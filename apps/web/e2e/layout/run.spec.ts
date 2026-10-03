@@ -27,8 +27,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
 const run = screens.find((screen) => screen.name === "run")!;
 
-/** The strip's chip (`run/InitiativeStrip.tsx`): the drawing's 52px tall, 112px at the least. */
-const CHIP = { height: 52, minWidth: 112 };
+/** The strip's chip (`run/InitiativeStrip.tsx`): the drawing's 52px tall, and wide enough for a name. */
+const CHIP = { height: 52, minWidth: 152 };
 /** The inspector's width (`--aside-w`): the grid's side columns, and the canvas's panels. */
 const ASIDE = 340;
 /** The grid's gap, `gap-4`. */
@@ -662,6 +662,23 @@ for (const width of WIDTHS) {
         await expect.soft(order).toHaveCSS("scrollbar-width", "none");
         const last = await box(chips.last());
         expect.soft(last.width, "last chip width").toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
+      });
+
+      await test.step("a crowded strip still shows each name, not a letter or two", async () => {
+        // The chip's floor holds eight characters or so before the ellipsis:
+        // "Goblin 12" all but whole, never "G…".
+        for (const chip of await chips.all()) {
+          const label = (await chip.getAttribute("aria-label")) ?? "chip";
+          const name = chip.locator("[data-slot=strip-name]");
+          const { shown, length } = await name.evaluate((el) => {
+            const length = el.textContent?.length ?? 0;
+            const glyph = el.scrollWidth / Math.max(length, 1);
+            return { shown: el.clientWidth / glyph, length };
+          });
+          expect
+            .soft(shown, `${label} characters shown`)
+            .toBeGreaterThanOrEqual(Math.min(8, length) - 0.5);
+        }
       });
 
       await test.step("the keyboard reaches every chip, and the strip brings it into view", async () => {

@@ -132,7 +132,7 @@ export function InitiativeStrip({
           className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
         >
           {combatants.map((combatant) => (
-            <li key={combatant.id} className="flex min-w-28 max-w-37.5 flex-1 basis-0">
+            <li key={combatant.id} className="flex min-w-38 max-w-44 flex-1 basis-0">
               <StripChip
                 combatant={combatant}
                 label={labels.get(combatant.id) ?? "?"}
@@ -286,6 +286,7 @@ function StripChip({
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="flex min-w-0 items-center gap-1">
           <span
+            data-slot="strip-name"
             className={cn(
               "min-w-0 truncate text-label leading-none font-semibold text-heading",
               out && "line-through",
@@ -317,11 +318,14 @@ function StripChip({
     </button>
   );
 
-  if (combatant.conditions.length === 0) return chip;
+  // The full name, which a crowded strip cuts short, and the conditions the
+  // disc only counts.
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipContent>{combatant.conditions.join(", ")}</TooltipContent>
+      <TooltipContent>
+        {[combatant.displayName, ...combatant.conditions].join(", ")}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -342,7 +346,7 @@ const reveal = (chip: HTMLElement) => {
  * players. A PC's portrait, when its seat lets the DM see one, is laid over the
  * initials, which stand under one still loading or failed (`DrawnImage`).
  * The conditions it carries are counted on its shoulder, as the drawing counts
- * them on a token; the chip's tooltip and name say which.
+ * them on a token; the chip's tooltip and accessible name say which.
  */
 function StripDisc({
   label,

@@ -725,6 +725,15 @@ describe("the runner", () => {
     await waitFor(() => expect(tooltip()).toHaveTextContent("Hostile"));
   });
 
+  it("names a chip without conditions in full in its tooltip", async () => {
+    const tooltip = () => document.querySelector("[data-slot=tooltip-content]");
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(rowFor("Brannoc").querySelector("[data-slot=strip-conditions]")).toBeNull();
+    await userEvent.hover(rowFor("Brannoc"));
+    await waitFor(() => expect(tooltip()).toHaveTextContent("Brannoc"));
+  });
+
   it("adds a combatant from the strip's trailing chip", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
