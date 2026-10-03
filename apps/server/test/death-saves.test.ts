@@ -346,6 +346,74 @@ describeLayer("death-saves", shared, (it) => {
       }),
     );
 
+    it.effect("sets a stable PC dying again when hit, and lets them roll", () =>
+      Effect.gen(function* () {
+        const dying = yield* aDyingPc;
+        yield* setSaves(dying, dying.id, { successes: 3, failures: 0 }).pipe(Effect.orDie);
+        const hit = yield* damage(dying, dying.id, { amount: 5 });
+        expect(savesOf(hit)).toEqual({ successes: 0, failures: 1 });
+        expect((yield* columnsOf(dying.character.id)).deathSaves).toEqual(savesOf(hit));
+        expect(savesOf(yield* roll(dying, dying.id, 12).pipe(Effect.orDie))).toEqual({
+          successes: 1,
+          failures: 1,
+        });
+
+        yield* setSaves(dying, dying.id, { successes: 3, failures: 1 }).pipe(Effect.orDie);
+        const critical = yield* damage(dying, dying.id, { amount: 5, critical: true });
+        expect(savesOf(critical)).toEqual({ successes: 0, failures: 3 });
+        expect((yield* columnsOf(dying.character.id)).deathSaves).toEqual(savesOf(critical));
+      }),
+    );
+
+    it.effect("keeps the successes of a PC who is not yet stable when hit", () =>
+      Effect.gen(function* () {
+        const dying = yield* aDyingPc;
+        yield* setSaves(dying, dying.id, { successes: 2, failures: 0 }).pipe(Effect.orDie);
+        const hit = yield* damage(dying, dying.id, { amount: 5 });
+        expect(savesOf(hit)).toEqual({ successes: 2, failures: 1 });
+      }),
+    );
+
+    it.effect("sets a stable PC dying again through the seat's delta", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const party = yield* Party;
+        const dying = yield* aDyingPc;
+        yield* setSaves(dying, dying.id, { successes: 3, failures: 0 }).pipe(Effect.orDie);
+        yield* as(party.damage(fixture.campaign.id, dying.seatId, { amount: 2 }));
+        expect(savesOf(yield* rowOf(dying.night.id, dying.run.id, dying.character.id))).toEqual({
+          successes: 0,
+          failures: 1,
+        });
+        expect((yield* columnsOf(dying.character.id)).deathSaves).toEqual({
+          successes: 0,
+          failures: 1,
+        });
+        expect(savesOf(yield* roll(dying, dying.id, 12).pipe(Effect.orDie))).toEqual({
+          successes: 1,
+          failures: 1,
+        });
+      }),
+    );
+
+    it.effect("sets a stable character dying again through the seat with no fight", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const party = yield* Party;
+        const characters = yield* Characters;
+        const { character, seatId } = yield* aCharacter(20);
+        yield* as(party.damage(fixture.campaign.id, seatId, { amount: 20 }));
+        yield* withActor(fixture.player)(
+          characters.setDeathSaves(character.id, { successes: 3, failures: 0 }),
+        ).pipe(Effect.orDie);
+        yield* as(party.damage(fixture.campaign.id, seatId, { amount: 2 }));
+        expect(yield* columnsOf(character.id)).toEqual({
+          hpCurrent: 0,
+          deathSaves: { successes: 0, failures: 1 },
+        });
+      }),
+    );
+
     it.effect("leaves a monster's counts alone at zero", () =>
       Effect.gen(function* () {
         const { night, run } = yield* aFight;

@@ -122,7 +122,8 @@ export const clampedCharacterHp = (sql: SqlClient.SqlClient, amount: number): St
  * reads the number from before the change and is atomic with it.
  *
  * - Damage to a creature already at zero adds a failure, or `failuresOnHit`
- *   (two for a critical). Both counts stop at three.
+ *   (two for a critical). Both counts stop at three. A stable creature (three
+ *   successes) that is hit is dying again: its successes go back to zero.
  * - Any healing from zero clears both counts.
  * - Anything else leaves them as they are; dropping *to* zero adds nothing.
  *
@@ -148,6 +149,10 @@ const deathSavesAfter = (
       ? sql`when (${applies}) and ${hpBefore} = 0
               then least(3, ${failures} + ${failuresOnHit}::integer)`
       : sql``;
+  const destabilised =
+    failuresOnHit > 0
+      ? sql`when (${applies}) and ${hpBefore} = 0 and ${successes} >= 3 then 0`
+      : sql``;
   return sql`
     death_save_failures = case
       ${failed}
@@ -155,6 +160,7 @@ const deathSavesAfter = (
       else ${failures}
     end,
     death_save_successes = case
+      ${destabilised}
       when (${applies}) and ${hpBefore} = 0 and ${hpAfter} > 0 then 0
       else ${successes}
     end

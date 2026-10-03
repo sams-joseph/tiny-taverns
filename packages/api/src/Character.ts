@@ -310,8 +310,9 @@ export type Currency = typeof Currency.Type;
  * value two screens read and two people write is live state, not prose.
  *
  * The rules are the server's, in `vitals.ts`: damage to a player character at
- * zero hit points adds a failure (two on a critical), any healing from zero
- * clears both, and a rolled save is `deathSaveRolled` below. Both counts stop
+ * zero hit points adds a failure (two on a critical) and, if they were stable
+ * at three successes, sets the successes back to zero; any healing from zero
+ * clears both; and a rolled save is `deathSaveRolled` below. Both counts stop
  * at three.
  */
 export const DeathSaves = Schema.Struct({
