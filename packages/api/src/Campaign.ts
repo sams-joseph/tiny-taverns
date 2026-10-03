@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { DiagonalRule } from "./BattleMap.js";
 import { AccountId, CampaignId, SharedWorldId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -52,6 +53,13 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
   /** The session the DM is running or preparing; drives the "Session 12" badge. */
   currentSessionId: Schema.NullOr(SessionId),
   visibility: Visibility,
+  /**
+   * How a diagonal step counts on every board of this table: `five`, the
+   * SRD's grid rule and where a campaign starts, or `alternating` 5/10. The
+   * server counts a combatant's movement with it (`Combatant.feetMoved`), and
+   * a board measures by it. Every member reads it; the creator sets it.
+   */
+  diagonalRule: DiagonalRule,
   ...provenanceFields,
   /**
    * The cover Hob drew once, after the campaign was made — or `null`: none was
@@ -119,5 +127,6 @@ export const CampaignUpdate = Schema.Struct({
   playerCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 64 }))),
   currentSessionId: Schema.optional(Schema.NullOr(SessionId)),
   visibility: Schema.optional(Visibility),
+  diagonalRule: Schema.optional(DiagonalRule),
 });
 export type CampaignUpdate = typeof CampaignUpdate.Type;

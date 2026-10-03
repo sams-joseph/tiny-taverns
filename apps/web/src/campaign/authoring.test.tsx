@@ -88,6 +88,7 @@ describe("sharing a campaign", () => {
         description: null,
         playerCount: 4,
         visibility: "shared",
+        diagonalRule: "five",
       }),
     );
   });

@@ -193,6 +193,7 @@ describeLayer("creator-actor", shared, (it) => {
         setDeathSaves: true,
         rollDeathSave: true,
         move: true,
+        turn: true,
         setInitiative: true,
         remove: true,
       };
@@ -280,7 +281,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([9, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([10, 10, 3, 4, 2, 4, 4]);
     });
   });
 
@@ -567,7 +568,10 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and thirty-three and thirty-four are `Combatants.setDeathSaves`
       // and `rollDeathSave`: the DM's dots and roll on the fight's row, gated
       // like every other write to the initiative list.
-      expect(gated).toBe(134);
+      // A hundred and thirty-five is `Combatants.turn`: a turn's spending is
+      // the runner's, gated with the rest of the order from the day declared,
+      // and no player read selects it.
+      expect(gated).toBe(135);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

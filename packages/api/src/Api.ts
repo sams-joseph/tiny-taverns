@@ -41,6 +41,7 @@ import {
   CombatantDeathSaveRoll,
   CombatantDeathSaves,
   CombatantMove,
+  CombatantTurn,
   CombatantUpdate,
   InitiativeSet,
   PlayerInitiative,
@@ -3266,6 +3267,18 @@ class CombatantsGroup extends HttpApiGroup.make("combatants")
       payload: CombatantMove,
       success: Combatant,
       error: [NotFound, Conflict],
+    }),
+    /** The DM's ticks on this turn's spending. See `CombatantTurn`. */
+    HttpApiEndpoint.post("turn", "/:combatantId/turn", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantTurn,
+      success: Combatant,
+      error: NotFound,
     }),
     HttpApiEndpoint.delete("remove", "/:combatantId", {
       params: {

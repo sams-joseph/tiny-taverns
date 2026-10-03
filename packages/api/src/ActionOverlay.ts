@@ -55,7 +55,7 @@ export interface OverlayEntry {
   readonly recharge?: ResourceRecharge;
   /** `"hp"` for a pool, `"ki"` for points; absent for plain uses. */
   readonly unit?: string;
-  /** The action economy — D6: drawn on the line, tracked nowhere. */
+  /** The action economy — D6: drawn on the line; the sheet tracks no turn's spending. */
   readonly cost?: ActionCost;
   /** The roll, when the feature is one: Second Wind's `1d10 + level`. */
   readonly dice?: (context: OverlayContext) => string;

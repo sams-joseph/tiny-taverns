@@ -3,6 +3,7 @@ import {
   type BoardSquare,
   type Combatant,
   type CombatantId,
+  type DiagonalRule,
   type PictureRect,
   cellRect,
   feetBetween,
@@ -15,8 +16,8 @@ import {
  * Everything here is about squares on the fight's own board
  * (`EncounterRunBoard`) and the feet each one is; where a square falls on the
  * picture, and how far apart two are, is the board's one geometry
- * (`BattleMap.ts`). The runner counts a diagonal as one square: the five-foot
- * rule.
+ * (`BattleMap.ts`). The runner counts a diagonal by the campaign's
+ * `diagonalRule`, as the server counts a move.
  */
 
 /**
@@ -112,17 +113,19 @@ export const moveLine = ({
   from,
   to,
   feetPerCell,
+  diagonals,
   speed,
 }: {
   readonly name: string;
   readonly from: BoardSquare | null;
   readonly to: BoardSquare | null;
   readonly feetPerCell: number;
+  readonly diagonals: DiagonalRule;
   readonly speed: number | undefined;
 }): string => {
   if (to === null) return `${name} is off the board`;
   if (from === null) return `${name} is on the board`;
-  const feet = feetBetween(from, to, { feetPerCell, diagonals: "five" });
+  const feet = feetBetween(from, to, { feetPerCell, diagonals });
   const past = speed !== undefined && feet > speed ? `, past their ${String(speed)} ft speed` : "";
   return `${name} moved ${String(feet)} ft${past}`;
 };

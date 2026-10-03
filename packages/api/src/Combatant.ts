@@ -145,6 +145,21 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    */
   position: Schema.NullOr(CombatantPosition),
   /**
+   * This turn's spending, the runner's *This turn* block: whether the action,
+   * the bonus action and the reaction are used, and the feet moved. The
+   * server clears all four on the row of whoever becomes up, when *Next turn*
+   * moves the marker, a round starts or the DM puts the marker on somebody, so
+   * a reaction spent off-turn comes back at the start of its own turn, as the
+   * SRD has it. `feetMoved` is counted by `move` while this combatant is up
+   * and the fight is taking turns, under the campaign's `diagonalRule`, and
+   * reset by the server alone; the DM's ticks on the other three are
+   * `CombatantTurn`. The creator's alone: no player read carries any of it.
+   */
+  actionUsed: Schema.Boolean,
+  bonusUsed: Schema.Boolean,
+  reactionUsed: Schema.Boolean,
+  feetMoved: Schema.Int,
+  /**
    * The portrait of the character this row was seeded from — **live, not a
    * snapshot**, and present only while that character sits in a seat of this
    * campaign the reader may see. The same URLs `Character.portrait` carries,
@@ -271,6 +286,25 @@ export const CombatantMove = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantMove = typeof CombatantMove.Type;
+
+/**
+ * The DM's ticks on a combatant's turn — *Action*, *Bonus*, *Reaction* — each
+ * an absolute value, so marking one used twice is the same as once and
+ * unmarking is the same write. Feet moved is not here: only `move` counts it.
+ *
+ * Its own endpoint rather than fields on `CombatantUpdate`, for the reason
+ * `CombatantMove` is: it is pressed over and over while the fight runs, so it
+ * carries a `requestId`. Any combatant may be ticked, up or not, because a
+ * reaction is spent on somebody else's turn. Only the start of a creature's
+ * own turn clears it (`Combatant.actionUsed`).
+ */
+export const CombatantTurn = Schema.Struct({
+  actionUsed: Schema.optional(Schema.Boolean),
+  bonusUsed: Schema.optional(Schema.Boolean),
+  reactionUsed: Schema.optional(Schema.Boolean),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type CombatantTurn = typeof CombatantTurn.Type;
 
 /**
  * One line of the DM's initiative write: this combatant's number, or `null` to

@@ -1022,7 +1022,7 @@ export function RunScreen() {
     />
   );
   const boardProps: RunBoardProps | undefined =
-    state === undefined
+    state === undefined || view === undefined
       ? undefined
       : {
           resource: boardResource,
@@ -1035,6 +1035,7 @@ export function RunScreen() {
             selected,
             activeId: state.run.activeCombatantId,
             speedOf,
+            diagonals: view.campaign.diagonalRule,
             movable: !frozen,
             onSelect: (combatant) => setSelectedId(combatant.id),
             onMove: move,
