@@ -24,8 +24,9 @@ import type { HobThreadList } from "./transcript";
  * Escape closes the list and not the panel: the dialog consumes the key, and
  * `useHobPanel` leaves a consumed key alone.
  *
- * The rows are the server's `threads`, newest first, each the question that
- * started it and when it last moved. Nothing here renames or deletes one;
+ * The rows are the server's `threads`, newest first, each the name Hob gave it
+ * (or, until it has one, the question that started it) and when it last
+ * moved. Nothing here renames or deletes one;
  * the wire has neither.
  */
 export function HobThreads({
