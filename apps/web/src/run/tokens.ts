@@ -5,6 +5,7 @@ import {
   type CombatantId,
   type PictureRect,
   cellRect,
+  feetBetween,
 } from "@taverns/api";
 
 /**
@@ -13,7 +14,9 @@ import {
  *
  * Everything here is about squares on the fight's own board
  * (`EncounterRunBoard`) and the feet each one is; where a square falls on the
- * picture is `cellRect`'s, the board's one geometry (`BattleMap.ts`).
+ * picture, and how far apart two are, is the board's one geometry
+ * (`BattleMap.ts`). The runner counts a diagonal as one square: the five-foot
+ * rule.
  */
 
 /**
@@ -79,32 +82,18 @@ export const leadingFeet = (speed: string | undefined): number | undefined => {
 };
 
 /**
- * Squares between two squares, a diagonal counting as one: the SRD's grid
- * rule, where every square moved into costs the square's feet.
+ * The rectangle round a set of squares, in the picture's pixels: from the
+ * first column and row any of them is in to the last. `undefined` for none.
  */
-export const squaresBetween = (from: BoardSquare, to: BoardSquare): number =>
-  Math.max(Math.abs(from.column - to.column), Math.abs(from.row - to.row));
-
-/**
- * The squares a creature can reach this turn: `speed` feet out from where it
- * stands in every direction, cut at the board's edges, as one rectangle in
- * the picture's pixels. `undefined` when it cannot move a whole square.
- */
-export const reachRect = (
-  board: BattleMapBoard & { readonly feetPerCell: number },
-  at: BoardSquare,
-  speed: number,
+export const extentRect = (
+  board: BattleMapBoard,
+  squares: ReadonlyArray<BoardSquare>,
 ): PictureRect | undefined => {
-  const squares = Math.floor(speed / board.feetPerCell);
-  if (squares < 1) return undefined;
-  const first = cellRect(board, {
-    column: Math.max(0, at.column - squares),
-    row: Math.max(0, at.row - squares),
-  });
-  const last = cellRect(board, {
-    column: Math.min(board.columns - 1, at.column + squares),
-    row: Math.min(board.rows - 1, at.row + squares),
-  });
+  if (squares.length === 0) return undefined;
+  const columns = squares.map((square) => square.column);
+  const rows = squares.map((square) => square.row);
+  const first = cellRect(board, { column: Math.min(...columns), row: Math.min(...rows) });
+  const last = cellRect(board, { column: Math.max(...columns), row: Math.max(...rows) });
   return {
     x: first.x,
     y: first.y,
@@ -133,7 +122,7 @@ export const moveLine = ({
 }): string => {
   if (to === null) return `${name} is off the board`;
   if (from === null) return `${name} is on the board`;
-  const feet = squaresBetween(from, to) * feetPerCell;
+  const feet = feetBetween(from, to, { feetPerCell, diagonals: "five" });
   const past = speed !== undefined && feet > speed ? `, past their ${String(speed)} ft speed` : "";
   return `${name} moved ${String(feet)} ft${past}`;
 };

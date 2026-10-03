@@ -5,11 +5,12 @@ import {
   type EncounterRunBoard,
   battleMapPlane,
   cellRect,
+  reachableSquares,
   squareAt,
 } from "@taverns/api";
 import { Button, Toggle, cn } from "@taverns/ui";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { percentOf, reachRect } from "./tokens";
+import { extentRect, percentOf } from "./tokens";
 
 /**
  * The fight's tokens, on the DM's board and in the tray beside it.
@@ -129,7 +130,19 @@ function Reach({ props }: { readonly props: TokenProps }) {
   const { board, selected, speedOf } = props;
   if (selected === undefined || selected.position === null) return null;
   const speed = speedOf(selected);
-  const rect = speed === undefined ? undefined : reachRect(board, selected.position, speed);
+  const rect =
+    speed === undefined
+      ? undefined
+      : extentRect(
+          board,
+          reachableSquares(board, {
+            from: selected.position,
+            feet: speed,
+            occupied: [],
+            feetPerCell: board.feetPerCell,
+            diagonals: "five",
+          }),
+        );
   if (rect === undefined) return null;
   const plane = battleMapPlane(board, board.image);
   return (

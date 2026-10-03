@@ -1,8 +1,8 @@
-import { Combatant } from "@taverns/api";
+import { Combatant, reachableSquares } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { brannoc, goblinBoss } from "../campaign/campaign.fixtures";
-import { labelsInOrder, leadingFeet, moveLine, reachRect, tokenLabels } from "./tokens";
+import { extentRect, labelsInOrder, leadingFeet, moveLine, tokenLabels } from "./tokens";
 
 const decode = Schema.decodeUnknownSync(Combatant);
 const row = (id: string, displayName: string, createdAt: string) =>
@@ -59,18 +59,24 @@ describe("the reach", () => {
     feetPerCell: 5,
     alignment: { cellPx: 10, offsetXPx: 0, offsetYPx: 0 },
   };
+  const reach = (feet: number) =>
+    extentRect(
+      board,
+      reachableSquares(board, {
+        from: { column: 2, row: 8 },
+        feet,
+        occupied: [],
+        feetPerCell: 5,
+        diagonals: "five",
+      }),
+    );
 
   it("is the squares the speed walks, cut at the board's edge", () => {
-    expect(reachRect(board, { column: 2, row: 8 }, 30)).toEqual({
-      x: 0,
-      y: 20,
-      width: 90,
-      height: 130,
-    });
+    expect(reach(30)).toEqual({ x: 0, y: 20, width: 90, height: 130 });
   });
 
   it("is nothing when the speed is not a whole square", () => {
-    expect(reachRect(board, { column: 2, row: 8 }, 4)).toBeUndefined();
+    expect(reach(4)).toBeUndefined();
   });
 });
 
