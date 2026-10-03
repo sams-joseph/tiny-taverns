@@ -5,15 +5,15 @@ import { rollDiceExpression, type LocalRoll } from "../characters/rolls";
  * The DM's own dice: a die, an ability, an attack and its result, rolled here
  * and shown here, and nowhere else.
  *
- * **Local on purpose.** A roll is not durable state — only a number it produced
+ * **Local, for now.** A roll is not durable state — only a number it produced
  * is, and the DM applies that to whatever it changes (an attack's *Apply*, the
  * damage box) — so these never reach the wire and are gone on a reload. A
  * death save is not one of them: its face is sent for the server's rule to
  * read, and the night's line for it is the roll's record.
- * Persisting them through `rolls.create` would not be a small step either: a
- * roll with no character takes the night's visibility, `rolls.list` answers
- * shared rows to every member, and the label carries a monster's name. If this
- * is ever sent, it is sent `dm`, with a test.
+ * The server can keep them: `rolls.create` files a roll with no character as
+ * `dm`, the creator's alone because its label carries a monster's name, with
+ * an attack's combatants and outcome (`rolls.test.ts`). Nothing here sends
+ * them yet.
  *
  * The fight's *Rolls* dock merges these with the players' tray and the night's
  * log (`rollsLog.ts`); a scene's *Dice* card shows the newest six.

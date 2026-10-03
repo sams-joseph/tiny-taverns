@@ -2,6 +2,7 @@ import {
   Actor,
   CampaignId,
   CharacterId,
+  CombatantId,
   Conflict,
   CurrentActor,
   EncounterRunId,
@@ -26,9 +27,10 @@ import {
   orNotFound,
   timestampColumns,
 } from "./rows.js";
-import { RUN } from "./liveTables.js";
+import { COMBATANT, fightLive, hiddenByFog, RUN } from "./liveTables.js";
 import {
   campaignReadable,
+  containedChildWritable,
   containedRowReadable,
   campaignWritableById,
   ensureCampaignReadable,
@@ -102,6 +104,28 @@ export class Rolls extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* Effect.serviceOption(LiveEvents);
 
+      /**
+       * Whether this actor may point a roll at this combatant: one of the fight
+       * on the table tonight, which only the creator writes. The insert's
+       * composite key holds the same rule against the roll's run.
+       */
+      const canNameCombatant = (
+        campaignId: CampaignId,
+        runId: EncounterRunId | null,
+        combatantId: CombatantId,
+        actor: Actor,
+      ): Effect.Effect<boolean> =>
+        runId === null
+          ? Effect.succeed(false)
+          : sql<{ readonly id: string }>`
+              select combatant.id from combatant
+              where combatant.id = ${combatantId}
+                and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+            `.pipe(
+              Effect.map((rows) => rows.length > 0),
+              Effect.orDie,
+            );
+
       const canRollCharacter = (
         campaignId: CampaignId,
         characterId: CharacterId,
@@ -139,9 +163,33 @@ export class Rolls extends Context.Service<
       ): Effect.Effect<typeof CurrentNightRow.Type, NotFound> =>
         nightOf({ campaignId, actor }).pipe(orNotFound("campaign", campaignId), dieOnSqlError);
 
+      /**
+       * Whether this reader may be told the roll's combatant in this column:
+       * through the combatant's own predicate and, while its fight is live, not
+       * under fog (`liveTables.ts`' `hiddenByFog`), as the player's order reads it.
+       */
+      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) => sql`
+        exists (
+          select 1 from combatant
+          join encounter_run on encounter_run.id = combatant.encounter_run_id
+          where combatant.id = ${sql(`character_roll.${column}`)}
+            and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+            and (${campaignWritableById(sql, campaignId, actor)}
+              or not ${fightLive(sql)}
+              or not ${hiddenByFog(sql, campaignId, actor)})
+        )
+      `;
+      const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
+        case when ${combatantNamed(column, campaignId, actor)}
+          then ${sql(`character_roll.${column}`)} end
+      `;
+
       // The run pointer goes through the run predicate for the reason
       // `sessionColumns` gives: a roll made while a hidden fight is on the
-      // table must not tell a player that fight exists.
+      // table must not tell a player that fight exists. The combatant pointers
+      // go through theirs, so a shared roll never names a hidden creature. A
+      // player reads the target's AC only of a player character they may be
+      // told is the target; a creature's AC is the DM's.
       const selectRoll = (campaignId: CampaignId, actor: Actor) => sql`
         character_roll.id, character_roll.campaign_id, character_roll.session_id,
         case when exists (
@@ -152,7 +200,18 @@ export class Rolls extends Context.Service<
         character_roll.account_id, character_roll.character_id,
         character_roll.label, character_roll.notation, character_roll.dice,
         character_roll.kept, character_roll.modifier, character_roll.total,
-        character_roll.mode, character_roll.critical, character_roll.request_id,
+        character_roll.mode, character_roll.critical, character_roll.kind,
+        ${combatantPointer("combatant_id", campaignId, actor)} as combatant_id,
+        ${combatantPointer("target_combatant_id", campaignId, actor)} as target_combatant_id,
+        case when ${campaignWritableById(sql, campaignId, actor)}
+          or (${combatantNamed("target_combatant_id", campaignId, actor)}
+            and exists (
+              select 1 from combatant
+              where combatant.id = character_roll.target_combatant_id
+                and combatant.kind = 'pc'
+            ))
+          then character_roll.target_ac end as target_ac,
+        character_roll.outcome, character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
         character_roll.created_at, character_roll.updated_at,
         account.name as account_name, character.name as character_name
@@ -266,11 +325,13 @@ export class Rolls extends Context.Service<
                     return yield* noOpenNight;
                   }
 
-                  if (payload.characterId === undefined) {
-                    if (!night.mayDmRoll) {
-                      return yield* new NotFound({ resource: "character", id: "dm-roll" });
-                    }
-                  } else {
+                  // The DM's own roll is theirs alone: its label may carry a
+                  // monster's name, which a shared night would tell everyone.
+                  const dmOnly = payload.characterId === undefined || payload.visibility === "dm";
+                  if (dmOnly && !night.mayDmRoll) {
+                    return yield* new NotFound({ resource: "character", id: "dm-roll" });
+                  }
+                  if (payload.characterId !== undefined) {
                     if (!night.mayDmRoll && night.sessionVisibility !== "shared") {
                       return yield* noOpenNight;
                     }
@@ -285,6 +346,13 @@ export class Rolls extends Context.Service<
                   if (payload.requestId !== undefined) {
                     const seen = yield* existing(campaignId, night.sessionId, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
+                  }
+
+                  for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
+                    if (combatantId === undefined) continue;
+                    if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {
+                      return yield* new NotFound({ resource: "combatant", id: combatantId });
+                    }
                   }
 
                   const rows = yield* sql<{ readonly id: RollId }>`
@@ -303,8 +371,13 @@ export class Rolls extends Context.Service<
                         total: payload.total,
                         mode: payload.mode,
                         critical: payload.critical ?? null,
+                        kind: payload.kind,
+                        combatant_id: payload.combatantId,
+                        target_combatant_id: payload.targetCombatantId,
+                        target_ac: payload.targetAc,
+                        outcome: payload.outcome,
                         request_id: payload.requestId,
-                        visibility: night.sessionVisibility,
+                        visibility: dmOnly ? "dm" : night.sessionVisibility,
                       }),
                     )}
                     on conflict do nothing
