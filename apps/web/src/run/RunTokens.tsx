@@ -60,7 +60,8 @@ import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
  * walking this turn (`feetLeftOf`), under the diagonal rule, less the squares
  * others hold (`reachableSquares`). A drag measures from where it started, and
  * its ruler's *left* or *over* is against the same feet, so the board and the
- * panel's *This turn* bar agree.
+ * panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
+ * Area or Fog is on (`BoardTools.tsx`, `Fog.tsx`) it is not drawn.
  *
  * ### Fog
  *
@@ -106,6 +107,8 @@ export interface TokenProps {
   readonly names: TokenNames;
   /** The squares under fog, as the Fog tool draws them: dimmed over the tokens, under the ruler. */
   readonly fog: ReadonlyArray<BoardSquare>;
+  /** Move is the dock's tool, so the range is drawn; Measure, Area and Fog hide it. */
+  readonly rangeShown: boolean;
   readonly onSelect: (combatant: Combatant) => void;
   /**
    * Set while an attack waits for its target: a token's click is the target
@@ -141,8 +144,9 @@ function Range({
   readonly from: BoardSquare | null;
   readonly occupied: ReadonlyArray<BoardSquare>;
 }) {
-  const { board, selected, activeId, feetLeftOf, diagonals } = props;
-  if (selected === undefined || selected.id !== activeId || from === null) return null;
+  const { board, selected, activeId, feetLeftOf, diagonals, rangeShown } = props;
+  if (!rangeShown || selected === undefined || selected.id !== activeId || from === null)
+    return null;
   const left = feetLeftOf(selected);
   if (left === undefined) return null;
   const squares = reachableSquares(board, {
@@ -183,8 +187,11 @@ function Range({
   );
 }
 
+/** How a ruler is drawn: the drawing's slate, peach and crimson, and the Measure tool's blue. */
+export type RulerTone = "heading" | "accent" | "danger" | "info";
+
 /** The ruler's colour by what it says: over or onto someone is a refusal, a turn's move is peach. */
-const RULER_TONE: Readonly<Record<RulerReading["verdict"], string>> = {
+const RULER_TONE: Readonly<Record<RulerReading["verdict"], RulerTone>> = {
   distance: "heading",
   left: "accent",
   over: "danger",
@@ -195,25 +202,30 @@ const RULER_TONE: Readonly<Record<RulerReading["verdict"], string>> = {
  * The live ruler under a drag: a line from the square the token left to the
  * one under the pointer, a dot where it started, and its reading beside the far
  * end. Drawn in the starting square's own 40-unit box, as the token face is, so
- * it keeps the drawing's weight at any zoom.
+ * it keeps the drawing's weight at any zoom. The Measure tool lays the same
+ * ruler in blue (`BoardTools.tsx`).
  */
-function Ruler({
+export function Ruler({
   board,
   from,
   to,
   reading,
+  tone = RULER_TONE[reading.verdict],
+  slot = "token-ruler",
 }: {
   readonly board: EncounterRunBoard;
   readonly from: BoardSquare;
   readonly to: BoardSquare;
   readonly reading: RulerReading;
+  /** Its colour, when it is not the one its reading says. */
+  readonly tone?: RulerTone;
+  readonly slot?: string;
 }) {
   const plane = battleMapPlane(board, board.image);
   const end = { x: 20 + (to.column - from.column) * 40, y: 20 + (to.row - from.row) * 40 };
-  const tone = RULER_TONE[reading.verdict];
   return (
     <div
-      data-slot="token-ruler"
+      data-slot={slot}
       className="pointer-events-none absolute z-lifted"
       // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
       style={percentOf(cellRect(board, from), plane)}
@@ -229,6 +241,7 @@ function Ruler({
             tone === "heading" && "stroke-heading",
             tone === "accent" && "stroke-accent",
             tone === "danger" && "stroke-danger",
+            tone === "info" && "stroke-info",
           )}
         />
         <circle
@@ -239,6 +252,7 @@ function Ruler({
             tone === "heading" && "fill-heading",
             tone === "accent" && "fill-accent",
             tone === "danger" && "fill-danger",
+            tone === "info" && "fill-info",
           )}
         />
         <foreignObject x={end.x + 16} y={end.y - 30} width={240} height={24}>
@@ -251,6 +265,7 @@ function Ruler({
                 tone === "heading" && "border-heading text-heading",
                 tone === "accent" && "border-accent text-accent",
                 tone === "danger" && "border-danger text-danger",
+                tone === "info" && "border-info text-info",
               )}
             >
               {reading.text}

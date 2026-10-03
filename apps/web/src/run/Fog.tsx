@@ -5,7 +5,7 @@ import {
   battleMapPlane,
   squareAt,
 } from "@taverns/api";
-import { Button, Icon, Toggle, cn } from "@taverns/ui";
+import { Button, cn } from "@taverns/ui";
 import { type PointerEvent, useRef, useState } from "react";
 import { fogOutline, squareKey } from "./fog";
 
@@ -165,51 +165,27 @@ export function FogBrush({
 }
 
 /**
- * The Fog tool in the board's dock: the switch, and while it is on, the
- * board-wide writes beside it. *Reset fog* puts back the fog the fight started
- * with, which is none until fog is authored in prep.
+ * The Fog tool's board-wide writes, beside the dock's tools while Fog is on
+ * (`BoardTools.tsx`). *Reset fog* puts back the fog the fight started with,
+ * which is none until fog is authored in prep.
  */
-export function FogTools({
-  on,
-  disabled,
-  onChange,
+export function FogActions({
   onWhole,
 }: {
-  readonly on: boolean;
-  readonly disabled: boolean;
-  readonly onChange: (on: boolean) => void;
   readonly onWhole: (kind: "revealAll" | "coverAll" | "reset") => void;
 }) {
   return (
-    <>
-      <Toggle
-        size="sm"
-        pressed={on}
-        disabled={disabled}
-        onPressedChange={(pressed) => onChange(pressed)}
-        title="Click or drag to hide and reveal squares"
-      >
-        <Icon name="cloud" size={13} />
-        Fog
-      </Toggle>
-      {on && (
-        <div
-          role="group"
-          aria-label="Fog"
-          className="flex flex-wrap items-center justify-center gap-1"
-        >
-          <span aria-hidden className="mx-0.5 h-5 w-px bg-strong" />
-          <Button variant="ghost" size="sm" onClick={() => onWhole("revealAll")}>
-            Reveal all
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onWhole("coverAll")}>
-            Cover all
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onWhole("reset")}>
-            Reset fog
-          </Button>
-        </div>
-      )}
-    </>
+    <div role="group" aria-label="Fog" className="flex flex-wrap items-center justify-center gap-1">
+      <span aria-hidden className="mx-0.5 h-5 w-px bg-strong" />
+      <Button variant="ghost" size="sm" onClick={() => onWhole("revealAll")}>
+        Reveal all
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => onWhole("coverAll")}>
+        Cover all
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => onWhole("reset")}>
+        Reset fog
+      </Button>
+    </div>
   );
 }

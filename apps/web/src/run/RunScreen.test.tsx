@@ -26,7 +26,12 @@ import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
 import { TEST_SESSION, TEST_SESSION_TOKEN } from "../test/session";
-import { boardFogWrites, combatantVisibilityWrites, combatantWrites } from "./load";
+import {
+  boardAreaWrites,
+  boardFogWrites,
+  combatantVisibilityWrites,
+  combatantWrites,
+} from "./load";
 
 /**
  * The runner, against a stub server.
@@ -2545,6 +2550,366 @@ describe("the canvas", () => {
     expect(within(hud("tools")).getByRole("status")).toHaveTextContent(
       "Where everyone stood when it ended.",
     );
+  });
+});
+
+describe("the board's tools", () => {
+  beforeEach(() => {
+    onTheCanvas();
+    // The board's 24 × 16 squares, 10px each, wherever a tool's layer measures them.
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset.slot === "board-tool"
+        ? DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 })
+        : rect.call(this);
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const areaPath = () => `${serverRunBase()}/board/area`;
+  const dockTools = () => within(document.querySelector<HTMLElement>("[data-slot=run-hud-tools]")!);
+  const tool = (name: string) =>
+    within(dockTools().getByRole("group", { name: "Tools" })).getByRole("button", { name });
+  const surface = () => document.querySelector<HTMLElement>("[data-slot=board-tool]")!;
+  /** The middle of square (column, row) on the tool's layer. */
+  const point = (column: number, row: number) => ({
+    clientX: column * 10 + 5,
+    clientY: row * 10 + 5,
+  });
+  const areaLayer = () => document.querySelector<SVGElement>("[data-slot=board-area]");
+  const areaWrites = () =>
+    server.calls.filter((call) => call.method === "PUT" && call.pathname.endsWith("/board/area"));
+  const sphere = { shape: "sphere", feet: 20, origin: { column: 5, row: 4 } } as const;
+
+  const open = async () => {
+    await renderRunner();
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("region", { name: "Battle map" })).getByRole("button", {
+          name: /^Brannoc,/,
+        }),
+      ).toBeInTheDocument(),
+    );
+  };
+
+  it("offers Move, Measure, Area and Fog in the dock, one at a time, Move first", async () => {
+    await open();
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+    expect(tool("Measure")).toHaveAttribute("aria-pressed", "false");
+    expect(tool("Area")).toHaveAttribute("aria-pressed", "false");
+    // Brannoc is up and followed: Move draws his range.
+    expect(document.querySelector("[data-slot=range-square]")).not.toBeNull();
+
+    await userEvent.click(tool("Measure"));
+    expect(tool("Measure")).toHaveAttribute("aria-pressed", "true");
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "false");
+    // Measure hides Move's range, and its layer takes the pointer over the tokens.
+    expect(document.querySelector("[data-slot=range-square]")).toBeNull();
+    expect(surface().className).toMatch(/(^|\s)z-lifted(\s|$)/);
+    expect(dockTools().getByRole("status")).toHaveTextContent("Drag on the grid to measure.");
+    // A pressed tool stays on.
+    await userEvent.click(tool("Measure"));
+    expect(tool("Measure")).toHaveAttribute("aria-pressed", "true");
+
+    // Fog is the fourth: its brush takes Measure's place, and its writes join the dock.
+    await userEvent.click(tool("Fog"));
+    expect(tool("Measure")).toHaveAttribute("aria-pressed", "false");
+    expect(surface()).toBeNull();
+    expect(document.querySelector("[data-slot=fog-brush]")).not.toBeNull();
+    expect(dockTools().getByRole("group", { name: "Fog" })).toBeInTheDocument();
+
+    await userEvent.click(tool("Move"));
+    expect(surface()).toBeNull();
+    expect(document.querySelector("[data-slot=fog-brush]")).toBeNull();
+    expect(dockTools().queryByRole("group", { name: "Fog" })).toBeNull();
+    expect(document.querySelector("[data-slot=range-square]")).not.toBeNull();
+  });
+
+  it("measures a drag on the grid in blue, outlines the square under the pointer, and writes nothing", async () => {
+    await open();
+    await userEvent.click(tool("Measure"));
+
+    fireEvent.pointerMove(surface(), { pointerId: 1, ...point(2, 2) });
+    expect(document.querySelector("[data-slot=tool-square]")).toHaveAttribute("x", String(2 * 64));
+    fireEvent.pointerDown(surface(), { pointerId: 1, button: 0, ...point(2, 2) });
+    fireEvent.pointerMove(surface(), { pointerId: 1, ...point(9, 5) });
+    fireEvent.pointerUp(surface(), { pointerId: 1, ...point(9, 5) });
+
+    // Seven across and three down, under the campaign's five-foot diagonals: 35 ft.
+    const reading = document.querySelector("[data-slot=measure-ruler] [data-slot=ruler-reading]");
+    expect(reading).toHaveTextContent(/^35 ft$/);
+    expect(reading?.className).toContain("text-info");
+    expect(dockTools().getByRole("status")).toHaveTextContent(
+      "35 ft. Drag again to measure, or press Esc.",
+    );
+    // The drag was the ruler's: the canvas did not pan, and no token moved.
+    const content = document.querySelector<HTMLElement>("[data-slot=board-canvas-content]")!;
+    expect(parseFloat(content.style.getPropertyValue("--pan-x"))).toBe(0);
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+
+    // Esc takes the ruler away and puts the tool back on Move.
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector("[data-slot=measure-ruler]")).toBeNull();
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("previews an area under the pointer, pins it with a click, and says who it catches", async () => {
+    server.routes.set(`PUT ${areaPath()}`, { status: 200, body: { ...runBoard, area: sphere } });
+    await open();
+    await userEvent.click(tool("Area"));
+    const shapes = within(dockTools().getByRole("group", { name: "Area" }));
+    expect(shapes.getByRole("button", { name: "Sphere" })).toHaveAttribute("aria-pressed", "true");
+    expect(shapes.getByText("20 ft")).toBeInTheDocument();
+    expect(dockTools().getByRole("status")).toHaveTextContent(
+      "Click a square to pin a 20 ft sphere there.",
+    );
+
+    fireEvent.pointerMove(surface(), { pointerId: 1, ...point(5, 4) });
+    expect(areaLayer()).toHaveAttribute("data-state", "preview");
+    expect(areaLayer()?.querySelector("[data-square='5,4']")).not.toBeNull();
+    expect(areaWrites()).toEqual([]);
+
+    fireEvent.click(surface(), point(5, 4));
+    await waitFor(() => expect(areaWrites()).toHaveLength(1));
+    expect(bodyOf(server, "PUT", "/board/area")).toMatchObject({ area: sphere });
+    expect(areaLayer()).toHaveAttribute("data-state", "pinned");
+    expect(screen.getByRole("img", { name: "Pinned: a 20 ft sphere" })).toBeInTheDocument();
+    // The players' shared board draws it, so the write re-reads their table.
+    expect(boardAreaWrites(campaignId)).toEqual([reads.playerTable(campaignId)]);
+    // Brannoc stands in it; the Goblin Boss is not on the board.
+    const banner = await screen.findByRole("status", { name: "Pinned area" });
+    expect(banner).toHaveTextContent("1 caught: Brannoc");
+  });
+
+  it("aims a cone from the selected creature toward the square clicked", async () => {
+    const cone = {
+      shape: "cone",
+      feet: 15,
+      origin: { column: 5, row: 4 },
+      toward: { column: 9, row: 4 },
+    } as const;
+    server.routes.set(`PUT ${areaPath()}`, { status: 200, body: { ...runBoard, area: cone } });
+    await open();
+    await userEvent.click(tool("Area"));
+    const shapes = within(dockTools().getByRole("group", { name: "Area" }));
+    await userEvent.click(shapes.getByRole("button", { name: "Cone" }));
+    // Each shape starts at its own size, and pressing it again changes nothing.
+    expect(shapes.getByText("15 ft")).toBeInTheDocument();
+    await userEvent.click(shapes.getByRole("button", { name: "Cone" }));
+    expect(shapes.getByRole("button", { name: "Cone" })).toHaveAttribute("aria-pressed", "true");
+    expect(dockTools().getByRole("status")).toHaveTextContent(
+      "Click a square to aim a 15 ft cone from Brannoc.",
+    );
+
+    fireEvent.click(surface(), point(9, 4));
+    await waitFor(() => expect(bodyOf(server, "PUT", "/board/area")).toMatchObject({ area: cone }));
+    expect(screen.getByRole("img", { name: "Pinned: a 15 ft cone" })).toBeInTheDocument();
+    // Brannoc's own square is where it starts, not in it.
+    expect(areaLayer()?.querySelector("[data-square='5,4']")).toBeNull();
+    expect(await screen.findByRole("status", { name: "Pinned area" })).toHaveTextContent(
+      "Nobody caught in the area",
+    );
+  });
+
+  it("steps the size five feet between 5 and 120, and a pinned area with it", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: sphere },
+    });
+    server.routes.set(`PUT ${areaPath()}`, {
+      status: 200,
+      body: { ...runBoard, area: { ...sphere, feet: 25 } },
+    });
+    await open();
+    // A pin the board already holds is drawn, and its banner offers Clear.
+    expect(await screen.findByRole("status", { name: "Pinned area" })).toHaveTextContent(
+      "1 caught: Brannoc",
+    );
+    await userEvent.click(tool("Area"));
+    const shapes = within(dockTools().getByRole("group", { name: "Area" }));
+    expect(shapes.getByText("20 ft")).toBeInTheDocument();
+
+    await userEvent.click(shapes.getByRole("button", { name: "Larger" }));
+    expect(shapes.getByText("25 ft")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(bodyOf(server, "PUT", "/board/area")).toMatchObject({ area: { ...sphere, feet: 25 } }),
+    );
+    expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
+
+    // Switching shape starts it at its own size, and leaves the pin on the board.
+    await userEvent.click(shapes.getByRole("button", { name: "Cube" }));
+    expect(shapes.getByText("15 ft")).toBeInTheDocument();
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
+
+    for (let press = 0; press < 3; press++) {
+      await userEvent.click(shapes.getByRole("button", { name: "Smaller" }));
+    }
+    expect(shapes.getByText("5 ft")).toBeInTheDocument();
+    // The pin is a sphere, so the cube's size is the tool's alone.
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
+
+    // Back on the pin's shape, the dock takes the pin's size, and + resizes the pin.
+    server.routes.set(`PUT ${areaPath()}`, {
+      status: 200,
+      body: { ...runBoard, area: { ...sphere, feet: 30 } },
+    });
+    await userEvent.click(shapes.getByRole("button", { name: "Sphere" }));
+    expect(shapes.getByText("25 ft")).toBeInTheDocument();
+    expect(areaWrites()).toHaveLength(1);
+    await userEvent.click(shapes.getByRole("button", { name: "Larger" }));
+    expect(shapes.getByText("30 ft")).toBeInTheDocument();
+    await waitFor(() => expect(areaWrites()).toHaveLength(2));
+    expect(JSON.parse(areaWrites()[1]!.body)).toMatchObject({ area: { ...sphere, feet: 30 } });
+    expect(screen.getByRole("img", { name: "Pinned: a 30 ft sphere" })).toBeInTheDocument();
+  });
+
+  it("clears the pin with Clear, and with Esc on Area unless the key is the Hob panel's", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: sphere },
+    });
+    server.routes.set(`PUT ${areaPath()}`, { status: 200, body: { ...runBoard, area: null } });
+    await open();
+    const banner = await screen.findByRole("status", { name: "Pinned area" });
+    await userEvent.click(within(banner).getByRole("button", { name: "Clear" }));
+    await waitFor(() => expect(areaWrites()).toHaveLength(1));
+    expect(JSON.parse(areaWrites()[0]!.body)).toMatchObject({ area: null });
+    await waitFor(() => expect(areaLayer()).toBeNull());
+
+    // Pinned again from another of the DM's tabs: the doorbell re-reads the board.
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: sphere },
+    });
+    server.emit(sessionEvent(12, "board-area-updated"));
+    await screen.findByRole("status", { name: "Pinned area" });
+
+    // Esc on Move does nothing; on Measure or Fog it puts the tool away and leaves the pin.
+    expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(true);
+    for (const name of ["Measure", "Fog"]) {
+      await userEvent.click(tool(name));
+      expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(false);
+      expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+    }
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("status", { name: "Pinned area" })).toBeInTheDocument();
+
+    await userEvent.click(tool("Area"));
+    const hob = document.createElement("section");
+    hob.setAttribute("aria-label", "Hob");
+    const field = hob.appendChild(document.createElement("textarea"));
+    document.body.append(hob);
+    fireEvent.keyDown(field, { key: "Escape" });
+    hob.remove();
+    // An Esc typed into a field clears the field, not the board, and one
+    // closing a menu closes the menu.
+    fireEvent.keyDown(panel().getByLabelText("Hit points to apply to Brannoc"), { key: "Escape" });
+    const menu = await panelMenu("Brannoc");
+    fireEvent.keyDown(menu.getAllByRole("menuitem")[0]!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    expect(areaWrites()).toHaveLength(1);
+
+    expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(false);
+    await waitFor(() => expect(areaWrites()).toHaveLength(2));
+    expect(JSON.parse(areaWrites()[1]!.body)).toMatchObject({ area: null });
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("drops the pin when the fight ends, as the server does", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: sphere },
+    });
+    await open();
+    await screen.findByRole("status", { name: "Pinned area" });
+    expect(areaLayer()).not.toBeNull();
+
+    // Ended from elsewhere: the server took the template off with the fight.
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
+      }
+    }
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: null },
+    });
+    server.emit(sessionEvent(12, "run-ended"));
+    await screen.findByText(/came off the table/);
+    await waitFor(() => expect(areaLayer()).toBeNull());
+    expect(areaWrites()).toEqual([]);
+  });
+
+  it("puts the board back as the server holds it when a pin is refused", async () => {
+    server.routes.set(`PUT ${areaPath()}`, { status: 409, body: { _tag: "Conflict" } });
+    await open();
+    await userEvent.click(tool("Area"));
+    fireEvent.click(surface(), point(5, 4));
+    await screen.findByText("The area was not pinned");
+    await waitFor(() => expect(areaLayer()).toBeNull());
+    expect(screen.queryByRole("status", { name: "Pinned area" })).toBeNull();
+  });
+
+  it("puts the tool away while an attack picks its target", async () => {
+    // Brannoc's sheet carries a Longsword to swing.
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: runParty.map((seat) => ({
+        ...seat,
+        character: {
+          ...seat.character,
+          sheet: {
+            ...seat.character.sheet,
+            actions: [
+              {
+                id: "atk:longsword",
+                name: "Longsword",
+                cost: "action",
+                hit: "+7",
+                dice: "1d8+4",
+                damageType: "Slashing",
+                source: "weapon",
+              },
+            ],
+          },
+        },
+      })),
+    });
+    await open();
+    await userEvent.click(tool("Measure"));
+    const actions = within(panel().getByRole("region", { name: "Actions of Brannoc" }));
+    await userEvent.click(await actions.findByRole("button", { name: "Attack with Longsword" }));
+    expect(surface()).toBeNull();
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+    expect(tool("Measure")).toBeDisabled();
+  });
+});
+
+describe("a pinned area on the narrow grid", () => {
+  it("is drawn on the board, which offers no tools", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: {
+        ...runBoard,
+        area: {
+          shape: "line",
+          feet: 30,
+          origin: { column: 5, row: 4 },
+          toward: { column: 5, row: 0 },
+        },
+      },
+    });
+    await renderRunner();
+    expect(await screen.findByRole("img", { name: "Pinned: a 30 ft line" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Tools" })).toBeNull();
+    expect(screen.queryByRole("status", { name: "Pinned area" })).toBeNull();
+    // Esc on a board nobody can play on writes nothing.
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(server.calls.filter((call) => call.method === "PUT")).toEqual([]);
   });
 });
 

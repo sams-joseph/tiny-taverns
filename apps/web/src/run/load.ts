@@ -190,15 +190,18 @@ export const liveStateAtom = Atom.family((path: RunPath) =>
 );
 
 /**
- * The fight's board — its own copy of the grid, its map's picture, and its fog.
+ * The fight's board — its own copy of the grid, its map's picture, its fog,
+ * and the area template pinned on it.
  *
- * **Writable, as the fight is (`liveStateAtom`).** The Fog tool's write answers
- * with the board, newer than any read, and the runner draws that answer
- * straight away rather than re-reading it (`RunScreen.tsx`'s `paintFog`).
+ * **Writable, as the fight is (`liveStateAtom`).** The Fog tool's write and the
+ * Area tool's each answer with the board, newer than any read, and the runner
+ * draws that answer straight away rather than re-reading it (`RunScreen.tsx`'s
+ * `paintFog` and `pinArea`).
  *
- * Names no reads: the fog is the one thing the product writes on a fight's
- * board, and only this screen writes it, so a key would have no other writer;
- * another of the DM's tabs is heard through the doorbell's `board-fog-updated`.
+ * Names no reads: the fog and the pin are the only things the product writes
+ * on a fight's board, and only this screen writes them, so a key would have no
+ * other writer; another of the DM's tabs is heard through the doorbell's
+ * `board-fog-updated` and `board-area-updated`.
  * A grid edit on the encounter's page is the next fight's, by design
  * (`EncounterRunBoard`), and Hob finishing the picture is polled for by the
  * band that shows it.
@@ -311,6 +314,15 @@ export const combatantVisibilityWrites = (campaignId: CampaignId): Invalidation 
  * on them. The DM's own board takes the write's answer (`runBoardAtom`).
  */
 export const boardFogWrites = (campaignId: CampaignId): Invalidation => [
+  reads.playerTable(campaignId),
+];
+
+/**
+ * What pinning or clearing an area template changes outside the fight: only
+ * the seated player's table, whose shared board draws it. The DM's own board
+ * takes the write's answer (`runBoardAtom`).
+ */
+export const boardAreaWrites = (campaignId: CampaignId): Invalidation => [
   reads.playerTable(campaignId),
 ];
 

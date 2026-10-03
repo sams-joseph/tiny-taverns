@@ -132,8 +132,11 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
 export const AreaShape = Schema.Literals(["sphere", "cone", "line", "cube"]);
 export type AreaShape = typeof AreaShape.Type;
 
-/** An area's size in feet: the Area tool's 5 to 120, its steps of 5 the tool's own. */
-const areaFeet = Schema.Int.check(Schema.isBetween({ minimum: 5, maximum: 120 }));
+/** The sizes an area takes, in feet: the Area tool's − and + stop here (its steps of 5 are its own). */
+export const AREA_FEET = { minimum: 5, maximum: 120 } as const;
+
+/** An area's size in feet, within {@link AREA_FEET}. */
+const areaFeet = Schema.Int.check(Schema.isBetween(AREA_FEET));
 
 /**
  * An area template pinned on a fight's board: a spell's sphere, cone, line or

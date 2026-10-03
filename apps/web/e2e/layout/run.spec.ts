@@ -14,8 +14,10 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * card's controls inside its edges, the *Rolls* dock taking a click, a long
  * order scrolling sideways inside the strip, every chip in reach of the
  * keyboard, and, on the canvas, a token dragged onto its square with its ruler
- * on the way, an attack picked on the board, and the Fog brush painting it. All of it is layout, stacking,
- * cursors and hit-testing, which jsdom does not compute.
+ * on the way, an attack picked on the board, the Fog brush painting it, and the
+ * dock's Measure and Area taking the pointer over the tokens (a ruler, a
+ * preview, a pin and its banner). All of it is layout, stacking, cursors and
+ * hit-testing, which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`'s
  * `liveFight`): Brannoc standing on a 24 × 16 board with no picture, and a
@@ -1033,6 +1035,183 @@ for (const width of WIDTHS) {
           expect
             .soft(await landsOn(page, centre.x, centre.y), "the token is on top")
             .toMatch(/^Brannoc, column/);
+        });
+      });
+    }
+
+    if (canvas) {
+      test("the board's Measure and Area tools", async ({ app, page }) => {
+        // The Goblin Boss stands two squares to Brannoc's right, where no panel covers him.
+        await page.route(
+          (url) =>
+            /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/combatants$/.test(
+              url.pathname,
+            ),
+          async (route) => {
+            const response = await route.fetch();
+            const rows = (await response.json()) as ReadonlyArray<Record<string, unknown>>;
+            await route.fulfill({
+              response,
+              json: rows.map((row) =>
+                row["displayName"] === "Goblin Boss"
+                  ? { ...row, position: { column: 7, row: 4 } }
+                  : row,
+              ),
+            });
+          },
+        );
+        // The server answers a pin or a clear with the board holding it.
+        await page.route(
+          (url) => url.pathname.endsWith("/board/area"),
+          async (route) => {
+            const board = await route.fetch({
+              url: route
+                .request()
+                .url()
+                .replace(/\/area$/, ""),
+              method: "GET",
+            });
+            const { area } = route.request().postDataJSON() as { area: unknown };
+            await route.fulfill({
+              response: board,
+              json: { ...((await board.json()) as object), area },
+            });
+          },
+        );
+        const writes: Array<{ path: string; body: unknown }> = [];
+        page.on("request", (request) => {
+          if (request.method() !== "GET" && request.url().includes("/stub/"))
+            writes.push({
+              path: new URL(request.url()).pathname.split("/").slice(-2).join("/"),
+              body: request.postDataJSON() as unknown,
+            });
+        });
+        await app.open(run);
+        const map = page.getByRole("region", { name: "Battle map" });
+        const tools = page.locator('[data-slot="run-hud-tools"]');
+        const brannoc = map.getByRole("button", { name: /^Brannoc, column/ });
+        const goblin = map.getByRole("button", { name: /^Goblin Boss, column/ });
+        await expect(goblin).toBeVisible();
+        const tool = (name: string) =>
+          tools.getByRole("group", { name: "Tools" }).getByRole("button", { name, exact: true });
+        const at = await box(brannoc);
+        /** The middle of the square `columns` across and `rows` down from Brannoc's. */
+        const from = (columns: number, rows: number) => ({
+          x: at.x + at.width / 2 + columns * at.width,
+          y: at.y + at.height / 2 + rows * at.height,
+        });
+
+        await test.step("the tools wear their names where the dock has room, and only icons where it has none", async () => {
+          const room = await tools.evaluate((el) => el.parentElement!.clientWidth);
+          const label = tool("Measure").locator("span");
+          // `@xl` of the dock's own container: 36rem.
+          if (room >= 576) await expect.soft(label, `${String(room)}px of room`).toBeVisible();
+          else await expect.soft(label, `${String(room)}px of room`).toBeHidden();
+          const group = await box(tools.getByRole("group", { name: "Tools" }));
+          const dock = await box(tools);
+          expect.soft(right(group), "the tools inside the dock").toBeLessThanOrEqual(right(dock));
+        });
+
+        await test.step("Measure: a drag from a token lays a blue ruler, moving and panning nothing", async () => {
+          await tool("Measure").click();
+          await expect(tool("Measure")).toHaveAttribute("aria-pressed", "true");
+          const view = await viewOf(page);
+          // The tool's layer is on top of the token, so the press is the ruler's.
+          expect
+            .soft(await landsOn(page, from(0, 0).x, from(0, 0).y), "the tool takes the press")
+            .toBe("board-canvas");
+          await expect.soft(map.locator('[data-slot="range-square"]')).toHaveCount(0);
+          await page.mouse.move(from(0, 0).x, from(0, 0).y);
+          await page.mouse.down();
+          await page.mouse.move(from(2, 1).x, from(2, 1).y, { steps: 4 });
+          await page.mouse.move(from(3, 2).x, from(3, 2).y, { steps: 4 });
+          await page.mouse.up();
+          const reading = map.locator('[data-slot="measure-ruler"] [data-slot="ruler-reading"]');
+          // Three across and two down, five-foot diagonals.
+          await expect.soft(reading).toHaveText("15 ft");
+          const info = await page.evaluate(() => {
+            const probe = document.createElement("span");
+            probe.style.color = "var(--info)";
+            document.body.append(probe);
+            const colour = getComputedStyle(probe).color;
+            probe.remove();
+            return colour;
+          });
+          await expect.soft(reading, "the ruler is blue").toHaveCSS("color", info);
+          const label = await box(reading);
+          expect.soft(label.x, "the reading beside the far end").toBeGreaterThan(from(3, 2).x);
+          // The square under the pointer is outlined, where the pointer is.
+          const outline = await box(map.locator('[data-slot="tool-square"]'));
+          expect.soft(outline.x + outline.width / 2, "outline x").toBeCloseTo(from(3, 2).x, 0);
+          expect.soft(outline.y + outline.height / 2, "outline y").toBeCloseTo(from(3, 2).y, 0);
+          expect.soft(await viewOf(page), "nothing panned").toEqual(view);
+          await expect.soft(brannoc).toHaveAccessibleName(/^Brannoc, column 6, row 5/);
+          expect.soft(writes, "nothing written").toEqual([]);
+
+          await page.keyboard.press("Escape");
+          await expect.soft(reading).toHaveCount(0);
+          await expect.soft(tool("Move")).toHaveAttribute("aria-pressed", "true");
+        });
+
+        await test.step("Area: hover previews, a click pins, the banner says who is caught", async () => {
+          await tool("Area").click();
+          const shapes = tools.getByRole("group", { name: "Area" });
+          await shapes.getByRole("button", { name: "Smaller", exact: true }).click();
+          await expect(shapes).toContainText("15 ft");
+          await shapes.getByRole("button", { name: "Smaller", exact: true }).click();
+          await expect(shapes).toContainText("10 ft");
+          // The dock stays between the columns with Area's controls in it.
+          const dock = await box(tools);
+          const left = await box(page.locator('[data-slot="run-hud-left"]'));
+          const panel = await box(page.locator('[data-slot="run-hud-panel"]'));
+          expect.soft(dock.x, "dock after the left column").toBeGreaterThanOrEqual(right(left));
+          expect.soft(right(dock), "dock before the panel").toBeLessThanOrEqual(panel.x);
+
+          await page.mouse.move(from(1, 0).x, from(1, 0).y);
+          const preview = map.locator('[data-slot="board-area"][data-state="preview"]');
+          await expect(preview).toBeVisible();
+          const centre = await box(preview.locator('[data-square="6,4"]'));
+          expect.soft(centre.width, "a square wide").toBeCloseTo(at.width, 0);
+          expect.soft(centre.x, "on its square").toBeCloseTo(at.x + at.width, 0);
+          expect.soft(writes, "a preview writes nothing").toEqual([]);
+
+          await page.mouse.click(from(1, 0).x, from(1, 0).y);
+          await expect.poll(() => writes.map((write) => write.path)).toEqual(["board/area"]);
+          expect.soft(writes[0]?.body).toMatchObject({
+            area: { shape: "sphere", feet: 10, origin: { column: 6, row: 4 } },
+          });
+          await expect(map.locator('[data-slot="board-area"][data-state="pinned"]')).toBeVisible();
+          const banner = page.getByRole("status", { name: "Pinned area" });
+          await expect(banner).toHaveText(/2 caught: Brannoc, Goblin Boss/);
+          const above = await box(banner);
+          const under = await box(tools);
+          expect.soft(above.y + above.height, "the banner over the dock").toBeLessThan(under.y);
+          expect.soft(above.x, "after the left column").toBeGreaterThanOrEqual(right(left));
+          expect.soft(right(above), "before the panel").toBeLessThanOrEqual(panel.x);
+          const clear = banner.getByRole("button", { name: "Clear" });
+          const press = await box(clear);
+          expect
+            .soft(
+              await page.evaluate(
+                ([x, y]) => document.elementFromPoint(x!, y!)?.closest("button")?.textContent,
+                [press.x + press.width / 2, press.y + press.height / 2],
+              ),
+              "Clear is on top",
+            )
+            .toBe("Clear");
+
+          // Back on Move, the tokens are on top of the pinned area again.
+          await tool("Move").click();
+          const token = await box(goblin);
+          expect
+            .soft(await landsOn(page, token.x + token.width / 2, token.y + token.height / 2))
+            .toMatch(/^Goblin Boss, column/);
+
+          await clear.click();
+          await expect.poll(() => writes.length).toBe(2);
+          expect.soft(writes[1]?.body).toMatchObject({ area: null });
+          await expect.soft(banner).toHaveCount(0);
+          await expect.soft(map.locator('[data-slot="board-area"]')).toHaveCount(0);
         });
       });
     }
