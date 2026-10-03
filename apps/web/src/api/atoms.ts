@@ -173,13 +173,14 @@ export const apiAtom = <A, E>(
  *
  * There are two of these, and both are the runner's (`run/load.ts`):
  * `liveStateAtom`, the two rows a live fight changes, and `runBoardAtom`, the
- * fight's board, whose fog the Fog tool paints. The runner is the only screen
- * whose writes carry an answer that is *newer than any read* — the run
- * `nextTurn` returns, the combatant `damage` returns, the board a stroke of fog
- * returns — and whose whole design rests on using it rather than waiting for
- * the doorbell. Before this existed that answer had to go somewhere else, so
- * the fight lived twice: once in the atom the screen read and once in a
- * `useState` copy the controller merged into. Two copies of one fight is exactly the divergence a registry exists to
+ * fight's board, whose fog the Fog tool paints and whose area template the
+ * Area tool pins. The runner is the only screen whose writes carry an answer
+ * that is *newer than any read* — the run `nextTurn` returns, the combatant
+ * `damage` returns, the board a stroke of fog or a pin returns — and whose
+ * whole design rests on using it rather than waiting for the doorbell. Before
+ * this existed that answer had to go somewhere else, so the fight lived twice:
+ * once in the atom the screen read and once in a `useState` copy the
+ * controller merged into. Two copies of one fight is exactly the divergence a registry exists to
  * prevent.
  *
  * **The write is the whole `AsyncResult`, not the value inside it**, and that is

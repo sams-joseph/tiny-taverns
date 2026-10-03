@@ -8,6 +8,7 @@ import {
 import { Card, Icon, SectionHeading, cn } from "@taverns/ui";
 import { useMemo } from "react";
 import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
+import { AreaLayer } from "../run/BoardTools";
 import { FogLayer } from "../run/Fog";
 import { TokenFace } from "../run/TokenFace";
 import { labelsInOrder, percentOf } from "../run/tokens";
@@ -36,6 +37,12 @@ import { labelsInOrder, percentOf } from "../run/tokens";
  * and the grid under it are gone, and so is everything standing there, since
  * the server sends no token under fog but this player's own, which is drawn
  * over it.
+ *
+ * An area the DM has pinned (`PlayerLiveBoard.area`, a spell's sphere, cone,
+ * line or cube) is drawn under the tokens and the fog by the DM's own layer
+ * (`run/BoardTools.tsx`), so the table sees where it lands and who stands in
+ * it. Who it catches is not said here: the DM's banner names creatures this
+ * player may not see.
  *
  * The numbers on two tokens of one name follow this player's order, since the
  * table answers no creation time; they need not match the DM's board.
@@ -68,6 +75,7 @@ export function PlayerBattleMap({
         </SectionHeading>
       </div>
       <BattleMapBoard map={map}>
+        {board.area !== null && <AreaLayer board={map} area={board.area} state="pinned" />}
         <FogLayer board={map} squares={board.fog} veil="opaque" />
         {board.tokens.map((token) => {
           const row = rows.get(token.combatantId);

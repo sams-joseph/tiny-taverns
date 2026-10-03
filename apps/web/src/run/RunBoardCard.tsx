@@ -13,6 +13,7 @@ import {
 } from "@taverns/ui";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
+import { AreaLayer } from "./BoardTools";
 import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens, TokenTray } from "./RunTokens";
 import { TOKEN_NAMES, type TokenNames } from "./tokens";
@@ -43,6 +44,9 @@ import { TOKEN_NAMES, type TokenNames } from "./tokens";
  * token but the party's comes off the players' board at once, while their rows
  * stay in the players' order. It can be set before the map is shared, so a
  * fight can open with the monsters already hidden.
+ *
+ * The dock's tools are the canvas's (`BoardTools.tsx`); this card only draws an
+ * area pinned there, as the players' board does.
  */
 /**
  * The DM's board switches: *Grid* and *Names* (this screen's view) and *Hide
@@ -133,7 +137,7 @@ function TokenNamesMenu({
 
 export function RunBoardCard(props: RunBoardProps) {
   const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
-  const { board, gridShown, setGrid, names, setNames, hint, withBoard } = useRunBoard(props);
+  const { board, gridShown, setGrid, names, setNames, hint, withBoard } = useRunBoard(props, false);
 
   if (resource.state === "loading") return null;
   if (resource.state === "ready" && board === null) return null;
@@ -185,6 +189,7 @@ export function RunBoardCard(props: RunBoardProps) {
         withBoard !== undefined && (
           <>
             <BattleMapBoard map={{ ...board, grid: gridShown ? "square" : "none" }}>
+              {board.area !== null && <AreaLayer board={board} area={board.area} state="pinned" />}
               <RunTokens {...withBoard} />
             </BattleMapBoard>
             <TokenTray {...withBoard} />

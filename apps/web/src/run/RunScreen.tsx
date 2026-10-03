@@ -1,4 +1,5 @@
 import type {
+  BoardArea,
   BoardSquare,
   Combatant,
   CombatantId,
@@ -64,6 +65,7 @@ import { runSceneAtom, saveModifier, sceneBadge, sceneNoun, sceneUpLine } from "
 import { SceneRunner } from "./SceneRunner";
 import {
   boardFogWrites,
+  boardAreaWrites,
   combatantVisibilityWrites,
   combatantWrites,
   deathSaveWrites,
@@ -686,11 +688,11 @@ export function RunScreen() {
   const writeBoard = useAtomSet(runBoardAtom(path));
   const registry = useContext(RegistryContext);
   /**
-   * The board's fog line: the Fog tool's writes and the doorbell's re-reads of
-   * the board go through it one at a time, in the order they were asked for.
-   * So answers land in the order the server applied them, and a re-read never
-   * lands older fog over a stroke this tab wrote after it was asked for. A task
-   * that fails leaves the line open for the next.
+   * The board's line: the Fog and Area tools' writes and the doorbell's
+   * re-reads of the board go through it one at a time, in the order they were
+   * asked for. So answers land in the order the server applied them, and a
+   * re-read never lands an older board over a stroke or a pin this tab wrote
+   * after it was asked for. A task that fails leaves the line open for the next.
    */
   const boardLine = useRef<Promise<void>>(Promise.resolve());
   const inBoardLine = useCallback((task: () => Promise<void>): Promise<void> => {
@@ -780,6 +782,7 @@ export function RunScreen() {
   const moves = useMutation();
   const mapShare = useMutation();
   const fogs = useMutation();
+  const areas = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -797,9 +800,9 @@ export function RunScreen() {
       refresh();
       reloadScene();
       reloadRolls();
-      // The fog is the board's, which nothing else re-reads: another of the
-      // DM's tabs painted it.
-      if (event.kind === "board-fog-updated") rereadBoard();
+      // The fog and the pinned area are the board's, which nothing else
+      // re-reads: another of the DM's tabs painted or pinned them.
+      if (event.kind === "board-fog-updated" || event.kind === "board-area-updated") rereadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
     [refresh, reloadScene, reloadRolls, rereadBoard],
@@ -1211,6 +1214,34 @@ export function RunScreen() {
     });
 
   /**
+   * The Area tool's write, in the board's line with the fog's: pin a template,
+   * or clear it. Its answer is the board, written straight into the board's
+   * atom, so the pin stays where it was put.
+   */
+  const pinArea = (area: BoardArea | null): Promise<void> =>
+    inBoardLine(async () => {
+      const saved = await areas
+        .submit(
+          (client) =>
+            client.runs.setArea({
+              params: path,
+              payload: { area, requestId: newRequestId() },
+            }),
+          boardAreaWrites(campaignId),
+        )
+        .catch(() => undefined);
+      if (saved !== undefined && Result.isSuccess(saved)) {
+        writeBoard((current) => AsyncResult.map(current, () => saved.success));
+        return;
+      }
+      toast.add({
+        type: "destructive",
+        title: area === null ? "The area is still pinned" : "The area was not pinned",
+        description: "That did not reach the server. The board shows the area it holds.",
+      });
+    });
+
+  /**
    * How far someone walks, from the front of their speed: the stat block's for
    * a creature, the sheet's for a party member, nothing for a row the DM typed.
    */
@@ -1476,6 +1507,7 @@ export function RunScreen() {
           hiding: mapShare.busy,
           onHideHostile: (hidden) => void setShown(mapShare, { hostileTokensHidden: hidden }),
           onFog: paintFog,
+          onArea: pinArea,
         };
 
   return (

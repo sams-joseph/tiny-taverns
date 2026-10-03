@@ -65,7 +65,7 @@ Four facts the library does not advertise:
 
 `run/load.ts` cuts the fight along what a hit changes: `runFrameAtom` (campaign, night, stat blocks; read once), `liveStateAtom` (run, combatants, Hob's audit rows; refreshed by the doorbell), and `runViewAtom`, derived from both with a refresh callback naming both.
 
-**The runner's two live reads are the product's only writable ones** (`writableApiAtom`): `liveStateAtom`, and `runBoardAtom`, whose fog the Fog tool writes. The runner learns what it just did from its own write's answer, which keeps it usable with the connection down; before the atom was writable that answer lived in a second `useState` copy of the fight, and two copies could disagree. The write is the whole `AsyncResult`, because `useAtomSet` treats a function argument as a functional update: `set((current) => AsyncResult.map(current, edit))`, which carries the edit into a failure's previous success too.
+**The runner's two live reads are the product's only writable ones** (`writableApiAtom`): `liveStateAtom`, and `runBoardAtom`, whose fog the Fog tool writes and whose area template the Area tool pins. The runner learns what it just did from its own write's answer, which keeps it usable with the connection down; before the atom was writable that answer lived in a second `useState` copy of the fight, and two copies could disagree. The write is the whole `AsyncResult`, because `useAtomSet` treats a function argument as a functional update: `set((current) => AsyncResult.map(current, edit))`, which carries the edit into a failure's previous success too.
 
 **A failure with a previous success is a staleness banner, not an error card.** `runViewAtom` contributes the previous success; a failure with none is the first load failing.
 

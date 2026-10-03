@@ -315,6 +315,33 @@ describe("PlayerTableScreen", () => {
     expect(map.queryByRole("img", { name: /^Marsh Hag/ })).toBeNull();
   });
 
+  it("draws the area the DM pinned under the tokens, and names nobody it catches", async () => {
+    const sphere = { shape: "sphere", feet: 10, origin: { column: 5, row: 4 } } as const;
+    server.routes.set(
+      ...playing(campaignId, { order: tableOrder, board: { ...sharedBoard, area: sphere } }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const area = map.getByRole("img", { name: "Pinned: a 10 ft sphere" });
+    // Two squares each way of the square it is centred on, drawn under the tokens.
+    expect(area.querySelector("[data-square='5,4']")).not.toBeNull();
+    expect(area.querySelector("[data-square='7,4']")).not.toBeNull();
+    expect(area.querySelector("[data-square='8,4']")).toBeNull();
+    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    expect(area.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Who it catches is the DM's banner, over creatures this player may not see.
+    expect(screen.queryByText(/caught/)).toBeNull();
+  });
+
+  it("draws no area once the DM has cleared it", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    expect(map.getByRole("img", { name: /^Brannoc Duskharrow/ })).toBeInTheDocument();
+    expect(map.queryByRole("img", { name: /^Pinned/ })).toBeNull();
+  });
+
   it("lays an ally's portrait on its row, and draws none where there is none", async () => {
     server.routes.set(
       ...playing(campaignId, {

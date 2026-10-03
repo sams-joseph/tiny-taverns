@@ -11,7 +11,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  *
  * Read over the `seated` scenario (`test/scenarios.ts`): Brannoc, Nessa and a
  * Marsh Hag in the order, Brannoc up, and a 24 × 16 board of 64px squares on a
- * 1536 × 1024 picture with Brannoc and the hag standing on it.
+ * 1536 × 1024 picture with Brannoc and the hag standing on it. An area the DM
+ * pins is answered in the page, and lies on its squares under the tokens.
  */
 
 const table = screens.find((screen) => screen.name === "player-table-fight")!;
@@ -192,6 +193,66 @@ for (const width of WIDTHS) {
           [at.x + at.width / 2, at.y + at.height / 2],
         );
         expect.soft(hit, "his token is on top").toMatch(/^Brannoc Duskharrow \(you\)/);
+      });
+    });
+
+    test("an area the DM pinned on the shared map", async ({ app, page }) => {
+      // The DM has pinned a 10 ft sphere on Brannoc's square.
+      await page.route(
+        (url) => /\/stub\/campaigns\/[^/]+\/table$/.test(url.pathname),
+        async (route) => {
+          const response = await route.fetch();
+          const table = (await response.json()) as {
+            fight?: { board?: Record<string, unknown> | null } | null;
+          };
+          const board = table.fight?.board;
+          await route.fulfill({
+            response,
+            json:
+              board === undefined || board === null
+                ? table
+                : {
+                    ...table,
+                    fight: {
+                      ...table.fight,
+                      board: {
+                        ...board,
+                        area: { shape: "sphere", feet: 10, origin: { column: 5, row: 4 } },
+                      },
+                    },
+                  },
+          });
+        },
+      );
+      await app.open(table);
+      const card = page.getByRole("region", { name: "Battle map" });
+      const board = card.locator('[data-slot="battle-map"]');
+      const area = card.getByRole("img", { name: "Pinned: a 10 ft sphere" });
+      await expect(area).toBeVisible();
+
+      await test.step("the area lies on its squares, under the tokens", async () => {
+        const inner = await board.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x + el.clientLeft, y: r.y + el.clientTop, width: el.clientWidth };
+        });
+        const square = inner.width / COLUMNS;
+        // A square's box takes in its one-pixel stroke, so measure its middle.
+        const edge = await box(area.locator('[data-square="7,4"]'));
+        expect.soft(Math.abs(edge.width - square), "a square wide").toBeLessThan(1.5);
+        expect.soft(edge.x + edge.width / 2, "its column").toBeCloseTo(inner.x + 7.5 * square, 0);
+        expect.soft(edge.y + edge.height / 2, "its row").toBeCloseTo(inner.y + 4.5 * square, 0);
+        const you = await box(card.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ }));
+        const hit = await page.evaluate(
+          ([x, y]) =>
+            document
+              .elementFromPoint(x!, y!)
+              ?.closest("[data-slot=token]")
+              ?.getAttribute("aria-label") ?? null,
+          [you.x + you.width / 2, you.y + you.height / 2],
+        );
+        expect.soft(hit, "the token is on top of the area").toMatch(/^Brannoc Duskharrow \(you\)/);
+        await expect.soft(card.getByRole("button")).toHaveCount(0);
+        await expect.soft(page.getByText(/caught/)).toHaveCount(0);
       });
     });
   });
