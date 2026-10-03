@@ -306,8 +306,10 @@ export class Recap extends Context.Service<
       /**
        * The player projection of the fights' rows: the same predicate, a
        * different select list, and only a fight's — a conversation, a skill
-       * challenge or a hazard had no initiative order at the table — less
-       * what stands under the fight's fog, as at the table.
+       * challenge or a hazard had no initiative order at the table — less,
+       * while the fight is live, what stands under its fog, as at the table.
+       * Fog is a live-board tool: once the fight ends, its rows follow the
+       * ordinary per-row rule alone.
        */
       const playerCombatantsOf = SqlSchema.findAll({
         Request: RunsRequest,
@@ -320,10 +322,9 @@ export class Recap extends Context.Service<
               select 1 from encounter_run
               where encounter_run.id = combatant.encounter_run_id
                 and encounter_run.mode = 'combat'
+                and (encounter_run.ended_at is not null
+                  or not ${hiddenByFog(sql, campaignId, actor)})
             )
-            -- The table's rule: what stands under fog is not in a player's
-            -- order, so a recap read mid-fight does not name it either.
-            and not ${hiddenByFog(sql, campaignId, actor)}
           ${initiativeOrder(sql)}
         `,
       });

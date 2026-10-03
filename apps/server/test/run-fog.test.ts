@@ -556,4 +556,37 @@ describeLayer("run-fog", shared, (it) => {
       yield* endNight(session);
     }),
   );
+
+  it.effect("names a fogged creature in a player's recap once the fight ends", () =>
+    Effect.gen(function* () {
+      const { jo, ilse } = yield* Fixture;
+      const session = yield* night();
+      const { fight, params, tamsin, wren, archer, sentry } = yield* aFight(session);
+      yield* as(jo.token, (client) =>
+        client.combatants.update({
+          params: { ...params, combatantId: sentry.id },
+          payload: { visibility: "dm" },
+        }),
+      );
+      yield* fog(params, { hide: [ARCHER, SENTRY] });
+      const recapOf = () =>
+        Effect.map(
+          as(ilse.token, (client) =>
+            client.recap.readAsPlayer({
+              params: { campaignId: params.campaignId, sessionId: session },
+            }),
+          ),
+          (recap) =>
+            recap.fights
+              .find((one) => one.run.id === fight.id)!
+              .combatants.map((row) => row.id)
+              .sort(),
+        );
+      expect(yield* recapOf()).toEqual([tamsin.id, wren.id].sort());
+
+      yield* as(jo.token, (client) => client.runs.end({ params, payload: {} }));
+      expect(yield* recapOf()).toEqual([tamsin.id, wren.id, archer.id].sort());
+      yield* endNight(session);
+    }),
+  );
 });
