@@ -10,11 +10,13 @@ import { SqlClient } from "effect/sql";
  * It is where a spell lands right now, the maintainer's decision D14 of
  * 2026-10-02 ("player and dm and temporary"), not something that happened. So
  * it is columns on `encounter_run_board`, the fight's working surface, and not
- * a table a recap or the log reads: nothing reads it once the fight ends, and
- * both ways a fight ends (`EncounterRuns.end` and the night carrying it,
- * `Sessions`) clear it. `resume` copies the board column by column and leaves
- * these out, so a resumed fight starts with nothing pinned. Clearing sets them
- * all back to `null`; there is no history of what was pinned.
+ * a table of its own: nothing reads it once the fight ends, and both ways a
+ * fight ends (`EncounterRuns.end` and the night carrying it, `Sessions`) clear
+ * it. `resume` copies the board column by column and leaves these out, so a
+ * resumed fight starts with nothing pinned. Clearing sets them all back to
+ * `null`, so the board holds no history of what was pinned; each pin and clear
+ * does append a `board-area-updated` line carrying the template, which the
+ * DM's run log shows as a line, and no recap or player read uses that payload.
  *
  * ### One template, whole or absent
  *
