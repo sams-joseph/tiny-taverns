@@ -9,6 +9,7 @@ import {
   type CombatantMove,
   CombatantPosition,
   type CombatantUpdate,
+  concentrationDc,
   Conflict,
   EncounterRunId,
   type InitiativeSet,
@@ -165,6 +166,15 @@ export class Combatants extends Context.Service<
         Schema.Struct({ ...combatantFields(sign), tokenShown: Schema.Boolean }),
         { portrait: "portrait_id" },
       );
+      /** A damaged or healed combatant, and the two facts about it before the hit. */
+      const HitRow = fromColumns(
+        Schema.Struct({
+          ...combatantFields(sign),
+          hpBefore: Schema.Int,
+          wasConcentrating: Schema.Boolean,
+        }),
+        { portrait: "portrait_id" },
+      );
 
       /** One combatant of this fight, through the writer's predicate. */
       const one = SqlSchema.findOne({
@@ -215,17 +225,25 @@ export class Combatants extends Context.Service<
           returning ${combatantColumns(sql, campaignId, actor)}
         `,
       });
-      /** Hit points moved by a delta, clamped in the statement that moves them. */
+      /**
+       * Hit points moved by a delta, clamped in the statement that moves them,
+       * with what the row held before: the clamp throws the old number away,
+       * and the log line wants "31 → 19". `old` is Postgres 18's pre-update
+       * row, so the before and the after are one statement's two halves rather
+       * than a read another hit could land between.
+       */
       const hit = SqlSchema.findOne({
         Request: Schema.toType(Schema.Struct({ ...inFight, id: CombatantId, amount: Schema.Int })),
-        Result: CombatantRow,
+        Result: HitRow,
         execute: ({ campaignId, actor, runId, id, amount }) => sql`
           update combatant
           set hp_current = ${clampedCombatantHp(sql, amount)},
               updated_at = now()
           where combatant.id = ${id}
             and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-          returning ${combatantColumns(sql, campaignId, actor)}
+          returning ${combatantColumns(sql, campaignId, actor)},
+            old.hp_current as hp_before,
+            'Concentrating' = any(old.conditions) as was_concentrating
         `,
       });
       const place = SqlSchema.findOne({
@@ -496,6 +514,12 @@ export class Combatants extends Context.Service<
          * - It does not move the turn marker. A creature dropping does not end
          *   its turn.
          *
+         * What it does add is to the log line, for the DM's dock: the hit
+         * points before the hit, which the clamp would otherwise lose, and the
+         * Constitution save's DC when a row holding `Concentrating` took damage
+         * and is still standing. The DC is a note, not a ruling: the condition
+         * stays until the DM clears it, whatever the die says.
+         *
          * `greatest`/`least` in SQL rather than in TypeScript so the clamp is
          * atomic with the read: two hits landing together must total both, and
          * a read-modify-write here would lose one.
@@ -511,13 +535,18 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
-                  const combatant = yield* hit({
+                  const { hpBefore, wasConcentrating, ...hurt } = yield* hit({
                     campaignId,
                     actor,
                     runId,
                     id,
                     amount: payload.amount,
                   }).pipe(orNotFound("combatant", id));
+                  const combatant = new Combatant(hurt, { disableChecks: true });
+                  // The save is owed only by a creature that was holding a
+                  // spell, took damage, and is still up to make it.
+                  const owesSave =
+                    wasConcentrating && payload.amount > 0 && combatant.hpCurrent > 0;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-damaged",
@@ -526,8 +555,10 @@ export class Combatants extends Context.Service<
                     characterId: combatant.characterId ?? undefined,
                     payload: {
                       amount: payload.amount,
+                      hpBefore,
                       hpCurrent: combatant.hpCurrent,
                       hpMax: combatant.hpMax,
+                      ...(owesSave ? { concentrationDc: concentrationDc(payload.amount) } : {}),
                     },
                     requestId: payload.requestId,
                     visibility: combatant.visibility,

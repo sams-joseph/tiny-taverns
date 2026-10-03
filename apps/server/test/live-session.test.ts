@@ -593,6 +593,89 @@ describeLayer("live-session", shared, (it) => {
         expect(log.filter((e) => e.kind === "combatant-damaged")).toHaveLength(2);
       }),
     );
+
+    it.effect("logs the hit points before each hit, which the clamp at zero would lose", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const combatants = yield* Combatants;
+        const events = yield* SessionEvents;
+        const session = yield* freshSession(123);
+        const run = yield* startOn(session.id);
+        const list = yield* withActor(fixture.dm)(
+          combatants.list(fixture.asDm, session.id, run.id),
+        );
+        const archer = list.find((c) => c.displayName === "Goblin Archer")!;
+        const brannoc = list.find((c) => c.displayName === "Brannoc")!;
+        const damage = (id: typeof archer.id, amount: number) =>
+          withActor(fixture.dm)(
+            combatants.damage(fixture.asDm, session.id, run.id, id, { amount }),
+          ).pipe(Effect.orDie);
+
+        yield* damage(archer.id, 99);
+        yield* damage(brannoc.id, 8);
+        yield* damage(brannoc.id, -99);
+
+        const log = yield* withActor(fixture.dm)(events.list(fixture.asDm, session.id, {}));
+        // Exact shapes: nobody here was concentrating, so no line names a save.
+        expect(
+          log.filter((e) => e.kind === "combatant-damaged").map((e) => e.payload),
+        ).toStrictEqual([
+          { amount: 99, hpBefore: 7, hpCurrent: 0, hpMax: 7 },
+          { amount: 8, hpBefore: 52, hpCurrent: 44, hpMax: 52 },
+          { amount: -99, hpBefore: 44, hpCurrent: 52, hpMax: 52 },
+        ]);
+      }),
+    );
+
+    it.effect(
+      "names the concentration save only when a concentrating creature took damage and is still up",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const combatants = yield* Combatants;
+          const events = yield* SessionEvents;
+          const session = yield* freshSession(124);
+          const run = yield* startOn(session.id);
+          const list = yield* withActor(fixture.dm)(
+            combatants.list(fixture.asDm, session.id, run.id),
+          );
+          const hag = list.find((c) => c.displayName === "Marsh Hag")!;
+          const damage = (amount: number) =>
+            withActor(fixture.dm)(
+              combatants.damage(fixture.asDm, session.id, run.id, hag.id, { amount }),
+            ).pipe(Effect.orDie);
+          const lastSave = Effect.gen(function* () {
+            const log = yield* withActor(fixture.dm)(events.list(fixture.asDm, session.id, {}));
+            const line = log.filter((e) => e.kind === "combatant-damaged").at(-1)!;
+            return (line.payload as { readonly concentrationDc?: number }).concentrationDc;
+          });
+
+          // Not concentrating: a hit is a hit.
+          yield* damage(30);
+          expect(yield* lastSave).toBeUndefined();
+
+          yield* withActor(fixture.dm)(
+            combatants.update(fixture.asDm, session.id, run.id, hag.id, {
+              conditions: ["Concentrating"],
+            }),
+          ).pipe(Effect.orDie);
+
+          // Half the damage, rounded down, once that beats ten.
+          yield* damage(25);
+          expect(yield* lastSave).toBe(12);
+          yield* damage(4);
+          expect(yield* lastSave).toBe(10);
+          // Healing is not damage, and owes no save.
+          yield* damage(-5);
+          expect(yield* lastSave).toBeUndefined();
+          // Dropped to zero: there is nobody left to make the save.
+          const down = yield* damage(999);
+          expect(down.hpCurrent).toBe(0);
+          expect(yield* lastSave).toBeUndefined();
+          // The log notes the save; it does not rule on it.
+          expect(down.conditions).toEqual(["Concentrating"]);
+        }),
+    );
   });
 
   describe("the turn marker", () => {
