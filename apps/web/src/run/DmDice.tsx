@@ -13,6 +13,7 @@ const SHOWN = 6;
 
 export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
   const lines = dmLines(dice.rolls).slice(0, SHOWN);
+  const roll = dice.roll;
   return (
     <section
       aria-label="Dice"
@@ -24,19 +25,21 @@ export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
           Dice
         </SectionHeading>
       </div>
-      <div className="grid grid-cols-7 gap-1">
-        {DICE.map((die) => (
-          <button
-            key={die}
-            type="button"
-            aria-label={`Roll a ${die}`}
-            onClick={() => dice.roll(die, `1${die}`)}
-            className="h-control-sm cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-mono font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
-          >
-            {die}
-          </button>
-        ))}
-      </div>
+      {roll !== undefined && (
+        <div className="grid grid-cols-7 gap-1">
+          {DICE.map((die) => (
+            <button
+              key={die}
+              type="button"
+              aria-label={`Roll a ${die}`}
+              onClick={() => roll(die, `1${die}`)}
+              className="h-control-sm cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-mono font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
+            >
+              {die}
+            </button>
+          ))}
+        </div>
+      )}
       {lines.length === 0 ? (
         <p className="text-body-s leading-body text-faint">
           Rolls show up here. Tap a die, a stat or an attack.

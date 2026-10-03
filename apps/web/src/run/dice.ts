@@ -147,10 +147,14 @@ export interface DmDice {
    * Roll a notation under a label, file it, and answer with what it came to —
    * a scene's *Roll for them* types the total into the check it is making. A
    * notation that does not parse rolls nothing.
+   *
+   * Absent, with `file`, unless the page's run is the night's live run: the
+   * server files a roll under the campaign's current night and its active run,
+   * so anywhere else a throw would land in the wrong record.
    */
-  readonly roll: (label: string, notation: string) => LocalRoll | undefined;
+  readonly roll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
   /** File the throws of one act rolled elsewhere — an attack, an action off its turn, a save — as one line. */
-  readonly file: (throws: ReadonlyArray<DmThrow>) => void;
+  readonly file: ((throws: ReadonlyArray<DmThrow>) => void) | undefined;
 }
 
 /**
@@ -161,6 +165,8 @@ export interface DmDice {
 export function useDmDice(
   path: { readonly campaignId: CampaignId; readonly sessionId: SessionId },
   saved: ReadonlyArray<Roll>,
+  /** The page's run is the night's live run (`roll`). */
+  live: boolean,
 ): DmDice {
   const { campaignId, sessionId } = path;
   const [pending, setPending] = useState<ReadonlyArray<Pending>>([]);
@@ -230,5 +236,5 @@ export function useDmDice(
     [file],
   );
 
-  return { rolls, roll, file };
+  return live ? { rolls, roll, file } : { rolls, roll: undefined, file: undefined };
 }

@@ -716,7 +716,6 @@ export function RunScreen() {
   // The night's rolls: the DM's own, which their dice file and read back
   // (`dice.ts`), and the players' tray.
   const nightRolls = rollsResource.state === "ready" ? rollsResource.value : NO_ROLLS;
-  const dice = useDmDice(path, nightRolls);
   const trayRolls = useMemo(() => nightRolls.filter((roll) => !isDmRoll(roll)), [nightRolls]);
 
   // The fight's own half, from the same atom the value above is built on — so
@@ -724,6 +723,18 @@ export function RunScreen() {
   // be two different answers.
   const controller = useRunState(path);
   const state = controller.state;
+  // The server files a DM roll under the campaign's current night and its
+  // active run, so the dice are out only on that run: not on an ended one, and
+  // not on a past night's log.
+  const dice = useDmDice(
+    path,
+    nightRolls,
+    view !== undefined &&
+      state !== undefined &&
+      state.run.endedAt === null &&
+      view.campaign.currentSessionId === sessionId &&
+      view.session.activeEncounterRunId === runId,
+  );
   // The *This turn* toggles, and `spendAction`, which an attack calls.
   const turnTicks = useTurnTicks(path, controller);
 
@@ -979,7 +990,7 @@ export function RunScreen() {
   const strike = (combatant: Combatant) => {
     if (picking === undefined) return;
     const attacker = state?.combatants.find((row) => row.id === picking.attackerId);
-    if (attacker === undefined || combatant.id === attacker.id) return;
+    if (attacker === undefined || combatant.id === attacker.id || dice.file === undefined) return;
     const outcome = resolveAttack({
       attacker: attacker.displayName,
       line: picking.line,
@@ -1028,6 +1039,7 @@ export function RunScreen() {
 
   /** The concentration save the attack's hit set up, filed with the DM's dice; once per hit. */
   const rollConcentration = (target: Combatant, dc: number, modifier: number) => {
+    if (dice.file === undefined) return;
     const save = concentrationThrow({
       target: target.displayName,
       targetId: target.id,
@@ -1335,11 +1347,13 @@ export function RunScreen() {
     struckSource === undefined
       ? undefined
       : saveModifier(struckSource.statBlock ?? struckSource.sheet ?? NO_ABILITIES, "CON");
+  const file = dice.file;
   const result = attack && {
     outcome: attack.outcome,
     applied: attack.applied !== undefined,
     concentrationDc: owed,
     onRollSave:
+      file !== undefined &&
       struck !== undefined &&
       owed !== undefined &&
       conSave !== undefined &&
@@ -1398,16 +1412,23 @@ export function RunScreen() {
           ? result
           : undefined
       }
-      onAttack={(line) => {
-        if (selected === undefined) return;
-        setAttack(undefined);
-        setTargeting({ attackerId: selected.id, line });
-      }}
-      onRollAction={(line) =>
-        selected !== undefined &&
-        dice.file(
-          rollActionThrows({ attacker: selected.displayName, attackerId: selected.id, line }),
-        )
+      onAttack={
+        file === undefined
+          ? undefined
+          : (line) => {
+              if (selected === undefined) return;
+              setAttack(undefined);
+              setTargeting({ attackerId: selected.id, line });
+            }
+      }
+      onRollAction={
+        file === undefined
+          ? undefined
+          : (line) =>
+              selected !== undefined &&
+              file(
+                rollActionThrows({ attacker: selected.displayName, attackerId: selected.id, line }),
+              )
       }
       onApplyResult={(amount) => void applyAttack(amount)}
       onDismissResult={() => setAttack(undefined)}

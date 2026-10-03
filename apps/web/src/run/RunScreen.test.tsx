@@ -2997,6 +2997,106 @@ describe("the DM's rolls, kept by the server", () => {
     expect(latest().getByText(totals[0]!)).toBeInTheDocument();
   });
 
+  /** Brannoc's sheet with a Longsword to swing. */
+  const armBrannoc = () =>
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: runParty.map((seat) => ({
+        ...seat,
+        character: {
+          ...seat.character,
+          sheet: {
+            ...seat.character.sheet,
+            actions: [
+              {
+                id: "atk:longsword",
+                name: "Longsword",
+                cost: "action",
+                hit: "+7",
+                dice: "1d8+4",
+                damageType: "Slashing",
+                source: "weapon",
+              },
+            ],
+          },
+        },
+      })),
+    });
+
+  /** Every way the runner offers to roll into the DM's dice, for the creature the panel shows. */
+  const rollButtons = () =>
+    screen
+      .queryAllByRole("button")
+      .map((button) => button.getAttribute("aria-label") ?? "")
+      .filter((label) => /^(Roll |Attack with )/.test(label));
+
+  it("puts the dice away once the fight is over, leaving the log", async () => {
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, endedAt: liveRun.startedAt },
+    });
+    await renderRunner();
+    await screen.findByText(/came off the table/);
+    expect(dock().getByText(/Nothing rolled yet/)).toBeInTheDocument();
+    expect(rollButtons()).toEqual([]);
+
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+    await openStatBlock();
+    expect(panel().getByText("Nimble Escape")).toBeInTheDocument();
+    expect(rollButtons()).toEqual([]);
+    expect(filed()).toEqual([]);
+  });
+
+  it("puts the dice away on a past night's log, which is not the campaign's current night", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    armBrannoc();
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await waitFor(() =>
+      expect(panel().getByRole("region", { name: "Actions of Brannoc" })).toBeInTheDocument(),
+    );
+    expect(rollButtons()).toEqual([]);
+
+    await userEvent.click(rowFor("Goblin Boss"));
+    await openStatBlock();
+    expect(panel().getByText("Nimble Escape")).toBeInTheDocument();
+    expect(rollButtons()).toEqual([]);
+    expect(filed()).toEqual([]);
+  });
+
+  it("offers every roll on the night's live run", async () => {
+    armBrannoc();
+    await renderRunner();
+    await waitFor(() =>
+      expect(panel().getByRole("button", { name: "Attack with Longsword" })).toBeInTheDocument(),
+    );
+    expect(rollButtons()).toEqual(
+      expect.arrayContaining(["Attack with Longsword", "Roll a d4", "Roll a d100"]),
+    );
+    await userEvent.click(rowFor("Goblin Boss"));
+    await openStatBlock();
+    expect(rollButtons()).toEqual(
+      expect.arrayContaining(["Roll Scimitar", "Roll Scimitar, 1d6+2"]),
+    );
+  });
+
+  it("puts a scene's dice away on a past night's log", async () => {
+    for (const [key, answer] of liveScene("challenge"))
+      if (!key.endsWith("/rolls")) server.routes.set(key, answer);
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Dice" });
+    expect(screen.getByRole("button", { name: "Roll for them" })).toBeDisabled();
+    expect(rollButtons()).toEqual([]);
+  });
+
   it("keeps forty lines of acts that took more than forty throws, each with its to-hit", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
