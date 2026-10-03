@@ -124,15 +124,13 @@ export const fogColumn = (sql: SqlClient.SqlClient) => sql`
 
 /**
  * The area template pinned on a fight's board as the wire spells it
- * (`BoardArea`), or `null` when nothing is pinned or the fight is over: a
- * template is where a spell lands now (`0090_run_board_area.ts`), and both
- * ends clear it, so the second test only keeps a missed clear off the wire.
+ * (`BoardArea`), or `null` when nothing is pinned. A fight that is over has
+ * nothing pinned: a template is where a spell lands now
+ * (`0090_run_board_area.ts`), and both ends clear it (`clearArea`).
  * `encounter_run_board` must be in scope.
  */
 export const areaColumn = (sql: SqlClient.SqlClient) => sql`
   case when encounter_run_board.area_shape is not null
-    and exists (select 1 from encounter_run pinned_on
-                where pinned_on.id = encounter_run_board.run_id and pinned_on.ended_at is null)
   then jsonb_build_object(
          'shape', encounter_run_board.area_shape,
          'feet', encounter_run_board.area_feet,
