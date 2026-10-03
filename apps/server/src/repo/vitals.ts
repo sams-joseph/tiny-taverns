@@ -3,6 +3,7 @@ import {
   type CampaignId,
   CharacterId,
   CombatantId,
+  type DeathSaves,
   EncounterRunId,
   SessionId,
 } from "@taverns/api";
@@ -115,10 +116,115 @@ export const clampedCharacterHp = (sql: SqlClient.SqlClient, amount: number): St
   sql`greatest(0, least(coalesce(character.hp_max, 10000),
                         coalesce(character.hp_current, character.hp_max, 0) - ${amount}))`;
 
-/** What a write-through carries. Both are optional; neither may be null. */
+/**
+ * **The death-save rule a change of hit points carries**, as the two `set`
+ * assignments that apply it — in the same statement as the hit points, so it
+ * reads the number from before the change and is atomic with it.
+ *
+ * - Damage to a creature already at zero adds a failure, or `failuresOnHit`
+ *   (two for a critical). Both counts stop at three. A stable creature (three
+ *   successes) that is hit is dying again: its successes go back to zero.
+ * - Any healing from zero clears both counts.
+ * - Anything else leaves them as they are; dropping *to* zero adds nothing.
+ *
+ * `applies` is who makes death saves at all — a player character — and a row
+ * it does not hold for keeps its counts untouched.
+ */
+const deathSavesAfter = (
+  sql: SqlClient.SqlClient,
+  args: {
+    readonly table: "combatant" | "character";
+    readonly applies: Statement.Fragment;
+    readonly hpBefore: Statement.Fragment;
+    readonly hpAfter: Statement.Fragment;
+    /** Zero unless this change is damage. */
+    readonly failuresOnHit: number;
+  },
+): Statement.Fragment => {
+  const { table, applies, hpBefore, hpAfter, failuresOnHit } = args;
+  const failures = sql(`${table}.death_save_failures`);
+  const successes = sql(`${table}.death_save_successes`);
+  const failed =
+    failuresOnHit > 0
+      ? sql`when (${applies}) and ${hpBefore} = 0
+              then least(3, ${failures} + ${failuresOnHit}::integer)`
+      : sql``;
+  const destabilised =
+    failuresOnHit > 0
+      ? sql`when (${applies}) and ${hpBefore} = 0 and ${successes} >= 3 then 0`
+      : sql``;
+  return sql`
+    death_save_failures = case
+      ${failed}
+      when (${applies}) and ${hpBefore} = 0 and ${hpAfter} > 0 then 0
+      else ${failures}
+    end,
+    death_save_successes = case
+      ${destabilised}
+      when (${applies}) and ${hpBefore} = 0 and ${hpAfter} > 0 then 0
+      else ${successes}
+    end
+  `;
+};
+
+/**
+ * {@link deathSavesAfter} for the fight's copy and a delta through
+ * {@link clampedCombatantHp}. Only a `pc` row makes death saves; an NPC's
+ * counts are never moved, and the wire draws them as `null`.
+ */
+export const combatantDeathSavesAfterDelta = (
+  sql: SqlClient.SqlClient,
+  amount: number,
+  critical: boolean,
+): Statement.Fragment =>
+  deathSavesAfter(sql, {
+    table: "combatant",
+    applies: sql`combatant.kind = 'pc'`,
+    hpBefore: sql`combatant.hp_current`,
+    hpAfter: clampedCombatantHp(sql, amount),
+    failuresOnHit: amount > 0 ? (critical ? 2 : 1) : 0,
+  });
+
+/**
+ * {@link deathSavesAfter} for the fight's copy and an absolute hit-point
+ * total — the DM's *Edit*. Setting a number is never a hit, so this can only
+ * clear the counts, when it lifts a player character off zero.
+ */
+export const combatantDeathSavesAfterSet = (
+  sql: SqlClient.SqlClient,
+  hpCurrent: number,
+): Statement.Fragment =>
+  deathSavesAfter(sql, {
+    table: "combatant",
+    applies: sql`combatant.kind = 'pc'`,
+    hpBefore: sql`combatant.hp_current`,
+    hpAfter: sql`${hpCurrent}::integer`,
+    failuresOnHit: 0,
+  });
+
+/**
+ * {@link deathSavesAfter} for a character with no fight, against `hpAfter` —
+ * {@link clampedCharacterHp} for a delta, or a rest's total. A character
+ * nobody has damaged counts down from full, as the clamp does.
+ */
+export const characterDeathSavesAfter = (
+  sql: SqlClient.SqlClient,
+  hpAfter: Statement.Fragment,
+  amount: number,
+): Statement.Fragment =>
+  deathSavesAfter(sql, {
+    table: "character",
+    applies: sql`true`,
+    hpBefore: sql`coalesce(character.hp_current, character.hp_max, 0)`,
+    hpAfter,
+    failuresOnHit: amount > 0 ? 1 : 0,
+  });
+
+/** What a write-through carries. All are optional; none may be null. */
 export interface CharacterVitals {
   readonly hpCurrent?: number | undefined;
   readonly conditions?: ReadonlyArray<string> | undefined;
+  readonly deathSaves?: DeathSaves | undefined;
 }
 
 /**
@@ -147,6 +253,10 @@ export const writeThroughToCharacter = (
   const columns: Record<string, unknown> = {};
   if (vitals.hpCurrent !== undefined) columns["hp_current"] = vitals.hpCurrent;
   if (vitals.conditions !== undefined) columns["conditions"] = textArray(vitals.conditions);
+  if (vitals.deathSaves !== undefined) {
+    columns["death_save_successes"] = vitals.deathSaves.successes;
+    columns["death_save_failures"] = vitals.deathSaves.failures;
+  }
   if (Object.keys(columns).length === 0) return Effect.void;
 
   return sql<{ readonly id: CharacterId }>`
@@ -214,6 +324,9 @@ export interface AppliedDelta {
  *
  * Out of a fight there is nothing to clamp against but the character's own
  * maximum, and nothing else to write.
+ *
+ * Either way the death saves move with the number, by {@link deathSavesAfter}:
+ * this path carries no critical, so a hit at zero is one failure.
  */
 export const applyCharacterDelta = (
   sql: SqlClient.SqlClient,
@@ -225,12 +338,20 @@ export const applyCharacterDelta = (
 ): Effect.Effect<AppliedDelta, never> =>
   Effect.gen(function* () {
     if (live !== undefined) {
-      const rows = yield* sql<{ readonly hp_current: number }>`
+      const rows = yield* sql<{
+        readonly hp_current: number;
+        readonly kind: "pc" | "npc";
+        readonly death_save_successes: number;
+        readonly death_save_failures: number;
+      }>`
         update combatant
-        set hp_current = ${clampedCombatantHp(sql, amount)}, updated_at = now()
+        set hp_current = ${clampedCombatantHp(sql, amount)},
+            ${combatantDeathSavesAfterDelta(sql, amount, false)},
+            updated_at = now()
         where combatant.id = ${live.combatantId}
           and ${containedRowWritable(sql, COMBATANT, campaignId, actor)}
-        returning combatant.hp_current
+        returning combatant.hp_current, combatant.kind,
+                  combatant.death_save_successes, combatant.death_save_failures
       `.pipe(Effect.orDie);
       // The lookup that produced `live` applied the same predicate one
       // statement ago, in this transaction. A miss here is the same
@@ -240,8 +361,15 @@ export const applyCharacterDelta = (
           new Error(`live combatant ${live.combatantId} vanished mid-transaction`),
         );
       }
-      const hpCurrent = rows[0]!.hp_current;
-      yield* writeThroughToCharacter(sql, characterId, campaignId, actor, { hpCurrent });
+      const row = rows[0]!;
+      const hpCurrent = row.hp_current;
+      yield* writeThroughToCharacter(sql, characterId, campaignId, actor, {
+        hpCurrent,
+        deathSaves:
+          row.kind === "pc"
+            ? { successes: row.death_save_successes, failures: row.death_save_failures }
+            : undefined,
+      });
       return { hpCurrent, live };
     }
 
@@ -251,7 +379,9 @@ export const applyCharacterDelta = (
     // live claim on the shared row once nobody sits there.
     const rows = yield* sql<{ readonly hp_current: number }>`
       update character
-      set hp_current = ${clampedCharacterHp(sql, amount)}, updated_at = now()
+      set hp_current = ${clampedCharacterHp(sql, amount)},
+          ${characterDeathSavesAfter(sql, clampedCharacterHp(sql, amount), amount)},
+          updated_at = now()
       where character.id = ${characterId}
         and ${characterVitalsWritable(sql, campaignId, actor)}
       returning character.hp_current

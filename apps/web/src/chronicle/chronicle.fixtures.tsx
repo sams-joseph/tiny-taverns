@@ -155,6 +155,7 @@ const combatant = {
   ac: 18,
   kind: "pc",
   conditions: [],
+  deathSaves: { successes: 0, failures: 0 },
   visibility: "dm",
   position: null,
   portrait: null,

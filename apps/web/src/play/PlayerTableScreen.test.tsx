@@ -144,6 +144,7 @@ describe("PlayerTableScreen", () => {
             hpMax: 52,
             tempHp: 3,
             conditions: ["Blessed"],
+            deathSaves: { successes: 0, failures: 0 },
             portrait: null,
           },
           {
@@ -275,6 +276,7 @@ describe("PlayerTableScreen", () => {
             hpMax: 52,
             tempHp: 0,
             conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
             portrait: null,
           },
           {
@@ -541,6 +543,7 @@ describe("rolling initiative at your table", () => {
     hpMax: 52,
     tempHp: 0,
     conditions: [],
+    deathSaves: { successes: 0, failures: 0 },
     portrait: null,
     ...overrides,
   });

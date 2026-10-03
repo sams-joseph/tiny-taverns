@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { BattleMapAlignment, BattleMapGrid, BattleMapImages } from "./BattleMap.js";
-import { CharacterPortraitImages } from "./Character.js";
+import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
@@ -62,6 +62,8 @@ export const PlayerLiveCombatantYou = Schema.Struct({
   hpMax: Schema.Int,
   tempHp: Schema.Int,
   conditions: Schema.Array(Schema.String),
+  /** Your character's death saves, as the fight holds them. */
+  deathSaves: DeathSaves,
   /** Your character's portrait, as `Character.portrait` carries it. */
   portrait: Schema.NullOr(CharacterPortraitImages),
 });

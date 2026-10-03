@@ -616,13 +616,15 @@ describeLayer("live-session", shared, (it) => {
         yield* damage(brannoc.id, -99);
 
         const log = yield* withActor(fixture.dm)(events.list(fixture.asDm, session.id, {}));
-        // Exact shapes: nobody here was concentrating, so no line names a save.
+        // Exact shapes: nobody here was concentrating, so no line names a
+        // save; only the PC's lines carry death saves.
+        const deathSaves = { successes: 0, failures: 0 };
         expect(
           log.filter((e) => e.kind === "combatant-damaged").map((e) => e.payload),
         ).toStrictEqual([
           { amount: 99, hpBefore: 7, hpCurrent: 0, hpMax: 7 },
-          { amount: 8, hpBefore: 52, hpCurrent: 44, hpMax: 52 },
-          { amount: -99, hpBefore: 44, hpCurrent: 52, hpMax: 52 },
+          { amount: 8, hpBefore: 52, hpCurrent: 44, hpMax: 52, deathSaves },
+          { amount: -99, hpBefore: 44, hpCurrent: 52, hpMax: 52, deathSaves },
         ]);
       }),
     );

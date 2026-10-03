@@ -201,7 +201,6 @@ const brannocsSheet: CharacterSheet = {
     { name: "Ferryman's token, unspent", quantity: 1, weight: "—", note: "From session 11" },
   ],
   currency: { pp: 0, gp: 84, ep: 0, sp: 12, cp: 40 },
-  deathSaves: { successes: 0, failures: 0 },
   levelUps: [{ level: 5, session: 10, note: "Extra Attack. Took Oath of the Open Road." }],
   journal: [{ session: 11, text: "The ferryman took the coin and gave back a token." }],
   story: {

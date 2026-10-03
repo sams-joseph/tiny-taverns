@@ -184,11 +184,11 @@ describe("the API declaration", () => {
     // path that names an account.**
     //
     // Asserted as the path shape rather than as "only one endpoint has params",
-    // because that weaker form has already been outgrown twice. Ten endpoints
-    // take a parameter now — a character of the caller's own, nine times
+    // because that weaker form has already been outgrown twice. Eleven endpoints
+    // take a parameter now — a character of the caller's own, ten times
     // (once with the level of its own level-up beside it), and the campaign a
     // new one goes into, which an insert has no row to derive. None of the
-    // ten is an account, and an `:accountId` appearing under `/me`
+    // eleven is an account, and an `:accountId` appearing under `/me`
     // would be the second answer to `members.list` that this test exists to
     // prevent, whether or not it arrived alone.
     const parameterised = endpointsOf(me as GroupShape).filter(
@@ -202,6 +202,7 @@ describe("the API declaration", () => {
       "levelUpOffer",
       "levelUps",
       "restCharacter",
+      "setCharacterDeathSaves",
       "spendCharacterResource",
       "undoLevelUp",
       "updateCharacter",
@@ -210,6 +211,7 @@ describe("the API declaration", () => {
       "/me/campaigns/:campaignId/characters",
       "/me/characters/:characterId",
       "/me/characters/:characterId",
+      "/me/characters/:characterId/death-saves",
       "/me/characters/:characterId/level-up",
       "/me/characters/:characterId/level-up",
       "/me/characters/:characterId/level-ups",

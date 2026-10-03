@@ -301,15 +301,19 @@ export const Currency = Schema.Struct({
 export type Currency = typeof Currency.Type;
 
 /**
- * Three up, three down — **live, and in the document by decision.**
+ * Three up, three down — **live, and two columns on each copy.**
  *
- * `CharacterSheet.jsx:126` claims a DM-side reader for this (*"Marks here show
- * on your DM's initiative row straight away"*) and there is not one: no delivery
- * of `EncounterRunner.jsx` draws a death save, and `data.js`'s `initiative` rows
- * carry none. A column whose only reader is the row that owns it is exactly what
- * the column rule excludes, so this stays document until a delivery draws it on
- * the DM's row — at which point it is two `smallint`s and a `vitals.ts`
- * write-through, which is a small and well-precedented change.
+ * `death_save_successes` and `death_save_failures` on `character` (the owner)
+ * and on `combatant` (the fight's copy), written in one transaction by
+ * `apps/server/src/repo/vitals.ts`, as a hit point is. They left the sheet
+ * document when the DM's runner came to draw them on the initiative row: a
+ * value two screens read and two people write is live state, not prose.
+ *
+ * The rules are the server's, in `vitals.ts`: damage to a player character at
+ * zero hit points adds a failure (two on a critical) and, if they were stable
+ * at three successes, sets the successes back to zero; any healing from zero
+ * clears both; and a rolled save is `deathSaveRolled` below. Both counts stop
+ * at three.
  */
 export const DeathSaves = Schema.Struct({
   successes: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 3 })),
@@ -401,7 +405,7 @@ export type SheetStory = typeof SheetStory.Type;
  * **The rules half of the sheet**: every key that answers what the creature on
  * it can do — the six cells, features, identity numbers, skills, actions,
  * counters, spellcasting and gear. `CharacterSheet` is this plus the player's
- * own half (notes, story, journal, the level-up log, death saves).
+ * own half (notes, story, journal, the level-up log).
  *
  * It is its own schema because an NPC carries a character-style sheet too, and
  * the keys it leaves out would be wire fields with no reader. A
@@ -469,10 +473,10 @@ export type SheetBody = typeof SheetBody.Type;
  *
  * So every key below is a new **optional** key on a `jsonb` document:
  * `emptyCharacterSheet` still decodes, every row written before them still
- * reads, and there is no backfill and no migration. The two values that are
- * genuinely *live* — death saves and spell slots — cleared a different rule and
- * are argued at `DeathSaves` and `SpellSlot`; the short version is that the DM's
- * runner draws neither, so neither has a second holder.
+ * reads, and there is no backfill and no migration. Spell slots are live and
+ * stay here, argued at `SpellSlot`: the DM's runner does not draw them, so they
+ * have no second holder. Death saves were the other such value until the
+ * runner drew them, and they are columns now (`DeathSaves`).
  *
  * **Growing the document grows what campaign search indexes.** `0012` puts
  * `jsonb_to_tsvector(body)` at weight C in `character.search` and `repo/Search.ts`
@@ -493,7 +497,6 @@ export const CharacterSheet = Schema.Struct({
    */
   notes: Schema.String,
   ...SheetBody.fields,
-  deathSaves: Schema.optional(DeathSaves),
   levelUps: Schema.optional(Schema.Array(LevelUp)),
   journal: Schema.optional(Schema.Array(JournalEntry)),
   story: Schema.optional(SheetStory),
@@ -643,6 +646,13 @@ export class Character extends Schema.Class<Character>("Character")({
    * copy, because nothing in a fight draws it.
    */
   inspiration: Schema.Boolean,
+  /**
+   * Death saves — the third value a live fight and a character both hold, so
+   * it travels through the write-through `hpCurrent` does. The DM marks and
+   * rolls them on the fight's copy; the owner marks them on their sheet
+   * (`CharacterDeathSavesSet`). Nought and nought is the ordinary state.
+   */
+  deathSaves: DeathSaves,
   /**
    * Where the real sheet lives, for the table that keeps theirs somewhere else.
    *
@@ -806,6 +816,44 @@ export const CharacterDamage = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CharacterDamage = typeof CharacterDamage.Type;
+
+/**
+ * The owner marking their own death saves, from their sheet —
+ * `POST /me/characters/:characterId/death-saves`. Absolute, as the pips are:
+ * pressing the second success sets two.
+ *
+ * Its own grain rather than a key on `CharacterOwnUpdate`, because death saves
+ * are live: they are columns the DM's runner reads and writes too, and the
+ * whole-document PATCH is the durable half. The character is the owner's
+ * (`ownCharacter`); the fight's copy follows only through a seat the owner
+ * holds at that fight's campaign.
+ */
+export const CharacterDeathSavesSet = Schema.Struct({
+  ...DeathSaves.fields,
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type CharacterDeathSavesSet = typeof CharacterDeathSavesSet.Type;
+
+/**
+ * A rolled death save, as the rules read it: a natural 20 is back up with one
+ * hit point and both counts cleared (`revived`), a natural 1 is two failures,
+ * 10 or more is a success, anything else a failure. Both counts stop at three.
+ *
+ * The one statement of the rule. The server applies it to a combatant the
+ * DM rolled for; the browser only rolls the face.
+ */
+export const deathSaveRolled = (
+  saves: DeathSaves,
+  face: number,
+): { readonly saves: DeathSaves; readonly revived: boolean } => {
+  if (face >= 20) return { saves: { successes: 0, failures: 0 }, revived: true };
+  if (face <= 1) {
+    return { saves: { ...saves, failures: Math.min(3, saves.failures + 2) }, revived: false };
+  }
+  return face >= 10
+    ? { saves: { ...saves, successes: Math.min(3, saves.successes + 1) }, revived: false }
+    : { saves: { ...saves, failures: Math.min(3, saves.failures + 1) }, revived: false };
+};
 
 /**
  * Spend or recover one counted sheet resource — spell slots, feature uses,

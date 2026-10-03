@@ -127,6 +127,13 @@ export const liveOrderStatement = (
              then combatant.initiative_set_by end as initiative_set_by,
            combatant.conditions,
            ${playerLiveHitPointColumns(sql, sql("own_seated.id"))},
+           -- Only the asker's own row: an ally's death saves are not
+           -- theirs to read, and a monster makes none.
+           case when own_seated.id is not null
+             then jsonb_build_object(
+               'successes', combatant.death_save_successes,
+               'failures', combatant.death_save_failures)
+           end as death_saves,
            ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
            case when ${tokenShown(sql)}
              and combatant.board_column is not null and combatant.board_row is not null

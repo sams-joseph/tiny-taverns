@@ -158,6 +158,8 @@ interface CarriedCombatantRow {
   readonly ac: number | null;
   readonly kind: CombatantKind;
   readonly conditions: ReadonlyArray<string>;
+  readonly death_save_successes: number;
+  readonly death_save_failures: number;
   readonly board_column: number | null;
   readonly board_row: number | null;
   readonly visibility: Visibility;
@@ -277,6 +279,8 @@ interface PartyRow {
   /** Null means nobody has said, which a seed reads as full. See `0014`. */
   readonly hp_current: number | null;
   readonly conditions: ReadonlyArray<string>;
+  readonly death_save_successes: number;
+  readonly death_save_failures: number;
   /** `character.body`, the sheet — read for its initiative bonus and nothing else. */
   readonly sheet: CharacterSheet;
 }
@@ -690,6 +694,8 @@ export class EncounterRuns extends Context.Service<
                                    character.player_name,
                                    character.descriptor, character.ac, character.hp_max,
                                    character.hp_current, character.conditions,
+                                   character.death_save_successes,
+                                   character.death_save_failures,
                                    character.body as sheet
                             from campaign_character
                             join character on character.id = campaign_character.character_id
@@ -754,6 +760,10 @@ export class EncounterRuns extends Context.Service<
                         hp_max: member.hp_max ?? 0,
                         ac: member.ac,
                         conditions: textArray(member.conditions),
+                        // The fight's copy of the character's death saves, as
+                        // of the hit points beside it.
+                        death_save_successes: member.death_save_successes,
+                        death_save_failures: member.death_save_failures,
                         kind: "pc",
                       });
                     }
@@ -781,6 +791,8 @@ export class EncounterRuns extends Context.Service<
                           // either be dropped or bound as null depending on
                           // which end the seed started at.
                           conditions: textArray([]),
+                          death_save_successes: 0,
+                          death_save_failures: 0,
                           kind: "npc",
                         });
                       }
@@ -911,6 +923,7 @@ export class EncounterRuns extends Context.Service<
                              combatant.initiative, combatant.initiative_bonus,
                              combatant.initiative_set_by, combatant.hp_current, combatant.hp_max,
                              combatant.ac, combatant.kind, combatant.conditions,
+                             combatant.death_save_successes, combatant.death_save_failures,
                              combatant.board_column, combatant.board_row,
                              combatant.visibility, combatant.origin, combatant.assistant_turn_id
                       from combatant
@@ -939,6 +952,8 @@ export class EncounterRuns extends Context.Service<
                         ac: row.ac,
                         kind: row.kind,
                         conditions: textArray(row.conditions),
+                        death_save_successes: row.death_save_successes,
+                        death_save_failures: row.death_save_failures,
                         board_column: row.board_column,
                         board_row: row.board_row,
                         visibility: row.visibility,

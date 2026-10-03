@@ -32,6 +32,7 @@ import noteCategoryPin from "../src/migrations/0068_note_category_pin.js";
 import npcLinks from "../src/migrations/0074_npc_links.js";
 import encounterOrder from "../src/migrations/0078_encounter_order.js";
 import integerSequences from "../src/migrations/0081_integer_sequences.js";
+import deathSaves from "../src/migrations/0085_death_saves.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -86,6 +87,8 @@ const noteLinkDatabase = freshDatabase("taverns_test_migrations_note_link");
 const orderDatabase = freshDatabase("taverns_test_migrations_order");
 /** A twentieth, for a log and a Chronicle numbered by `bigint` sequences. */
 const sequencesDatabase = freshDatabase("taverns_test_migrations_sequences");
+/** A twenty-first, for sheets that kept their death saves in the document. */
+const deathSavesDatabase = freshDatabase("taverns_test_migrations_death_saves");
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -359,6 +362,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 82, name: "subclass_spells" },
         { migration_id: 83, name: "character_advancement" },
         { migration_id: 84, name: "assistant_thread_name" },
+        { migration_id: 85, name: "death_saves" },
       ]);
     }),
   );
@@ -454,6 +458,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 82, name: "subclass_spells" },
         { migration_id: 83, name: "character_advancement" },
         { migration_id: 84, name: "assistant_thread_name" },
+        { migration_id: 85, name: "death_saves" },
       ]);
     }),
   );
@@ -1542,6 +1547,85 @@ describeLayer(
           expect(measured.characters).toEqual([{ name: "Brannoc", inspiration: false }]);
           expect(measured.cleared).toContain("not-null");
         }),
+    );
+  },
+);
+
+describeLayer(
+  "upgrading a database whose death saves were on the sheet",
+  deathSavesDatabase,
+  (it) => {
+    it.effect("moves each sheet's death saves into the columns and out of the document", () =>
+      Effect.gen(function* () {
+        const measured = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* migrate;
+          // The shape `0084` left: no columns on either copy, and the log's
+          // vocabulary without the kind.
+          for (const table of ["character", "combatant"]) {
+            yield* sql`
+              alter table ${sql(table)}
+                drop column death_save_successes,
+                drop column death_save_failures
+            `;
+          }
+
+          const account = (yield* sql<{ readonly id: string }>`
+            insert into account ${sql.insert({ name: "Jo", token_hash: "death-saves-hash" })}
+            returning id
+          `)[0]!.id;
+          const sheet = (deathSaves: unknown) =>
+            JSON.stringify({
+              notes: "",
+              abilities: [],
+              traits: [],
+              ...(deathSaves === undefined ? {} : { deathSaves }),
+            });
+          yield* sql`
+            insert into character ${sql.insert([
+              { account_id: account, name: "Brannoc", body: sheet({ successes: 2, failures: 1 }) },
+              { account_id: account, name: "Nessa", body: sheet({ successes: 7, failures: -2 }) },
+              { account_id: account, name: "Pim", body: sheet({ successes: "two" }) },
+              { account_id: account, name: "Wren", body: sheet(undefined) },
+            ])}
+          `;
+
+          yield* deathSaves;
+          const characters = yield* sql<{
+            readonly name: string;
+            readonly death_save_successes: number;
+            readonly death_save_failures: number;
+            readonly kept: boolean;
+          }>`
+            select name, death_save_successes, death_save_failures, body ? 'deathSaves' as kept
+            from character order by name
+          `;
+          const outOfRange = yield* sql`
+            update character set death_save_failures = 4 where name = 'Brannoc'
+          `.pipe(
+            Effect.as("written"),
+            Effect.catch((error) => Effect.succeed(describeError(error))),
+          );
+          const combatantColumns = yield* sql<{ readonly column_name: string }>`
+            select column_name from information_schema.columns
+            where table_name = 'combatant' and column_name like 'death_save_%'
+            order by column_name
+          `;
+          return { characters, outOfRange, combatantColumns };
+        }).pipe(Effect.orDie);
+
+        expect(measured.characters).toEqual([
+          { name: "Brannoc", death_save_successes: 2, death_save_failures: 1, kept: false },
+          { name: "Nessa", death_save_successes: 3, death_save_failures: 0, kept: false },
+          { name: "Pim", death_save_successes: 0, death_save_failures: 0, kept: false },
+          { name: "Wren", death_save_successes: 0, death_save_failures: 0, kept: false },
+        ]);
+        expect(measured.outOfRange).toContain("character_death_save_failures_range");
+        expect(measured.combatantColumns.map((row) => row.column_name)).toEqual([
+          "death_save_failures",
+          "death_save_successes",
+        ]);
+      }),
     );
   },
 );

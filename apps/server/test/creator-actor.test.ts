@@ -190,6 +190,8 @@ describeLayer("creator-actor", shared, (it) => {
         create: true,
         update: true,
         damage: true,
+        setDeathSaves: true,
+        rollDeathSave: true,
         move: true,
         setInitiative: true,
         remove: true,
@@ -278,7 +280,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([7, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([9, 10, 3, 4, 2, 4, 4]);
     });
   });
 
@@ -562,7 +564,10 @@ describeLayer("creator-actor", shared, (it) => {
       // campaign's reach — the NPC in the proof's campaign and that campaign's
       // rules. A sheet is DM prep, the creator's from the day it was declared,
       // and `PlayerNpc` carries none of it.
-      expect(gated).toBe(132);
+      // A hundred and thirty-three and thirty-four are `Combatants.setDeathSaves`
+      // and `rollDeathSave`: the DM's dots and roll on the fight's row, gated
+      // like every other write to the initiative list.
+      expect(gated).toBe(134);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
@@ -857,7 +862,10 @@ describeLayer("creator-actor", shared, (it) => {
       // `HobThreads.name` is the one hundred and eighty-third, for `discard`'s
       // reason: Hob's name for a thread, written under the asker's own reach,
       // whose `"dm"` arm is already the creator predicate.
-      expect(ungated).toBe(183);
+      // `Characters.setDeathSaves` is the one hundred and eighty-fourth, for
+      // `Characters.rest`'s reason: the owner's marks on a character in no
+      // campaign, whose reach into a fight is the owner's own seat.
+      expect(ungated).toBe(184);
     });
   });
 });

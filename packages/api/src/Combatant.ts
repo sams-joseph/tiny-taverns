@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CharacterPortraitImages } from "./Character.js";
+import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
 import {
   MAX_INITIATIVE,
@@ -129,6 +129,12 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   ac: Schema.NullOr(Schema.Int),
   kind: CombatantKind,
   conditions: Schema.Array(Schema.String),
+  /**
+   * Death saves, for a player character — `null` for an NPC, which does not
+   * make them. The fight's copy of `Character.deathSaves`, written through with
+   * it (`repo/vitals.ts`); a PC the DM typed in by hand keeps them here alone.
+   */
+  deathSaves: Schema.NullOr(DeathSaves),
   /** The per-row "Hide from players" override (`EncounterRunner.jsx:139`). */
   visibility: Visibility,
   /**
@@ -215,9 +221,39 @@ export type CombatantUpdate = typeof CombatantUpdate.Type;
 export const CombatantDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
+  /**
+   * The hit was a critical. It matters to one rule: damage to a player
+   * character already at zero is two death-save failures rather than one.
+   */
+  critical: Schema.optional(Schema.Boolean),
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantDamage = typeof CombatantDamage.Type;
+
+/**
+ * Set a player character's death saves — the DM pressing the dots on the
+ * initiative row. Absolute, as the dots are, and written through to the
+ * character. An NPC makes no death saves, so naming one is a `Conflict`.
+ */
+export const CombatantDeathSaves = Schema.Struct({
+  ...DeathSaves.fields,
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type CombatantDeathSaves = typeof CombatantDeathSaves.Type;
+
+/**
+ * A death save the DM rolled: the face of the d20, which the browser rolled,
+ * and the server applies `deathSaveRolled` to. A natural 20 brings them back
+ * with one hit point, written through to the character with the counts.
+ *
+ * `Conflict` when the combatant makes no roll: an NPC, a PC above zero hit
+ * points, or one already stable (three successes) or dead (three failures).
+ */
+export const CombatantDeathSaveRoll = Schema.Struct({
+  face: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type CombatantDeathSaveRoll = typeof CombatantDeathSaveRoll.Type;
 
 /**
  * Put a token on a square, move it, or take it off the board (`position:

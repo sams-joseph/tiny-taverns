@@ -5,6 +5,7 @@ import {
   Character,
   CharacterId,
   CharacterBannerImages,
+  type CharacterDeathSavesSet,
   CharacterPortraitImages,
   type CharacterOwnCreate,
   type CharacterOwnUpdate,
@@ -15,6 +16,7 @@ import {
   CombatantId,
   Conflict,
   CurrentActor,
+  DeathSaves,
   EncounterRunId,
   NotFound,
   OwnedCharacter,
@@ -28,7 +30,6 @@ import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql"
 import {
   assistantColumns,
   type AssistantOrigin,
-  classFromColumns,
   defined,
   dieOnSqlError,
   fileUnder,
@@ -40,7 +41,8 @@ import {
   uuidArray,
 } from "./rows.js";
 import { levelOrClassMoved, recomputeForLevel, validateSubrace } from "./sheetLevel.js";
-import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
+import { appendEvent } from "./SessionEvents.js";
+import { appendCharacterUpdated, characterDeathSavesAfter, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
   characterVocabulary,
@@ -223,19 +225,41 @@ const bannerFromId = (sign: PortraitSigner | undefined) =>
  * it through here, after its own predicate, so whoever can load the character
  * gets its picture and nobody else gets a URL. The row's `visibility` column is
  * inert — who at a table may see a character is the seat's question — and the
- * decode drops it, as `Character` has no field for it.
+ * decode drops it, as `Character` has no field for it. The two death-save
+ * columns become the one `deathSaves` value here, so no statement has to
+ * assemble it.
  */
-export const characterRow = (sign: PortraitSigner | undefined) =>
-  classFromColumns(
-    Character,
-    {
-      ...Character.fields,
+export const characterRow = (sign: PortraitSigner | undefined) => {
+  const { deathSaves: _deathSaves, ...fields } = Character.fields;
+  return fromColumns(
+    Schema.Struct({
+      ...fields,
       ...timestampColumns,
       portrait: portraitFromId(sign),
       banner: bannerFromId(sign),
-    },
+      deathSaveSuccesses: DeathSaves.fields.successes,
+      deathSaveFailures: DeathSaves.fields.failures,
+    }),
     { sheet: "body", portrait: "portrait_id", banner: "banner_id" },
+  ).pipe(
+    Schema.decodeTo(
+      Schema.instanceOf(Character),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform(
+          ({ deathSaveSuccesses, deathSaveFailures, ...row }) =>
+            new Character(
+              {
+                ...row,
+                deathSaves: { successes: deathSaveSuccesses, failures: deathSaveFailures },
+              },
+              { disableChecks: true },
+            ),
+        ),
+        SchemaGetter.forbidden(() => "a row is read, never written back"),
+      ),
+    ),
   );
+};
 
 const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
 
@@ -470,7 +494,8 @@ export const liveFightsOf = (sql: SqlClient.SqlClient, characterIds: ReadonlyArr
  * A long rest heals to full, zeroes temporary hit points, resets every
  * recharging counter, returns half the hit dice and ends concentration; other
  * conditions stay. A short rest resets short counters and spends up to the
- * requested hit dice on rolled healing.
+ * requested hit dice on rolled healing. Either one that lifts the character
+ * off zero hit points clears its death saves, as any healing does.
  *
  * Runs inside the caller's transaction, after its fight check and retry claim.
  * `before` is the character the caller read under the same reach, and
@@ -524,6 +549,7 @@ export const restCharacterRow = (
         update character
         set body = ${encodeSheet(nextSheet)}::jsonb,
             hp_current = ${hpCurrent},
+            ${characterDeathSavesAfter(sql, hpCurrent, 0)},
             temp_hp = ${tempHp},
             conditions = ${textArray(nextConditions)},
             version = character.version + 1,
@@ -598,6 +624,16 @@ export class Characters extends Context.Service<
       id: CharacterId,
       payload: CharacterRest,
     ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
+    /**
+     * The owner marking their own death saves. The character is reached by
+     * `ownCharacter`; its copy in a live fight follows only through one of the
+     * owner's active seats (`openSeatSessionsOf`), which is the one way an
+     * owner's write reaches a fight.
+     */
+    readonly setDeathSaves: (
+      id: CharacterId,
+      payload: CharacterDeathSavesSet,
+    ) => Effect.Effect<Character, NotFound, CurrentActor>;
     /**
      * Deleting a character retires its live seats in the same transaction —
      * the deferred participation key allows a retired seat to keep standing —
@@ -790,6 +826,65 @@ export class Characters extends Context.Service<
 
       const openSeatSessions = (characterId: CharacterId, actor: Actor) =>
         openSeatSessionsOf(sql, characterId, actor);
+
+      /** The owner's death saves, set on their own character. */
+      const markDeathSaves = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ id: CharacterId, successes: Schema.Int, failures: Schema.Int }),
+        ),
+        Result: CharacterRow,
+        execute: ({ id, successes, failures }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update character
+              set death_save_successes = ${successes},
+                  death_save_failures = ${failures},
+                  updated_at = now()
+              where character.id = ${id} and ${ownCharacter(sql, actor)}
+              returning character.*, ${portraitColumns(sql)}
+            `,
+          ),
+      });
+
+      /**
+       * The fight's copy of the owner's death saves, logged as the DM's own
+       * mark is. The combatant came from `openSeatSessionsOf` — the owner's
+       * active seat at this table, its open night and that night's fight — so
+       * the seat is the reach, and this statement only names the row it found.
+       */
+      const markCombatantDeathSaves = (
+        characterId: CharacterId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+        saves: { readonly successes: number; readonly failures: number },
+        requestId: string | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<{ readonly visibility: "dm" | "shared" }>`
+            update combatant
+            set death_save_successes = ${saves.successes},
+                death_save_failures = ${saves.failures},
+                updated_at = now()
+            where combatant.id = ${combatantId}
+              and combatant.character_id = ${characterId}
+              and combatant.kind = 'pc'
+            returning combatant.visibility
+          `.pipe(Effect.orDie);
+          const row = rows[0];
+          if (row === undefined) return;
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "death-save",
+            encounterRunId: runId,
+            combatantId,
+            characterId,
+            payload: { ...saves, by: "player" },
+            requestId,
+            visibility: row.visibility,
+          }).pipe(Effect.orDie);
+        });
       const ringSessions = (sessions: ReadonlyArray<OpenSeatSession>) =>
         ringSeatSessions(live, sessions);
       const appendTouched = (
@@ -1001,6 +1096,49 @@ export class Characters extends Context.Service<
                     const sessions = yield* openSeatSessions(id, actor);
                     yield* appendTouched(id, sessions, rested.detail, payload.requestId);
                     return { character: rested.character, sessions };
+                  }),
+                )
+                .pipe(
+                  Effect.tap(({ sessions }) => ringSessions(sessions)),
+                  Effect.map(({ character }) => character),
+                );
+            }),
+          ),
+
+        setDeathSaves: (id, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const saves = { successes: payload.successes, failures: payload.failures };
+              return yield* sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    yield* readOwn(id);
+                    const claimed = yield* claimCharacterRequest(sql, id, payload.requestId);
+                    if (!claimed) {
+                      return { character: yield* readOwn(id), sessions: [] };
+                    }
+
+                    const sessions = yield* openSeatSessions(id, actor);
+                    yield* Effect.forEach(
+                      sessions,
+                      (session) =>
+                        session.combatantId === null || session.runId === null
+                          ? appendTouched(id, [session], { deathSaves: saves }, payload.requestId)
+                          : markCombatantDeathSaves(
+                              id,
+                              session.sessionId,
+                              session.runId,
+                              session.combatantId,
+                              saves,
+                              payload.requestId,
+                            ),
+                      { discard: true },
+                    );
+                    const character = yield* markDeathSaves({ id, ...saves }).pipe(
+                      orNotFound("character", id),
+                    );
+                    return { character, sessions };
                   }),
                 )
                 .pipe(
