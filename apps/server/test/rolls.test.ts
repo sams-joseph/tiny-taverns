@@ -10,6 +10,7 @@ import {
 import { Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { BattleMaps } from "../src/repo/BattleMaps.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
@@ -30,6 +31,7 @@ import { describeLayer } from "./support/suite.js";
 
 const services = Layer.mergeAll(
   Accounts.layer,
+  BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -423,6 +425,106 @@ describeLayer("rolls", services, (it) => {
           const after = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
           expect(after).toMatchObject({ targetCombatantId: null, outcome: "miss" });
         }),
+    );
+
+    it.effect(
+      "shows a player a PC target's AC on a shared attack, never a monster's, while the creator sees both",
+      () =>
+        Effect.gen(function* () {
+          const f = yield* aFight;
+          const rolls = yield* Rolls;
+          const combatants = yield* Combatants;
+          const table = yield* PlayerTable;
+          const goblin = yield* combatants.create(f.dmProof, f.sessionId, f.run.id, {
+            displayName: "Goblin",
+            ac: 13,
+            visibility: "shared",
+          });
+          const own = yield* aCharacterAt(f.campaign.id, f.dm, { name: "Fen's ranger" });
+          const before = yield* table.ticks(f.player, f.campaign.id, f.sessionId, 0, 50);
+          const atGoblin = yield* as(
+            f.dm,
+            rolls.create(f.campaign.id, {
+              ...payload(own.character.id),
+              kind: "attack",
+              targetCombatantId: goblin.id,
+              targetAc: 13,
+              outcome: "hit",
+            }),
+          );
+          const atBrannoc = yield* as(
+            f.dm,
+            rolls.create(f.campaign.id, {
+              ...payload(own.character.id),
+              kind: "attack",
+              targetCombatantId: f.brannoc.id,
+              targetAc: 17,
+              outcome: "miss",
+            }),
+          );
+          expect(atGoblin.visibility).toBe("shared");
+
+          const listed = yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}));
+          const byId = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, atGoblin.id));
+          for (const read of [listed.find((row) => row.id === atGoblin.id), byId]) {
+            expect(read).toMatchObject({
+              targetCombatantId: goblin.id,
+              targetAc: null,
+              outcome: "hit",
+            });
+          }
+          expect(listed.find((row) => row.id === atBrannoc.id)).toMatchObject({
+            targetCombatantId: f.brannoc.id,
+            targetAc: 17,
+          });
+          // The doorbell carries cursors and nothing of the roll.
+          const ticks = yield* table.ticks(f.player, f.campaign.id, f.sessionId, 0, 50);
+          expect(ticks.length).toBeGreaterThan(before.length);
+          expect(ticks.every((tick) => typeof tick === "number")).toBe(true);
+
+          const asCreator = yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}));
+          expect(asCreator.find((row) => row.id === atGoblin.id)?.targetAc).toBe(13);
+          expect(
+            (yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, atGoblin.id))).targetAc,
+          ).toBe(13);
+        }),
+    );
+
+    it.effect("names a shared combatant under fog to the creator alone", () =>
+      Effect.gen(function* () {
+        const f = yield* aFight;
+        const rolls = yield* Rolls;
+        const combatants = yield* Combatants;
+        const maps = yield* BattleMaps;
+        const goblin = yield* combatants.create(f.dmProof, f.sessionId, f.run.id, {
+          displayName: "Goblin",
+          ac: 13,
+          visibility: "shared",
+        });
+        const square = { column: 3, row: 4 };
+        yield* combatants.move(f.dmProof, f.sessionId, f.run.id, goblin.id, { position: square });
+        const own = yield* aCharacterAt(f.campaign.id, f.dm, { name: "Fen's ranger" });
+        const shot = yield* as(
+          f.dm,
+          rolls.create(f.campaign.id, {
+            ...payload(own.character.id),
+            kind: "attack",
+            combatantId: goblin.id,
+            targetCombatantId: goblin.id,
+          }),
+        );
+        const clear = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+        expect(clear).toMatchObject({ combatantId: goblin.id, targetCombatantId: goblin.id });
+
+        yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [square] });
+        const listed = yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}));
+        const byId = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+        for (const read of [listed.find((row) => row.id === shot.id), byId]) {
+          expect(read).toMatchObject({ combatantId: null, targetCombatantId: null });
+        }
+        const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+        expect(asCreator).toMatchObject({ combatantId: goblin.id, targetCombatantId: goblin.id });
+      }),
     );
   });
 });

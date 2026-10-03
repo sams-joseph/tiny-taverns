@@ -27,7 +27,7 @@ import {
   orNotFound,
   timestampColumns,
 } from "./rows.js";
-import { COMBATANT, RUN } from "./liveTables.js";
+import { COMBATANT, fightLive, hiddenByFog, RUN } from "./liveTables.js";
 import {
   campaignReadable,
   containedChildWritable,
@@ -163,19 +163,33 @@ export class Rolls extends Context.Service<
       ): Effect.Effect<typeof CurrentNightRow.Type, NotFound> =>
         nightOf({ campaignId, actor }).pipe(orNotFound("campaign", campaignId), dieOnSqlError);
 
-      /** A combatant pointer on the roll, through the combatant's own predicate. */
-      const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
-        case when exists (
+      /**
+       * Whether this reader may be told the roll's combatant in this column:
+       * through the combatant's own predicate and, while its fight is live, not
+       * under fog (`liveTables.ts`' `hiddenByFog`), as the player's order reads it.
+       */
+      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) => sql`
+        exists (
           select 1 from combatant
+          join encounter_run on encounter_run.id = combatant.encounter_run_id
           where combatant.id = ${sql(`character_roll.${column}`)}
             and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-        ) then ${sql(`character_roll.${column}`)} end
+            and (${campaignWritableById(sql, campaignId, actor)}
+              or not ${fightLive(sql)}
+              or not ${hiddenByFog(sql, campaignId, actor)})
+        )
+      `;
+      const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
+        case when ${combatantNamed(column, campaignId, actor)}
+          then ${sql(`character_roll.${column}`)} end
       `;
 
       // The run pointer goes through the run predicate for the reason
       // `sessionColumns` gives: a roll made while a hidden fight is on the
       // table must not tell a player that fight exists. The combatant pointers
-      // go through theirs, so a shared roll never names a hidden creature.
+      // go through theirs, so a shared roll never names a hidden creature. A
+      // player reads the target's AC only of a player character they may be
+      // told is the target; a creature's AC is the DM's.
       const selectRoll = (campaignId: CampaignId, actor: Actor) => sql`
         character_roll.id, character_roll.campaign_id, character_roll.session_id,
         case when exists (
@@ -189,7 +203,15 @@ export class Rolls extends Context.Service<
         character_roll.mode, character_roll.critical, character_roll.kind,
         ${combatantPointer("combatant_id", campaignId, actor)} as combatant_id,
         ${combatantPointer("target_combatant_id", campaignId, actor)} as target_combatant_id,
-        character_roll.target_ac, character_roll.outcome, character_roll.request_id,
+        case when ${campaignWritableById(sql, campaignId, actor)}
+          or (${combatantNamed("target_combatant_id", campaignId, actor)}
+            and exists (
+              select 1 from combatant
+              where combatant.id = character_roll.target_combatant_id
+                and combatant.kind = 'pc'
+            ))
+          then character_roll.target_ac end as target_ac,
+        character_roll.outcome, character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
         character_roll.created_at, character_roll.updated_at,
         account.name as account_name, character.name as character_name
