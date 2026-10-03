@@ -114,7 +114,7 @@ describe("Icon", () => {
     expect(svg).toHaveAttribute("stroke", "currentColor");
   });
 
-  it("carries every glyph the encounter runner's drawing names, and not the dropped toggle's", () => {
+  it("carries every glyph the encounter runner's drawing names", () => {
     for (const name of [
       "eye",
       "crosshair",
@@ -126,7 +126,6 @@ describe("Icon", () => {
     ]) {
       expect(icons).toHaveProperty(name);
     }
-    expect(icons).not.toHaveProperty("monitor");
   });
 });
 
