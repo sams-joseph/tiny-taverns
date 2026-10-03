@@ -18,6 +18,7 @@ import {
 import { type WheelEvent, useEffect, useRef } from "react";
 import { apiUrl } from "../api/client";
 import { DrawnImage } from "../hob/DrawnImage";
+import { wheelUnit } from "./canvas";
 import { outOfTheFight } from "./load";
 
 /**
@@ -102,7 +103,7 @@ export function InitiativeStrip({
     const strip = event.currentTarget;
     if (!floating || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
     if (strip.scrollWidth <= strip.clientWidth) return;
-    strip.scrollLeft += event.deltaY;
+    strip.scrollLeft += event.deltaY * wheelUnit(event);
   };
 
   return (

@@ -18,6 +18,7 @@ import {
   fitView,
   keepInView,
   openingView,
+  wheelUnit,
   wheelZoomFactor,
   zoomAbout,
   zoomLimits,
@@ -151,7 +152,7 @@ export function BoardCanvas({
     if (element === null) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const unit = wheelUnit(event);
       const box = element.getBoundingClientRect();
       if (event.ctrlKey || event.metaKey) {
         zoomBy(wheelZoomFactor(event.deltaY * unit), {
