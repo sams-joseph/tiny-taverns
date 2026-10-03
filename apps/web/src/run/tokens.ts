@@ -6,6 +6,7 @@ import {
   type PictureRect,
   feetBetween,
 } from "@taverns/api";
+import { outOfTheFight } from "./load";
 
 /**
  * What the DM's board works out about its tokens, pure: the label on each, how
@@ -145,7 +146,7 @@ export const tokenState = (
   { hp, hostileTokensHidden }: { readonly hp: number; readonly hostileTokensHidden: boolean },
 ): TokenState => {
   const monster = combatant.kind !== "pc";
-  const out = monster ? hp === 0 : (combatant.deathSaves?.failures ?? 0) >= 3;
+  const out = outOfTheFight(combatant, hp);
   return {
     out,
     struck: out,

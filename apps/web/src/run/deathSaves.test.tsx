@@ -5,7 +5,7 @@ import { Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reads } from "../api/keys";
 import { deathStatusOf, dotPressed, isDead } from "./deathSaves";
-import { deathSaveWrites } from "./load";
+import { deathSaveWrites, outOfTheFight } from "./load";
 import {
   bodyOf,
   brannoc,
@@ -41,6 +41,15 @@ describe("death-save status", () => {
     expect(isDead(decode({ ...brannoc, deathSaves: { successes: 2, failures: 2 } }))).toBe(false);
     // A monster makes no saves, so it is never dead this way: it is out at zero.
     expect(isDead(decode({ ...goblinBoss, hpCurrent: 0 }))).toBe(false);
+  });
+
+  it("puts a party member out of the fight only when dead, and a monster at zero", () => {
+    const dying = decode({ ...brannoc, hpCurrent: 0, deathSaves: { successes: 0, failures: 2 } });
+    const dead = decode({ ...brannoc, hpCurrent: 0, deathSaves: { successes: 0, failures: 3 } });
+    expect(outOfTheFight(dying, 0)).toBe(false);
+    expect(outOfTheFight(dead, 0)).toBe(true);
+    expect(outOfTheFight(decode(goblinBoss), 0)).toBe(true);
+    expect(outOfTheFight(decode(goblinBoss), 1)).toBe(false);
   });
 
   it("fills a dot and those before it, and empties a filled one and those after it", () => {
@@ -79,10 +88,12 @@ const dot = (row: "successes" | "failures", n: number) =>
   within(panel().getByRole("group", { name: `Death save ${row}` })).getByRole("button", {
     name: `${row === "successes" ? "Success" : "Fail"} ${String(n)} of 3`,
   });
-const rows = () => screen.getAllByRole("row");
+/** The initiative strip's chips, which are the only buttons in its order. */
+const rows = () =>
+  within(screen.getByRole("list", { name: "Initiative order" })).getAllByRole("button");
 const rowFor = (name: string): HTMLElement => {
   const found = rows().find((row) => row.textContent?.includes(name));
-  if (found === undefined) throw new Error(`no row for ${name}`);
+  if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
 };
 
@@ -271,5 +282,47 @@ describe("death saves on the runner", () => {
 
     expect(dot("successes", 2)).toBeDisabled();
     expect(saves.getByRole("button", { name: "Roll death save" })).toBeDisabled();
+  });
+});
+
+describe("who the fight draws as out", () => {
+  const token = (name: string) =>
+    within(screen.getByRole("region", { name: "Battle map" })).getByRole("button", {
+      name: new RegExp(`^${name}, column`),
+    });
+  const placedBoss = { ...goblinBoss, hpCurrent: 0, position: { column: 9, row: 4 } };
+
+  it("leaves a dying party member drawn as they are, in the strip and on the board", async () => {
+    server.routes.set(`GET ${runBase}/combatants`, {
+      status: 200,
+      body: [downed(0, 2), placedBoss],
+    });
+    await renderRunner();
+    await block();
+
+    const row = rowFor("Brannoc");
+    expect(row.className).not.toContain("opacity-45");
+    expect(within(row).getByText("Brannoc").className).not.toContain("line-through");
+    expect(token("Brannoc").className).not.toContain("opacity-45");
+    // The monster at zero beside him is out, as before.
+    expect(rowFor("Goblin Boss").className).toContain("opacity-45");
+    expect(within(rowFor("Goblin Boss")).getByText("Goblin Boss").className).toContain(
+      "line-through",
+    );
+    expect(token("Goblin Boss").className).toContain("opacity-45");
+  });
+
+  it("fades and strikes through a dead party member, in the strip and on the board", async () => {
+    server.routes.set(`GET ${runBase}/combatants`, {
+      status: 200,
+      body: [downed(0, 3), placedBoss],
+    });
+    await renderRunner();
+    await block();
+
+    const row = rowFor("Brannoc");
+    expect(row.className).toContain("opacity-45");
+    expect(within(row).getByText("Brannoc").className).toContain("line-through");
+    expect(token("Brannoc").className).toContain("opacity-45");
   });
 });

@@ -12,10 +12,8 @@ export const deathStatusOf = (saves: DeathSaves): DeathStatus =>
   saves.failures >= 3 ? "dead" : saves.successes >= 3 ? "stable" : "dying";
 
 /**
- * A party member with three failed death saves: out of the fight, faded and
- * struck through wherever the fight draws them, as a monster at zero is. A
- * dying one is not. The one spelling of "dead" for the panel, the initiative
- * strip and the tokens, so the three cannot disagree about who is.
+ * A party member with three failed death saves. A dying one is not: they stay
+ * drawn as they are until their saves say otherwise.
  */
 export const isDead = (combatant: Combatant): boolean =>
   combatant.deathSaves !== null && deathStatusOf(combatant.deathSaves) === "dead";
