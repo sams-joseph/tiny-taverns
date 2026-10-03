@@ -827,6 +827,12 @@ export function RunScreen() {
     },
   });
 
+  // Ending the fight takes its pinned area off the board on the server, which
+  // rings no `board-area-updated`: re-read the board once the run is over.
+  useEffect(() => {
+    if (over) rereadBoard();
+  }, [over, rereadBoard]);
+
   const dialogOpen = adding || editing !== undefined || removing !== undefined || ending;
   const frozen = over || dialogOpen;
 

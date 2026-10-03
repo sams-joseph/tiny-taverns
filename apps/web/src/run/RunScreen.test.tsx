@@ -2819,6 +2819,31 @@ describe("the board's tools", () => {
     expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("drops the pin when the fight ends, as the server does", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: sphere },
+    });
+    await open();
+    await screen.findByRole("status", { name: "Pinned area" });
+    expect(areaLayer()).not.toBeNull();
+
+    // Ended from elsewhere: the server took the template off with the fight.
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
+      }
+    }
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: null },
+    });
+    server.emit(sessionEvent(12, "run-ended"));
+    await screen.findByText(/came off the table/);
+    await waitFor(() => expect(areaLayer()).toBeNull());
+    expect(areaWrites()).toEqual([]);
+  });
+
   it("puts the board back as the server holds it when a pin is refused", async () => {
     server.routes.set(`PUT ${areaPath()}`, { status: 409, body: { _tag: "Conflict" } });
     await open();
