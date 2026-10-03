@@ -2407,7 +2407,7 @@ class SearchGroup extends HttpApiGroup.make("search")
  *
  * - `threads` and `turns` are the conversation, read back. The panel resumes
  *   the newest thread on open, which is the whole of "it is still there after a
- *   reload"; a picker over the rest is a surface the designers have not drawn.
+ *   reload", and its conversations list is `threads` itself, newest first.
  * - `accept` is the **only** thing in the product that writes
  *   `origin = 'assistant'`. It takes no content payload at all, and that is the
  *   point: the row is materialised from the proposal the *server* stored on

@@ -7,6 +7,7 @@ import { HttpMiddleware, HttpRouter } from "effect/http";
 import type { SqlClient } from "effect/sql";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
+import { HobNamer } from "./assistant/HobNamer.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";
 import { chatCompletionConfig } from "./assistant/modelConfig.js";
 import { AuthorizationLive } from "./Authorization.js";
@@ -229,7 +230,9 @@ export const assistantFromConfig: Layer.Layer<
       `Hob is ON: model ${model.value} at ${apiUrl.value}, max output tokens ${maxTokens}.`,
     );
 
+    // Hob names a conversation it started, on the model it answers on.
     return Hob.layer({ model: model.value }).pipe(
+      Layer.provide(HobNamer.layer),
       Layer.provide(
         languageModelLayer({
           apiUrl: apiUrl.value,

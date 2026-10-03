@@ -1,6 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import type { CampaignId, HobAccepted, HobKept, NpcId, SharedWorldId } from "@taverns/api";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,6 +51,8 @@ interface HobStub {
   threads: Array<Record<string, unknown>>;
   /** What `GET …/hob/threads/:id/turns` answers, oldest first. */
   turns: Array<Record<string, unknown>>;
+  /** One thread's turns in place of `turns`, by thread id; `"missing"` is a 404. */
+  turnsFor: Record<string, Array<Record<string, unknown>> | "missing">;
   /** Set to answer `accept` with a declared failure instead of the row. */
   acceptStatus: number | undefined;
   acceptBody: unknown;
@@ -142,6 +144,7 @@ const installHobServer = (): HobStub => {
     available: true,
     threads: [],
     turns: [],
+    turnsFor: {},
     acceptStatus: undefined,
     acceptBody: undefined,
     frames: [],
@@ -169,6 +172,7 @@ const installHobServer = (): HobStub => {
       stub.available = true;
       stub.threads = [];
       stub.turns = [];
+      stub.turnsFor = {};
       stub.acceptStatus = undefined;
       stub.acceptBody = undefined;
       stub.frames = [];
@@ -230,7 +234,17 @@ const installHobServer = (): HobStub => {
       );
     }
 
-    if (pathname.endsWith("/turns")) return Promise.resolve(json(stub.turns));
+    if (pathname.endsWith("/turns")) {
+      const own = stub.turnsFor[pathname.split("/").at(-2) ?? ""];
+      return Promise.resolve(
+        own === "missing"
+          ? new Response(
+              JSON.stringify({ _tag: "NotFound", resource: "assistant_thread", id: "gone" }),
+              { status: 404, headers: { "content-type": "application/json" } },
+            )
+          : json(own ?? stub.turns),
+      );
+    }
 
     if (pathname.endsWith("/hob/threads")) return Promise.resolve(json(stub.threads));
 
@@ -372,6 +386,7 @@ const aThread = (title: string) => ({
   // (`0031`): a thread is a campaign's or a Shared World's, never both.
   worldId: null,
   title,
+  name: null,
   createdAt: stamp,
   updatedAt: stamp,
 });
@@ -381,6 +396,7 @@ const aWorldThread = (title: string) => ({
   campaignId: null,
   worldId,
   title,
+  name: null,
   createdAt: stamp,
   updatedAt: stamp,
 });
@@ -822,6 +838,133 @@ describe("the conversation is still there", () => {
     // No thread named: the server starts one. The old evening is untouched.
     expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "Something else." });
     server.close();
+  });
+});
+
+describe("the other conversations", () => {
+  const olderId = "2c3d4e5f-6071-4b8c-9dae-1f2a3b4c5d6e";
+  const said = (thread: string, id: string, who: "user" | "hob", text: string) => ({
+    id,
+    threadId: thread,
+    who,
+    text,
+    proposal: null,
+    acceptedAt: null,
+    discardedAt: null,
+    kept: null,
+    createdAt: stamp,
+  });
+  const twoThreads = () => {
+    server.threads = [
+      aThread("Who is the ferryman?"),
+      { ...aThread("Build me an ambush in the reeds"), id: olderId },
+    ];
+    server.turnsFor = {
+      [threadId]: [said(threadId, turnId, "hob", "Cazril.")],
+      [olderId]: [
+        said(olderId, "aaaaaaa1-0000-4000-8000-000000000002", "user", "Build me an ambush."),
+        said(olderId, "aaaaaaa1-0000-4000-8000-000000000003", "hob", "Six bullywugs."),
+      ],
+    };
+  };
+  const listed = () => screen.getByRole("dialog", { name: "Conversations" });
+
+  it("lists every conversation in the scope, newest first, marking the one on screen", async () => {
+    twoThreads();
+    renderHob();
+    expect(await screen.findByText("Cazril.")).toBeInTheDocument();
+    const reads = server.paths.filter((path) => path.endsWith("/hob/threads")).length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+
+    // Read again on every showing: a thread started since the panel opened is
+    // in the list the moment the list is.
+    await waitFor(() =>
+      expect(server.paths.filter((path) => path.endsWith("/hob/threads"))).toHaveLength(reads + 1),
+    );
+    const rows = await within(listed()).findAllByRole("button", { name: /ferryman|ambush/ });
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Who is the ferryman?"),
+      expect.stringContaining("Build me an ambush in the reeds"),
+    ]);
+    expect(rows[0]).toHaveAttribute("aria-current", "true");
+    expect(rows[1]).not.toHaveAttribute("aria-current");
+  });
+
+  it("opens a picked conversation in the panel, and the next question continues it", async () => {
+    twoThreads();
+    renderHob();
+    expect(await screen.findByText("Cazril.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    await userEvent.click(
+      await within(listed()).findByRole("button", { name: /Build me an ambush in the reeds/ }),
+    );
+
+    expect(await screen.findByText("Six bullywugs.")).toBeInTheDocument();
+    expect(screen.getByText("Build me an ambush.")).toBeInTheDocument();
+    expect(screen.queryByText("Cazril.")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Conversations" })).toBeNull();
+    expect(server.paths).toContain(`/campaigns/${campaignId}/hob/threads/${olderId}/turns`);
+
+    server.frames = [delta("Make it seven."), done()];
+    await userEvent.type(composer()!, "And one more?{Enter}");
+    await waitFor(() => expect(server.bodies).toHaveLength(1));
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ threadId: olderId, text: "And one more?" });
+  });
+
+  it("says so when a picked conversation cannot be read, and starts afresh after", async () => {
+    twoThreads();
+    server.turnsFor[olderId] = "missing";
+    renderHob();
+    expect(await screen.findByText("Cazril.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    await userEvent.click(
+      await within(listed()).findByRole("button", { name: /Build me an ambush in the reeds/ }),
+    );
+
+    expect(await screen.findByText(/That conversation could not be opened/)).toBeInTheDocument();
+    server.frames = [delta("Right."), done()];
+    await userEvent.type(composer()!, "Something else.{Enter}");
+    await waitFor(() => expect(server.bodies).toHaveLength(1));
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "Something else." });
+  });
+
+  it("calls a conversation by Hob's name for it once there is one, and by its question until then", async () => {
+    server.threads = [
+      { ...aThread("Who is the ferryman?"), name: "The Ferryman" },
+      { ...aThread("Build me an ambush in the reeds"), id: olderId },
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+
+    const rows = await within(listed()).findAllByRole("button", { name: /Ferryman|ambush/ });
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("The Ferryman"),
+      expect.stringContaining("Build me an ambush in the reeds"),
+    ]);
+    expect(within(listed()).queryByText("Who is the ferryman?")).toBeNull();
+  });
+
+  it("lists the account's own conversations outside a campaign", async () => {
+    server.threads = [{ ...aThread("Draft me a ranger"), campaignId: null }];
+    renderHob({ account: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.click(screen.getByRole("button", { name: "Conversations" }));
+
+    expect(
+      await within(listed()).findByRole("button", { name: /Draft me a ranger/ }),
+    ).toBeInTheDocument();
+    expect(server.paths.filter((path) => path === "/me/hob/threads").length).toBeGreaterThan(1);
+  });
+
+  it("offers no list at a table whose conversations are not the reader's", () => {
+    renderHob({ campaign: false });
+    expect(screen.queryByRole("button", { name: "Conversations" })).toBeNull();
   });
 });
 
@@ -1876,6 +2019,7 @@ describe("the account's own Hob, outside any campaign", () => {
         campaignId: null,
         worldId: null,
         title: "Choose my next level for me.",
+        name: null,
         createdAt: stamp,
         updatedAt: stamp,
       },
@@ -1957,6 +2101,7 @@ describe("the account's own Hob, outside any campaign", () => {
         campaignId: null,
         worldId: null,
         title: "A river",
+        name: null,
         createdAt: stamp,
         updatedAt: stamp,
       },

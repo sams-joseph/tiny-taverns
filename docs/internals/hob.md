@@ -42,6 +42,8 @@ Two decisions there are easy to undo. It is one fragment for reading and writing
 
 `HobThreads` takes a `reach` argument rather than twin methods. A creator holds threads in both campaign sets, so operations naming a thread read the reach off the row (`HobThreads.reachOf`) rather than deriving it from the creator proof; `threads.list` stays proof-derived because listing genuinely is "which set does the panel show".
 
+A thread's `title` is the question that started it, shortened, and never changes. Its `name` (`0084`) is what Hob called it: `assistant/HobNamer.ts` asks the model for one after the first answer has been saved, in a fiber the service owns, so the answer never waits for it, and writes it once through `HobThreads.name` under the asker's own reach. A failure, a timeout or an empty reply is a log line and leaves `name` null, which the panel's list reads as "show the title". The namer is optional the way `HobDirectWrites` is: `app.ts` provides it on Hob's own model whenever Hob is ON, and a suite that scripts the model round by round leaves it out, so its scripts are not shifted by a naming round; `hob-naming.test.ts` provides one on a second scripted model. A name describes the conversation and nothing in the record, which is why it needs no accept.
+
 ## Six toolkits, because a toolkit is what the model is shown
 
 A tool bound to a handler that always refuses is still a tool the model spends a round reaching for. So `toolkit.ts` has six toolkits, not one narrowed at the handler:

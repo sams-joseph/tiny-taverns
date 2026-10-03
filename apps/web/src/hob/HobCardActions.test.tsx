@@ -149,6 +149,7 @@ const serve = (surface: Surface, turns: ReadonlyArray<Record<string, unknown>> =
               id: threadId,
               ...surface.threadScope,
               title: "The lantern-keeper",
+              name: null,
               createdAt: stamp,
               updatedAt: stamp,
             },

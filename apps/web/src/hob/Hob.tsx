@@ -313,6 +313,11 @@ export function ScopedHob({
       onOpenArtifact={conversation.open}
       openableArtifactIds={conversation.openableArtifactIds}
       onNewThread={conversation.reset}
+      threadList={conversation.threadList}
+      threadId={conversation.threadId}
+      opening={conversation.opening}
+      onListThreads={conversation.listThreads}
+      onOpenThread={conversation.openThread}
     />
   );
 }
