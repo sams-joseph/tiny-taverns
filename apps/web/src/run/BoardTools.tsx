@@ -113,8 +113,8 @@ export interface ToolPointer {
  * Measure's drag is the ruler's and never the canvas's pan
  * (`BoardCanvas.tsx` pans only a press that reaches it). Area's click is the
  * pin, and a drag still pans the board: the canvas swallows the click of a
- * press that travelled, so panning to the spot pins nothing. The wheel pans
- * and zooms under both.
+ * press that travelled, so panning to the spot pins nothing. The wheel zooms
+ * under both.
  */
 export function ToolSurface({
   board,

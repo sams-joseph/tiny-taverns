@@ -2355,18 +2355,62 @@ describe("the canvas", () => {
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 
-  it("pans on a scroll and zooms on a pinch, and the page itself never scrolls for either", async () => {
+  it("zooms on a scroll about the pointer, and the page itself never scrolls for it", async () => {
     await open();
     const zoom = zoomOf();
-    const scrolled = fireEvent.wheel(canvasEl(), { deltaX: 30, deltaY: 40 });
+    const from = panOf();
+    // The plane's point under the pointer, before and after.
+    const under = (view: { x: number; y: number }, at: number, scale: number) =>
+      (at - view.x) / scale;
+    const scrolled = fireEvent.wheel(canvasEl(), { deltaY: -100, clientX: 120, clientY: 60 });
     expect(scrolled).toBe(false);
-    expect(zoomOf()).toBe(zoom);
-    expect(panOf().x).toBeCloseTo(-30);
-    expect(panOf().y).toBeCloseTo(-40);
+    expect(zoomOf()).toBeCloseTo(zoom * Math.SQRT2);
+    expect(under(panOf(), 120, zoomOf())).toBeCloseTo(under(from, 120, zoom));
+    expect(under({ x: panOf().y, y: 0 }, 60, zoomOf())).toBeCloseTo(
+      under({ x: from.y, y: 0 }, 60, zoom),
+    );
 
-    const pinched = fireEvent.wheel(canvasEl(), { deltaY: -100, ctrlKey: true });
-    expect(pinched).toBe(false);
+    // Down zooms back out, a sideways scroll does nothing, and none of them pans.
+    expect(fireEvent.wheel(canvasEl(), { deltaY: 100, clientX: 120, clientY: 60 })).toBe(false);
+    expect(zoomOf()).toBeCloseTo(zoom);
+    expect(panOf().x).toBeCloseTo(from.x);
+    expect(panOf().y).toBeCloseTo(from.y);
+    expect(fireEvent.wheel(canvasEl(), { deltaX: 40, deltaY: 0 })).toBe(false);
+    expect(zoomOf()).toBeCloseTo(zoom);
+    expect(panOf().x).toBeCloseTo(from.x);
+
+    // A pinch is the same zoom.
+    expect(fireEvent.wheel(canvasEl(), { deltaY: -100, ctrlKey: true })).toBe(false);
     expect(zoomOf()).toBeGreaterThan(zoom);
+  });
+
+  it("zooms on a scroll over a token and over a tool's layer", async () => {
+    await open();
+    const token = await within(board()).findByRole("button", { name: /^Brannoc,/ });
+    let zoom = zoomOf();
+    expect(fireEvent.wheel(token, { deltaY: -100 })).toBe(false);
+    expect(zoomOf()).toBeGreaterThan(zoom);
+    for (const tool of ["Measure", "Area", "Fog"]) {
+      await userEvent.click(within(hud("tools")).getByRole("button", { name: tool }));
+      zoom = zoomOf();
+      const layer = document.querySelector<HTMLElement>(
+        tool === "Fog" ? "[data-slot=fog-brush]" : "[data-slot=board-tool]",
+      )!;
+      expect(fireEvent.wheel(layer, { deltaY: 100 })).toBe(false);
+      expect(zoomOf()).toBeLessThan(zoom);
+    }
+  });
+
+  it("leaves a scroll over a floating panel to the panel, and never zooms for it", async () => {
+    await open();
+    const zoom = zoomOf();
+    const from = panOf();
+    for (const name of ["strip", "rolls", "panel", "tools"]) {
+      expect(canvasEl().contains(hud(name))).toBe(false);
+      expect(fireEvent.wheel(hud(name), { deltaY: 100 })).toBe(true);
+    }
+    expect(zoomOf()).toBe(zoom);
+    expect(panOf()).toEqual(from);
   });
 
   it("pans on a drag over the board, and the drag's click puts nobody down", async () => {
