@@ -1,4 +1,6 @@
 import { HpBar, cn } from "@taverns/ui";
+import { apiUrl } from "../api/client";
+import { DrawnImage } from "../hob/DrawnImage";
 
 /**
  * A token's face: the drawing's counter (`Encounter Runner.dc.html`), a slate
@@ -16,7 +18,12 @@ import { HpBar, cn } from "@taverns/ui";
  * - **selected**: the same ring in the heading colour, unless it is also the
  *   active one, whose ring wins.
  * - **hidden**: the disc's ring is dashed (the DM's board only).
- * - **struck**: the initials are struck through.
+ * - **portrait**: a character's portrait thumbnail, laid over the initials and
+ *   clipped to the disc inside its ring, as the initiative strip lays it; the
+ *   initials stand under one still loading or failed (`DrawnImage`).
+ * - **struck**: the initials are struck through. Under a portrait they cannot
+ *   be seen, so a struck token is read by the fade its box gives one that is
+ *   out (`run/RunTokens.tsx`).
  * - **health**: the hit-point bar under the disc (`HpBar`'s bands); absent, no bar.
  * - **conditions**: how many it has, on a violet badge at the disc's shoulder.
  * - **name**: the name under it, when the board shows names (`nameShown`).
@@ -31,6 +38,7 @@ export function TokenFace({
   active,
   hidden = false,
   struck = false,
+  portrait,
   health,
   conditions = 0,
   name,
@@ -43,6 +51,8 @@ export function TokenFace({
   readonly active: boolean;
   readonly hidden?: boolean;
   readonly struck?: boolean;
+  /** A character's portrait thumbnail (`thumbUrl`), when it has one; never a monster's. */
+  readonly portrait: string | undefined;
   /** Hit points over maximum, 0–1, when this board draws the bar. */
   readonly health?: number;
   readonly conditions?: number;
@@ -99,6 +109,16 @@ export function TokenFace({
       >
         {label}
       </text>
+      {portrait !== undefined && (
+        <foreignObject x={6} y={6} width={28} height={28}>
+          <div
+            data-slot="token-portrait"
+            className="relative size-full overflow-hidden rounded-full"
+          >
+            <DrawnImage src={apiUrl(portrait)} className="object-top" />
+          </div>
+        </foreignObject>
+      )}
       {health !== undefined && (
         <foreignObject x={6} y={41} width={28} height={3}>
           <HpBar fraction={health} className="h-full" />

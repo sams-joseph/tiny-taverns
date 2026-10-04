@@ -234,6 +234,27 @@ describe("PlayerTableScreen", () => {
     expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(false);
   });
 
+  it("lays a character's portrait on its token, and leaves the rest their initials", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.map((row) =>
+          row.kind === "you" ? { ...row, portrait: drawnPortrait } : row,
+        ),
+        board: sharedBoard,
+      }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    expect(you.querySelector("[data-slot=token-portrait] img")?.getAttribute("src")).toBe(
+      apiUrl(drawnPortrait.thumbUrl),
+    );
+    const hag = map.getByRole("img", { name: /^Marsh Hag/ });
+    expect(hag.querySelector("[data-slot=token-portrait]")).toBeNull();
+    expect(hag).toHaveTextContent("MH");
+  });
+
   it("covers the squares under fog outright, under the player's own token", async () => {
     // The table sent the hag's row away with the fog over her square; only the
     // player's own token still stands under it.
