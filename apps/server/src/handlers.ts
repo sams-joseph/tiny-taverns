@@ -62,6 +62,7 @@ import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { HobImages } from "./images/HobImages.js";
+import { ImageUploads } from "./images/ImageUploads.js";
 import { UploadUrls } from "./storage/UploadUrls.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -441,6 +442,23 @@ const UploadsLive = HttpApiBuilder.group(
         body: request.stream,
       }),
     );
+  }),
+);
+
+/**
+ * A person's own picture of something they made; see the group's declaration
+ * and `images/ImageUploads.ts`, which decides everything through the same
+ * ownership statement a draw uses.
+ */
+const PicturesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "pictures",
+  Effect.fnUntraced(function* (handlers) {
+    const pictures = yield* ImageUploads;
+    return handlers
+      .handle("createUpload", ({ payload }) => pictures.create(payload))
+      .handle("applyUpload", ({ params, payload }) => pictures.apply(params.uploadId, payload))
+      .handle("remove", ({ params }) => pictures.remove(params.subject, params.subjectId));
   }),
 );
 
@@ -1884,6 +1902,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     InvitePreviewLive,
     ImagesLive,
     UploadsLive,
+    PicturesLive,
     JoinLive,
     CampaignsLive,
     MembersLive,

@@ -10,6 +10,14 @@ import {
   EncounterRunBoard,
 } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
+import {
+  ImageSubject,
+  ImageUploadApply,
+  ImageUploadCreate,
+  ImageUploadTicket,
+  UploadRejected,
+  UploadsUnavailable,
+} from "./ImageUpload.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { CampaignAct, CampaignActCreate, CampaignActUpdate } from "./CampaignAct.js";
 import { CampaignStory, CampaignStoryPut, PlayerCampaignStory } from "./CampaignStory.js";
@@ -1138,6 +1146,48 @@ class UploadsGroup extends HttpApiGroup.make("uploads").add(
     error: NotFound,
   }),
 ) {}
+
+/**
+ * A person's own picture of something they made, in place of Hob's.
+ *
+ * Every endpoint is the subject's owner's alone, decided by the same
+ * statement that decides who may start a draw (`OWNED_SUBJECT` in
+ * `repo/Images.ts`): a character's owner, or a campaign's creator for the
+ * campaign, its NPCs and its battle maps, or a Shared World's owner. Anyone
+ * else, and an upload that is not the caller's, is `NotFound`. Who may *see*
+ * the picture is still only the subject's own reads.
+ *
+ * - `createUpload` hands out a ticket: a short-lived `PUT` the browser sends
+ *   the file to. `RateLimited` past the account's daily uploads.
+ * - `applyUpload` crops the received file once per kind and replaces each
+ *   kind's picture, a draw still running included. A ticket applies once.
+ * - `remove` takes every picture off the subject. The record stays, marked
+ *   removed, so Hob never draws it again; uploading puts one back.
+ */
+class PicturesGroup extends HttpApiGroup.make("pictures")
+  .add(
+    HttpApiEndpoint.post("createUpload", "/pictures/uploads", {
+      payload: ImageUploadCreate,
+      success: ImageUploadTicket,
+      error: [NotFound, RateLimited, UploadsUnavailable],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("applyUpload", "/pictures/uploads/:uploadId/apply", {
+      params: { uploadId: Schema.String },
+      payload: ImageUploadApply,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, UploadRejected, UploadsUnavailable],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("remove", "/pictures/:subject/:subjectId", {
+      params: { subject: ImageSubject, subjectId: Schema.String },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .middleware(Authorization) {}
 
 /**
  * Accepting an invitation — the one endpoint that sits outside every campaign
@@ -3430,6 +3480,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(InvitePreviewGroup)
   .add(ImagesGroup)
   .add(UploadsGroup)
+  .add(PicturesGroup)
   .add(JoinGroup)
   .add(SharedWorldsGroup)
   .add(SharedWorldHistoryGroup)

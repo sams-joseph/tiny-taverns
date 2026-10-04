@@ -1067,6 +1067,9 @@ describeLayer("membership", shared, (it) => {
               'hob_direct_resource_update',
               -- The daily image budget's ledger: read only by the cap.
               'image_spend',
+              -- An upload ticket is read only by its own account's apply; a
+              -- stranger's refusal there is covered in pictures.test.ts.
+              'image_upload',
               -- A banner is read only as a field of the NPC, beside its
               -- portrait, through the NPC's own shipped reads.
               'npc_banner',

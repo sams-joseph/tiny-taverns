@@ -79,6 +79,7 @@ import { HobImages } from "./images/HobImages.js";
 import { ImageModel } from "./images/ImageModel.js";
 import { ImageUrls } from "./images/ImageUrls.js";
 import { UploadUrls } from "./storage/UploadUrls.js";
+import { ImageUploads } from "./images/ImageUploads.js";
 import { ImageRecords } from "./repo/Images.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
@@ -516,6 +517,7 @@ export const servicesOver = <E>(
   | ObjectStorage
   | HobImages
   | UploadUrls
+  | ImageUploads
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -534,8 +536,15 @@ export const servicesOver = <E>(
   | Sessions
   | Spells,
   E | Config.ConfigError | StorageError
-> =>
-  Layer.mergeAll(
+> => {
+  // Hob's pictures of every kind: the worker, the image routes and the
+  // deletion drain. Named once, because the uploads below need the same worker
+  // and a layer is shared only by identity.
+  const hobImages = images.pipe(Layer.provide([ImageRecords.layer, storage, imageUrls]));
+  // Where an uploaded file's bytes go: the provider's presigned `PUT`, or
+  // this server's own signed route over the same storage.
+  const uploadUrlsLive = uploadUrls.pipe(Layer.provide(storage));
+  return Layer.mergeAll(
     Accounts.layer,
     AuthorizationLive.pipe(Layer.provide([Accounts.layer, identity])),
     // Jotting a beat appends `beat-added` to the log, so it rings the doorbell
@@ -659,13 +668,12 @@ export const servicesOver = <E>(
     Layer.fresh(NpcThreads.layer).pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // Files, behind whichever provider `STORAGE_DRIVER` names.
     storage,
-    // Hob's pictures of every kind: the worker, the image routes and the
-    // deletion drain. The same memoised storage and URL layers the rest of the
-    // graph holds.
-    images.pipe(Layer.provide([ImageRecords.layer, storage, imageUrls])),
-    // Where an uploaded file's bytes go: the provider's presigned `PUT`, or
-    // this server's own signed route over the same storage.
-    uploadUrls.pipe(Layer.provide(storage)),
+    hobImages,
+    uploadUrlsLive,
+    // A person's own pictures, through the same records, storage and worker.
+    ImageUploads.layer.pipe(
+      Layer.provide([ImageRecords.layer, storage, uploadUrlsLive, hobImages]),
+    ),
     // The NPC rehearsal loop: proposal tools write only review rows, never
     // destination campaign state. It reads the NPC, its transcript, and this
     // NPC's explicit facts/approved memories — no campaign-wide repositories.
@@ -823,6 +831,7 @@ export const servicesOver = <E>(
       ]),
     ),
   ).pipe(Layer.provide(database));
+};
 
 /**
  * The configured services, over the real database.
@@ -889,6 +898,7 @@ export const applicationOver = <E>(
     | Options
     | HobImages
     | UploadUrls
+    | ImageUploads
     | RuleArticles
     | Rolls
     | Party

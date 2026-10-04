@@ -1,4 +1,4 @@
-import { type Actor, CurrentActor } from "@taverns/api";
+import { type Actor, CurrentActor, IMAGE_KINDS_OF_SUBJECT, type ImageSubject } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
@@ -36,7 +36,8 @@ export type ImageFailure =
   | "interrupted"
   | "storage"
   | "skipped"
-  | "capped";
+  | "capped"
+  | "removed";
 
 /** A row the worker is to draw. */
 export interface ImageJob {
@@ -153,6 +154,37 @@ const OWNED_SUBJECT: {
   `,
 };
 
+/** An upload ticket the account may still apply. */
+export interface PendingUpload {
+  readonly id: string;
+  readonly subject: ImageSubject;
+  readonly subjectId: string;
+  readonly contentType: string;
+  readonly contentLength: number;
+  readonly prefix: StorageKey;
+}
+
+/** A ticket recorded, or why not. */
+export type UploadBegun =
+  | {
+      readonly _tag: "begun";
+      readonly id: string;
+      readonly prefix: StorageKey;
+      readonly expiresAt: Date;
+    }
+  | { readonly _tag: "notFound" }
+  | { readonly _tag: "capped" };
+
+/** One kind's picture cut from an upload, ready to become its row. */
+export interface UploadedImage {
+  readonly kind: ImageKind;
+  readonly stored: Omit<StoredImage, "inputTokens" | "outputTokens">;
+}
+
+/** Where an upload's file lands: `uploads/{accountId}/{uploadId}`, the file `source` under it. */
+export const uploadPrefix = (accountId: string, uploadId: string): StorageKey =>
+  StorageKey(`uploads/${accountId}/${uploadId}`);
+
 /** Midnight UTC today: the caps are per UTC day whatever the session's time zone. */
 const utcDayStart = (sql: SqlClient.SqlClient) =>
   sql`(date_trunc('day', now() at time zone 'utc') at time zone 'utc')`;
@@ -165,6 +197,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * rare and the critical section is two counts and two inserts.
  */
 const START_LOCK = 0x70_6f_72_74; // "port"
+
+/** The same for upload tickets, so two at once cannot both take the last of the day. */
+const UPLOAD_LOCK = 0x75_70_6c_64; // "upld"
 
 export class ImageRecords extends Context.Service<
   ImageRecords,
@@ -231,6 +266,54 @@ export class ImageRecords extends Context.Service<
     readonly deletionDone: (id: string) => Effect.Effect<void>;
     /** Back off: the next attempt waits a minute per failed attempt, up to an hour. */
     readonly deletionFailed: (id: string, error: string) => Effect.Effect<void>;
+    /**
+     * Record an upload ticket for a subject this actor may picture, and
+     * answer where its file goes. `notFound` when the actor may not picture
+     * it (the same `OWNED_SUBJECT` a draw asks), `capped` past
+     * `perAccountPerDay` tickets in this UTC day.
+     */
+    readonly beginUpload: (
+      subject: ImageSubject,
+      subjectId: string,
+      terms: {
+        readonly contentType: string;
+        readonly contentLength: number;
+        readonly expiresInSeconds: number;
+        readonly perAccountPerDay: number;
+      },
+    ) => Effect.Effect<UploadBegun, never, CurrentActor>;
+    /** This actor's own ticket, still pending and in date, or `undefined`. */
+    readonly pendingUpload: (
+      uploadId: string,
+    ) => Effect.Effect<PendingUpload | undefined, never, CurrentActor>;
+    /**
+     * Make an upload the subject's pictures: under the ticket's and the
+     * subject's locks, replace each kind's row with a `ready` upload row, run
+     * `put` with each new row's prefix, and close the ticket, queueing its
+     * file. A battle map's grid is reset to the new picture's width. `false`,
+     * with nothing written, when the ticket was applied, expired or not this
+     * actor's, or the subject is no longer theirs.
+     */
+    readonly applyUpload: <E>(
+      uploadId: string,
+      images: ReadonlyArray<UploadedImage & { readonly id: string }>,
+      put: (
+        prefixes: ReadonlyArray<{ readonly kind: ImageKind; readonly prefix: StorageKey }>,
+      ) => Effect.Effect<void, E>,
+    ) => Effect.Effect<boolean, E, CurrentActor>;
+    /**
+     * Take every picture off a subject this actor may picture: each `ready`
+     * or still `generating` row becomes `failed/removed` and its files are
+     * queued. `false` when the actor may not picture it.
+     */
+    readonly remove: (
+      subject: ImageSubject,
+      subjectId: string,
+    ) => Effect.Effect<boolean, never, CurrentActor>;
+    /** Close pending tickets past their expiry and queue their files. Answers how many. */
+    readonly expireUploads: Effect.Effect<number>;
+    /** Queue prefixes for deletion: files put by a write that then rolled back. */
+    readonly enqueueDeletions: (prefixes: ReadonlyArray<StorageKey>) => Effect.Effect<void>;
     /** The prefix of a `ready` image, for the image route after its signature checked out. */
     readonly readyPrefix: (
       kind: ImageKind,
@@ -415,6 +498,201 @@ export class ImageRecords extends Context.Service<
               not_before = now() + make_interval(mins => least(attempts + 1, 60))
             where id = ${id}
           `.pipe(Effect.orDie, Effect.asVoid),
+
+        beginUpload: (subject, subjectId, terms) =>
+          sql
+            .withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                if (!UUID.test(subjectId)) return { _tag: "notFound" } as const;
+                yield* sql`select pg_advisory_xact_lock(${UPLOAD_LOCK})`;
+                const owned = yield* OWNED_SUBJECT[subject](sql, subjectId, actor);
+                if (owned[0] === undefined) return { _tag: "notFound" } as const;
+                const today = yield* sql<{ readonly count: number }>`
+                  select count(*)::int as count from image_upload
+                  where account_id = ${actor.accountId} and created_at >= ${utcDayStart(sql)}
+                `;
+                if ((today[0]?.count ?? 0) >= terms.perAccountPerDay) {
+                  return { _tag: "capped" } as const;
+                }
+                const id = crypto.randomUUID();
+                const prefix = uploadPrefix(actor.accountId, id);
+                // The expiry is the database's clock, as the sweep that closes it is.
+                const rows = yield* sql<{ readonly expires_at: Date }>`
+                  insert into image_upload (
+                    id, account_id, subject, subject_id, content_type, content_length,
+                    storage_prefix, expires_at
+                  ) values (
+                    ${id}, ${actor.accountId}, ${subject}, ${subjectId}, ${terms.contentType},
+                    ${terms.contentLength}, ${prefix},
+                    now() + make_interval(secs => ${terms.expiresInSeconds})
+                  )
+                  returning expires_at
+                `;
+                return { _tag: "begun", id, prefix, expiresAt: rows[0]!.expires_at } as const;
+              }),
+            )
+            .pipe(Effect.orDie),
+
+        pendingUpload: (uploadId) =>
+          Effect.gen(function* () {
+            if (!UUID.test(uploadId)) return undefined;
+            const actor = yield* CurrentActor;
+            const rows = yield* sql<{
+              readonly id: string;
+              readonly subject: ImageSubject;
+              readonly subject_id: string;
+              readonly content_type: string;
+              readonly content_length: number;
+              readonly storage_prefix: string;
+            }>`
+              select id, subject, subject_id, content_type, content_length, storage_prefix
+              from image_upload
+              where id = ${uploadId} and account_id = ${actor.accountId}
+                and state = 'pending' and expires_at > now()
+            `;
+            const row = rows[0];
+            return row === undefined
+              ? undefined
+              : {
+                  id: row.id,
+                  subject: row.subject,
+                  subjectId: row.subject_id,
+                  contentType: row.content_type,
+                  contentLength: row.content_length,
+                  prefix: StorageKey(row.storage_prefix),
+                };
+          }).pipe(Effect.orDie),
+
+        applyUpload: (uploadId, images, put) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const tickets = yield* sql<{
+                  readonly subject: ImageSubject;
+                  readonly subject_id: string;
+                  readonly storage_prefix: string;
+                }>`
+                  select subject, subject_id, storage_prefix from image_upload
+                  where id = ${uploadId} and account_id = ${actor.accountId}
+                    and state = 'pending' and expires_at > now()
+                  for update
+                `;
+                const ticket = tickets[0];
+                if (ticket === undefined) return false;
+                const owned = yield* OWNED_SUBJECT[ticket.subject](sql, ticket.subject_id, actor);
+                const subject = owned[0];
+                if (subject === undefined) return false;
+
+                const prefixes: Array<{ readonly kind: ImageKind; readonly prefix: StorageKey }> =
+                  [];
+                for (const image of images) {
+                  const prefix = imagePrefix(
+                    image.kind,
+                    subject.account_id,
+                    subject.subject_id,
+                    image.id,
+                  );
+                  // The old row's trigger queues its files, and a draw still
+                  // running on it finds nothing to store into.
+                  yield* sql`
+                    delete from ${table(image.kind)}
+                    where ${sql(IMAGE_KINDS[image.kind].subjectColumn)} = ${subject.subject_id}
+                  `;
+                  yield* sql`
+                    insert into ${table(image.kind)} ${sql.insert({
+                      id: image.id,
+                      [IMAGE_KINDS[image.kind].subjectColumn]: subject.subject_id,
+                      ...(subject.campaign_id === undefined
+                        ? {}
+                        : { campaign_id: subject.campaign_id }),
+                      account_id: subject.account_id,
+                      state: "ready",
+                      source: "upload",
+                      storage_prefix: prefix,
+                      original_type: image.stored.originalType,
+                      content_sha256: Buffer.from(image.stored.sha256),
+                      width: image.stored.width,
+                      height: image.stored.height,
+                      original_bytes: image.stored.originalBytes,
+                      stored_bytes: image.stored.storedBytes,
+                      finished_at: new Date(),
+                    })}
+                  `;
+                  if (image.kind === "battleMap") {
+                    // The grid is measured in the picture's pixels, so a new
+                    // picture starts with the grid across its whole width, as a
+                    // drawn map does.
+                    yield* sql`
+                      update battle_map set
+                        cell_px = ${image.stored.width}::double precision / board_columns,
+                        offset_x_px = 0,
+                        offset_y_px = 0,
+                        updated_at = now()
+                      where id = ${subject.subject_id}
+                    `;
+                  }
+                  prefixes.push({ kind: image.kind, prefix });
+                }
+                yield* put(prefixes);
+                yield* sql`
+                  update image_upload set state = 'applied', finished_at = now()
+                  where id = ${uploadId}
+                `;
+                yield* sql`insert into storage_deletion (prefix) values (${ticket.storage_prefix})`;
+                return true;
+              }),
+            ),
+          ),
+
+        remove: (subject, subjectId) =>
+          sql
+            .withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                if (!UUID.test(subjectId)) return false;
+                const owned = yield* OWNED_SUBJECT[subject](sql, subjectId, actor);
+                if (owned[0] === undefined) return false;
+                for (const kind of IMAGE_KINDS_OF_SUBJECT[subject]) {
+                  yield* sql`
+                    with removed as (
+                      update ${table(kind)} set
+                        state = 'failed', failure = 'removed',
+                        finished_at = now(), updated_at = now()
+                      where ${sql(IMAGE_KINDS[kind].subjectColumn)} = ${subjectId}
+                        and state in ('ready', 'generating')
+                      returning storage_prefix
+                    )
+                    insert into storage_deletion (prefix) select storage_prefix from removed
+                  `;
+                }
+                return true;
+              }),
+            )
+            .pipe(Effect.orDie),
+
+        expireUploads: sql<{ readonly count: number }>`
+          with expired as (
+            update image_upload set state = 'expired', finished_at = now()
+            where state = 'pending' and expires_at <= now()
+            returning storage_prefix
+          ), enqueued as (
+            insert into storage_deletion (prefix) select storage_prefix from expired
+            returning 1
+          )
+          select count(*)::int as count from enqueued
+        `.pipe(
+          Effect.map((rows) => rows[0]?.count ?? 0),
+          Effect.orDie,
+        ),
+
+        enqueueDeletions: (prefixes) =>
+          prefixes.length === 0
+            ? Effect.void
+            : sql`
+                insert into storage_deletion ${sql.insert(prefixes.map((prefix) => ({ prefix })))}
+              `.pipe(Effect.orDie, Effect.asVoid),
 
         readyPrefix: (kind, imageId) =>
           UUID.test(imageId)

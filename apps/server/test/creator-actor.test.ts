@@ -874,7 +874,13 @@ describeLayer("creator-actor", shared, (it) => {
       // `Characters.setDeathSaves` is the one hundred and eighty-fourth, for
       // `Characters.rest`'s reason: the owner's marks on a character in no
       // campaign, whose reach into a fight is the owner's own seat.
-      expect(ungated).toBe(184);
+      // A hundred and eighty-five to eighty-eight are a person's own pictures:
+      // `ImageRecords.beginUpload`, `pendingUpload`, `applyUpload` and
+      // `remove`, for `ImageRecords.start`'s reason. Each reaches its subject
+      // through `OWNED_SUBJECT`, the statement a draw uses, whose campaign arms
+      // are already the creator predicate and whose character arm is in no
+      // campaign; a ticket is reached only by the account that took it.
+      expect(ungated).toBe(188);
     });
   });
 });
