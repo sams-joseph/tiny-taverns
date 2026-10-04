@@ -80,6 +80,7 @@ export const classifyFailure = (error: unknown): ApiFailure => {
         message: stringField(error, "message") ?? "That is already there.",
       };
     case "HobUnavailable":
+    case "UploadsUnavailable":
       return {
         kind: "unavailable",
         message: stringField(error, "message") ?? "That part of the server is not switched on.",
@@ -104,6 +105,13 @@ export const classifyFailure = (error: unknown): ApiFailure => {
      */
     case "SchemaError":
       return { kind: "invalid", detail: schemaDetail(error) };
+    // The server read the file and could not make a picture of it; its
+    // sentence says why.
+    case "UploadRejected":
+      return {
+        kind: "invalid",
+        detail: stringField(error, "message") ?? "That file cannot be used as a picture.",
+      };
     case "HttpClientError": {
       // A transport error is "the server did not answer" — a different thing to
       // tell a DM than "the server said no".

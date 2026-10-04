@@ -43,6 +43,7 @@ import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { HobCover } from "../hob/HobCover";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
@@ -964,9 +965,10 @@ function OtherReadAloud({
  * The *Battle map* card: the picture Hob drew of the place, whole, over the
  * setting line it was drawn from.
  *
- * **Hob's picture, never an upload.** The drawing's card is a drop target;
- * a map is drawn once, from the setting line, as the encounter is made, with no
- * redraw and no upload, so the card shows what Hob drew. A new encounter has
+ * **Hob's picture, or the creator's own.** A map is drawn once, from the
+ * setting line, as the encounter is made, with no redraw; the creator may
+ * upload one in its place through the card's buttons (the drawing's drop
+ * target is not drawn). A new encounter has
  * nothing drawn yet and an old one may have no picture at all (images off,
  * nothing to draw from, a refused or failed draw); either way the card is the
  * setting line alone, with no empty slot. While Hob is still drawing it says
@@ -1017,10 +1019,23 @@ function DrawnMap({
     [invalidate, encounterId],
   );
   useHobDrawingPolling(map?.imagePending ?? false, rereadMap);
+  // The creator's own map in place of Hob's, or none. Uploading resets the
+  // grid, so the encounter's read changes with the map's.
+  const pictures = usePictureActions({
+    subject: "battleMap",
+    subjectId: map?.id ?? "",
+    hasPicture: map?.image != null,
+    noun: "map",
+    invalidates: [reads.battleMap(encounterId), reads.encounters(campaignId)],
+  });
   // The builder has already read the map for its setting line, so a failure
   // here is a second read's; the form still works without the picture.
   return map === null ? null : (
-    <HobCover image={map.image} pending={map.imagePending} shape="whole" />
+    <>
+      <HobCover image={map.image} pending={map.imagePending} shape="whole" />
+      <div className="flex flex-wrap gap-2 px-5 pt-4">{pictures.buttons}</div>
+      {pictures.dialogs}
+    </>
   );
 }
 

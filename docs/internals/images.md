@@ -106,9 +106,11 @@ Characters use `CharacterPortrait` ([Characters](characters.md), _The portrait_)
 - `card`: the head of each card on the campaign list and on the Shared World list, bled to the card's edges.
 - `hero`: the top of the creator's Overview, of the player's campaign page, and of a Shared World's screen. It sits in the page, never in the sticky chrome rows.
 - `strip`: a battle map across the Encounters preview, cropped to 24:9 and linked to the encounter's page.
-- `whole`: a battle map uncropped in the encounter builder's _Battle map_ card, above the setting line it was drawn from. The builder shows what Hob drew; it has no upload and no redraw.
+- `whole`: a battle map uncropped in the encounter builder's _Battle map_ card, above the setting line it was drawn from. The card has no redraw; its upload and remove are the owner's picture actions below.
 
-The Shared World screen's campaign directory cards and the archived shelves show no cover. A board, the encounter page's and the fight's, is not a plate: `BattleMapBoard` draws the grid over the picture, and the grid alone without one.
+The Shared World screen's campaign directory cards and the archived shelves show no cover.
+
+**The owner's picture actions** are one hook, `usePictureActions` (`apps/web/src/pictures/`), which every owner screen uses: the campaign's and the Shared World's actions menus (_Upload_ or _Replace cover_, _Remove cover_), and buttons under the character sheet's portrait, in the NPC page's bar and under the encounter builder's map. One dialog frames one file for each kind the subject shows, with a cropper of the kind's `IMAGE_ASPECT`; its view math (`crop.ts`) is pure and is the crop the server is sent. A file the server could not decode whole (over 4096 px on a side, over the size limit, or another type) is redrawn upright on a canvas in the browser first (`prepare.ts`). The bytes go to the ticket's URL on the bare HTTP client, with the ticket's headers and no bearer token, because the URL may be a storage provider's. The NPC drawer, the cast cards and the lists carry no actions; they show what the owner's screens set. A board, the encounter page's and the fight's, is not a plate: `BattleMapBoard` draws the grid over the picture, and the grid alone without one.
 
 Every shape carries both sizes in `srcset`, with `sizes="auto, 100vw"`. The browser picks by the width it actually draws, so a wide card on a 2x screen loads the full size and a narrow band on a 1x screen loads the card size.
 

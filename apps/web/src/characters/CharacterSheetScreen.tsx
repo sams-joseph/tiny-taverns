@@ -38,6 +38,7 @@ import { UndoLevelUpDialog } from "./UndoLevelUpDialog";
 import { drawnSections, hitPoints, sectionInView, type SheetSectionId } from "./sheet";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { DeathSaveRow, HpTrack, SectionSpine, StatPill } from "./SheetParts";
 import { SheetDocument, type SheetLog } from "./SheetDocument";
 import { deathSaveWrites, ownCharacterWrites, restOwnCharacter, setOwnDeathSaves } from "./write";
@@ -195,6 +196,14 @@ function IdentityCard({
   // able to mark the first save on the night they do.
   const deathSaves = character.deathSaves;
   const { busy, failure, submit } = useMutation();
+  // The owner's own portrait and banner, from one upload, or neither.
+  const pictures = usePictureActions({
+    subject: "character",
+    subjectId: character.id,
+    hasPicture: character.portrait !== null || character.banner !== null,
+    noun: "portrait",
+    invalidates: ownCharacterWrites(owned),
+  });
   const [hitDiceToSpend, setHitDiceToSpend] = useState(0);
   const hitDiceResource = character.sheet.resources?.find((resource) => resource.id === "hit-dice");
   const availableHitDice =
@@ -307,6 +316,8 @@ function IdentityCard({
               Hob is drawing their portrait…
             </p>
           )}
+          <div className="flex flex-wrap gap-2">{pictures.buttons}</div>
+          {pictures.dialogs}
           {(meta.length > 0 || (character.playerName !== null && character.playerName !== "")) && (
             <div>
               {meta.length > 0 && (

@@ -6,6 +6,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { TopBar } from "../shell/TopBar";
 import { type CampaignActs, useCampaignAct } from "./act";
@@ -393,6 +394,15 @@ export function CampaignSettingsButtons({
     memberships.value.some(
       (row) => row.campaign.id === view.campaign.id && row.sharedWorld !== null,
     );
+  // The cover, the creator's own to replace or remove. Its dialogs stay here
+  // rather than in the frame: they hold nothing the rest of the campaign shares.
+  const cover = usePictureActions({
+    subject: "campaign",
+    subjectId: view.campaign.id,
+    hasPicture: view.campaign.image !== null,
+    noun: "cover",
+    invalidates: [reads.campaign(view.campaign.id), reads.myCampaigns],
+  });
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => onOpen("invites")}>
@@ -441,6 +451,7 @@ export function CampaignSettingsButtons({
                 },
               ]
             : []),
+          ...cover.items,
           {
             label: "Delete permanently",
             icon: "trash-2",
@@ -449,6 +460,7 @@ export function CampaignSettingsButtons({
           },
         ]}
       />
+      {cover.dialogs}
     </>
   );
 }

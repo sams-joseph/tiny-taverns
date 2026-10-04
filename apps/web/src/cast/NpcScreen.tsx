@@ -21,6 +21,7 @@ import { DetailFacts, DetailSection } from "../ui/detail";
 import { NpcAppearance } from "./NpcAppearance";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { npcAtom, sessionNpcsAtom, type NpcDetail } from "./load";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { NpcAvatar } from "./NpcAvatar";
 import { NpcDialog } from "./NpcDialog";
 import { campaignSheetTarget } from "./npcSheet";
@@ -112,6 +113,7 @@ export function NpcScreen() {
             <Icon name="pencil" size={14} />
             Edit
           </Button>
+          <NpcPictureButtons npc={extra.npc} />
           <ArchiveButton npc={extra.npc} />
         </>
       )}
@@ -1308,6 +1310,27 @@ function Inspector({
         The prompt itself is never shown or stored: it carries your private material.
       </p>
     </Card>
+  );
+}
+
+/**
+ * The NPC's portrait and banner, the creator's to upload, replace or remove.
+ * Its own component because the bar's actions are a render prop, and a hook
+ * belongs to a component.
+ */
+function NpcPictureButtons({ npc }: { readonly npc: Npc }) {
+  const pictures = usePictureActions({
+    subject: "npc",
+    subjectId: npc.id,
+    hasPicture: npc.image !== null || npc.banner !== null,
+    noun: "portrait",
+    invalidates: [reads.npc(npc.id), reads.npcs(npc.campaignId), reads.npcFollowUp(npc.campaignId)],
+  });
+  return (
+    <>
+      {pictures.buttons}
+      {pictures.dialogs}
+    </>
   );
 }
 

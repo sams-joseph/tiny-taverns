@@ -487,9 +487,14 @@ describe("the battle map card", () => {
     expect(img.closest("[data-slot=hob-cover]")).toHaveClass("aspect-3/2");
     const location = within(card()).getByRole("textbox", { name: "Location" });
     expect(img.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // No upload and no redraw: the picture is Hob's, drawn once.
+    // No redraw: the picture is Hob's, drawn once. The creator's own map goes
+    // in through the card's upload, whose file chooser is in its dialog.
     expect(document.querySelector("input[type=file]")).toBeNull();
-    expect(within(card()).queryByRole("button")).toBeNull();
+    expect(
+      within(card())
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Replace map", "Remove map"]);
   });
 
   it("draws no empty slot when there is no picture", async () => {
