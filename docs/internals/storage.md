@@ -5,9 +5,9 @@ The server keeps files (Hob-drawn images: character portraits, campaign and Shar
 ## The interface is provider-neutral
 
 - **Keys are `StorageKey`s**: slash-separated segments of `A-Z a-z 0-9 . _ -`, no `.`/`..`, no empty segment, no leading or trailing slash, at most 512 characters. The brand is checked where a key is minted, so every adapter sees only keys every other adapter also accepts. `@` is outside the alphabet on purpose; the file-system adapter uses it for its own file names.
-- **Operations**: `put` (bytes and a content type, replacing), `get` (metadata plus a byte stream, or `StorageNotFound`), `head` (metadata or `None`), `delete` (idempotent), `deletePrefix` (idempotent).
+- **Operations**: `put` (bytes and a content type, replacing), `get` (metadata plus a byte stream, or `StorageNotFound`), `head` (metadata or `None`), `delete` (idempotent), `deletePrefix` (idempotent), `signUpload` (a presigned `PUT`, or `None`; see _Uploads_ below).
 - **`deletePrefix(p)` removes keys under `p/`**, at any depth. It does not remove an object stored at `p` itself, or `p2/…`. S3-style providers must list with the trailing slash to match.
-- **No bucket, region, endpoint or URL appears in the interface.** A provider's configuration is its adapter's business, read in its branch of `storageFromConfig`.
+- **No bucket, region or endpoint appears in the interface.** A provider's configuration is its adapter's business, read in its branch of `storageFromConfig`. The one URL it hands out is a presigned upload's, and no caller looks inside it.
 - **Errors are ours**: `StorageNotFound`, `StorageError` and `StorageUnavailable`. `StorageError.message` names only the operation and the key; provider text goes in `cause`, which is for logs. No storage error reaches the wire: the image routes map `StorageNotFound` to the contract's `NotFound` and let the other two be a 500.
 
 ## Configuration and the boot line
@@ -31,11 +31,19 @@ Every branch logs one line, as hosted sign-in and Hob do (`server.md`, _Env file
 
 ## Adding a provider
 
-1. **Write the adapter** as a new module in `apps/server/src/storage/`, exporting a `layer` that returns `Layer<ObjectStorage, StorageError, …>`. Read its settings from `Config` (credentials `Config.Redacted`) and map every provider failure to `StorageError`, keeping the provider's error as `cause`. A missing object must be `StorageNotFound` from `get` and `None` from `head`, never a `StorageError`.
+1. **Write the adapter** as a new module in `apps/server/src/storage/`, exporting a `layer` that returns `Layer<ObjectStorage, StorageError, …>`. Read its settings from `Config` (credentials `Config.Redacted`) and map every provider failure to `StorageError`, keeping the provider's error as `cause`. A missing object must be `StorageNotFound` from `get` and `None` from `head`, never a `StorageError`. A hosted provider should implement `signUpload` as a presigned `PUT` (S3, R2 and GCS's S3 API all take one), so uploaded bytes skip the server; returning `None` is correct but routes every upload through it.
 2. **Register the driver.** Add its name to the `STORAGE_DRIVER` literals in `apps/server/src/Config.ts`, add a branch to `storageFromConfig` that logs its ON line, and document its variables by name in `apps/server/.env.example`.
 3. **Pass the contract.** Call `objectStorageContract(name, layer)` from `apps/server/test/support/objectStorageContract.ts` and change nothing in it. It builds the layer once and gives each test its own key prefix, so it can run against a real bucket. Behaviour that belongs to one adapter goes in that adapter's own test file. If the adapter cannot meet a contract test, change the interface for every adapter; do not skip the test.
 
 `ObjectStorage.memory` is an in-process adapter that also passes the contract. Use it in tests of code that stores files but is not about storage.
+
+## Uploads
+
+A file a person uploads goes from the browser to storage without the server choosing where. `UploadUrls.sign` (`apps/server/src/storage/UploadUrls.ts`) asks the adapter for a presigned `PUT` bound to the key, the content type, the exact length and an expiry. When the adapter declines, as the file-system and memory adapters do, the server signs a `PUT /uploads` of its own under `PORTRAIT_URL_SECRET` covering the same four things, so every caller works with every adapter.
+
+- **The server's route is stateless, like a provider's.** It holds no row. Whoever mints the URL has already decided who may upload, and the route checks only that this is the request that was signed. A forged or expired signature, another `Content-Type`, and a body of any other length are all `NotFound`, and nothing is stored unless every byte matched. It reads the raw body and stops at the first byte past the signed length; `MAX_UPLOAD_BYTES` bounds what can be signed, because the body is held in memory before `put`.
+- **Headers carry only the content type.** A browser's `fetch` cannot set `Content-Length`, so the length must be bound by the signature. An adapter that presigns signs the length as the provider checks it, and its bucket needs CORS allowing `PUT` from the app's origin.
+- The image routes' signatures begin with a kind's tag and an upload's with `[`, so neither opens the other.
 
 ## Key layout
 

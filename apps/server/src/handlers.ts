@@ -62,6 +62,7 @@ import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { HobImages } from "./images/HobImages.js";
+import { UploadUrls } from "./storage/UploadUrls.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
@@ -418,6 +419,28 @@ const ImagesLive = HttpApiBuilder.group(
       .handle("battleMap", ({ params, query }) =>
         images.image("battleMap", { ...params, e: query.e, s: query.s }),
       );
+  }),
+);
+
+/**
+ * An uploaded file's bytes, when the storage provider cannot take them itself;
+ * see the group's declaration and `storage/UploadUrls.ts`. Raw, so the body is
+ * read as a stream and refused at the first byte past the signed length
+ * rather than buffered whole first.
+ */
+const UploadsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "uploads",
+  Effect.fnUntraced(function* (handlers) {
+    const uploads = yield* UploadUrls;
+    return handlers.handleRaw("receive", ({ query, request }) =>
+      uploads.receive({
+        ...query,
+        contentType: request.headers["content-type"],
+        contentLength: request.headers["content-length"],
+        body: request.stream,
+      }),
+    );
   }),
 );
 
@@ -1860,6 +1883,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldMembersLive,
     InvitePreviewLive,
     ImagesLive,
+    UploadsLive,
     JoinLive,
     CampaignsLive,
     MembersLive,

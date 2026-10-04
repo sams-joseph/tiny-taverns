@@ -78,6 +78,7 @@ import { Options } from "./repo/Options.js";
 import { HobImages } from "./images/HobImages.js";
 import { ImageModel } from "./images/ImageModel.js";
 import { ImageUrls } from "./images/ImageUrls.js";
+import { UploadUrls } from "./storage/UploadUrls.js";
 import { ImageRecords } from "./repo/Images.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
@@ -344,6 +345,14 @@ export const imageUrlsFromConfig: Layer.Layer<ImageUrls, Config.ConfigError> = L
 );
 
 /**
+ * Whether this server can sign its own upload URLs: `PORTRAIT_URL_SECRET`
+ * again. Without it only a provider that presigns its own `PUT` can take an
+ * upload. No boot line of its own; the images line already names the secret.
+ */
+export const uploadUrlsFromConfig: Layer.Layer<UploadUrls, Config.ConfigError, ObjectStorage> =
+  Layer.unwrap(Effect.map(portraitUrlSecret, (secret) => UploadUrls.layer(secret)));
+
+/**
  * Whether Hob draws a picture of each new character and campaign: the images
  * half of the question `assistantFromConfig` answers, arranged the same way.
  *
@@ -461,6 +470,7 @@ export const servicesOver = <E>(
     E | Config.ConfigError,
     ImageRecords | ObjectStorage | ImageUrls
   > = hobImagesFromConfig,
+  uploadUrls: Layer.Layer<UploadUrls, E | Config.ConfigError, ObjectStorage> = uploadUrlsFromConfig,
 ): Layer.Layer<
   | Accounts
   | Advancement
@@ -505,6 +515,7 @@ export const servicesOver = <E>(
   | NpcThreads
   | ObjectStorage
   | HobImages
+  | UploadUrls
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -652,6 +663,9 @@ export const servicesOver = <E>(
     // deletion drain. The same memoised storage and URL layers the rest of the
     // graph holds.
     images.pipe(Layer.provide([ImageRecords.layer, storage, imageUrls])),
+    // Where an uploaded file's bytes go: the provider's presigned `PUT`, or
+    // this server's own signed route over the same storage.
+    uploadUrls.pipe(Layer.provide(storage)),
     // The NPC rehearsal loop: proposal tools write only review rows, never
     // destination campaign state. It reads the NPC, its transcript, and this
     // NPC's explicit facts/approved memories — no campaign-wide repositories.
@@ -874,6 +888,7 @@ export const applicationOver = <E>(
     | NpcThreads
     | Options
     | HobImages
+    | UploadUrls
     | RuleArticles
     | Rolls
     | Party

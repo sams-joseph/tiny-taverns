@@ -143,6 +143,14 @@ describe("the API declaration", () => {
     // battle map that a visibility predicate already allowed; every failure is the same
     // `NotFound`. See the group's declaration and
     // `apps/server/src/images/ImageUrls.ts`.
+    //
+    // **The fourth is `uploads.receive`**, where an uploaded file's bytes
+    // arrive when the storage provider cannot take them itself, because the
+    // browser sends them to whatever presigned URL it was handed. Its
+    // capability is an HMAC over the storage key, the content type, the exact
+    // length and an expiry, minted only after the caller's reach to the
+    // subject was checked; every failure is the same `NotFound`. See
+    // `apps/server/src/storage/UploadUrls.ts`.
     expect(unauthenticated).toEqual([
       "health.check",
       "invitePreview.read",
@@ -153,6 +161,7 @@ describe("the API declaration", () => {
       "images.npc",
       "images.npcBanner",
       "images.battleMap",
+      "uploads.receive",
     ]);
   });
 
@@ -380,6 +389,8 @@ describe("the API declaration", () => {
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.
       "table",
+      // An uploaded file's bytes behind a signed URL, not a credential: see above.
+      "uploads",
     ]);
   });
 });

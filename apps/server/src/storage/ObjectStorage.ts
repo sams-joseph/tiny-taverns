@@ -6,7 +6,8 @@ import { Brand, Context, Data, Effect, Layer, Option, Ref, Stream } from "effect
  *
  * Every provider (a local directory today, S3, R2 or GCS later) is one
  * implementation of this service, selected by `STORAGE_DRIVER` in `app.ts`.
- * The interface names no bucket, region, endpoint or URL, and no provider error
+ * The interface names no bucket, region or endpoint, and the one URL it hands
+ * out, a presigned upload's, is opaque to every caller. No provider error
  * text reaches a caller's error channel: an adapter maps its failures onto the
  * three errors below and keeps the original only as `cause`, for logs.
  *
@@ -59,6 +60,28 @@ export interface StoredObject extends ObjectMetadata {
   readonly body: Stream.Stream<Uint8Array, StorageError>;
 }
 
+/**
+ * What a direct upload may write: exactly `contentLength` bytes of
+ * `contentType`, within `expiresInSeconds` of signing.
+ */
+export interface UploadTerms {
+  readonly contentType: string;
+  readonly contentLength: number;
+  readonly expiresInSeconds: number;
+}
+
+/**
+ * A request the browser makes itself to store an object without the bytes
+ * passing through this server: a provider's presigned `PUT`. The URL is
+ * opaque and the provider's own; the browser sends exactly `headers` (the
+ * signed `Content-Type` and `Content-Length`) and the bytes.
+ */
+export interface SignedUpload {
+  readonly url: string;
+  readonly method: "PUT";
+  readonly headers: Readonly<Record<string, string>>;
+}
+
 /** No object under this key. */
 export class StorageNotFound extends Data.TaggedError("StorageNotFound")<{
   readonly key: StorageKey;
@@ -70,7 +93,7 @@ export class StorageNotFound extends Data.TaggedError("StorageNotFound")<{
  * the wire.
  */
 export class StorageError extends Data.TaggedError("StorageError")<{
-  readonly operation: "put" | "get" | "head" | "delete" | "deletePrefix" | "open";
+  readonly operation: "put" | "get" | "head" | "delete" | "deletePrefix" | "signUpload" | "open";
   readonly key: string;
   readonly message: string;
   readonly cause?: unknown;
@@ -108,6 +131,17 @@ export class ObjectStorage extends Context.Service<
     readonly deletePrefix: (
       prefix: StorageKey,
     ) => Effect.Effect<void, StorageError | StorageUnavailable>;
+    /**
+     * A presigned `PUT` the browser can send straight to the provider, bound
+     * to the key, the content type and the exact length, or `None` when this
+     * provider cannot take one (a local directory, memory). On `None` the
+     * server takes the bytes at its own signed route instead
+     * (`storage/UploadUrls.ts`), so every caller works with every adapter.
+     */
+    readonly signUpload: (
+      key: StorageKey,
+      terms: UploadTerms,
+    ) => Effect.Effect<Option.Option<SignedUpload>, StorageError | StorageUnavailable>;
   }
 >()("ObjectStorage") {
   /**
@@ -129,6 +163,7 @@ export class ObjectStorage extends Context.Service<
       head: () => off,
       delete: () => off,
       deletePrefix: () => off,
+      signUpload: () => off,
     };
   });
 
@@ -176,6 +211,7 @@ export class ObjectStorage extends Context.Service<
             objects,
             (map) => new Map([...map].filter(([key]) => !key.startsWith(`${prefix}/`))),
           ),
+        signUpload: () => Effect.succeedNone,
       };
     }),
   );

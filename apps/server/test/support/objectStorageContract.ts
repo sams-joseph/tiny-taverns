@@ -189,6 +189,34 @@ export const objectStorageContract = <E>(name: string, layer: Layer.Layer<Object
       }),
     );
 
+    it.effect("signs an upload as a PUT bound to its content type, or declines", () =>
+      Effect.gen(function* () {
+        const key = scope()("uploads/source");
+
+        const signed = yield* ObjectStorage.use((storage) =>
+          storage.signUpload(key, {
+            contentType: "image/png",
+            contentLength: 10,
+            expiresInSeconds: 900,
+          }),
+        );
+
+        // Declining is an answer: the server then takes the bytes itself
+        // (`storage/UploadUrls.ts`). A provider that signs hands out a PUT the
+        // browser can send with only headers it is allowed to set; the length is
+        // bound by the signature, not a header the browser could choose.
+        if (Option.isSome(signed)) {
+          expect(signed.value.method).toBe("PUT");
+          expect(signed.value.headers["content-type"]).toBe("image/png");
+          expect(Object.keys(signed.value.headers).map((name) => name.toLowerCase())).not.toContain(
+            "content-length",
+          );
+        }
+        // Signing stores nothing.
+        expect(yield* head(key)).toEqual(Option.none());
+      }),
+    );
+
     it.effect("stores again under a prefix that was deleted", () =>
       Effect.gen(function* () {
         const key = scope();
