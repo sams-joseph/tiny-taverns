@@ -186,6 +186,9 @@ export const layer = (options: {
               { discard: true },
             ).pipe(Effect.mapError(failed("deletePrefix", prefix)));
           }),
+
+        // A directory has no URL of its own; the server takes the bytes.
+        signUpload: () => Effect.succeedNone,
       };
     }),
   );

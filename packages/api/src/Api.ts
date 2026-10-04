@@ -1005,8 +1005,8 @@ class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
 /**
  * What the holder of an invitation can ask before they have an account.
  *
- * **One of the three groups with no `Authorization` middleware** (with
- * `health` and `images`), and the disclosure it makes is deliberate and bounded: the
+ * **One of the four groups with no `Authorization` middleware** (with
+ * `health`, `images` and `uploads`), and the disclosure it makes is deliberate and bounded: the
  * campaign's name, the DM's name and when the invitation dies, to whoever holds
  * a live token and nobody else. It exists so the step between a friend at the
  * table and the read-aloud text is a page that says what signing in gets you,
@@ -1110,6 +1110,34 @@ class ImagesGroup extends HttpApiGroup.make("images")
       error: NotFound,
     }),
   ) {}
+
+/**
+ * Where an uploaded file's bytes arrive when the storage provider cannot take
+ * them itself — **the fourth group with no `Authorization` middleware**, for
+ * the same reason as `images`: the browser sends the bytes to whatever URL it
+ * was handed, a provider's presigned `PUT` or this one, and adds no header the
+ * provider would not expect.
+ *
+ * The capability is the signature, which covers the storage key, the content
+ * type, the exact length and the expiry, and is minted only after the caller's
+ * reach to the subject was checked. A forged, altered or expired signature, a
+ * `Content-Type` other than the signed one, and a body of any other length are
+ * all the same `NotFound`. Nothing is stored unless every byte was right.
+ */
+class UploadsGroup extends HttpApiGroup.make("uploads").add(
+  HttpApiEndpoint.put("receive", "/uploads", {
+    query: {
+      k: Schema.optional(Schema.String),
+      t: Schema.optional(Schema.String),
+      n: Schema.optional(Schema.String),
+      e: Schema.optional(Schema.String),
+      s: Schema.optional(Schema.String),
+    },
+    payload: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array()),
+    success: HttpApiSchema.NoContent,
+    error: NotFound,
+  }),
+) {}
 
 /**
  * Accepting an invitation — the one endpoint that sits outside every campaign
@@ -3401,6 +3429,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(MeGroup)
   .add(InvitePreviewGroup)
   .add(ImagesGroup)
+  .add(UploadsGroup)
   .add(JoinGroup)
   .add(SharedWorldsGroup)
   .add(SharedWorldHistoryGroup)
