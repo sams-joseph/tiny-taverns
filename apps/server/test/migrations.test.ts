@@ -228,6 +228,7 @@ describeLayer("migrations", database, (it) => {
         "group_member",
         "hob_direct_resource_update",
         "image_spend",
+        "image_upload",
         "language",
         "magic_item",
         "magic_item_rarity",
@@ -367,6 +368,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 87, name: "run_board_fog" },
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
+        { migration_id: 91, name: "image_uploads" },
       ]);
     }),
   );
@@ -467,6 +469,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 87, name: "run_board_fog" },
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
+        { migration_id: 91, name: "image_uploads" },
       ]);
     }),
   );

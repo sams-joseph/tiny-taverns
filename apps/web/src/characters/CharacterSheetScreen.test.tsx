@@ -301,9 +301,9 @@ describe("a character sheet", () => {
     // bar the designers drew, with no handler here — not a sheet control. The
     // vitals toggle opens the narrow summary and writes nothing. Everything
     // else is a write the payload carries: the bar's *Edit*, *Level up*, *Level
-    // up with Hob* (whose keep is the same write) and *Delete*, the resource
-    // spend/rest controls, the five section actions, and the six death-save
-    // pips.
+    // up with Hob* (whose keep is the same write) and *Delete*, *Upload
+    // portrait* (its own endpoints, `pictures`), the resource spend/rest
+    // controls, the five section actions, and the six death-save pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
       "Add to campaign",
@@ -312,6 +312,7 @@ describe("a character sheet", () => {
       "Level up with Hob",
       "Edit",
       "Show vitals",
+      "Upload portrait",
       "−",
       "+",
       "Short rest",
@@ -356,9 +357,12 @@ describe("a character sheet", () => {
     // not an inline toggle on the sheet.
     expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
-    // No portrait upload and no journal entry. The roll log is present, and its
-    // copy says when a result can leave this browser.
-    expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
+    // The portrait's one control is the owner's upload (there is none to
+    // remove in the fixture), and there is no journal entry. The roll log is
+    // present, and its copy says when a result can leave this browser.
+    expect(
+      screen.getAllByRole("button", { name: /portrait/i }).map((node) => node.textContent),
+    ).toEqual(["Upload portrait"]);
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
     expect(screen.getByText(/Your rolls/)).toBeTruthy();
     expect(screen.getByText(/sends them to the table's dice tray/i)).toBeTruthy();
@@ -667,6 +671,9 @@ describe("the portrait on the sheet", () => {
     await renderSheet();
     await screen.findAllByText("Brannoc Duskharrow");
     expect(document.querySelector("img[src*='/portraits/']")).toBeNull();
-    expect(screen.queryByText(/portrait/i)).toBeNull();
+    // The one word for it is the owner's *Upload portrait*; nothing says one failed.
+    expect(
+      screen.queryAllByText(/portrait/i).filter((node) => node.closest("button") === null),
+    ).toEqual([]);
   });
 });

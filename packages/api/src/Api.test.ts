@@ -358,6 +358,9 @@ describe("the API declaration", () => {
       // account-owned character. It replaced the campaign-scoped `characters`
       // group when the continuity decision made the character top-level.
       "party",
+      // A person's own picture of something they made: the upload ticket, its
+      // apply and the remove, each the subject owner's alone.
+      "pictures",
       // A shared encounter as a player is told it: names and counts, no
       // difficulty (captain's decision, 2026-09-25). `encounters` is the
       // creator's.

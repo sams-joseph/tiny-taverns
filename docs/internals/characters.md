@@ -101,12 +101,12 @@ A creator holds threads in both campaign sets (the campaign's shared thread and 
 
 Thread-naming operations (`turns`, `accept`) therefore read reach off the thread: `HobThreads.reachOf` selects through the OR of the two complete `conversationReachable` predicates and answers `"dm"` when `account_id` is null, `"own"` otherwise. Reach derived from the proof would let a creator draft a character they are then refused the keeping of. `threads.list` stays proof-derived because the panel's listing genuinely asks which set the panel shows. Accept takes no content payload; the row lands with `origin = 'assistant'` and every correction is an ordinary owner PATCH.
 
-## The portrait: drawn once, seen by whoever sees the character
+## The portrait: drawn once or uploaded, seen by whoever sees the character
 
 A character's portrait is the first kind of Hob-drawn image. [Images](images.md) covers the capability every kind shares: the worker, the records, the signed routes, the shared daily budget, the house style and the deletion outbox. This section covers what is particular to characters.
 
 - **The trigger** is `HobImages.drawCharacter`, called by the handlers that make a character, the form's two creates and Hob's two accepts (`HobLive`, `MeHobLive`), after their transactions commit. Another way of making a character must call it too.
-- **The record** is `character_portrait` (`0048_character_portraits.ts`): one row per character ever, bound to the character and its owner by the composite key to `character (id, account_id)`. A skipped row means there was no race, class, appearance or background (`portraitHasSubject`).
+- **The record** is `character_portrait` (`0048_character_portraits.ts`): one row per character at a time, bound to the character and its owner by the composite key to `character (id, account_id)`. A skipped row means there was no race, class, appearance or background (`portraitHasSubject`). The owner's upload replaces the row, and removing the picture marks it `removed` ([Images](images.md), _Uploaded pictures_).
 - **The prompt** is `portraitPromptFor` in `packages/api/src/Portrait.ts` with `HOUSE_PORTRAIT_STYLE`, the one implementation; no client sends a prompt.
 - **The banner** is a second draw beside the portrait, `character_banner` (`0075_portrait_banners.ts`), for the Party card's wide band ([Images](images.md), _Portrait banners_). It is started only beside a portrait that started in the same call, and `portraitColumns` selects it with the portrait, so every read below carries both.
 - **Visibility is exactly the character's.** The wire carries `Character.portrait` (three signed paths, or `null`), `Character.banner` (two, or `null`) and `portraitPending`. Every URL is minted by `portraitImages` in `repo/Characters.ts`, only for a portrait id that a read's own predicate returned. Two kinds of read return one:

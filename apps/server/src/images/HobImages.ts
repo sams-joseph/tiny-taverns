@@ -308,7 +308,9 @@ export class HobImages extends Context.Service<
         const sweep = Effect.suspend(() => records.sweepStale(STALE_AFTER_SECONDS, held));
 
         if (options.storageOn) {
-          yield* Effect.all([sweep, drainDeletions]).pipe(
+          // Upload tickets nobody applied expire here too, and their files
+          // drain with everything else's.
+          yield* Effect.all([sweep, records.expireUploads, drainDeletions]).pipe(
             Effect.catchCause((cause) =>
               Effect.logWarning(`Image housekeeping failed: ${Cause.pretty(cause)}`),
             ),

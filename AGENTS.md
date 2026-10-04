@@ -29,6 +29,7 @@ Any object a person can create, Hob can also create through the creator toolkit'
 The maintainer's standing exceptions:
 
 - Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote).
+- Hob does not upload pictures; it draws them. An upload is a person's own file.
 - Rolls and ended fights are deleted only with their night.
 - Shared campaign and Shared World conversation threads may be hidden rather than hard-deleted.
 - Retiring is the delete for NPC knowledge and memory.

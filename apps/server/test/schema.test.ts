@@ -111,6 +111,10 @@ const NOT_CONTENT = [
   // The daily image budget's ledger: a spend per draw started, billed to an
   // account and never read by anybody but the cap. See 0055_image_spend.ts.
   "image_spend",
+  // An upload ticket: where one account was told to send a file, and the
+  // daily count of them. Never on the wire past its id, and read only by its
+  // own account's apply. See 0091_image_uploads.ts.
+  "image_upload",
   "language",
   "magic_item_rarity",
   "magic_item_variant",

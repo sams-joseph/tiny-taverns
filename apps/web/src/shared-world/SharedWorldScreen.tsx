@@ -21,6 +21,7 @@ import { NewCampaignDialog } from "../campaign/NewCampaignDialog";
 import { OverviewCard, OverviewHero, OverviewPage } from "../campaign/OverviewParts";
 import { monthOf } from "../chronicle/format";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { TopBar } from "../shell/TopBar";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
@@ -165,6 +166,14 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
     [invalidate, worldId],
   );
   useHobDrawingPolling(view?.sharedWorld.imagePending === true, rereadCover);
+  // The cover, the owner's own to replace or remove.
+  const cover = usePictureActions({
+    subject: "sharedWorld",
+    subjectId: worldId,
+    hasPicture: view !== undefined && view.sharedWorld.image !== null,
+    noun: "cover",
+    invalidates: [reads.sharedWorld(worldId), reads.mySharedWorlds],
+  });
 
   const newCampaign = (
     <Button size="sm" onClick={() => setCreatingCampaign(true)}>
@@ -215,6 +224,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
                         icon: "archive",
                         onSelect: () => setWorldArchiveOpen(true),
                       },
+                      ...cover.items,
                       {
                         label: "Delete permanently",
                         icon: "trash-2",
@@ -223,6 +233,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
                       },
                     ]}
                   />
+                  {cover.dialogs}
                 </>
               )}
             </OverviewHero>

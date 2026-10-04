@@ -28,6 +28,7 @@ export * from "./Hob.js";
 export * from "./HouseStyle.js";
 export * from "./HobDirectResourceUpdate.js";
 export * from "./Ids.js";
+export * from "./ImageUpload.js";
 export * from "./Initiative.js";
 export * from "./SharedWorld.js";
 export * from "./SharedWorldHistory.js";

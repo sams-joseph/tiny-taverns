@@ -1,6 +1,6 @@
 # Images: what Hob draws, once
 
-Hob draws a picture of some of the things people make: a character's portrait, a campaign's cover, a Shared World's cover, a campaign NPC's portrait and an encounter's battle map. A character and a campaign NPC get a second picture beside the square portrait: a wide banner, for the card bands a square crops to a strip (_Portrait banners_ below). All of them follow the captain's rules for character portraits: drawn automatically once after creation (an NPC created blank, at the first edit that gives it something to draw from), started only by the thing's owner, no redraw and no upload, one house style, and anyone who can see the thing sees its picture. A battle map is the creator's alone, so only the creator sees it, except as a fight's board a DM shows to the table. The provider is chosen by environment variables, and files sit behind the provider-neutral storage adapter ([Storage](storage.md)).
+Hob draws a picture of some of the things people make: a character's portrait, a campaign's cover, a Shared World's cover, a campaign NPC's portrait and an encounter's battle map. A character and a campaign NPC get a second picture beside the square portrait: a wide banner, for the card bands a square crops to a strip (_Portrait banners_ below). All of them follow the captain's rules for character portraits: drawn automatically once after creation (an NPC created blank, at the first edit that gives it something to draw from), started only by the thing's owner, no redraw, one house style, and anyone who can see the thing sees its picture. The owner may put a picture of their own in its place, or take the picture off (_Uploaded pictures_ below). A battle map is the creator's alone, so only the creator sees it, except as a fight's board a DM shows to the table. The provider is chosen by environment variables, and files sit behind the provider-neutral storage adapter ([Storage](storage.md)).
 
 Creatures, items and feats are deliberately not drawn, and neither is a Library NPC original: only the copy a cast holds is.
 
@@ -52,6 +52,17 @@ Each is its own start against the caps, the square first. With one draw left in 
 
 On the wire the banner is a field beside the portrait (`Character.banner`, `Npc.banner`, `PlayerNpc.banner`). It is minted by the same signer in the same reads, so whoever may see the portrait may see the banner. `portraitPending` and `imagePending` stay true until both are finished. A band shows the banner, or the square when there is none.
 
+## Uploaded pictures
+
+Whoever may start a subject's draw may upload a file in its place: a character's owner, a campaign's creator for the campaign, its NPCs and its battle maps, and a Shared World's owner. The check is `OWNED_SUBJECT` itself, so the two can never disagree, and anyone else gets `NotFound`. The endpoints are the `pictures` group (`images/ImageUploads.ts`).
+
+- **An upload is the kind's own row**, `ready` with `source = 'upload'` (`0091_image_uploads.ts`), so the subject's reads, the signer, the routes and the delete cascade serve it unchanged. It sent no prompt, it writes no `image_spend`, and visibility is still the subject's.
+- **A ticket, then the file, then an apply.** `createUpload` records an `image_upload` row (its subject, type, exact length and a 15-minute expiry) and answers a signed `PUT` ([Storage](storage.md), _Uploads_). `applyUpload` reads the file back, crops it once per kind named, and, under the ticket's and the subject's locks, replaces each kind's row and puts its files. An account takes `UPLOADS_PER_ACCOUNT_PER_DAY` tickets a UTC day, counted from `image_upload`, which is why a ticket's row outlives its file.
+- **One file, a crop per kind.** A character or NPC upload can fill the square and the banner, each with its own crop. A crop is a fraction of the upright picture, applied after `rotate()` honours the EXIF orientation. The contract's `IMAGE_ASPECT` is the aspect each kind is cropped to; `image-kinds.test.ts` pins it to `kinds.ts`. A kind with no crop is cut as a drawn one is. A battle map is never cropped, and applying one resets the map's grid across the new picture's width, because the old alignment was measured in the old picture's pixels.
+- **The file's own bytes are never kept.** `renderUpload` stores the crop re-encoded as `original.webp`, which carries none of the file's metadata, and the variants cut from it. Applying, and the worker's sweep of tickets past their expiry, queue the raw file's prefix in `storage_deletion`.
+- **Replacing wins over a running draw.** The new row has a new id, so the draw's `store` finds nothing to lock and stores nothing.
+- **Removing is not deleting the row.** `remove` marks every `ready` or `generating` row of the subject `failed/removed` and queues its files. A deleted row would read as never recorded, and the NPC edit that starts a first draw would then redraw it. An upload replaces a removed row.
+
 ## Visibility is the subject's
 
 The wire carries an image only as a field of its subject: `Character.portrait` / `portraitPending`, `Campaign.image` / `imagePending`, `SharedWorld.image` / `imagePending`, and `Npc.image` / `imagePending` (also on `PlayerNpc`, and `image` alone on the follow-up queue's `NpcFollowUpNpc`). Each image is minted as signed paths only inside a read whose own SQL already returned the subject.
@@ -95,9 +106,11 @@ Characters use `CharacterPortrait` ([Characters](characters.md), _The portrait_)
 - `card`: the head of each card on the campaign list and on the Shared World list, bled to the card's edges.
 - `hero`: the top of the creator's Overview, of the player's campaign page, and of a Shared World's screen. It sits in the page, never in the sticky chrome rows.
 - `strip`: a battle map across the Encounters preview, cropped to 24:9 and linked to the encounter's page.
-- `whole`: a battle map uncropped in the encounter builder's _Battle map_ card, above the setting line it was drawn from. The builder shows what Hob drew; it has no upload and no redraw.
+- `whole`: a battle map uncropped in the encounter builder's _Battle map_ card, above the setting line it was drawn from. The card has no redraw; its upload and remove are the owner's picture actions below.
 
-The Shared World screen's campaign directory cards and the archived shelves show no cover. A board, the encounter page's and the fight's, is not a plate: `BattleMapBoard` draws the grid over the picture, and the grid alone without one.
+The Shared World screen's campaign directory cards and the archived shelves show no cover.
+
+**The owner's picture actions** are one hook, `usePictureActions` (`apps/web/src/pictures/`), which every owner screen uses: the campaign's and the Shared World's actions menus (_Upload_ or _Replace cover_, _Remove cover_), and buttons under the character sheet's portrait, in the NPC page's bar and under the encounter builder's map. One dialog frames one file for each kind the subject shows, with a cropper of the kind's `IMAGE_ASPECT`; its view math (`crop.ts`) is pure and is the crop the server is sent. A file the server could not decode whole (over 4096 px on a side, over the size limit, or another type) is redrawn upright on a canvas in the browser first (`prepare.ts`). The bytes go to the ticket's URL on the bare HTTP client, with the ticket's headers and no bearer token, because the URL may be a storage provider's. The NPC drawer, the cast cards and the lists carry no actions; they show what the owner's screens set. A board, the encounter page's and the fight's, is not a plate: `BattleMapBoard` draws the grid over the picture, and the grid alone without one.
 
 Every shape carries both sizes in `srcset`, with `sizes="auto, 100vw"`. The browser picks by the width it actually draws, so a wide card on a 2x screen loads the full size and a narrow band on a 1x screen loads the card size.
 
