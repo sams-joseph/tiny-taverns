@@ -15,6 +15,7 @@ import {
   rulerReading,
   squareAt,
   squaresBetween,
+  startingSquares,
 } from "./BattleMap.js";
 
 /** Every new map's board: 24 × 16 squares of 64 px over the 1536 × 1024 picture. */
@@ -273,5 +274,37 @@ describe("the ruler", () => {
     expect(
       rulerReading({ from: at(6, 7), to: at(9, 7), remaining: 30, occupied: true, ...five }),
     ).toEqual({ feet: 15, verdict: "occupied", text: "Occupied" });
+  });
+});
+
+describe("where tokens start", () => {
+  it("lines the party up the left edge and its foes up the right, from the middle row out", () => {
+    const party = startingSquares(drawn, "party", 3, []);
+    expect(party).toEqual([
+      { column: 0, row: 7 },
+      { column: 0, row: 8 },
+      { column: 0, row: 6 },
+    ]);
+    expect(startingSquares(drawn, "foes", 2, party)).toEqual([
+      { column: 23, row: 7 },
+      { column: 23, row: 8 },
+    ]);
+  });
+
+  it("passes over a square already taken, and moves a column in once one is full", () => {
+    const tiny = { columns: 3, rows: 2 };
+    expect(startingSquares(tiny, "party", 3, [{ column: 0, row: 0 }])).toEqual([
+      { column: 0, row: 1 },
+      { column: 1, row: 0 },
+      { column: 1, row: 1 },
+    ]);
+  });
+
+  it("answers fewer squares than asked when the board has no room left", () => {
+    const tiny = { columns: 2, rows: 1 };
+    expect(startingSquares(tiny, "foes", 3, [])).toEqual([
+      { column: 1, row: 0 },
+      { column: 0, row: 0 },
+    ]);
   });
 });

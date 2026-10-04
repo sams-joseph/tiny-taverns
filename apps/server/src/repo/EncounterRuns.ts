@@ -30,6 +30,7 @@ import {
   type StatBlock,
   statBlockInitiativeBonus,
   type Visibility,
+  startingSquares,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
@@ -806,6 +807,40 @@ export class EncounterRuns extends Context.Service<
                           death_save_successes: 0,
                           death_save_failures: 0,
                           kind: "npc",
+                        });
+                      }
+                    }
+                    // Every token starts on the board, the party down the left
+                    // edge and the monsters down the right (`startingSquares`),
+                    // so the DM drags them where they belong rather than
+                    // putting each one down. Every row carries both keys, for
+                    // `sql.insert`'s first-row column list; with no board they
+                    // stay off it.
+                    const boards = yield* sql<{
+                      readonly board_columns: number;
+                      readonly board_rows: number;
+                    }>`
+                      select board_columns, board_rows from encounter_run_board
+                      where encounter_run_board.run_id = ${run.id}
+                    `;
+                    const grid = boards[0];
+                    const sides = { party: [] as typeof seeded, foes: [] as typeof seeded };
+                    for (const row of seeded) {
+                      row.board_column = null;
+                      row.board_row = null;
+                      sides[row.kind === "pc" ? "party" : "foes"].push(row);
+                    }
+                    if (grid !== undefined) {
+                      const board = { columns: grid.board_columns, rows: grid.board_rows };
+                      const left = startingSquares(board, "party", sides.party.length, []);
+                      const right = startingSquares(board, "foes", sides.foes.length, left);
+                      for (const [rows, squares] of [
+                        [sides.party, left],
+                        [sides.foes, right],
+                      ] as const) {
+                        squares.forEach((square, index) => {
+                          rows[index]!.board_column = square.column;
+                          rows[index]!.board_row = square.row;
                         });
                       }
                     }

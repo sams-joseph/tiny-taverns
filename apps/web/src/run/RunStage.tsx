@@ -4,12 +4,11 @@ import { battleMapPlane } from "@taverns/api";
 import { type ReactNode, useCallback, useRef } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
-import { BoardCanvas, CanvasZoom, type CanvasControls } from "./BoardCanvas";
+import { BoardCanvas } from "./BoardCanvas";
 import { AreaBanner, AreaLayer, BoardToolPicker, ToolSurface } from "./BoardTools";
 import { FogActions, FogBrush } from "./Fog";
-import { BoardToggles } from "./RunBoardCard";
-import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
-import { RunTokens, TokenTray } from "./RunTokens";
+import { useRunBoard, type RunBoardProps } from "./runBoard";
+import { RunTokens } from "./RunTokens";
 
 /**
  * The fight at a desktop width: **a canvas, not a page.** The board fills the
@@ -36,11 +35,10 @@ import { RunTokens, TokenTray } from "./RunTokens";
  *   players' tray and the night's log merged into it (`RollsDock.tsx`).
  * - **banner** — under the strip, between the columns, while a tool waits for
  *   a token: the attack's *Pick a target*.
- * - **tools** — bottom centre, over the board: the board's tools (*Move*,
- *   *Measure*, *Area* with its shapes and size, and *Fog* with its *Reveal
- *   all*, *Cover all* and *Reset fog*, `BoardTools.tsx`), *Grid*, *Names*,
- *   *Hide from players*, zoom, the hint and the tokens nobody has put down
- *   (`RunBoardStage`), with a pinned area's banner over it.
+ * - **tools** — bottom centre, over the board: the board's four tools and
+ *   nothing else (*Move*, *Measure*, *Area* with its shapes and size, and *Fog*
+ *   with its *Reveal all*, *Cover all* and *Reset fog*, `BoardTools.tsx`), with
+ *   a pinned area's banner over it.
  *
  * Below `@3xl` of `main` the board is too small to play on and the runner is
  * the window-scrolling grid it always was (`RunLayout.tsx`); `useStage` asks
@@ -141,26 +139,26 @@ export function RunStage({
 const hudScroller = "pointer-events-auto overflow-y-auto overscroll-contain";
 
 /**
- * The board on the canvas: the same board, tokens and switches as the card
- * (`RunBoardCard.tsx`, through `useRunBoard`), with the card's header and
- * footer gathered into the tool dock floating at the bottom of the stage.
+ * The board on the canvas: the same board and tokens as the card
+ * (`RunBoardCard.tsx`, through `useRunBoard`), with only the tool dock floating
+ * at the bottom of the stage. The card's switches, hint, tray and caption are
+ * the card's alone; the wheel zooms the canvas (`BoardCanvas.tsx`).
  *
  * The dock's tools are the canvas's alone, since only here does the board take
  * a pointer (`BoardTools.tsx`). While Measure, Area or Fog is on, a layer over
  * the tokens takes every press, so no token drags: Measure's ruler, Area's
  * pin, or Fog's brush (`Fog.tsx`), which paints the players' fog of war. Esc,
  * Move or anything else claiming the board (an attack's pick, a dialog) puts
- * the tool away; only Esc on Area or _Clear_ takes the pin off. The pinned area is drawn under the tokens whichever tool is
- * on, and its banner says who it catches.
+ * the tool away; only Esc on Area or _Clear_ takes the pin off. The pinned area
+ * is drawn under the tokens whichever tool is on, and its banner says who it
+ * catches.
  */
 export function RunBoardStage({
   freeArea,
   ...props
 }: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
-  const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
-  const { board, gridShown, setGrid, names, setNames, hint, withBoard, tools, fogTool } =
-    useRunBoard(props, true);
-  const controls = useRef<CanvasControls | null>(null);
+  const { resource, reload, over } = props;
+  const { board, gridShown, withBoard, tools, fogTool } = useRunBoard(props, true);
   const dock = useRef<HTMLDivElement>(null);
 
   // Above the dock as well as between the columns.
@@ -189,12 +187,7 @@ export function RunBoardStage({
   const plane = battleMapPlane(board, board.image);
   return (
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
-      <BoardCanvas
-        plane={plane}
-        cellPx={board.alignment.cellPx}
-        freeArea={clear}
-        controlsRef={controls}
-      >
+      <BoardCanvas plane={plane} cellPx={board.alignment.cellPx} freeArea={clear}>
         <BattleMapBoard
           map={{ ...board, grid: gridShown ? "square" : "none" }}
           className="box-content"
@@ -223,41 +216,18 @@ export function RunBoardStage({
         <div
           ref={dock}
           data-slot="run-hud-tools"
-          className="pointer-events-auto max-w-full min-w-0 rounded-card border border-strong bg-surface-card shadow-3"
+          className="pointer-events-auto flex max-w-full min-w-0 flex-wrap items-center justify-center gap-1.5 rounded-card border border-strong bg-surface-card px-3 py-2 shadow-3"
         >
-          <div className="flex flex-wrap items-center justify-center gap-1.5 px-3 py-2">
-            <BoardToolPicker
-              tool={tools.tool}
-              disabled={!tools.usable}
-              onTool={tools.choose}
-              shape={tools.shape}
-              feet={tools.feet}
-              onShape={tools.pickShape}
-              onStep={tools.step}
-              fog={<FogActions onWhole={fogTool.whole} />}
-            />
-            <BoardToggles
-              gridShown={gridShown}
-              setGrid={setGrid}
-              names={names}
-              setNames={setNames}
-              over={over}
-              hostileTokensHidden={hostileTokensHidden}
-              hiding={hiding}
-              onHideHostile={onHideHostile}
-            />
-            <CanvasZoom controls={controls} />
-          </div>
-          <p
-            role="status"
-            className="mb-0 border-t border-hairline px-3 py-2 text-body-s leading-snug text-muted-foreground"
-          >
-            {hint}
-          </p>
-          <TokenTray {...withBoard} />
-          <p className="mb-0 border-t border-hairline px-3 py-2 text-caption leading-body text-muted-foreground">
-            {boardCaption(board)}
-          </p>
+          <BoardToolPicker
+            tool={tools.tool}
+            disabled={!tools.usable}
+            onTool={tools.choose}
+            shape={tools.shape}
+            feet={tools.feet}
+            onShape={tools.pickShape}
+            onStep={tools.step}
+            fog={<FogActions onWhole={fogTool.whole} />}
+          />
         </div>
       </div>
     </section>

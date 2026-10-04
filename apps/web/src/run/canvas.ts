@@ -30,9 +30,6 @@ export const SQUARE_PX = {
   target: 24,
 } as const;
 
-/** One press of + or −. */
-export const ZOOM_STEP = 1.25;
-
 export interface ZoomLimits {
   readonly min: number;
   readonly max: number;
@@ -49,7 +46,7 @@ const clamp = (value: number, { min, max }: ZoomLimits): number =>
 
 /**
  * The whole board in `area` (the part of the canvas no panel covers), as large
- * as fits and centred in it. *Fit*.
+ * as fits and centred in it.
  */
 export const fitView = (plane: PictureSize, area: PictureRect, limits: ZoomLimits): CanvasView => {
   const zoom = clamp(Math.min(area.width / plane.width, area.height / plane.height), limits);
@@ -64,7 +61,7 @@ export const fitView = (plane: PictureSize, area: PictureRect, limits: ZoomLimit
  * What the runner opens on: the fitted board, unless that would draw a square
  * smaller than a pointer can hit, in which case the board is drawn at that
  * smallest playable size from the area's top-left corner and the rest is a pan
- * away. A board that fits at that size is centred, as *Fit* centres it.
+ * away. A board that fits at that size is centred.
  */
 export const openingView = (plane: PictureSize, area: PictureRect, cellPx: number): CanvasView => {
   const limits = zoomLimits(cellPx);
@@ -94,7 +91,7 @@ export const zoomAbout = (
 
 /**
  * Keep at least one square of the board on the canvas along each axis, so a
- * pan can never lose it; *Fit* is the way back to all of it.
+ * pan can never lose it.
  */
 export const keepInView = (
   view: CanvasView,

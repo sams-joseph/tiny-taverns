@@ -550,6 +550,39 @@ export interface BoardMeasure {
 export const feetBetween = (from: BoardSquare, to: BoardSquare, measure: BoardMeasure): number =>
   squaresBetween(from, to, measure.diagonals) * measure.feetPerCell;
 
+/**
+ * Where tokens start: `count` free squares on one side of the board, the party
+ * from the left edge and its foes from the right, each column filled from its
+ * middle row outward before the next column in. A square already `taken` is
+ * passed over; a board with no room left answers fewer squares than asked,
+ * and the rest wait off the board.
+ */
+export const startingSquares = (
+  board: Pick<BattleMapBoard, "columns" | "rows">,
+  side: "party" | "foes",
+  count: number,
+  taken: ReadonlyArray<BoardSquare>,
+): ReadonlyArray<BoardSquare> => {
+  const used = new Set(taken.map((square) => `${String(square.column)}:${String(square.row)}`));
+  const middle = Math.floor((board.rows - 1) / 2);
+  // 0, +1, −1, +2, −2, …: outward from the middle row.
+  const rows = Array.from({ length: board.rows }, (_, k) =>
+    k % 2 === 0 ? middle - k / 2 : middle + (k + 1) / 2,
+  ).filter((row) => row >= 0 && row < board.rows);
+  const out: Array<BoardSquare> = [];
+  for (let step = 0; step < board.columns && out.length < count; step++) {
+    const column = side === "party" ? step : board.columns - 1 - step;
+    for (const row of rows) {
+      if (out.length === count) break;
+      const key = `${String(column)}:${String(row)}`;
+      if (used.has(key)) continue;
+      used.add(key);
+      out.push({ column, row });
+    }
+  }
+  return out;
+};
+
 const sameSquare = (a: BoardSquare, b: BoardSquare): boolean =>
   a.column === b.column && a.row === b.row;
 

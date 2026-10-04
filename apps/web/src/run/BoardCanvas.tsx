@@ -1,10 +1,8 @@
 import type { PictureRect, PictureSize } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
 import {
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
-  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -14,8 +12,6 @@ import {
 } from "react";
 import {
   type CanvasView,
-  ZOOM_STEP,
-  fitView,
   keepInView,
   openingView,
   wheelUnit,
@@ -30,13 +26,13 @@ import {
  *
  * - **Pan**: drag anywhere but a token. A drag that starts on a token moves the token (`RunTokens.tsx`)
  *   and never reaches the canvas. A drag that moved is a pan and its click is
- *   swallowed, so letting go over a square never puts a token from the tray
- *   there; a press that did not move is still the click that places it.
+ *   swallowed, so letting go over a square never puts a token waiting off the
+ *   board there; a press that did not move is still the click that places it.
  * - **Zoom**: the wheel or a trackpad's two-finger scroll, a trackpad pinch
  *   (which the browser sends as a wheel with Ctrl held), two fingers on a touch
- *   screen, or the dock's −, + and *Fit*. The wheel and the fingers zoom about
- *   the point under them. The floating panels are the canvas's siblings, not
- *   its children, so a wheel over one scrolls it and never reaches the board.
+ *   screen, each about the point under it. The floating panels are the
+ *   canvas's siblings, not its children, so a wheel over one scrolls it and
+ *   never reaches the board.
  *
  * The canvas clips rather than hides its overflow: `overflow: hidden` is still
  * a scroller to the browser, and focusing a token past its edge (the arrow
@@ -47,24 +43,16 @@ import {
  * zoom (`getBoundingClientRect` answers the transformed box).
  *
  * Until the DM pans or zooms, the view follows the canvas as it resizes
- * (`openingView`, in the part no panel covers); after that it is theirs, and
- * *Fit* hands the whole board back.
+ * (`openingView`, in the part no panel covers); after that it is theirs.
  */
 
 /** A pointer that moved less than this is a press, not a drag. */
 const DRAG_PX = 4;
 
-export interface CanvasControls {
-  readonly zoomIn: () => void;
-  readonly zoomOut: () => void;
-  readonly fit: () => void;
-}
-
 export function BoardCanvas({
   plane: { width, height },
   cellPx,
   freeArea,
-  controlsRef,
   children,
 }: {
   readonly plane: PictureSize;
@@ -72,8 +60,6 @@ export function BoardCanvas({
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
   readonly freeArea: (canvas: DOMRect) => PictureRect;
-  /** The dock's −, + and *Fit*, which live outside the canvas. */
-  readonly controlsRef: RefObject<CanvasControls | null>;
   /** The board, drawn at the plane's size. */
   readonly children: ReactNode;
 }) {
@@ -131,20 +117,6 @@ export function BoardCanvas({
     },
     [settle, limits],
   );
-
-  useEffect(() => {
-    controlsRef.current = {
-      zoomIn: () => zoomBy(ZOOM_STEP),
-      zoomOut: () => zoomBy(1 / ZOOM_STEP),
-      fit: () => {
-        const fitted = area();
-        if (fitted !== undefined) setChosen(fitView(plane, fitted, limits));
-      },
-    };
-    return () => {
-      controlsRef.current = null;
-    };
-  }, [controlsRef, zoomBy, area, plane, limits]);
 
   // The wheel, bound by hand: React's own listener is passive, and the page
   // must not scroll or zoom under the board. A scroll and a pinch both zoom,
@@ -267,33 +239,6 @@ export function BoardCanvas({
       >
         {children}
       </div>
-    </div>
-  );
-}
-
-/** The dock's three canvas buttons. */
-export function CanvasZoom({ controls }: { readonly controls: RefObject<CanvasControls | null> }) {
-  return (
-    <div role="group" aria-label="Zoom" className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Zoom out"
-        onClick={() => controls.current?.zoomOut()}
-      >
-        <Icon name="minus" size={13} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Zoom in"
-        onClick={() => controls.current?.zoomIn()}
-      >
-        <Icon name="plus" size={13} />
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => controls.current?.fit()}>
-        Fit
-      </Button>
     </div>
   );
 }

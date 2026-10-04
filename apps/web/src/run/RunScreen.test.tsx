@@ -1613,6 +1613,10 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
 
   const card = () => within(screen.getByRole("region", { name: "Battle map" }));
   const hint = () => card().getByRole("status");
+  /** The card's hint line; the canvas's dock carries only its tools. */
+  const hintSays = async (text: string) => {
+    if (!wide) await waitFor(() => expect(hint()).toHaveTextContent(text));
+  };
   const moves = () => server.calls.filter((call) => call.pathname.endsWith("/move"));
   const brannocMove = () => `POST ${serverRunBase()}/combatants/${brannoc.id}/move`;
   const bossMove = () => `POST ${serverRunBase()}/combatants/${goblinBoss.id}/move`;
@@ -1674,7 +1678,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
   const token = (name: string) =>
     card().getByRole("button", { name: new RegExp(`^${name}, column`) });
 
-  it("stands a placed combatant on its square, and trays the one nobody has put down", async () => {
+  it("stands a placed combatant on its square, and draws none for one off the board", async () => {
     await open();
     await waitFor(() => expect(token("Brannoc")).toBeInTheDocument());
     expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 6, row 5");
@@ -1682,13 +1686,9 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(token("Brannoc").style.left).toMatch(/^20\.8333/);
     expect(token("Brannoc").style.top).toBe("25%");
     expect(token("Brannoc")).toHaveTextContent("B");
-    // Nothing guesses the Goblin Boss a square: he waits in the tray.
+    // The Goblin Boss is off the board: no token, and no tray waiting for him.
     expect(card().queryByRole("button", { name: /^Goblin Boss, column/ })).toBeNull();
-    expect(
-      within(card().getByRole("group", { name: "Not on the board" })).getByRole("button", {
-        name: "Goblin Boss, not on the board",
-      }),
-    ).toBeInTheDocument();
+    expect(card().queryByRole("group", { name: "Not on the board" })).toBeNull();
     // Drawing them is a read.
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
@@ -1706,18 +1706,14 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(moves()).toEqual([]);
   });
 
-  it("puts a token from the tray on the square clicked", async () => {
+  it("puts a token off the board, selected from the initiative, on the square clicked", async () => {
     server.routes.set(bossMove(), {
       status: 200,
       body: { ...goblinBoss, position: { column: 12, row: 3 } },
     });
     await open();
-    await userEvent.click(
-      await card().findByRole("button", { name: "Goblin Boss, not on the board" }),
-    );
-    await waitFor(() =>
-      expect(hint()).toHaveTextContent("Click a square to put Goblin Boss on the board."),
-    );
+    await userEvent.click(rowFor("Goblin Boss"));
+    await hintSays("Click a square to put Goblin Boss on the board.");
 
     clickSquare(12, 3);
 
@@ -1729,8 +1725,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     await waitFor(() =>
       expect(token("Goblin Boss")).toHaveAccessibleName("Goblin Boss, column 13, row 4"),
     );
-    expect(hint()).toHaveTextContent("Goblin Boss is on the board");
-    expect(card().queryByRole("group", { name: "Not on the board" })).toBeNull();
+    await hintSays("Goblin Boss is on the board");
   });
 
   it("moves a dragged token, with a ruler on the way, and says how far it went", async () => {
@@ -1772,9 +1767,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(brannocToken.style.left).toMatch(/^45\.8333/);
 
     answer();
-    await waitFor(() =>
-      expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
-    );
+    await hintSays("Brannoc moved 30 ft, past their 25 ft speed");
     await waitFor(() => expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 12, row 3"));
   });
 
@@ -1801,9 +1794,8 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     // Four squares on each side alternate 5, 10, 5, 10: 30 ft, not 20.
     await waitFor(() => expect(ruler()).toHaveTextContent("30 ft · 5 over"));
     fireEvent.pointerUp(brannocToken, { pointerId: 7, ...middle(9, 8) });
-    await waitFor(() =>
-      expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
-    );
+    await waitFor(() => expect(moves()).toHaveLength(1));
+    await hintSays("Brannoc moved 30 ft, past their 25 ft speed");
   });
 
   it("reads plain feet for a creature whose turn it is not, and what is left for the one up", async () => {
@@ -1921,36 +1913,40 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(within(boss).queryByText("Goblin Boss")).toBeNull();
   });
 
-  it("names every token, or none, by the DM's choice, kept on this browser", async () => {
-    const kept = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => kept.get(key) ?? null,
-      setItem: (key: string, value: string) => kept.set(key, value),
-    });
-    server.routes.set(`GET ${serverRunBase()}/combatants`, {
-      status: 200,
-      body: [brannocPlaced, { ...goblinBoss, position: { column: 20, row: 10 } }],
-    });
-    await open();
-    await card().findByRole("button", { name: /^Goblin Boss,/ });
-    const named = () =>
-      [...document.querySelectorAll("[data-slot=run-tokens] [data-slot=token-name]")].map(
-        (name) => name.textContent,
-      );
-    expect(named()).toEqual(["Brannoc"]);
+  // *Names* and *Grid* are the card's; the canvas's dock carries only its tools.
+  it.runIf(!wide)(
+    "names every token, or none, by the DM's choice, kept on this browser",
+    async () => {
+      const kept = new Map<string, string>();
+      vi.stubGlobal("localStorage", {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => kept.set(key, value),
+      });
+      server.routes.set(`GET ${serverRunBase()}/combatants`, {
+        status: 200,
+        body: [brannocPlaced, { ...goblinBoss, position: { column: 20, row: 10 } }],
+      });
+      await open();
+      await card().findByRole("button", { name: /^Goblin Boss,/ });
+      const named = () =>
+        [...document.querySelectorAll("[data-slot=run-tokens] [data-slot=token-name]")].map(
+          (name) => name.textContent,
+        );
+      expect(named()).toEqual(["Brannoc"]);
 
-    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
-    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Every token" }));
-    await waitFor(() => expect(named()).toEqual(["Brannoc", "Goblin Boss"]));
-    expect(kept.get("taverns:run:token-names")).toBe("all");
+      await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+      await userEvent.click(await screen.findByRole("menuitemradio", { name: "Every token" }));
+      await waitFor(() => expect(named()).toEqual(["Brannoc", "Goblin Boss"]));
+      expect(kept.get("taverns:run:token-names")).toBe("all");
 
-    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
-    await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
-    await waitFor(() => expect(named()).toEqual([]));
-    // A view, not a write.
-    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
-    vi.unstubAllGlobals();
-  });
+      await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+      await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
+      await waitFor(() => expect(named()).toEqual([]));
+      // A view, not a write.
+      expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("opens on the choice this browser kept", async () => {
     vi.stubGlobal("localStorage", { getItem: () => "none", setItem: () => undefined });
@@ -1960,21 +1956,24 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     vi.unstubAllGlobals();
   });
 
-  it("draws the board, and keeps a choice for the visit, when this browser keeps no storage", async () => {
-    const blocked = () => {
-      throw new Error("blocked");
-    };
-    vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked });
-    await open();
-    await card().findByRole("button", { name: /^Brannoc,/ });
-    const name = () => document.querySelector("[data-slot=run-tokens] [data-slot=token-name]");
-    // The drawing's default stands in.
-    expect(name()?.textContent).toBe("Brannoc");
-    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
-    await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
-    await waitFor(() => expect(name()).toBeNull());
-    vi.unstubAllGlobals();
-  });
+  it.runIf(!wide)(
+    "draws the board, and keeps a choice for the visit, when this browser keeps no storage",
+    async () => {
+      const blocked = () => {
+        throw new Error("blocked");
+      };
+      vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked });
+      await open();
+      await card().findByRole("button", { name: /^Brannoc,/ });
+      const name = () => document.querySelector("[data-slot=run-tokens] [data-slot=token-name]");
+      // The drawing's default stands in.
+      expect(name()?.textContent).toBe("Brannoc");
+      await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+      await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
+      await waitFor(() => expect(name()).toBeNull());
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("reaches as far as a stat block's speed, and draws no range where none is written", async () => {
     const guard = "2b1f2a1e-0000-4000-8000-000000000c99";
@@ -2064,19 +2063,6 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
   });
 
-  it("takes a standing token off the board, back into the tray", async () => {
-    server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
-    await open();
-    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
-    await userEvent.click(card().getByRole("button", { name: "Take Brannoc off the board" }));
-
-    await waitFor(() => expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: null }));
-    await waitFor(() =>
-      expect(card().getByRole("button", { name: "Brannoc, not on the board" })).toBeInTheDocument(),
-    );
-    expect(hint()).toHaveTextContent("Brannoc is off the board");
-  });
-
   it("takes a standing token off the board from the panel's menu, where the board is played on", async () => {
     server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
     await open();
@@ -2090,7 +2076,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     await userEvent.click(menu.getByRole("menuitem", { name: "Take off the board" }));
     await waitFor(() => expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: null }));
     await waitFor(() =>
-      expect(card().getByRole("button", { name: "Brannoc, not on the board" })).toBeInTheDocument(),
+      expect(card().queryByRole("button", { name: /^Brannoc, column/ })).toBeNull(),
     );
     // Off the board, there is nothing left to take off.
     expect(
@@ -2113,25 +2099,28 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     await screen.findByText("Brannoc did not move");
     expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 6, row 5");
     await waitFor(() => expect(brannocToken.style.left).toMatch(/^20\.8333/));
-    expect(hint()).toHaveTextContent("Drag Brannoc to a square, or step with the arrow keys.");
+    await hintSays("Drag Brannoc to a square, or step with the arrow keys.");
   });
 
-  it("hides the grid on this screen only, and the squares still take a token", async () => {
-    await open();
-    await waitFor(() => expect(document.querySelectorAll("[data-line=column]")).toHaveLength(25));
-    const grid = card().getByRole("button", { name: "Grid" });
-    expect(grid).toHaveAttribute("aria-pressed", "true");
+  it.runIf(!wide)(
+    "hides the grid on this screen only, and the squares still take a token",
+    async () => {
+      await open();
+      await waitFor(() => expect(document.querySelectorAll("[data-line=column]")).toHaveLength(25));
+      const grid = card().getByRole("button", { name: "Grid" });
+      expect(grid).toHaveAttribute("aria-pressed", "true");
 
-    await userEvent.click(grid);
-    expect(document.querySelectorAll("[data-line=column]")).toHaveLength(0);
-    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+      await userEvent.click(grid);
+      expect(document.querySelectorAll("[data-line=column]")).toHaveLength(0);
+      expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
 
-    drag(token("Brannoc"), [
-      [5, 4],
-      [7, 4],
-    ]);
-    await waitFor(() => expect(moves()).toHaveLength(1));
-  });
+      drag(token("Brannoc"), [
+        [5, 4],
+        [7, 4],
+      ]);
+      await waitFor(() => expect(moves()).toHaveLength(1));
+    },
+  );
 
   it("moves nothing once the fight is over", async () => {
     for (const [key, answer] of [...server.routes]) {
@@ -2149,7 +2138,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     token("Brannoc").focus();
     await userEvent.keyboard("{ArrowRight}");
 
-    expect(hint()).toHaveTextContent("Where everyone stood when it ended.");
+    await hintSays("Where everyone stood when it ended.");
     expect(card().queryByRole("button", { name: /off the board/ })).toBeNull();
     expect(moves()).toEqual([]);
   });
@@ -2216,39 +2205,43 @@ describe.each(layouts)("what the table sees of the map, on $layout", ({ wide }) 
     expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
   });
 
-  it("hides every monster token from the players at once, and fades them here", async () => {
-    server.routes.set(`GET ${serverRunBase()}/combatants`, {
-      status: 200,
-      body: [
-        { ...brannocPlaced, visibility: "shared" },
-        { ...goblinBoss, position: { column: 9, row: 4 }, visibility: "shared" },
-      ],
-    });
-    await renderRunner();
-    await screen.findByRole("region", { name: "Battle map" });
-    const boss = await card().findByRole("button", { name: /^Goblin Boss, column/ });
-    const hide = card().getByRole("button", { name: "Hide from players" });
-    expect(hide).toHaveAttribute("aria-pressed", "false");
-    expect(boss.className).not.toMatch(/opacity-/);
-    expect(boss.querySelector("[data-ring=hidden]")).toBeNull();
+  // *Hide from players* is the card's; the canvas's dock carries only its tools.
+  it.runIf(!wide)(
+    "hides every monster token from the players at once, and fades them here",
+    async () => {
+      server.routes.set(`GET ${serverRunBase()}/combatants`, {
+        status: 200,
+        body: [
+          { ...brannocPlaced, visibility: "shared" },
+          { ...goblinBoss, position: { column: 9, row: 4 }, visibility: "shared" },
+        ],
+      });
+      await renderRunner();
+      await screen.findByRole("region", { name: "Battle map" });
+      const boss = await card().findByRole("button", { name: /^Goblin Boss, column/ });
+      const hide = card().getByRole("button", { name: "Hide from players" });
+      expect(hide).toHaveAttribute("aria-pressed", "false");
+      expect(boss.className).not.toMatch(/opacity-/);
+      expect(boss.querySelector("[data-ring=hidden]")).toBeNull();
 
-    answerRun({ hostileTokensHidden: true });
-    await userEvent.click(hide);
-    await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "true"));
-    expect(runPatches()).toEqual([{ hostileTokensHidden: true }]);
-    // Off the players' board: faded and dashed here, the party untouched.
-    const hidden = card().getByRole("button", { name: /^Goblin Boss, column/ });
-    expect(hidden.className).toMatch(/opacity-70/);
-    expect(hidden.querySelector("[data-ring=hidden]")).not.toBeNull();
-    const brannocToken = card().getByRole("button", { name: /^Brannoc, column/ });
-    expect(brannocToken.className).not.toMatch(/opacity-/);
-    expect(brannocToken.querySelector("[data-ring=hidden]")).toBeNull();
+      answerRun({ hostileTokensHidden: true });
+      await userEvent.click(hide);
+      await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "true"));
+      expect(runPatches()).toEqual([{ hostileTokensHidden: true }]);
+      // Off the players' board: faded and dashed here, the party untouched.
+      const hidden = card().getByRole("button", { name: /^Goblin Boss, column/ });
+      expect(hidden.className).toMatch(/opacity-70/);
+      expect(hidden.querySelector("[data-ring=hidden]")).not.toBeNull();
+      const brannocToken = card().getByRole("button", { name: /^Brannoc, column/ });
+      expect(brannocToken.className).not.toMatch(/opacity-/);
+      expect(brannocToken.querySelector("[data-ring=hidden]")).toBeNull();
 
-    answerRun({ hostileTokensHidden: false });
-    await userEvent.click(hide);
-    await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "false"));
-    expect(runPatches().at(-1)).toEqual({ hostileTokensHidden: false });
-  });
+      answerRun({ hostileTokensHidden: false });
+      await userEvent.click(hide);
+      await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "false"));
+      expect(runPatches().at(-1)).toEqual({ hostileTokensHidden: false });
+    },
+  );
 
   it("changes nothing once the fight is over", async () => {
     for (const [key, answer] of [...server.routes]) {
@@ -2259,7 +2252,9 @@ describe.each(layouts)("what the table sees of the map, on $layout", ({ wide }) 
     await renderRunner();
     await screen.findByText(/came off the table/);
     expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
-    expect(await card().findByRole("button", { name: "Hide from players" })).toBeDisabled();
+    if (!wide) {
+      expect(await card().findByRole("button", { name: "Hide from players" })).toBeDisabled();
+    }
   });
 });
 
@@ -2316,17 +2311,16 @@ describe("the canvas", () => {
     );
     // The *Rolls* dock — the DM's dice, the players' tray and the log — bottom left.
     expect(hud("rolls").firstElementChild).toBe(screen.getByRole("region", { name: "Rolls" }));
-    // The board's switches, zoom, hint, tray and size, in the tool dock over it.
+    // The tool dock over it holds the board's four tools and nothing else.
     const tools = within(hud("tools"));
-    expect(tools.getByRole("button", { name: "Grid" })).toBeInTheDocument();
-    expect(tools.getByRole("button", { name: "Hide from players" })).toBeInTheDocument();
-    expect(tools.getByRole("group", { name: "Zoom" })).toBeInTheDocument();
-    expect(tools.getByRole("button", { name: /^Names on tokens/ })).toBeInTheDocument();
-    expect(tools.getByRole("status")).toHaveTextContent(
-      "Drag Brannoc to a square, or step with the arrow keys.",
-    );
-    expect(tools.getByRole("group", { name: "Not on the board" })).toBeInTheDocument();
-    expect(hud("tools")).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft");
+    expect(
+      within(tools.getByRole("group", { name: "Tools" }))
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Move", "Measure", "Area", "Fog"]);
+    expect(tools.getAllByRole("button")).toHaveLength(4);
+    expect(tools.queryByRole("status")).toBeNull();
+    expect(hud("tools")).not.toHaveTextContent("squares ·");
     // The header keeps the fight's switches and its one peach.
     expect(screen.getByRole("switch", { name: "Share" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
@@ -2341,18 +2335,6 @@ describe("the canvas", () => {
     const screenBox = document.querySelector<HTMLElement>("[data-slot=run-screen]")!;
     expect(screenBox.className).toContain("var(--chrome-height)");
     for (const name of ["rolls", "panel"]) expect(hud(name).className).toMatch(/overflow-y-auto/);
-  });
-
-  it("zooms from the dock and fits the board back", async () => {
-    await open();
-    const before = zoomOf();
-    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom in" }));
-    expect(zoomOf()).toBeCloseTo(before * 1.25);
-    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom out" }));
-    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom out" }));
-    expect(zoomOf()).toBeCloseTo(before / 1.25);
-    // Nothing on the canvas is a write.
-    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 
   it("zooms on a scroll about the pointer, and the page itself never scrolls for it", async () => {
@@ -2422,10 +2404,8 @@ describe("the canvas", () => {
     await waitFor(() =>
       expect(within(board()).getByRole("button", { name: /^Brannoc,/ })).toBeInTheDocument(),
     );
-    // The Goblin Boss is in the tray, so a click on a square would put him down.
-    await userEvent.click(
-      within(hud("tools")).getByRole("button", { name: "Goblin Boss, not on the board" }),
-    );
+    // The Goblin Boss is off the board and selected, so a click on a square would put him down.
+    await userEvent.click(rowFor("Goblin Boss"));
     vi.spyOn(
       document.querySelector<HTMLElement>("[data-slot=run-tokens]")!,
       "getBoundingClientRect",
@@ -2487,9 +2467,7 @@ describe("the canvas", () => {
       status: 200,
       body: { ...goblinBoss, position: { column: 1, row: 1 } },
     });
-    await userEvent.click(
-      within(hud("tools")).getByRole("button", { name: "Goblin Boss, not on the board" }),
-    );
+    await userEvent.click(rowFor("Goblin Boss"));
     vi.spyOn(
       document.querySelector<HTMLElement>("[data-slot=run-tokens]")!,
       "getBoundingClientRect",
@@ -2590,10 +2568,8 @@ describe("the canvas", () => {
     const ended = await screen.findByText(/came off the table/);
     expect(stage()).not.toContainElement(ended);
     expect(ended.compareDocumentPosition(stage()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Over, nothing on the board moves.
-    expect(within(hud("tools")).getByRole("status")).toHaveTextContent(
-      "Where everyone stood when it ended.",
-    );
+    // Over, nothing on the board takes a tool.
+    expect(within(hud("tools")).getByRole("button", { name: "Measure" })).toBeDisabled();
   });
 });
 
@@ -2652,7 +2628,6 @@ describe("the board's tools", () => {
     // Measure hides Move's range, and its layer takes the pointer over the tokens.
     expect(document.querySelector("[data-slot=range-square]")).toBeNull();
     expect(surface().className).toMatch(/(^|\s)z-lifted(\s|$)/);
-    expect(dockTools().getByRole("status")).toHaveTextContent("Drag on the grid to measure.");
     // A pressed tool stays on.
     await userEvent.click(tool("Measure"));
     expect(tool("Measure")).toHaveAttribute("aria-pressed", "true");
@@ -2685,9 +2660,6 @@ describe("the board's tools", () => {
     const reading = document.querySelector("[data-slot=measure-ruler] [data-slot=ruler-reading]");
     expect(reading).toHaveTextContent(/^35 ft$/);
     expect(reading?.className).toContain("text-info");
-    expect(dockTools().getByRole("status")).toHaveTextContent(
-      "35 ft. Drag again to measure, or press Esc.",
-    );
     // The drag was the ruler's: the canvas did not pan, and no token moved.
     const content = document.querySelector<HTMLElement>("[data-slot=board-canvas-content]")!;
     expect(parseFloat(content.style.getPropertyValue("--pan-x"))).toBe(0);
@@ -2706,9 +2678,6 @@ describe("the board's tools", () => {
     const shapes = within(dockTools().getByRole("group", { name: "Area" }));
     expect(shapes.getByRole("button", { name: "Sphere" })).toHaveAttribute("aria-pressed", "true");
     expect(shapes.getByText("20 ft")).toBeInTheDocument();
-    expect(dockTools().getByRole("status")).toHaveTextContent(
-      "Click a square to pin a 20 ft sphere there.",
-    );
 
     fireEvent.pointerMove(surface(), { pointerId: 1, ...point(5, 4) });
     expect(areaLayer()).toHaveAttribute("data-state", "preview");
@@ -2743,9 +2712,6 @@ describe("the board's tools", () => {
     expect(shapes.getByText("15 ft")).toBeInTheDocument();
     await userEvent.click(shapes.getByRole("button", { name: "Cone" }));
     expect(shapes.getByRole("button", { name: "Cone" })).toHaveAttribute("aria-pressed", "true");
-    expect(dockTools().getByRole("status")).toHaveTextContent(
-      "Click a square to aim a 15 ft cone from Brannoc.",
-    );
 
     fireEvent.click(surface(), point(9, 4));
     await waitFor(() => expect(bodyOf(server, "PUT", "/board/area")).toMatchObject({ area: cone }));
