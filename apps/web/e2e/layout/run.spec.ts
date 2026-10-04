@@ -255,9 +255,10 @@ for (const width of WIDTHS) {
           await expect.soft(page.locator(".sticky.top-0").first()).toHaveCSS("z-index", "10");
         });
 
-        await test.step("the board's switches and zoom stay inside the dock", async () => {
+        await test.step("the dock holds the four tools, inside its edge", async () => {
           const edge = await box(tools);
-          for (const name of ["Grid", "Hide from players", "Zoom out", "Zoom in", "Fit"]) {
+          await expect.soft(tools.getByRole("button")).toHaveCount(4);
+          for (const name of ["Move", "Measure", "Area", "Fog"]) {
             const control = await box(tools.getByRole("button", { name, exact: true }));
             expect.soft(control.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
             expect.soft(right(control), `${name} right`).toBeLessThanOrEqual(right(edge) + 0.5);
@@ -595,28 +596,6 @@ for (const width of WIDTHS) {
           expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
         });
 
-        await test.step("the dock zooms in and out, and Fit puts the whole board between the panels", async () => {
-          const tools = page.locator('[data-slot="run-hud-tools"]');
-          const view = await viewOf(page);
-          await tools.getByRole("button", { name: "Zoom in", exact: true }).click();
-          expect
-            .soft((await viewOf(page)).zoom, "zoomed in a step")
-            .toBeCloseTo(view.zoom * 1.25, 4);
-          await tools.getByRole("button", { name: "Zoom out", exact: true }).click();
-          expect.soft((await viewOf(page)).zoom, "and back").toBeCloseTo(view.zoom, 4);
-
-          await tools.getByRole("button", { name: "Fit", exact: true }).click();
-          const board = await box(map.locator('[data-slot="battle-map"]'));
-          const list = await box(page.locator('[data-slot="run-hud-left"]'));
-          const panel = await box(page.locator('[data-slot="run-hud-panel"]'));
-          const strip = await box(page.locator('[data-slot="run-hud-strip"]'));
-          const dock = await box(tools);
-          expect.soft(board.x, "after the left column").toBeGreaterThanOrEqual(right(list) - 0.5);
-          expect.soft(right(board), "before the panel").toBeLessThanOrEqual(panel.x + 0.5);
-          expect.soft(board.y, "under the strip").toBeGreaterThanOrEqual(bottom(strip) - 0.5);
-          expect.soft(bottom(board), "above the dock").toBeLessThanOrEqual(dock.y + 0.5);
-        });
-
         await test.step("a wheel over a floating panel is the panel's, never the board's, and the window does not scroll", async () => {
           for (const slot of ["run-hud-panel", "run-hud-rolls", "run-hud-tools"]) {
             const region = page.locator(`[data-slot="${slot}"]`);
@@ -636,7 +615,6 @@ for (const width of WIDTHS) {
         await test.step("the board is to look at: nothing on it takes a pointer", async () => {
           await expect.soft(map.locator('[data-slot="run-tokens"]')).toBeHidden();
           await expect.soft(map.getByRole("button", { name: /column/ })).toHaveCount(0);
-          await expect.soft(map.getByRole("group", { name: "Not on the board" })).toBeHidden();
           const view = map.locator('[data-slot="run-tokens-view"] > span').first();
           await view.scrollIntoViewIfNeeded();
           await expect(view).toBeVisible();
@@ -923,9 +901,6 @@ for (const width of WIDTHS) {
         await expect(token).toBeVisible();
         const fogSwitch = tools.getByRole("button", { name: "Fog", exact: true });
         await fogSwitch.click();
-        // The dock grows with the tool's writes; the whole board goes back
-        // between the panels and above it.
-        await tools.getByRole("button", { name: "Fit", exact: true }).click();
         await page.waitForTimeout(200);
         const at = await box(token);
         const centre = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
@@ -940,7 +915,7 @@ for (const width of WIDTHS) {
 
         await test.step("Fog is a tool in the dock, and on, its brush takes the board over every token", async () => {
           await expect(fogSwitch).toHaveAttribute("aria-pressed", "true");
-          await expect(tools.getByRole("status")).toContainText("Click or drag to hide squares");
+          await expect(tools.getByRole("group", { name: "Fog" })).toBeVisible();
           expect.soft(await brushAt(centre.x, centre.y), "the brush is over Brannoc").toBe(true);
           await expect
             .soft(map.locator('[data-slot="fog-brush"]'), "the brush's cursor")

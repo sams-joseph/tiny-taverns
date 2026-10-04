@@ -700,7 +700,7 @@ export function CombatantPanel({
   const subtitle = subtitleOf(combatant);
   const hidden = combatant.visibility === "dm";
   // The drawing's words as the tooltip; the name in the accessible one, since
-  // the board's dock has a *Hide from players* of its own for every monster.
+  // the board card has a *Hide from players* of its own for every monster.
   const eye = hidden ? "Hidden from players. Click to reveal." : "Hide from players";
   const eyeName = hidden
     ? `${combatant.displayName} is hidden from players. Reveal them.`

@@ -25,6 +25,7 @@ import {
   type InitiativeSet,
   NotFound,
   type SessionId,
+  startingSquares,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
@@ -584,6 +585,35 @@ export class Combatants extends Context.Service<
                 Effect.gen(function* () {
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   const hpMax = payload.hpMax ?? 0;
+                  // On the board from the start, as a started fight's tokens
+                  // are: the first free square on its side (`startingSquares`).
+                  // Two adds racing may land on one square, which a square
+                  // allows; with no board, or no room, it waits off it.
+                  const boards = yield* sql<{
+                    readonly board_columns: number;
+                    readonly board_rows: number;
+                  }>`
+                    select board_columns, board_rows from encounter_run_board
+                    where encounter_run_board.run_id = ${runId}
+                  `;
+                  const grid = boards[0];
+                  const taken =
+                    grid === undefined
+                      ? []
+                      : yield* sql<{ readonly column: number; readonly row: number }>`
+                          select board_column as column, board_row as row from combatant
+                          where combatant.encounter_run_id = ${runId}
+                            and combatant.board_column is not null
+                        `;
+                  const square =
+                    grid === undefined
+                      ? undefined
+                      : startingSquares(
+                          { columns: grid.board_columns, rows: grid.board_rows },
+                          payload.kind === "pc" ? "party" : "foes",
+                          1,
+                          taken,
+                        )[0];
                   // An insert answers with its row; not getting one is a defect.
                   const combatant = yield* insert({
                     campaignId,
@@ -603,6 +633,8 @@ export class Combatants extends Context.Service<
                       ac: payload.ac,
                       conditions: textArray(payload.conditions),
                       visibility: payload.visibility,
+                      board_column: square?.column,
+                      board_row: square?.row,
                     }),
                   }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   yield* appendEvent(sql, {

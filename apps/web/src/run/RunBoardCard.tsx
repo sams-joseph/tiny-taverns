@@ -15,7 +15,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
 import { AreaLayer } from "./BoardTools";
 import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
-import { RunTokens, TokenTray } from "./RunTokens";
+import { RunTokens } from "./RunTokens";
 import { TOKEN_NAMES, type TokenNames } from "./tokens";
 
 /**
@@ -192,7 +192,6 @@ export function RunBoardCard(props: RunBoardProps) {
               {board.area !== null && <AreaLayer board={board} area={board.area} state="pinned" />}
               <RunTokens {...withBoard} />
             </BattleMapBoard>
-            <TokenTray {...withBoard} />
             <p className="mb-0 border-t border-hairline px-panel py-2.5 text-caption leading-body text-muted-foreground">
               {boardCaption(board)}
             </p>

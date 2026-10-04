@@ -23,8 +23,9 @@ import { describeLayer } from "./support/suite.js";
  * alone, against the fight's own grid** (`0064_combatant_positions.ts`,
  * `Combatants.move`).
  *
- * Over the real application and Postgres. Every token starts off the board;
- * a square is checked against the grid the fight was started on; a repeated
+ * Over the real application and Postgres. Every token starts on the board,
+ * the party down the left edge and the roster down the right, and one added
+ * by hand on its side's next free square; a square is checked against the grid the fight was started on; a repeated
  * `requestId` applies once; the move is contained by the run in its path; and
  * a resumed fight keeps its tokens where they stood. No player read carries a
  * position until the DM shows the map (`player-board.test.ts` is that side),
@@ -224,14 +225,59 @@ const move = (
   );
 
 describeLayer("combatant-moves", shared, (it) => {
-  describe("a token starts off the board", () => {
-    it.effect("seeds every combatant unplaced, the party and the roster alike", () =>
+  describe("a token starts on the board", () => {
+    it.effect("seeds the party down the left edge and the roster down the right", () =>
       Effect.gen(function* () {
+        const { jo } = yield* Fixture;
         const session = yield* night;
-        const { fight, order } = yield* fightOn(session);
+        const { fight, params, order } = yield* fightOn(session);
+        const board = (yield* as(jo.token, (client) => client.runs.board({ params })))!;
+        const middle = Math.floor((board.rows - 1) / 2);
+        const last = board.columns - 1;
         expect(order.length).toBe(3);
-        for (const combatant of order) expect(combatant.position).toBeNull();
+        expect(order.filter((row) => row.kind === "pc").map((row) => row.position)).toEqual([
+          { column: 0, row: middle },
+        ]);
+        expect(
+          order
+            .filter((row) => row.kind === "npc")
+            .map((row) => JSON.stringify(row.position))
+            .sort(),
+        ).toEqual(
+          [
+            { column: last, row: middle },
+            { column: last, row: middle + 1 },
+          ]
+            .map((square) => JSON.stringify(square))
+            .sort(),
+        );
+        // Seeding is not a move: the log has nothing to say yet.
         expect(yield* movesIn(fight.id)).toEqual([]);
+        yield* endNight(session);
+      }),
+    );
+
+    it.effect("puts one added by hand on its side's next free square, and none with no board", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        const session = yield* night;
+        const { fight, params } = yield* fightOn(session);
+        const board = (yield* as(jo.token, (client) => client.runs.board({ params })))!;
+        const middle = Math.floor((board.rows - 1) / 2);
+        const add = (displayName: string, kind: "pc" | "npc") =>
+          as(jo.token, (client) =>
+            client.combatants.create({ params, payload: { displayName, kind } }),
+          );
+
+        // The two archers hold the middle and the one under it on the right.
+        const wolf = yield* add("Wolf", "npc");
+        expect(wolf.position).toEqual({ column: board.columns - 1, row: middle - 1 });
+        const ally = yield* add("Ally", "pc");
+        expect(ally.position).toEqual({ column: 0, row: middle + 1 });
+        expect(yield* movesIn(fight.id)).toEqual([]);
+
+        yield* sql((sql) => sql`delete from encounter_run_board where run_id = ${fight.id}`);
+        expect((yield* add("Hawk", "npc")).position).toBeNull();
         yield* endNight(session);
       }),
     );
@@ -244,6 +290,7 @@ describeLayer("combatant-moves", shared, (it) => {
         const session = yield* night;
         const { fight, params, order } = yield* fightOn(session);
         const archer = order.find((row) => row.kind === "npc")!;
+        const start = archer.position;
 
         const placed = yield* move(jo, params, archer, { column: 0, row: 0 });
         expect(placed).toMatchObject({ ok: true, value: { position: { column: 0, row: 0 } } });
@@ -256,7 +303,9 @@ describeLayer("combatant-moves", shared, (it) => {
           row: 3,
         });
         // Nobody else moved.
-        expect(listed.filter((row) => row.position !== null)).toHaveLength(1);
+        for (const row of order.filter((each) => each.id !== archer.id)) {
+          expect(listed.find((each) => each.id === row.id)?.position).toEqual(row.position);
+        }
 
         const off = yield* move(jo, params, archer, null);
         expect(off).toMatchObject({ ok: true, value: { position: null } });
@@ -264,7 +313,7 @@ describeLayer("combatant-moves", shared, (it) => {
         // One line per move, saying where from and where to.
         const log = yield* movesIn(fight.id);
         expect(log.map((event) => [event.combatant_id, event.payload])).toEqual([
-          [archer.id, { from: null, to: { column: 0, row: 0 } }],
+          [archer.id, { from: start, to: { column: 0, row: 0 } }],
           [archer.id, { from: { column: 0, row: 0 }, to: { column: 5, row: 3 } }],
           [archer.id, { from: { column: 5, row: 3 }, to: null }],
         ]);
@@ -324,7 +373,7 @@ describeLayer("combatant-moves", shared, (it) => {
         const { order } = yield* fightOn(session);
         const refused = yield* Effect.flatMap(
           SqlClient.SqlClient,
-          (sql) => sql`update combatant set board_column = 2 where id = ${order[0]!.id}`,
+          (sql) => sql`update combatant set board_column = null where id = ${order[0]!.id}`,
         ).pipe(
           Effect.flip,
           // The driver's error, which names the constraint, is the innermost cause.
@@ -406,18 +455,21 @@ describeLayer("combatant-moves", shared, (it) => {
           yield* move(jo, { ...params, sessionId: first }, elsewhere, { column: 1, row: 1 }),
         ).toEqual({ ok: false, tag: "NotFound" });
         const untouched = yield* sql(
-          (sql) => sql<{ readonly board_column: number | null }>`
-            select board_column from combatant where id = ${elsewhere.id}
+          (sql) => sql<{ readonly board_column: number | null; readonly board_row: number | null }>`
+            select board_column, board_row from combatant where id = ${elsewhere.id}
           `,
         );
-        expect(untouched[0]?.board_column).toBeNull();
+        expect(untouched[0]).toEqual({
+          board_column: elsewhere.position?.column,
+          board_row: elsewhere.position?.row,
+        });
         yield* endNight(second);
       }),
     );
   });
 
   describe("a resumed fight", () => {
-    it.effect("keeps every token where it stood, and the unplaced ones off the board", () =>
+    it.effect("keeps every token where it stood, and one taken off off the board", () =>
       Effect.gen(function* () {
         const { jo, table } = yield* Fixture;
         const first = yield* night;
@@ -425,6 +477,12 @@ describeLayer("combatant-moves", shared, (it) => {
         const [one, two] = order.filter((row) => row.kind === "npc");
         yield* move(jo, params, one!, { column: 4, row: 1 });
         yield* move(jo, params, two!, { column: 6, row: 9 });
+        yield* move(
+          jo,
+          params,
+          order.find((row) => row.kind === "pc")!,
+          null,
+        );
         yield* endNight(first);
 
         const second = yield* night;

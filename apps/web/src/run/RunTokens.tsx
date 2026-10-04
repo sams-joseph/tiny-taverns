@@ -11,22 +11,24 @@ import {
   rulerReading,
   squareAt,
 } from "@taverns/api";
-import { Button, Toggle, Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
 import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
 
 /**
- * The fight's tokens, on the DM's board and in the tray beside it.
+ * The fight's tokens, on the DM's board.
  *
  * A token is a combatant's square (`Combatant.position`), drawn as the
  * drawing's counter (`TokenFace.tsx`): ringed peach on whoever is up, ringed
  * white when selected, dashed when the players cannot see it, faded when it is
  * out of the fight, with its hit points under it, a count of its conditions and,
- * by the DM's preference, its name. A token nobody has put down is not on the
- * board at all; it waits in the tray (`TokenTray`), because a square the
- * product chose would be a guess.
+ * by the DM's preference, its name. Every token starts on the board, the
+ * party down the left edge and the monsters down the right (`startingSquares`,
+ * on the server). One taken off it, or one a full board had no room for, is
+ * not drawn; selected from the initiative strip, it goes down on the next
+ * square clicked.
  *
  * ### Moving is a drag, on a screen wide enough to hit a square
  *
@@ -529,64 +531,5 @@ export function RunTokens(props: TokenProps) {
         <FogLayer board={board} squares={fog} veil="dim" />
       </div>
     </>
-  );
-}
-
-/**
- * Who is not on the board yet — every token, until the DM puts it down — and,
- * for whoever is selected and standing, the way back off it.
- *
- * Wide, each name is a chip that selects its combatant, and the next square
- * clicked is where it goes. Narrow, it is the list, since there is no square to
- * click.
- */
-export function TokenTray(props: TokenProps) {
-  const { combatants, labels, selected, movable, onSelect, onMove } = props;
-  const waiting = combatants.filter((combatant) => combatant.position === null);
-  const standing = selected !== undefined && selected.position !== null ? selected : undefined;
-  if (waiting.length === 0 && standing === undefined) return null;
-
-  return (
-    <div
-      data-slot="token-tray"
-      className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-hairline px-panel py-2.5"
-    >
-      {waiting.length > 0 && (
-        <>
-          <span className="text-label-s leading-none text-muted-foreground">Not on the board</span>
-          <div
-            role="group"
-            aria-label="Not on the board"
-            className="hidden flex-wrap gap-1.5 @3xl:flex"
-          >
-            {waiting.map((combatant) => (
-              <Toggle
-                key={combatant.id}
-                size="sm"
-                pressed={combatant.id === selected?.id}
-                onPressedChange={() => onSelect(combatant)}
-                aria-label={`${combatant.displayName}, not on the board`}
-              >
-                <span className="font-mono">{labels.get(combatant.id) ?? "?"}</span>
-                {combatant.displayName}
-              </Toggle>
-            ))}
-          </div>
-          <span className="text-body-s leading-snug text-foreground @3xl:hidden">
-            {waiting.map((combatant) => combatant.displayName).join(", ")}
-          </span>
-        </>
-      )}
-      {standing !== undefined && movable && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void onMove(standing, null)}
-          className="ml-auto hidden @3xl:inline-flex"
-        >
-          Take {standing.displayName} off the board
-        </Button>
-      )}
-    </div>
   );
 }

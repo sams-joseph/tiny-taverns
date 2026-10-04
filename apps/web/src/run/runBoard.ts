@@ -10,16 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Resource } from "../api/failure";
 import { describeBoard } from "../campaign/BattleMapBoard";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
-import {
-  areaAt,
-  areaName,
-  caughtBy,
-  caughtLine,
-  sameArea,
-  squaresOf,
-  startingFeet,
-  stepFeet,
-} from "./area";
+import { areaAt, caughtBy, caughtLine, sameArea, squaresOf, startingFeet, stepFeet } from "./area";
 import type { BoardTool, ToolPointer } from "./BoardTools";
 import { useEscapeAway } from "./escape";
 import { type FogEdit, fogAfter, squareKey, squaresBetween } from "./fog";
@@ -92,17 +83,15 @@ export function useRunBoard(
     onArea,
   });
   const fogTool = useFogTool({ board, on: tools.tool === "fog", onFog });
+  // The card's line; the canvas's dock carries only its tools.
   const hint = over
     ? "Where everyone stood when it ended."
-    : tools.tool === "fog"
-      ? "Click or drag to hide squares from the players. Start on fog to reveal."
-      : (tools.hint ??
-        lastMove ??
-        (selected === undefined
-          ? "Drag a token to its square."
-          : selected.position === null
-            ? `Click a square to put ${selected.displayName} on the board.`
-            : `Drag ${selected.displayName} to a square, or step with the arrow keys.`));
+    : (lastMove ??
+      (selected === undefined
+        ? "Drag a token to its square."
+        : selected.position === null
+          ? `Click a square to put ${selected.displayName} on the board.`
+          : `Drag ${selected.displayName} to a square, or step with the arrow keys.`));
 
   const onMove = async (combatant: Combatant, to: BoardSquare | null) => {
     if (board === null) return;
@@ -265,19 +254,6 @@ function useBoardTools({
       ? undefined
       : caughtLine(caughtBy(squaresOf(board, pinned), tokens.combatants, tokens.hpOf));
 
-  const hint =
-    tool === "measure"
-      ? ruler === undefined
-        ? "Drag on the grid to measure."
-        : `${ruler.reading.text}. Drag again to measure, or press Esc.`
-      : tool === "area"
-        ? shape === "sphere" || shape === "cube"
-          ? `Click a square to pin a ${areaName({ shape, feet })} there.`
-          : source === undefined
-            ? `A ${shape} starts at a creature: put whoever is up on the board first.`
-            : `Click a square to aim a ${areaName({ shape, feet })} from ${source.displayName}.`
-        : undefined;
-
   return {
     tool,
     usable: usable && board !== null,
@@ -308,7 +284,6 @@ function useBoardTools({
     preview,
     caught,
     clear: () => send(null),
-    hint,
   };
 }
 

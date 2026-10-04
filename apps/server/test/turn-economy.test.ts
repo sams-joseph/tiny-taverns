@@ -364,6 +364,8 @@ describeLayer("turn-economy", shared, (it) => {
         const session = yield* night;
         const { params, tamsin, archer, other } = yield* underWay(session);
         yield* tick(jo, params, tamsin, { actionUsed: true });
+        // Every token starts on the board: off it first, so this is a put-down.
+        yield* move(params, tamsin, null);
         yield* move(params, tamsin, { column: 0, row: 0 });
         yield* move(params, tamsin, { column: 5, row: 0 });
         // Spent on somebody else's turn: the archer's reaction, the other's bonus.
@@ -464,6 +466,8 @@ describeLayer("turn-economy", shared, (it) => {
           expect(board?.feetPerCell).toBe(5);
 
           // Putting the token down walks nowhere.
+          // Every token starts on the board: off it first, so this is a put-down.
+          yield* move(params, tamsin, null);
           yield* move(params, tamsin, { column: 0, row: 0 });
           expect((yield* move(params, tamsin, { column: 4, row: 4 })).feetMoved).toBe(feet);
           // Three squares straight on is fifteen feet under either rule, added on.
@@ -481,6 +485,8 @@ describeLayer("turn-economy", shared, (it) => {
       Effect.gen(function* () {
         const session = yield* night;
         const { params, archer } = yield* underWay(session);
+        // Every token starts on the board: off it first, so this is a put-down.
+        yield* move(params, archer, null);
         yield* move(params, archer, { column: 0, row: 0 });
         expect((yield* move(params, archer, { column: 5, row: 0 })).feetMoved).toBe(0);
         yield* endNight(session);
@@ -491,6 +497,8 @@ describeLayer("turn-economy", shared, (it) => {
       Effect.gen(function* () {
         const session = yield* night;
         const { params, tamsin } = yield* rolling(session);
+        // Every token starts on the board: off it first, so this is a put-down.
+        yield* move(params, tamsin, null);
         yield* move(params, tamsin, { column: 0, row: 0 });
         expect((yield* move(params, tamsin, { column: 5, row: 0 })).feetMoved).toBe(0);
         yield* endNight(session);
@@ -513,6 +521,8 @@ describeLayer("turn-economy", shared, (it) => {
           );
         }
         yield* tick(jo, params, tamsin, { actionUsed: true });
+        // Every token starts on the board: off it first, so this is a put-down.
+        yield* move(params, tamsin, null);
         yield* move(params, tamsin, { column: 0, row: 0 });
         yield* move(params, tamsin, { column: 3, row: 0 });
 
@@ -544,6 +554,8 @@ describeLayer("turn-economy", shared, (it) => {
         const first = yield* night;
         const { fight, params, tamsin } = yield* underWay(first);
         yield* tick(jo, params, tamsin, { actionUsed: true });
+        // Every token starts on the board: off it first, so this is a put-down.
+        yield* move(params, tamsin, null);
         yield* move(params, tamsin, { column: 0, row: 0 });
         yield* move(params, tamsin, { column: 4, row: 0 });
         yield* endNight(first);
