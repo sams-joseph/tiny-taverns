@@ -437,6 +437,11 @@ export function RunTokens(props: TokenProps) {
           active={active}
           hidden={state.hidden}
           struck={state.struck}
+          portrait={
+            combatant.kind === "pc" && combatant.portrait !== null
+              ? combatant.portrait.thumbUrl
+              : undefined
+          }
           health={state.health}
           conditions={combatant.conditions.length}
           name={

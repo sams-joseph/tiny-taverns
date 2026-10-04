@@ -101,6 +101,9 @@ export function PlayerBattleMap({
                 label={labels.get(row.combatantId) ?? "?"}
                 selected={row.kind === "you"}
                 active={row.combatantId === upNextId}
+                portrait={
+                  row.kind !== "npc" && row.portrait !== null ? row.portrait.thumbUrl : undefined
+                }
               />
             </span>
           );

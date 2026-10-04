@@ -1913,6 +1913,27 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(within(boss).queryByText("Goblin Boss")).toBeNull();
   });
 
+  it("lays a PC's portrait on its token, and leaves the monster its initials", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        { ...brannocPlaced, portrait: drawnPortrait },
+        { ...goblinBoss, position: { column: 20, row: 10 } },
+      ],
+    });
+    await open();
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+    const boss = token("Goblin Boss");
+
+    // The portrait is clipped to the disc, over the initials it stands in front of.
+    const plate = brannocToken.querySelector("[data-slot=token-portrait]");
+    expect(plate?.className).toContain("rounded-full");
+    expect(plate?.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnPortrait.thumbUrl));
+    expect(brannocToken.querySelector("text")).toHaveTextContent("B");
+    expect(boss.querySelector("[data-slot=token-portrait]")).toBeNull();
+    expect(boss.querySelector("text")).toHaveTextContent("GB");
+  });
+
   // *Names* and *Grid* are the card's; the canvas's dock carries only its tools.
   it.runIf(!wide)(
     "names every token, or none, by the DM's choice, kept on this browser",
