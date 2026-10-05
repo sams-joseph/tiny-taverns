@@ -1,4 +1,4 @@
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, Tooltip, TooltipContent, TooltipTrigger } from "@taverns/ui";
 import { useState, type ReactNode } from "react";
 import type { ActionsMenuItem } from "../ui/ActionsMenu";
 import {
@@ -11,8 +11,10 @@ import {
  * Upload, replace and remove a subject's own picture, for its owner.
  *
  * The one way a screen offers them: menu items for a screen whose commands sit
- * in an `ActionsMenu`, buttons for one whose commands are buttons, and the
- * dialogs either opens, so every screen asks the same questions and writes
+ * in an `ActionsMenu`, buttons for one whose commands are buttons, the same
+ * two as icon buttons named by a tooltip where a labelled row would not fit
+ * (`iconButtons`, a narrow rail or over the picture itself), and the dialogs
+ * any of them opens, so every screen asks the same questions and writes
  * through the same two calls. The screen says what the write changes
  * (`invalidates`), because only the screen knows which of its reads carry the
  * picture.
@@ -20,6 +22,7 @@ import {
 export function usePictureActions(input: PictureActionsInput): {
   readonly items: ReadonlyArray<ActionsMenuItem>;
   readonly buttons: ReactNode;
+  readonly iconButtons: ReactNode;
   readonly dialogs: ReactNode;
 } {
   const [open, setOpen] = useState<"upload" | "remove">();
@@ -53,6 +56,26 @@ export function usePictureActions(input: PictureActionsInput): {
     </>
   );
 
+  // Named by the tooltip and the accessible label, the same words as the menu.
+  const iconButtons = items.map((item) => (
+    <Tooltip key={item.label}>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label={item.label}
+            className="size-control-sm"
+            onClick={item.onSelect}
+          >
+            <Icon name={item.icon} size={14} />
+          </Button>
+        }
+      />
+      <TooltipContent>{item.label}</TooltipContent>
+    </Tooltip>
+  ));
+
   const close = () => setOpen(undefined);
   const dialogs =
     open === "upload" ? (
@@ -61,5 +84,5 @@ export function usePictureActions(input: PictureActionsInput): {
       <RemovePictureDialog {...input} title={removeLabel} onClose={close} />
     ) : null;
 
-  return { items, buttons, dialogs };
+  return { items, buttons, iconButtons, dialogs };
 }

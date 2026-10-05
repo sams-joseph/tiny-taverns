@@ -34,6 +34,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
+import { usePictureActions } from "../pictures/usePictureActions";
 import { SaveState } from "../ui/SaveState";
 import { NpcAvatar } from "./NpcAvatar";
 import { NpcLinks } from "./NpcLinks";
@@ -88,6 +89,9 @@ const NOT_MET = "";
  * table, the encounters and the notes, each written at once rather than
  * through the autosave, since a link is not an edit of the NPC.
  *
+ * **The portrait band carries the picture actions** (`usePictureActions`),
+ * upload or replace and remove, as icons over its corner, as on the NPC's page.
+ *
  * *Archive* is the drawn *Remove from cast*, made reversible: the NPC moves to
  * the archived shelf, where *Restore* brings them back.
  */
@@ -130,6 +134,14 @@ export function NpcDrawer({
   const nameRef = useRef<HTMLInputElement>(null);
   const archive = useMutation();
   const campaignId = npc.campaignId;
+  // The same reads the NPC's page names: the Cast's shelf carries the picture.
+  const pictures = usePictureActions({
+    subject: "npc",
+    subjectId: npc.id,
+    hasPicture: npc.image !== null || npc.banner !== null,
+    noun: "portrait",
+    invalidates: [reads.npc(npc.id), reads.npcs(campaignId), reads.npcFollowUp(campaignId)],
+  });
 
   const type = (fields: Partial<NpcFields>) => {
     setDraft((current) => ({ ...current, ...fields }));
@@ -166,7 +178,10 @@ export function NpcDrawer({
       <SheetContent
         side="right"
         data-slot="npc-drawer"
-        initialFocus={focusName ? nameRef : true}
+        // The name, not the first tabbable: that is now the portrait's upload,
+        // whose tooltip would open over the band. A touch still focuses the
+        // sheet itself, so no keyboard rises, unless the NPC was just made.
+        initialFocus={focusName ? nameRef : (type) => (type === "touch" ? true : nameRef.current)}
         className="w-cast-drawer max-w-full"
       >
         <SheetHeader className="shrink-0 pr-12">
@@ -187,7 +202,9 @@ export function NpcDrawer({
                 Hob is drawing…
               </Badge>
             )}
+            <div className="absolute top-2.5 right-2.5 flex gap-1.5">{pictures.iconButtons}</div>
           </div>
+          {pictures.dialogs}
 
           <div className="grid gap-3.5 @sm:grid-cols-2">
             <Field

@@ -316,7 +316,7 @@ function IdentityCard({
               Hob is drawing their portrait…
             </p>
           )}
-          <div className="flex flex-wrap gap-2">{pictures.buttons}</div>
+          <div className="flex flex-wrap gap-2">{pictures.iconButtons}</div>
           {pictures.dialogs}
           {(meta.length > 0 || (character.playerName !== null && character.playerName !== "")) && (
             <div>
