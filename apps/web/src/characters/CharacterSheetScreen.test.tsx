@@ -357,11 +357,14 @@ describe("a character sheet", () => {
     // not an inline toggle on the sheet.
     expect(screen.getAllByRole("button", { name: /spell slot/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Prepare/i })).toBeNull();
-    // The portrait's one control is the owner's upload (there is none to
-    // remove in the fixture), and there is no journal entry. The roll log is
+    // The portrait's one control is the owner's upload, an icon named by its
+    // tooltip (there is none to remove in the fixture), and there is no
+    // journal entry. The roll log is
     // present, and its copy says when a result can leave this browser.
     expect(
-      screen.getAllByRole("button", { name: /portrait/i }).map((node) => node.textContent),
+      screen
+        .getAllByRole("button", { name: /portrait/i })
+        .map((node) => node.getAttribute("aria-label")),
     ).toEqual(["Upload portrait"]);
     expect(screen.queryByRole("button", { name: /Entry/ })).toBeNull();
     expect(screen.getByText(/Your rolls/)).toBeTruthy();

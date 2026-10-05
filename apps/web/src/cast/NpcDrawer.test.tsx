@@ -308,6 +308,21 @@ describe("the NPC drawer", () => {
     expect(said()).toHaveTextContent("Not met yet");
   });
 
+  it("offers the portrait's upload over the band, and cancelling it leaves the drawer open", async () => {
+    const drawer = await open();
+
+    // Cazril has no picture, so there is nothing to remove.
+    expect(within(drawer).queryByRole("button", { name: "Remove portrait" })).toBeNull();
+    await userEvent.click(within(drawer).getByRole("button", { name: "Upload portrait" }));
+    const upload = await screen.findByRole("dialog", { name: "Upload portrait" });
+    await userEvent.click(within(upload).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Upload portrait" })).toBeNull(),
+    );
+    expect(screen.getByRole("dialog", { name: "Cazril" })).toBeInTheDocument();
+  });
+
   it("leads to the NPC's rehearsal and to the cast's follow-up", async () => {
     const drawer = await open();
 
