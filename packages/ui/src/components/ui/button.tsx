@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
 /**
- * Heights 38 / 32 / 44 / 38(icon), 6px radius, 1px border. Solid variants carry a
+ * Heights 38 / 30 / 44 / 38(icon), 6px radius, 1px border. Solid variants carry a
  * level-1 shadow that swaps to a subtle inset on press — no transform, no bounce.
  *
  * On dark, hover makes a fill *lighter*, never darker, and never uses opacity.
@@ -37,7 +37,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-control px-3.5 text-label",
-        sm: "h-8 px-3 text-label-s",
+        sm: "h-control-sm px-3 text-label-s",
         lg: "h-row px-5 text-label-l",
         icon: "size-control p-0 text-label",
       },
