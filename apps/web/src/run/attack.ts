@@ -5,6 +5,7 @@ import {
   rollFace,
   signed,
   type Random,
+  type RollMode,
 } from "../characters/rolls";
 import type { ActionLine } from "./actions";
 import { throwOf, type DmThrow } from "./dice";
@@ -241,39 +242,36 @@ export const attackThrows = (
  * *Roll* for a creature that is not up: the to-hit and the damage together,
  * with no target, as the DM's rolls of one act — the log prints them as one
  * line, `d20 11 +6 = 17 · 2d8+4 = 14`.
+ *
+ * A seated player rolls their own lines the same way from their Table
+ * (`play/PlayerCard.tsx`), with no `attackerId` — a player's roll names no
+ * combatant — and with advantage or disadvantage on the to-hit when they say.
  */
 export const rollActionThrows = ({
   attacker,
   attackerId,
   line,
+  mode = "normal",
   random = Math.random,
 }: {
   readonly attacker: string;
-  readonly attackerId: CombatantId;
+  readonly attackerId?: CombatantId;
   readonly line: ActionLine;
+  readonly mode?: RollMode;
   readonly random?: Random;
 }): ReadonlyArray<DmThrow> => {
   const label = `${attacker} · ${line.name}`;
-  const d20 = line.toHit === undefined ? undefined : rollFace(20, random);
+  const about = attackerId === undefined ? {} : { combatantId: attackerId };
+  const toHit =
+    line.toHit === undefined
+      ? undefined
+      : rollDiceExpression(label, `1d20${signed(line.toHit)}`, mode, random);
   const damage = damageOf(line, false, random);
   return [
-    ...(d20 === undefined || line.toHit === undefined
+    ...(toHit === undefined
       ? []
-      : [
-          {
-            label,
-            notation: `1d20${signed(line.toHit)}`,
-            dice: [d20],
-            kept: [d20],
-            modifier: line.toHit,
-            total: d20 + line.toHit,
-            mode: "normal",
-            critical: naturalOf(d20),
-            kind: "attack",
-            combatantId: attackerId,
-          } satisfies DmThrow,
-        ]),
-    ...damage.map((roll) => damageThrow(label, roll, { combatantId: attackerId })),
+      : [{ ...throwOf(toHit), kind: "attack", ...about } satisfies DmThrow]),
+    ...damage.map((roll) => damageThrow(label, roll, about)),
   ];
 };
 

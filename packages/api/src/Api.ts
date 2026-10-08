@@ -59,6 +59,7 @@ import {
   CombatantUpdate,
   InitiativeSet,
   PlayerInitiative,
+  PlayerMove,
 } from "./Combatant.js";
 import {
   Creature,
@@ -2430,7 +2431,7 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
     /**
      * Your own initiative, while the fight is rolling it.
      *
-     * The one write in this group. It reaches exactly one row: the combatant of
+     * It reaches exactly one row: the combatant of
      * a character in one of your own active seats, in the fight this table
      * shows you. Anything else — another player's character, a monster, a fight
      * that is not shared, a campaign you are not in — is `NotFound`, the same
@@ -2441,6 +2442,35 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
     HttpApiEndpoint.put("setInitiative", "/table/runs/:runId/combatants/:combatantId/initiative", {
       params: { campaignId: CampaignId, runId: EncounterRunId, combatantId: CombatantId },
       payload: PlayerInitiative,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Move your own token, on your own turn.
+     *
+     * The same row as `setInitiative`, and `NotFound` for anything else.
+     * `Conflict` when it is not your turn, the fight is not taking turns, the
+     * DM is not showing the map, or the square is off the board. The feet are
+     * counted as the DM's move counts them; going over your speed is not
+     * refused, as it is not for the DM.
+     */
+    HttpApiEndpoint.post("move", "/table/runs/:runId/combatants/:combatantId/move", {
+      params: { campaignId: CampaignId, runId: EncounterRunId, combatantId: CombatantId },
+      payload: PlayerMove,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Tick your own action, bonus action or reaction.
+     *
+     * The same row as `setInitiative`, and `NotFound` for anything else.
+     * `Conflict` when the fight is not taking turns, or when the payload names
+     * the action or bonus action and it is not your turn. A reaction may be
+     * ticked on anybody's turn, since that is when one is spent.
+     */
+    HttpApiEndpoint.post("turn", "/table/runs/:runId/combatants/:combatantId/turn", {
+      params: { campaignId: CampaignId, runId: EncounterRunId, combatantId: CombatantId },
+      payload: CombatantTurn,
       success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),

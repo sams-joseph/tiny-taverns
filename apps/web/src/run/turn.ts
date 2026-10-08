@@ -19,7 +19,7 @@ export type TurnTicks = Omit<CombatantTurn, "requestId">;
 
 /** Whether it is this creature's turn: the fight is taking turns and the marker is on it. */
 export const isUp = (
-  combatant: Combatant,
+  combatant: Pick<Combatant, "id">,
   run: Pick<EncounterRun, "phase" | "activeCombatantId">,
 ): boolean => run.phase === "turns" && run.activeCombatantId === combatant.id;
 
@@ -31,7 +31,7 @@ export const isUp = (
  * reads as how far over. `undefined` when its speed is not a number.
  */
 export const feetLeft = (
-  combatant: Combatant,
+  combatant: Pick<Combatant, "id" | "feetMoved">,
   speed: number | undefined,
   run: Pick<EncounterRun, "phase" | "activeCombatantId">,
 ): number | undefined =>

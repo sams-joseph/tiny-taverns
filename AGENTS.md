@@ -118,7 +118,7 @@ The web client sends requests through a client derived from `TavernsApi`. `Autho
 - Structural over remembered: a constraint the schema refuses, a grep a test performs, a type that does not compile. A rule that has to be remembered gets a test that remembers it.
 - Provenance is a pointer, never an access path. Nothing is read through `derived_from`, `continued_from` or `equipmentId` to grant reach.
 - Optional keys are omitted, not sent as `undefined`; a required argument beats a default nobody names.
-- Pages scroll with the window. Never bound a page to the viewport and hand its scrolling to an inner container; `sticky` is fine (pin under the chrome with `--chrome-height`), and a modal dialog scrolling its own body is a separate case. The one named exception is the live runner's canvas at desktop widths (`run/RunStage.tsx`): its board fills the viewport and its panels scroll themselves.
+- Pages scroll with the window. Never bound a page to the viewport and hand its scrolling to an inner container; `sticky` is fine (pin under the chrome with `--chrome-height`), and a modal dialog scrolling its own body is a separate case. The one named exception is the live runner's canvas at desktop widths (`run/RunStage.tsx`), which a seated player's table shares: its board fills the viewport and its panels scroll themselves.
 - A card that stands for an object opens it from anywhere on its face, with no separate Open button: `<Card linked>` plus a name link carrying `data-card-link` and `cardLinkClassName` (`packages/ui` card). Secondary actions inside stay usable and do not navigate.
 - If a rule here fights the task, say so and get a decision before breaking it.
 
