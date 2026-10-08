@@ -5,6 +5,7 @@ import {
   inCampaign,
   type NestedTable,
   seatedByActor,
+  seatSeenByActor,
   under,
 } from "./visibility.js";
 
@@ -97,11 +98,13 @@ export const underFog = (sql: SqlClient.SqlClient): Statement.Fragment =>
           = any(encounter_run_board.fog_hidden))`;
 
 /**
- * Over `combatant` in scope: fog hides this row from this reader — **its token
- * and its row of the order both**, so what a player cannot see on the board is
- * not in their initiative either. It stands under fog and is not the reader's
- * own character: a player always knows where they are, and their own row is
- * their seat at the table.
+ * Over `combatant` in scope: fog hides this row from this reader — **its row
+ * of the order and its token both**, so a creature the party cannot see on the
+ * board is not in their initiative either. It stands under fog and is not a
+ * party row this reader may already see through a seat (`seatSeenByActor`: a
+ * shared seat, or their own). The party knows who is in it, so an ally under
+ * fog keeps its row, name and numbers; only its token goes, and
+ * `tokenShownTo` takes that.
  *
  * It holds whether or not the DM shows the map. Fog says the party cannot see
  * what stands there, and turning off *Share map* takes the board away without
@@ -111,7 +114,9 @@ export const hiddenByFog = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
   actor: Actor,
-): Statement.Fragment => sql`(${underFog(sql)} and not ${seatedByActor(sql, campaignId, actor)})`;
+): Statement.Fragment =>
+  sql`(${underFog(sql)}
+    and not (combatant.kind = 'pc' and ${seatSeenByActor(sql, campaignId, actor)}))`;
 
 /**
  * Over `encounter_run` in scope: its fight is still on the table — the tail of
@@ -135,19 +140,31 @@ export const fightLive = (sql: SqlClient.SqlClient): Statement.Fragment =>
       and (chain.ended_at is null or chain.ended_reason = 'carried'))`;
 
 /**
- * Over `combatant` and its `encounter_run` in scope: this row's token is on a
- * player's board, if the row is in their order at all — the board is shown, it
- * is not a monster while hostile tokens are hidden, and it is not a monster
- * under fog. The player's table selects positions under it and a move's log
- * line is shared under it, so the two cannot disagree about which moves a
- * player can see. A player character under fog is still on its owner's board,
- * so it passes here and `hiddenByFog` takes it off everybody else's with its
- * row.
+ * Over `combatant` and its `encounter_run` in scope: this row's token is on
+ * some player's board, if the row is in their order at all — the board is
+ * shown, it is not a monster while hostile tokens are hidden, and it is not a
+ * monster under fog. It names no reader, so a move's log line is shared under
+ * it (`Combatants.move`): a player character under fog is still on its
+ * owner's board. The player's table selects positions under `tokenShownTo`,
+ * which narrows this to the reader.
  */
 export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`(${boardShown(sql)}
     and (combatant.kind = 'pc'
       or (not encounter_run.hostile_tokens_hidden and not ${underFog(sql)})))`;
+
+/**
+ * `tokenShown` for one reader: and not under fog unless it is the reader's own
+ * character, since a player always knows where they are. An ally under fog
+ * keeps its row of the order (`hiddenByFog`) but not its token.
+ */
+export const tokenShownTo = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`(${tokenShown(sql)}
+    and (not ${underFog(sql)} or ${seatedByActor(sql, campaignId, actor)}))`;
 
 /**
  * A fresh turn for whoever the marker just landed on: nothing spent, no feet

@@ -76,7 +76,19 @@ export const PlayerLiveCombatantYou = Schema.Struct({
   hpCurrent: Schema.Int,
   hpMax: Schema.Int,
   tempHp: Schema.Int,
+  /** Your character's armour class as the fight snapshotted it (`Combatant.ac`). */
+  ac: Schema.NullOr(Schema.Int),
   conditions: Schema.Array(Schema.String),
+  /**
+   * This turn's spending on your own row, as `Combatant.actionUsed` and its
+   * siblings: yours alone, since the spending of anybody else's turn is the
+   * DM's. You tick the first three (`table.turn`); `feetMoved` counts your
+   * own moves while you are up (`table.move`) and the DM's moves of you.
+   */
+  actionUsed: Schema.Boolean,
+  bonusUsed: Schema.Boolean,
+  reactionUsed: Schema.Boolean,
+  feetMoved: Schema.Int,
   /** Your character's death saves, as the fight holds them. */
   deathSaves: DeathSaves,
   /** Your character's portrait, as `Character.portrait` carries it. */
@@ -154,8 +166,8 @@ export const PlayerLiveBoard = Schema.Struct({
   image: Schema.NullOr(BattleMapImages),
   /**
    * The squares under fog of war, in reading order (row by row): drawn opaque,
-   * since nothing standing on one is on this player's table — neither its
-   * token nor its row of the order — but the player's own character.
+   * since no token on one is on this player's board but their own. A creature
+   * there is not in their order either; an ally keeps its row.
    */
   fog: Schema.Array(CombatantPosition),
   /**

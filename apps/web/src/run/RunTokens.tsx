@@ -15,7 +15,8 @@ import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
-import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
+import type { DrawnBoard } from "./BoardTools";
+import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } from "./tokens";
 
 /**
  * The fight's tokens, on the DM's board.
@@ -121,10 +122,57 @@ export interface TokenProps {
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<unknown>;
 }
 
-type Placed = Combatant & { readonly position: BoardSquare };
+/**
+ * A token as the layer draws it, whoever's board it is on: the DM's, built
+ * from a `Combatant` (`RunTokens`), or a seated player's, built from a row of
+ * their order (`play/PlayerBoard.tsx`). What it looks like is worked out by
+ * the caller, from what that reader may know; where it stands, how it drags
+ * and what a drag measures are this layer's, so the two boards cannot
+ * disagree about a move.
+ */
+export interface LayerToken extends Omit<TokenState, "health"> {
+  readonly id: CombatantId;
+  readonly displayName: string;
+  readonly position: BoardSquare | null;
+  /** The party's colour rather than everyone else's. */
+  readonly party: boolean;
+  /** A character's portrait thumbnail, when this reader may see one. */
+  readonly portrait: string | undefined;
+  readonly conditions: number;
+  /** Hit points over maximum, 0–1, when this reader may know them; no bar otherwise. */
+  readonly health: number | undefined;
+  /** Said after its name on the token's button: `" (you)"`. */
+  readonly spoken?: string;
+}
 
-const placed = (combatants: ReadonlyArray<Combatant>): ReadonlyArray<Placed> =>
-  combatants.filter((combatant): combatant is Placed => combatant.position !== null);
+/** `TokenProps`, over any board's tokens. */
+export interface TokenLayerProps<T extends LayerToken> {
+  readonly board: DrawnBoard;
+  readonly tokens: ReadonlyArray<T>;
+  readonly labels: ReadonlyMap<CombatantId, string>;
+  readonly selected: T | undefined;
+  readonly activeId: CombatantId | null;
+  readonly feetLeftOf: (token: T) => number | undefined;
+  readonly diagonals: DiagonalRule;
+  /** Whether this token may be dragged, stepped or put down now. */
+  readonly movable: (token: T) => boolean;
+  readonly names: TokenNames;
+  /**
+   * The squares under fog, and how: the DM's board dims them over the tokens,
+   * since the DM sees through fog; a player's covers them under the tokens,
+   * since the only token a player's board draws there is their own.
+   */
+  readonly fog: { readonly squares: ReadonlyArray<BoardSquare>; readonly veil: "dim" | "opaque" };
+  readonly rangeShown: boolean;
+  readonly onSelect: (token: T) => void;
+  readonly onTarget: ((token: T) => void) | undefined;
+  readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
+}
+
+type Placed<T extends LayerToken> = T & { readonly position: BoardSquare };
+
+const placed = <T extends LayerToken>(tokens: ReadonlyArray<T>): ReadonlyArray<Placed<T>> =>
+  tokens.filter((token): token is Placed<T> => token.position !== null);
 
 const same = (a: BoardSquare, b: BoardSquare): boolean => a.column === b.column && a.row === b.row;
 
@@ -137,12 +185,12 @@ interface Drag {
 }
 
 /** The squares the selected creature can walk to, when it is the one whose turn it is. */
-function Range({
+function Range<T extends LayerToken>({
   props,
   from,
   occupied,
 }: {
-  readonly props: TokenProps;
+  readonly props: TokenLayerProps<T>;
   readonly from: BoardSquare | null;
   readonly occupied: ReadonlyArray<BoardSquare>;
 }) {
@@ -215,7 +263,7 @@ export function Ruler({
   tone = RULER_TONE[reading.verdict],
   slot = "token-ruler",
 }: {
-  readonly board: EncounterRunBoard;
+  readonly board: DrawnBoard;
   readonly from: BoardSquare;
   readonly to: BoardSquare;
   readonly reading: RulerReading;
@@ -286,19 +334,51 @@ const STEP: Record<string, readonly [number, number]> = {
   ArrowDown: [0, 1],
 };
 
-/** Everything that stands on the board, as a layer of the board's box. */
+/** The DM's tokens: every row of the fight, drawn as the DM may see it. */
 export function RunTokens(props: TokenProps) {
+  const { combatants, hpOf, hostileTokensHidden, movable, fog, speedOf: _speedOf, ...rest } = props;
+  const tokens = combatants.map((combatant) => ({
+    ...tokenState(combatant, { hp: hpOf(combatant), hostileTokensHidden }),
+    combatant,
+    id: combatant.id,
+    displayName: combatant.displayName,
+    position: combatant.position,
+    party: combatant.kind === "pc",
+    portrait:
+      combatant.kind === "pc" && combatant.portrait !== null
+        ? combatant.portrait.thumbUrl
+        : undefined,
+    conditions: combatant.conditions.length,
+  }));
+  const byId = (id: CombatantId | undefined) => tokens.find((token) => token.id === id);
+  return (
+    <TokenLayer
+      {...rest}
+      tokens={tokens}
+      selected={byId(props.selected?.id)}
+      movable={() => movable}
+      fog={{ squares: fog, veil: "dim" }}
+      feetLeftOf={(token) => props.feetLeftOf(token.combatant)}
+      onSelect={(token) => props.onSelect(token.combatant)}
+      onTarget={
+        props.onTarget === undefined ? undefined : (token) => props.onTarget?.(token.combatant)
+      }
+      onMove={(token, to) => props.onMove(token.combatant, to)}
+    />
+  );
+}
+
+/** Everything that stands on the board, as a layer of the board's box. */
+export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const {
     board,
-    combatants,
+    tokens,
     labels,
-    hpOf,
     selected,
     activeId,
     feetLeftOf,
     diagonals,
     movable,
-    hostileTokensHidden,
     names,
     fog,
     onSelect,
@@ -312,8 +392,8 @@ export function RunTokens(props: TokenProps) {
   /** A dropped token, held on its square until the server answers the move. */
   const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
 
-  const standing = placed(combatants);
-  const squareOf = (combatant: Placed): BoardSquare =>
+  const standing = placed(tokens);
+  const squareOf = (combatant: Placed<T>): BoardSquare =>
     drag?.id === combatant.id
       ? drag.over
       : landing?.id === combatant.id
@@ -324,7 +404,8 @@ export function RunTokens(props: TokenProps) {
     standing.filter((other) => other.id !== id).map(squareOf);
 
   // A token in the tray goes down on the square clicked.
-  const placing = movable && !targeting && selected !== undefined && selected.position === null;
+  const placing =
+    !targeting && selected !== undefined && movable(selected) && selected.position === null;
   const at = (square: BoardSquare) => percentOf(cellRect(board, square), plane);
 
   /** The square under a point on the screen, or `undefined` off the board. */
@@ -343,10 +424,10 @@ export function RunTokens(props: TokenProps) {
     if (square !== undefined) void onMove(selected, square);
   };
 
-  const press = (combatant: Placed) => (event: PointerEvent<HTMLButtonElement>) => {
+  const press = (combatant: Placed<T>) => (event: PointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0 || targeting) return;
     onSelect(combatant);
-    if (!movable) return;
+    if (!movable(combatant)) return;
     // Held by the token, so a pointer that outruns it still drags it.
     if ("setPointerCapture" in event.currentTarget) {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -361,7 +442,7 @@ export function RunTokens(props: TokenProps) {
     if (square !== undefined && !same(square, drag.over)) setDrag({ ...drag, over: square });
   };
 
-  const drop = (combatant: Placed) => (event: PointerEvent<HTMLButtonElement>) => {
+  const drop = (combatant: Placed<T>) => (event: PointerEvent<HTMLButtonElement>) => {
     if (drag === undefined || drag.pointerId !== event.pointerId) return;
     setDrag(undefined);
     const to = drag.over;
@@ -378,10 +459,10 @@ export function RunTokens(props: TokenProps) {
   };
 
   /** The arrow keys walk a focused token one square, which is the board without a pointer. */
-  const step = (combatant: Placed) =>
+  const step = (combatant: Placed<T>) =>
     function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
       const delta = STEP[event.key];
-      if (delta === undefined || !movable || targeting) return;
+      if (delta === undefined || !movable(combatant) || targeting) return;
       event.preventDefault();
       const to = {
         column: Math.min(board.columns - 1, Math.max(0, combatant.position.column + delta[0])),
@@ -420,30 +501,25 @@ export function RunTokens(props: TokenProps) {
     />
   );
 
-  const look = (combatant: Placed) => {
-    const state = tokenState(combatant, { hp: hpOf(combatant), hostileTokensHidden });
+  const look = (combatant: Placed<T>) => {
     const active = combatant.id === activeId;
     const isSelected = combatant.id === selected?.id;
     const dragging = combatant.id === drag?.id;
     return {
       active,
       dragging,
-      fade: state.out ? "opacity-45" : state.hidden ? "opacity-70" : "",
+      fade: combatant.out ? "opacity-45" : combatant.hidden ? "opacity-70" : "",
       face: (
         <TokenFace
-          party={combatant.kind === "pc"}
+          party={combatant.party}
           label={labels.get(combatant.id) ?? "?"}
           selected={isSelected}
           active={active}
-          hidden={state.hidden}
-          struck={state.struck}
-          portrait={
-            combatant.kind === "pc" && combatant.portrait !== null
-              ? combatant.portrait.thumbUrl
-              : undefined
-          }
-          health={state.health}
-          conditions={combatant.conditions.length}
+          hidden={combatant.hidden}
+          struck={combatant.struck}
+          portrait={combatant.portrait}
+          {...(combatant.health === undefined ? {} : { health: combatant.health })}
+          conditions={combatant.conditions}
           name={
             nameShown(names, { active, selected: isSelected, dragging })
               ? combatant.displayName
@@ -453,6 +529,8 @@ export function RunTokens(props: TokenProps) {
       ),
     };
   };
+
+  const veil = <FogLayer board={board} squares={fog.squares} veil={fog.veil} />;
 
   return (
     <>
@@ -464,6 +542,7 @@ export function RunTokens(props: TokenProps) {
           onClick={place}
           className={cn("absolute inset-0", (placing || targeting) && "cursor-crosshair")}
         />
+        {fog.veil === "opaque" && veil}
         {range}
         {standing.map((combatant) => {
           const square = squareOf(combatant);
@@ -475,7 +554,8 @@ export function RunTokens(props: TokenProps) {
                   <button
                     type="button"
                     data-slot="token"
-                    aria-label={`${combatant.displayName}, column ${String(combatant.position.column + 1)}, row ${String(combatant.position.row + 1)}`}
+                    data-token={combatant.id}
+                    aria-label={`${combatant.displayName}${combatant.spoken ?? ""}, column ${String(combatant.position.column + 1)}, row ${String(combatant.position.row + 1)}`}
                     aria-pressed={combatant.id === selected?.id}
                     onPointerDown={press(combatant)}
                     onPointerMove={follow}
@@ -488,7 +568,7 @@ export function RunTokens(props: TokenProps) {
                       "transition-[left,top] duration-(--dur-fast) ease-out",
                       targeting
                         ? "cursor-crosshair"
-                        : movable
+                        : movable(combatant)
                           ? dragging
                             ? "cursor-grabbing"
                             : "cursor-grab"
@@ -507,7 +587,7 @@ export function RunTokens(props: TokenProps) {
             </Tooltip>
           );
         })}
-        <FogLayer board={board} squares={fog} veil="dim" />
+        {fog.veil === "dim" && veil}
         {drag !== undefined && reading !== undefined && (
           <Ruler board={board} from={drag.from} to={drag.over} reading={reading} />
         )}
@@ -519,12 +599,14 @@ export function RunTokens(props: TokenProps) {
         aria-hidden
         className="pointer-events-none absolute inset-0 @3xl:hidden"
       >
+        {fog.veil === "opaque" && veil}
         {range}
         {standing.map((combatant) => {
           const { active, fade, face } = look(combatant);
           return (
             <span
               key={combatant.id}
+              data-token={combatant.id}
               className={cn("absolute", active && "z-lifted", fade)}
               // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
               style={at(squareOf(combatant))}
@@ -533,7 +615,7 @@ export function RunTokens(props: TokenProps) {
             </span>
           );
         })}
-        <FogLayer board={board} squares={fog} veil="dim" />
+        {fog.veil === "dim" && veil}
       </div>
     </>
   );

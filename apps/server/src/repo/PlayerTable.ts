@@ -5,6 +5,7 @@ import {
   CharacterId,
   type CombatantId,
   CombatantPosition,
+  type CombatantTurn,
   Conflict,
   CurrentActor,
   EncounterKind,
@@ -20,10 +21,11 @@ import {
   type PlayerLiveSeat,
   type PlayerLiveToken,
   type PlayerLiveTurn,
+  type PlayerMove,
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
-import { SqlClient, SqlSchema } from "effect/sql";
+import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
@@ -48,10 +50,12 @@ import {
   initiativeOrder,
   RUNS,
   tokenShown,
+  tokenShownTo,
 } from "./liveTables.js";
-import { dieOnSqlError, fromColumns } from "./rows.js";
+import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
+import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
-import { appendEvent } from "./SessionEvents.js";
+import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   containedRowReadable,
   ensureCampaignReadable,
@@ -134,13 +138,20 @@ export const liveOrderStatement = (
              then combatant.initiative_bonus end as initiative_bonus,
            case when own_seated.id is not null
              then combatant.initiative_set_by end as initiative_set_by,
+           -- The armour class and this turn's spending are the asker's own
+           -- row's alone: nobody else's is selected.
+           case when own_seated.id is not null then combatant.ac end as ac,
+           case when own_seated.id is not null then combatant.action_used end as action_used,
+           case when own_seated.id is not null then combatant.bonus_used end as bonus_used,
+           case when own_seated.id is not null then combatant.reaction_used end as reaction_used,
+           case when own_seated.id is not null then combatant.feet_moved end as feet_moved,
            combatant.conditions,
            ${playerLiveHitPointColumns(sql, {
              ownSeat: sql("own_seated.id"),
              seenSeat: sql("seated.id"),
            })},
            ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
-           case when ${tokenShown(sql)}
+           case when ${tokenShownTo(sql, campaignId, actor)}
              and combatant.board_column is not null and combatant.board_row is not null
              then jsonb_build_object(
                'column', combatant.board_column, 'row', combatant.board_row)
@@ -161,8 +172,8 @@ export const liveOrderStatement = (
     where combatant.encounter_run_id = ${runId}
       and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
       and (combatant.kind = 'npc' or seated.id is not null)
-      -- What stands under fog is not on this player's board, so it is not in
-      -- their order either; their own character always is.
+      -- A creature under fog is not on this player's board, so it is not in
+      -- their order either; a party row they may see keeps its row.
       and not ${hiddenByFog(sql, campaignId, actor)}
       -- A conversation, a skill challenge or a hazard has no
       -- initiative order to show: only the asker's own rows are
@@ -196,8 +207,9 @@ const playerBoardRow = (sign: ImageSigner | undefined) =>
  * line. A token is a position selected beside a row of the order under the
  * same condition, and not at all for an NPC while hostile tokens are hidden,
  * so a row the order drops takes its token with it. **Fog** drops the row of
- * whatever stands under it, token and all, but the player's own character
- * (`liveTables.ts`' `hiddenByFog`); the board carries the fogged squares. The
+ * a creature under it, token and all (`liveTables.ts`' `hiddenByFog`); an ally
+ * under fog keeps its row but not its token, and only the player's own token
+ * shows over fog (`tokenShownTo`). The board carries the fogged squares. The
  * DM's pinned area template rides on the board, so it is shown exactly when
  * the board is.
  */
@@ -226,6 +238,38 @@ export class PlayerTable extends Context.Service<
       runId: EncounterRunId,
       combatantId: CombatantId,
       initiative: number,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
+    /**
+     * Move your own token, on your own turn.
+     *
+     * The same one row as `setInitiative`. Refused as a `Conflict` unless the
+     * fight is taking turns with the marker on this row and the DM is showing
+     * the map, since a player moves only a token they can see on a board they
+     * can see. Where it may land and what the walk costs are the DM's move's
+     * rules (`moves.ts`): the square must be on the fight's board, the feet
+     * are added to `feet_moved`, and going over speed is not refused. The log
+     * line is shared under the same rule as the DM's move.
+     */
+    readonly move: (
+      campaignId: CampaignId,
+      runId: EncounterRunId,
+      combatantId: CombatantId,
+      payload: PlayerMove,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
+    /**
+     * Tick your own action, bonus action or reaction (`CombatantTurn`).
+     *
+     * The same one row as `setInitiative`. Refused as a `Conflict` while the
+     * fight is not taking turns, and when the action or the bonus action is
+     * named off your turn; a reaction is spent on somebody else's turn, so it
+     * may be ticked on any. The line is `dm`, as the DM's tick's is: a turn's
+     * spending is on no other player's table.
+     */
+    readonly turn: (
+      campaignId: CampaignId,
+      runId: EncounterRunId,
+      combatantId: CombatantId,
+      payload: CombatantTurn,
     ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
     /**
      * Contentless player live ticks. The cursor is `session_event.seq`; the
@@ -325,6 +369,69 @@ export class PlayerTable extends Context.Service<
             and ${rowReadable(sql, "session", campaignId, actor)}
           limit 1
         `.pipe(Effect.orDie);
+
+      /**
+       * The asker's own row, locked with its fight, through the one predicate
+       * that says which row a player may write (`ownSeatedCombatant`) — and
+       * only in the fight on this table tonight: the campaign's current night,
+       * as the read. Anything else is `NotFound`, the answer the read gives.
+       */
+      const ownRow = (
+        campaignId: CampaignId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+        actor: Actor,
+      ) =>
+        sql<{
+          readonly session_id: SessionId;
+          readonly phase: "initiative" | "turns";
+          readonly ended_at: Date | null;
+          readonly active_combatant_id: CombatantId | null;
+          readonly initiative_set_by: InitiativeSetBy | null;
+          readonly character_id: CharacterId;
+          readonly board_column: number | null;
+          readonly board_row: number | null;
+          readonly board_shown: boolean;
+        }>`
+          select encounter_run.session_id, encounter_run.phase, encounter_run.ended_at,
+                 encounter_run.active_combatant_id,
+                 combatant.initiative_set_by, combatant.character_id,
+                 combatant.board_column, combatant.board_row,
+                 ${boardShown(sql)} as board_shown
+          from combatant
+          join encounter_run on encounter_run.id = combatant.encounter_run_id
+          where combatant.id = ${combatantId}
+            and combatant.encounter_run_id = ${runId}
+            and encounter_run.session_id = (
+                  select campaign.current_session_id from campaign
+                  where campaign.id = ${campaignId}
+                )
+            and ${ownSeatedCombatant(sql, COMBATANT, campaignId, actor)}
+          for update of combatant, encounter_run
+        `.pipe(
+          Effect.flatMap((rows) =>
+            rows[0] === undefined
+              ? Effect.fail(new NotFound({ resource: "combatant", id: combatantId }))
+              : Effect.succeed(rows[0]),
+          ),
+        );
+
+      /**
+       * A repeat of a write the server already applied changes nothing, and a
+       * second send that raced past the check is refused by the unique index;
+       * both are the first's answer, as for the DM's writes.
+       */
+      const once = <E, R>(effect: Effect.Effect<SessionId | undefined, E, R>) =>
+        effect.pipe(
+          Effect.catch((error) =>
+            SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+              ? Effect.succeed(undefined)
+              : Effect.fail(error),
+          ),
+          Effect.tap((sessionId) =>
+            sessionId === undefined ? Effect.void : live.touched(sessionId),
+          ),
+        );
 
       return {
         read: (campaignId) =>
@@ -427,33 +534,7 @@ export class PlayerTable extends Context.Service<
 
               const sessionId = yield* sql.withTransaction(
                 Effect.gen(function* () {
-                  // The row, locked, through the one predicate that says which
-                  // row a player may write — and only in the fight on this
-                  // table tonight: the campaign's current night, as the read.
-                  const rows = yield* sql<{
-                    readonly session_id: SessionId;
-                    readonly phase: "initiative" | "turns";
-                    readonly ended_at: Date | null;
-                    readonly initiative_set_by: InitiativeSetBy | null;
-                    readonly character_id: CharacterId;
-                  }>`
-                    select encounter_run.session_id, encounter_run.phase, encounter_run.ended_at,
-                           combatant.initiative_set_by, combatant.character_id
-                    from combatant
-                    join encounter_run on encounter_run.id = combatant.encounter_run_id
-                    where combatant.id = ${combatantId}
-                      and combatant.encounter_run_id = ${runId}
-                      and encounter_run.session_id = (
-                            select campaign.current_session_id from campaign
-                            where campaign.id = ${campaignId}
-                          )
-                      and ${ownSeatedCombatant(sql, COMBATANT, campaignId, actor)}
-                    for update of combatant, encounter_run
-                  `;
-                  const row = rows[0];
-                  if (row === undefined) {
-                    return yield* new NotFound({ resource: "combatant", id: combatantId });
-                  }
+                  const row = yield* ownRow(campaignId, runId, combatantId, actor);
                   if (row.ended_at !== null || row.phase !== "initiative") {
                     return yield* new Conflict({
                       message: "this fight is not rolling initiative; tell your DM your number",
@@ -486,6 +567,125 @@ export class PlayerTable extends Context.Service<
                 }),
               );
               yield* live.touched(sessionId);
+            }),
+          ),
+
+        move: (campaignId, runId, combatantId, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+
+              yield* once(
+                sql.withTransaction(
+                  Effect.gen(function* () {
+                    const row = yield* ownRow(campaignId, runId, combatantId, actor);
+                    if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                      return undefined;
+                    }
+                    if (
+                      row.ended_at !== null ||
+                      row.phase !== "turns" ||
+                      row.active_combatant_id !== combatantId
+                    ) {
+                      return yield* new Conflict({ message: "it is not your turn" });
+                    }
+                    if (!row.board_shown) {
+                      return yield* new Conflict({ message: "your DM is not showing the map" });
+                    }
+
+                    const fight = yield* fightForMove(sql, runId);
+                    const to = payload.position;
+                    yield* ensureOnBoard(fight, to);
+                    const feet = feetWalked(fight, combatantId, row, to);
+
+                    const moved = yield* sql<{
+                      readonly visibility: "dm" | "shared";
+                      readonly token_shown: boolean;
+                    }>`
+                      update combatant
+                      set board_column = ${to.column},
+                          board_row = ${to.row},
+                          feet_moved = combatant.feet_moved + ${feet},
+                          updated_at = now()
+                      where combatant.id = ${combatantId}
+                      returning combatant.visibility,
+                        (select ${tokenShown(sql)} from encounter_run
+                          where encounter_run.id = combatant.encounter_run_id) as token_shown
+                    `;
+                    const shown = moved[0]!;
+                    yield* appendEvent(sql, {
+                      sessionId: row.session_id,
+                      kind: "combatant-moved",
+                      encounterRunId: runId,
+                      combatantId,
+                      characterId: row.character_id,
+                      payload: {
+                        from:
+                          row.board_column === null || row.board_row === null
+                            ? null
+                            : { column: row.board_column, row: row.board_row },
+                        to,
+                      },
+                      requestId: payload.requestId,
+                      visibility:
+                        shown.visibility === "shared" && shown.token_shown ? "shared" : "dm",
+                    });
+                    return row.session_id;
+                  }),
+                ),
+              );
+            }),
+          ),
+
+        turn: (campaignId, runId, combatantId, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+
+              yield* once(
+                sql.withTransaction(
+                  Effect.gen(function* () {
+                    const row = yield* ownRow(campaignId, runId, combatantId, actor);
+                    if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                      return undefined;
+                    }
+                    if (row.ended_at !== null || row.phase !== "turns") {
+                      return yield* new Conflict({ message: "this fight is not taking turns" });
+                    }
+                    const { requestId, ...ticks } = payload;
+                    if (
+                      (ticks.actionUsed !== undefined || ticks.bonusUsed !== undefined) &&
+                      row.active_combatant_id !== combatantId
+                    ) {
+                      return yield* new Conflict({ message: "it is not your turn" });
+                    }
+                    const columns = defined({
+                      action_used: ticks.actionUsed,
+                      bonus_used: ticks.bonusUsed,
+                      reaction_used: ticks.reactionUsed,
+                    });
+                    if (Object.keys(columns).length === 0) return undefined;
+
+                    yield* sql`
+                      update combatant set ${sql.update(columns)}, updated_at = now()
+                      where combatant.id = ${combatantId}
+                    `;
+                    yield* appendEvent(sql, {
+                      sessionId: row.session_id,
+                      kind: "combatant-updated",
+                      encounterRunId: runId,
+                      combatantId,
+                      characterId: row.character_id,
+                      payload: { ...ticks, by: "player" },
+                      requestId,
+                      visibility: "dm",
+                    });
+                    return row.session_id;
+                  }),
+                ),
+              );
             }),
           ),
 

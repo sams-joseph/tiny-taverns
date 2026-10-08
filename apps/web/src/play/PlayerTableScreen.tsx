@@ -1,70 +1,52 @@
 import {
-  initiativeFrom,
-  NEUTRAL_RUN_NAMES,
+  type BoardSquare,
   type CampaignId,
-  type EncounterRunId,
-  type NpcId,
-  type PlayerNpc,
-  type PlayerLiveCombatant,
+  type CombatantId,
+  type DeathSaves,
+  NEUTRAL_RUN_NAMES,
   type PlayerLiveCombatantYou,
-  type Roll,
   type RollMode,
-  type SessionId,
-  type SheetAction,
+  deathSaveRolled,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   BackLink,
-  Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  Icon,
   EmptyState,
-  Input,
-  Label,
   Loading,
-  sectionHeadingVariants,
+  cn,
 } from "@taverns/ui";
-import { Result } from "effect";
 import { Atom } from "effect/reactivity";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { apiAtom, useApiAtom } from "../api/atoms";
-import { useNpcSessionChat } from "../cast/playerChat";
-import { RehearsalPanel } from "../cast/RehearsalPanel";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { CharacterPortrait } from "../characters/CharacterPortrait";
-import { actionRows } from "../characters/sheet";
-import {
-  type LocalRoll,
-  rollAbilityCheck,
-  rollDetail,
-  rollDiceExpression,
-  signed,
-} from "../characters/rolls";
+import { deathSaveWrites, setOwnDeathSaves } from "../characters/write";
+import { rollDiceExpression } from "../characters/rolls";
+import { actionsOf } from "../run/actions";
+import { rollActionThrows } from "../run/attack";
+import { RunLayout } from "../run/RunLayout";
+import { RunStage } from "../run/RunStage";
+import { useStage } from "../run/stage";
+import { leadingFeet } from "../run/tokens";
+import { feetLeft, type TurnTicks } from "../run/turn";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
-import { PlayerBattleMap } from "./PlayerBoard";
+import { PlayerBattleMap, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
+import { TableRowCard, YourCard } from "./PlayerCard";
+import { PlayerStrip } from "./PlayerStrip";
 import { SceneOnTheTable } from "./SceneOnTheTable";
+import { tableLabels } from "./tableRows";
 import { usePlayerTableStream } from "./tableStream";
-import { type TurnBanner, turnBanner } from "./turnBanner";
-import { ApiFailureNotice } from "../api/ApiFailureNotice";
-
-interface PendingRoll extends LocalRoll {
-  readonly localId: string;
-  readonly state: "sending" | "sent" | "failed";
-  readonly message: string;
-}
-
-const newRollRequestId = (): string =>
-  globalThis.crypto?.randomUUID?.() ?? `roll-${String(Date.now())}-${String(Math.random())}`;
-
-const criticalFrom = (roll: LocalRoll): "hit" | "miss" | undefined =>
-  roll.natural === 20 ? "hit" : roll.natural === 1 ? "miss" : undefined;
+import { ReadAloud, SessionNpcCard, TurnBannerCard, YourInitiative } from "./TableCards";
+import { TableDice } from "./TableDice";
+import { tableRollOf, useTableRolls } from "./tableRolls";
+import { turnBanner } from "./turnBanner";
 
 const playerTableAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(loadPlayerTableView(campaignId), [
@@ -75,404 +57,33 @@ const playerTableAtom = Atom.family((campaignId: CampaignId) =>
   ]),
 );
 
-const sessionNpcsAtom = Atom.family(
-  ({ campaignId, sessionId }: { readonly campaignId: CampaignId; readonly sessionId: SessionId }) =>
-    apiAtom(
-      (client) => client.npcs.sessionList({ params: { campaignId, sessionId } }),
-      [reads.sessionNpcs(sessionId)],
-    ),
-);
-
-const bandLabel = (band: PlayerLiveCombatant & { kind: "npc" }) =>
-  ({ unhurt: "Unhurt", hurt: "Hurt", bloodied: "Bloodied", down: "Down", unknown: "Unknown" })[
-    band.hpBand
-  ];
-
-function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
-  const detail =
-    row.kind === "you"
-      ? [
-          `${String(row.hpCurrent)}/${String(row.hpMax)} hp`,
-          row.tempHp > 0 ? `${String(row.tempHp)} temp` : undefined,
-        ]
-      : row.kind === "ally"
-        ? [row.subtitle, row.playerName]
-        : [row.subtitle, bandLabel(row)];
-
-  return (
-    <div className="flex min-h-row flex-wrap items-center gap-2.5 border-t border-hairline px-card py-2 first:border-t-0">
-      <Badge variant={row.kind === "you" ? "default" : "secondary"}>
-        {row.kind === "you" ? "You" : row.kind === "ally" ? "Ally" : "NPC"}
-      </Badge>
-      {row.kind !== "npc" && row.portrait !== null && (
-        <CharacterPortrait name={row.displayName} portrait={row.portrait} size="row" />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-body-s leading-body font-medium text-foreground">
-            {row.displayName}
-          </span>
-          <span className="text-caption leading-snug text-muted-foreground">
-            Initiative {row.initiative === null ? "—" : String(row.initiative)}
-          </span>
-        </div>
-        <div className="text-caption leading-snug text-muted-foreground">
-          {detail
-            .filter((part): part is string => part !== undefined && part !== null && part !== "")
-            .join(" · ")}
-        </div>
-      </div>
-      {row.conditions.map((condition) => (
-        <Badge key={condition} variant="secondary">
-          {condition}
-        </Badge>
-      ))}
-    </div>
-  );
-}
+const newRequestId = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `turn-${String(Date.now())}-${String(Math.random())}`;
 
 /**
- * Whose turn it is, at the head of the fight: the round, the creature that is
- * up — or *"Something moves"* — and the next one this player can see
- * (`turnBanner.ts`). A live region, so the turn moving is said aloud.
+ * A seated player's live table, laid out as the DM's runner is
+ * (`run/RunScreen.tsx`) and built from its parts, over the player's own
+ * projection of the fight (`PlayerLiveTable`), never the DM's.
+ *
+ * **On a fight with a shared map, at a desktop width**, it is the runner's
+ * canvas (`run/RunStage.tsx`): the board fills the stage and the panels float
+ * over it — the read-only initiative strip across the top (or *Your
+ * initiative* while it is rolled), the player's own card on the right with
+ * whose turn it is and the table's NPCs and read-alouds under it, and their
+ * rolls bottom left. Like the DM's, this stage is bounded to the viewport and
+ * its panels scroll themselves.
+ *
+ * **Otherwise** — a narrow screen, no shared map, or a scene that is not a
+ * fight — it is the runner's grid (`run/RunLayout.tsx`), and the window
+ * scrolls.
+ *
+ * What a player may do here is what the table's writes allow: enter their own
+ * initiative while it is rolled, tick their own action, bonus action and
+ * reaction, drag their own token on their own turn, mark and roll their own
+ * death saves, and roll anything on their sheet into the tray. A chip or a
+ * token selects; anyone else's card says what the table told this player of
+ * them and offers nothing to press.
  */
-function TurnBannerCard({ banner }: { readonly banner: TurnBanner }) {
-  return (
-    <Card
-      role="status"
-      aria-label="Turn"
-      className="flex-row flex-wrap items-center gap-x-5 gap-y-3 border-t-3 border-t-accent px-panel py-3.5"
-    >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <span className="text-label-s leading-none text-muted-foreground">
-          Round {String(banner.round)}
-        </span>
-        <span className={sectionHeadingVariants({ size: "hero" })}>{banner.title}</span>
-      </div>
-      {banner.upNext !== undefined && (
-        <div className="flex min-w-0 flex-col gap-1.5 border-l border-hairline pl-5">
-          <span className="text-label-s leading-none text-muted-foreground">Up next</span>
-          <span className="text-body leading-snug font-medium text-foreground">
-            {banner.upNext}
-          </span>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-/**
- * Your own initiative, while the fight is rolling it: roll it here or type the
- * total you rolled with real dice, and it lands in your DM's list straight
- * away. Your DM can change it; once they have, their number stands and this
- * card only says what it is.
- */
-function YourInitiative({
-  campaignId,
-  runId,
-  you,
-  rollMode,
-  onRolled,
-}: {
-  readonly campaignId: CampaignId;
-  readonly runId: EncounterRunId;
-  readonly you: PlayerLiveCombatantYou;
-  readonly rollMode: RollMode;
-  readonly onRolled: (roll: LocalRoll) => void;
-}) {
-  const { busy, failure, submit } = useMutation();
-  const [draft, setDraft] = useState("");
-  const typed = initiativeFrom(draft);
-
-  const send = async (initiative: number) => {
-    const sent = await submit(
-      (client) =>
-        client.table.setInitiative({
-          params: { campaignId, runId, combatantId: you.combatantId },
-          payload: { initiative },
-        }),
-      [reads.playerTable(campaignId)],
-    );
-    if (Result.isSuccess(sent)) setDraft("");
-  };
-
-  const roll = () => {
-    if (you.initiativeBonus === null) return;
-    const rolled = rollAbilityCheck("Initiative", signed(you.initiativeBonus), rollMode);
-    if (rolled === undefined) return;
-    onRolled(rolled);
-    void send(rolled.total);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your initiative</CardTitle>
-        <p className="text-body-s leading-body text-muted-foreground">
-          {you.initiativeSetBy === "dm"
-            ? `Your DM has you at ${String(you.initiative)}.`
-            : you.initiative === null
-              ? "Roll here, or type what you rolled at the table. Your DM sees it straight away and can change it."
-              : `You sent ${String(you.initiative)}. You can change it until your DM starts the round.`}
-        </p>
-      </CardHeader>
-      {you.initiativeSetBy !== "dm" && (
-        <CardContent className="flex flex-col gap-3">
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (typed !== undefined) void send(typed);
-            }}
-          >
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="your-initiative">Total</Label>
-              <Input
-                id="your-initiative"
-                mono
-                inputMode="numeric"
-                value={draft}
-                aria-invalid={draft.trim() !== "" && typed === undefined ? true : undefined}
-                onChange={(event) => setDraft(event.target.value)}
-                className="w-24"
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={busy || typed === undefined}>
-              {busy ? "Sending…" : "Send"}
-            </Button>
-            {you.initiativeBonus !== null && (
-              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={roll}>
-                <Icon name="dices" size={14} />
-                Roll d20 {signed(you.initiativeBonus)}
-              </Button>
-            )}
-          </form>
-          {failure !== undefined && <SaveFailure failure={failure} />}
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
-function RollLine({ roll }: { readonly roll: Roll }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-hairline px-card py-2 first:border-t-0">
-      <span className="text-body-s font-medium text-foreground">{roll.label}</span>
-      <span className="text-body-s text-accent-ink">{String(roll.total)}</span>
-      <span className="text-caption text-muted-foreground">
-        {roll.notation} · dice {roll.dice.join(", ")}
-        {roll.kept.length !== roll.dice.length ? ` · kept ${roll.kept.join(", ")}` : ""}
-      </span>
-    </div>
-  );
-}
-
-function PendingRollLine({ roll }: { readonly roll: PendingRoll }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-hairline px-card py-2 first:border-t-0">
-      <span className="text-body-s font-medium text-foreground">{roll.label}</span>
-      <span className="text-body-s text-accent-ink">{String(roll.total)}</span>
-      <span className="text-caption text-muted-foreground">{rollDetail(roll)}</span>
-      <span className="text-caption text-muted-foreground">{roll.message}</span>
-    </div>
-  );
-}
-
-function SessionNpcConversation({
-  campaignId,
-  sessionId,
-  npc,
-  refreshToken,
-}: {
-  readonly campaignId: CampaignId;
-  readonly sessionId: SessionId;
-  readonly npc: PlayerNpc;
-  readonly refreshToken: number;
-}) {
-  const chat = useNpcSessionChat(campaignId, sessionId, npc.id, npc.name, refreshToken);
-  return (
-    <RehearsalPanel
-      name={npc.name}
-      image={npc.image}
-      rehearsal={chat}
-      subtitle="Open at the table · shared with active participants"
-      emptyTitle={`Talk to ${npc.name}`}
-      emptyBody="Open at the table is the shared live-session conversation. Everyone in this channel can read the exchange; the NPC cannot change the campaign or remember this automatically."
-      label={`Say something to ${npc.name}`}
-      ariaLabel={`Talk to ${npc.name}`}
-    />
-  );
-}
-
-function SessionNpcCard({
-  campaignId,
-  sessionId,
-  refreshToken,
-}: {
-  readonly campaignId: CampaignId;
-  readonly sessionId: SessionId;
-  readonly refreshToken: number;
-}) {
-  const [resource, reload] = useApiAtom(sessionNpcsAtom({ campaignId, sessionId }));
-  const [selected, setSelected] = useState<NpcId | undefined>(undefined);
-
-  useEffect(() => {
-    if (refreshToken > 0) reload();
-  }, [refreshToken, reload]);
-
-  if (resource.state === "loading") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Open at the table</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-body-s text-muted-foreground">Looking for shared NPCs…</p>
-        </CardContent>
-      </Card>
-    );
-  }
-  if (resource.state === "failed") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Open at the table</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const npcs = resource.value;
-  const npc = npcs.find((row) => row.id === selected) ?? npcs[0];
-  if (npc === undefined) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>NPCs at the table</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-body-s leading-body text-muted-foreground">
-            The DM has not opened an NPC at the table for this live session.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Open at the table</CardTitle>
-        <p className="text-body-s leading-body text-muted-foreground">
-          This is the shared live-session conversation for active table participants.
-          {npc.sessionState === "paused" ? " The DM has paused new messages for now." : ""}
-        </p>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {npcs.length > 1 && (
-          <div className="flex flex-wrap gap-2">
-            {npcs.map((row) => (
-              <Button
-                key={row.id}
-                size="sm"
-                variant={row.id === npc.id ? "secondary" : "ghost"}
-                onClick={() => setSelected(row.id)}
-              >
-                {row.name}
-                {row.sessionState === "paused" && <Badge variant="secondary">paused</Badge>}
-              </Button>
-            ))}
-          </div>
-        )}
-        <SessionNpcConversation
-          campaignId={campaignId}
-          sessionId={sessionId}
-          npc={npc}
-          refreshToken={refreshToken}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function RollControls({
-  seated,
-  actions,
-  rollMode,
-  onMode,
-  onRoll,
-}: {
-  /** Whether this account holds a seat in what is on the table. */
-  readonly seated: boolean;
-  readonly actions: ReadonlyArray<SheetAction>;
-  readonly rollMode: RollMode;
-  readonly onMode: (mode: RollMode) => void;
-  readonly onRoll: (roll: LocalRoll | undefined) => void;
-}) {
-  if (!seated) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Your turn tools</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-body-s leading-body text-muted-foreground">
-            Seat one of your characters in this fight to roll into the table tray.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your rolls</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2">
-          {(["normal", "advantage", "disadvantage"] as const).map((mode) => (
-            <Button
-              key={mode}
-              size="sm"
-              variant={rollMode === mode ? "secondary" : "ghost"}
-              onClick={() => onMode(mode)}
-            >
-              {mode === "normal" ? "Normal" : mode === "advantage" ? "Advantage" : "Disadvantage"}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {actions
-            .filter((action) => action.dice !== undefined || action.hit !== undefined)
-            .slice(0, 6)
-            .map((action) => (
-              <Button
-                key={action.id}
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  const dice = action.dice;
-                  if (dice !== undefined) onRoll(rollDiceExpression(action.name, dice, "normal"));
-                  else if (action.hit !== undefined)
-                    onRoll(
-                      rollDiceExpression(`${action.name} attack`, `1d20${action.hit}`, rollMode),
-                    );
-                }}
-              >
-                <Icon name="dices" size={14} />
-                {action.name}
-              </Button>
-            ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function PlayerTableScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId/table" });
   const [resource, reload] = useApiAtom(playerTableAtom(campaignId));
@@ -484,23 +95,33 @@ export function PlayerTableScreen() {
   // a hazard has no initiative order, and a player still rolls in one.
   const seat = fight?.seats[0];
   const owned = view?.characters.find((row) => row.character.id === seat?.characterId);
-  const actions = owned === undefined ? [] : actionRows(owned.character.sheet);
+  const sheet = owned?.character.sheet;
+  const actions = useMemo(() => (sheet === undefined ? [] : actionsOf({ sheet })), [sheet]);
+  const speed = leadingFeet(sheet?.identity?.speed);
   const upNextId = fight?.upNext?.kind === "visible" ? fight.upNext.combatantId : undefined;
-  const yourTurn = you !== undefined && upNextId === you.combatantId;
+  const turns = fight?.mode === "combat" && fight.phase === "turns";
+  const yourTurn = you !== undefined && turns && upNextId === you.combatantId;
   const banner = turnBanner(fight);
-  const { failure, submit } = useMutation();
-  const [rollMode, setRollMode] = useState<RollMode>("normal");
-  const [pendingRolls, setPendingRolls] = useState<ReadonlyArray<PendingRoll>>([]);
-  const [tableTicks, setTableTicks] = useState(0);
-  const visiblePendingRolls = pendingRolls.filter(
-    (pending) => !view?.rolls.some((roll) => roll.requestId === pending.localId),
-  );
+  const labels = useMemo(() => tableLabels(fight?.order ?? []), [fight?.order]);
+  const stage = useStage();
 
+  const [rollMode, setRollMode] = useState<RollMode>("normal");
+  const [picked, setPicked] = useState<CombatantId>();
+  const dice = useTableRolls({
+    campaignId,
+    characterId: seat?.characterId,
+    rolls: view?.rolls ?? [],
+  });
+  const turnWrite = useMutation();
+  const moveWrite = useMutation();
+  const savesWrite = useMutation();
+
+  // Every tick re-reads the table, and tells the NPC card to re-read its own.
+  const [tableTicks, setTableTicks] = useState(0);
   const refreshTable = useCallback(() => {
     reload();
     setTableTicks((count) => count + 1);
   }, [reload]);
-
   const connection = usePlayerTableStream({
     campaignId,
     sessionId: table?.sessionId,
@@ -509,50 +130,196 @@ export function PlayerTableScreen() {
     onReconnected: refreshTable,
   });
 
-  const recordRoll = (roll: LocalRoll | undefined) => {
-    if (roll === undefined || table === null || table === undefined || seat === undefined) return;
-    const requestId = newRollRequestId();
-    const pending: PendingRoll = {
-      ...roll,
-      localId: requestId,
-      state: "sending",
-      message: "Sending to the table…",
-    };
-    setPendingRolls((current) => [pending, ...current].slice(0, 6));
-    void submit(
+  // Whoever was picked, while they are still on this table; else your own row.
+  const selected =
+    fight?.order.find((row) => row.combatantId === picked) ?? (you === undefined ? undefined : you);
+  const selectedId = selected?.combatantId;
+
+  const tick = (ticks: TurnTicks) => {
+    if (fight === null || you === undefined) return;
+    void turnWrite.submit(
       (client) =>
-        client.rolls.create({
-          params: { campaignId },
-          payload: {
-            characterId: seat.characterId,
-            label: roll.label,
-            notation: roll.notation,
-            dice: roll.dice,
-            kept: roll.kept,
-            modifier: roll.modifier,
-            total: roll.total,
-            mode: roll.mode,
-            requestId,
-            ...(criticalFrom(roll) === undefined ? {} : { critical: criticalFrom(roll) }),
-          },
+        client.table.turn({
+          params: { campaignId, runId: fight.id, combatantId: you.combatantId },
+          payload: { ...ticks, requestId: newRequestId() },
         }),
       [reads.playerTable(campaignId)],
-    ).then((result) => {
-      setPendingRolls((current) =>
-        current.map((item) =>
-          item.localId !== requestId
-            ? item
-            : Result.isSuccess(result)
-              ? { ...item, state: "sent", message: "Sent to the table." }
-              : { ...item, state: "failed", message: "Kept here — the table refused it." },
-        ),
-      );
-    });
+    );
   };
 
-  return (
+  const move = (to: BoardSquare) =>
+    fight === null || you === undefined
+      ? Promise.resolve()
+      : moveWrite.submit(
+          (client) =>
+            client.table.move({
+              params: { campaignId, runId: fight.id, combatantId: you.combatantId },
+              payload: { position: to, requestId: newRequestId() },
+            }),
+          [reads.playerTable(campaignId)],
+        );
+
+  const setSaves = (saves: DeathSaves) => {
+    if (owned === undefined) return;
+    void savesWrite.submit(
+      (client) => setOwnDeathSaves(client, owned.character, saves),
+      deathSaveWrites(owned),
+    );
+  };
+
+  /**
+   * *Roll death save*: the d20 into your tray, and the dots marked by the
+   * rule (`deathSaveRolled`). A natural 20 is the DM's to mark, since it
+   * brings you back with a hit point and a player writes none.
+   */
+  const rollDeathSave = () => {
+    if (you === undefined) return;
+    const rolled = rollDiceExpression(`${you.displayName} · Death save`, "1d20");
+    if (rolled === undefined) return;
+    dice.file({ ...rolled, kind: "death-save" });
+    const face = rolled.kept[0] ?? rolled.total;
+    const { saves, revived } = deathSaveRolled(you.deathSaves, face);
+    if (!revived) setSaves(saves);
+  };
+
+  const rollAction = (action: Parameters<typeof rollActionThrows>[0]["line"]) => {
+    const name = you?.displayName ?? owned?.character.name ?? "You";
+    for (const thrown of rollActionThrows({ attacker: name, line: action, mode: rollMode })) {
+      dice.file(tableRollOf(thrown));
+    }
+  };
+
+  const failure = turnWrite.failure ?? moveWrite.failure ?? savesWrite.failure;
+
+  const boardProps: PlayerBoardProps | undefined =
+    fight?.board === null || fight?.board === undefined || fight.mode !== "combat"
+      ? undefined
+      : {
+          board: fight.board,
+          order: fight.order,
+          labels,
+          upNextId,
+          selectedId,
+          diagonals: view?.campaign.diagonalRule ?? "five",
+          feetLeft:
+            you === undefined
+              ? undefined
+              : feetLeft({ id: you.combatantId, feetMoved: you.feetMoved }, speed, {
+                  phase: fight.phase,
+                  activeCombatantId: upNextId ?? null,
+                }),
+          movable: yourTurn && !moveWrite.busy,
+          onSelect: (row) => setPicked(row.combatantId),
+          onMove: move,
+        };
+  const canvas = stage.wide === true && boardProps !== undefined;
+
+  const card =
+    selected !== undefined && selected.kind !== "you" ? (
+      <TableRowCard
+        row={selected}
+        label={labels.get(selected.combatantId) ?? "?"}
+        up={selected.combatantId === upNextId}
+        onBack={you === undefined ? undefined : () => setPicked(you.combatantId)}
+      />
+    ) : owned !== undefined ? (
+      <YourCard
+        name={you?.displayName ?? owned.character.name}
+        you={you}
+        label={you === undefined ? "?" : (labels.get(you.combatantId) ?? "?")}
+        speed={speed}
+        actions={actions}
+        turns={turns}
+        yourTurn={yourTurn}
+        busy={turnWrite.busy || savesWrite.busy}
+        onTick={tick}
+        onDeathSaves={setSaves}
+        onDeathSaveRoll={rollDeathSave}
+        onRollAction={rollAction}
+      />
+    ) : (
+      <Card>
+        <CardHeader>
+          <CardTitle>Your character</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-0 text-body-s leading-body text-muted-foreground">
+            Seat one of your characters in this fight to roll into the table tray.
+          </p>
+        </CardContent>
+      </Card>
+    );
+
+  const yourInitiative =
+    fight !== null && fight.phase === "initiative" && you !== undefined ? (
+      <YourInitiative
+        campaignId={campaignId}
+        runId={fight.id}
+        you={you}
+        rollMode={rollMode}
+        onRolled={dice.file}
+      />
+    ) : null;
+
+  const strip =
+    fight === null ? null : fight.mode !== "combat" ? (
+      <SceneOnTheTable mode={fight.mode} />
+    ) : (
+      <PlayerStrip
+        fight={fight}
+        labels={labels}
+        selectedId={selectedId}
+        floating={canvas}
+        onSelect={(row) => setPicked(row.combatantId)}
+      />
+    );
+
+  const panel = (
     <>
+      {banner !== undefined && <TurnBannerCard banner={banner} />}
+      {failure !== undefined && (
+        <Card className="border-danger">
+          <CardContent className="pt-card">
+            <SaveFailure failure={failure} />
+          </CardContent>
+        </Card>
+      )}
+      {card}
+    </>
+  );
+
+  const tableCards =
+    table === undefined || table === null ? null : (
+      <>
+        <SessionNpcCard
+          campaignId={campaignId}
+          sessionId={table.sessionId}
+          refreshToken={tableTicks}
+        />
+        <ReadAloud notes={view?.readAloud ?? []} />
+      </>
+    );
+
+  const rolls = (
+    <TableDice
+      sheet={sheet}
+      mode={rollMode}
+      onMode={setRollMode}
+      rolls={view?.rolls ?? []}
+      dice={dice}
+    />
+  );
+
+  return (
+    <div
+      data-slot="player-table"
+      className={cn(
+        canvas && "flex h-[calc(100dvh_-_var(--chrome-height)_-_2_*_var(--spacing-page))] flex-col",
+      )}
+    >
+      {stage.probe}
       <TopBar
+        framed
         title={view?.campaign.name ?? "The table"}
         subtitle={
           table === undefined
@@ -584,158 +351,68 @@ export function PlayerTableScreen() {
           player table appears here.
         </EmptyState>
       )}
-      {view !== undefined && table !== null && table !== undefined && (
-        <div className="@container flex flex-col gap-5">
-          <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-            <span>
-              {connection.status === "live"
-                ? "Live"
-                : connection.status === "stopped"
-                  ? "Stream stopped"
-                  : "Reconnecting…"}
-            </span>
-            <span>Cursor {String(connection.cursor)}</span>
-            {yourTurn && <Badge variant="magic">Your turn</Badge>}
-          </div>
-
+      {view !== undefined && table !== null && table !== undefined && stage.wide !== undefined && (
+        <div className={cn("flex flex-col gap-4", canvas && "min-h-0 flex-1")}>
+          {/* Said only when it has fallen behind: a table keeping up needs no word. */}
+          {(connection.status === "reconnecting" || connection.status === "stopped") && (
+            <p
+              role="status"
+              className="mb-0 rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+            >
+              {connection.status === "stopped"
+                ? "The live updates stopped. Reload to pick the table up again."
+                : "Reconnecting to the table…"}
+            </p>
+          )}
           {fight === null ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Nothing on the table</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-body-s leading-body text-muted-foreground">
-                  The night is open. The DM has not shared a fight with the table.
-                </p>
-              </CardContent>
-            </Card>
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Nothing on the table</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="mb-0 text-body-s leading-body text-muted-foreground">
+                    The night is open. The DM has not shared a fight with the table.
+                  </p>
+                </CardContent>
+              </Card>
+              {tableCards}
+            </>
+          ) : canvas && boardProps !== undefined ? (
+            <RunStage
+              strip={strip}
+              rolling={yourInitiative}
+              banner={undefined}
+              panel={
+                <>
+                  {panel}
+                  {tableCards}
+                </>
+              }
+              rolls={rolls}
+              board={(freeArea) => <PlayerBoardStage {...boardProps} freeArea={freeArea} />}
+            />
           ) : (
-            <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
-              <div className="flex min-w-0 flex-col gap-5">
-                {banner !== undefined && <TurnBannerCard banner={banner} />}
-                {fight.phase === "initiative" && you !== undefined && (
-                  <YourInitiative
-                    campaignId={campaignId}
-                    runId={fight.id}
-                    you={you}
-                    rollMode={rollMode}
-                    onRolled={recordRoll}
-                  />
-                )}
-                {fight.mode !== "combat" ? (
-                  <SceneOnTheTable mode={fight.mode} />
-                ) : (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Initiative</CardTitle>
-                      {fight.phase === "initiative" && (
-                        <p className="text-body-s leading-body text-muted-foreground">
-                          Rolling initiative. The first round starts once everyone has a number.
-                        </p>
-                      )}
-                    </CardHeader>
-                    {fight.order.map((row) => (
-                      <CombatantRow key={row.combatantId} row={row} />
-                    ))}
-                  </Card>
-                )}
-
-                {fight.board !== null && (
-                  <PlayerBattleMap board={fight.board} order={fight.order} upNextId={upNextId} />
-                )}
-
-                {view.readAloud.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    {view.readAloud.map((note) => (
-                      <Card key={note.id}>
-                        <CardHeader>
-                          <span className="text-caption font-medium tracking-caps uppercase text-faint">
-                            Read aloud
-                          </span>
-                          <CardTitle>{note.title}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="max-w-measure font-serif text-body-l leading-loose italic text-foreground">
-                            {note.body}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <aside className="flex min-w-0 flex-col gap-5">
-                <SessionNpcCard
-                  campaignId={campaignId}
-                  sessionId={table.sessionId}
-                  refreshToken={tableTicks}
-                />
-                <RollControls
-                  seated={seat !== undefined}
-                  actions={actions}
-                  rollMode={rollMode}
-                  onMode={setRollMode}
-                  onRoll={recordRoll}
-                />
-                {owned !== undefined && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Quick checks</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      {owned.character.sheet.abilities.slice(0, 6).map((ability) => (
-                        <Button
-                          key={ability.label}
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            recordRoll(
-                              rollAbilityCheck(
-                                `${ability.label} check`,
-                                ability.modifier,
-                                rollMode,
-                              ),
-                            )
-                          }
-                        >
-                          {ability.label}
-                        </Button>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-                {failure !== undefined && (
-                  <Card className="border-danger">
-                    <CardContent className="pt-card">
-                      <SaveFailure failure={failure} />
-                    </CardContent>
-                  </Card>
-                )}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Dice tray</CardTitle>
-                  </CardHeader>
-                  {visiblePendingRolls.map((roll) => (
-                    <PendingRollLine key={roll.localId} roll={roll} />
-                  ))}
-                  {view.rolls.map((roll) => (
-                    <RollLine key={roll.id} roll={roll} />
-                  ))}
-                  {visiblePendingRolls.length === 0 && view.rolls.length === 0 && (
-                    <CardContent>
-                      <p className="text-body-s text-muted-foreground">
-                        Your rolls for this live table appear here. Other players' tray is not
-                        shown.
-                      </p>
-                    </CardContent>
-                  )}
-                </Card>
-              </aside>
-            </div>
+            <RunLayout
+              initiative={
+                <div className="flex flex-col gap-4">
+                  {strip}
+                  {yourInitiative}
+                </div>
+              }
+              strip
+              map={boardProps === undefined ? null : <PlayerBattleMap {...boardProps} />}
+              card={<div className="flex flex-col gap-4">{panel}</div>}
+              rest={
+                <>
+                  {rolls}
+                  {tableCards}
+                </>
+              }
+            />
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

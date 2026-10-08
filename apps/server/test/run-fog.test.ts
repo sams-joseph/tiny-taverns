@@ -20,10 +20,11 @@ import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
- * **Fog of war on a fight's board: the DM's alone to paint, and what stands
+ * **Fog of war on a fight's board: the DM's alone to paint, and a creature
  * under it is not on a player's table — neither its token nor its row of the
- * order — but the player's own character** (`0087_run_board_fog.ts`,
- * `BattleMaps.updateFog`, `liveTables.ts`' `hiddenByFog`).
+ * order. An ally under it keeps its row but not its token; the player's own
+ * character keeps both** (`0087_run_board_fog.ts`, `BattleMaps.updateFog`,
+ * `liveTables.ts`' `hiddenByFog` and `tokenShownTo`).
  *
  * Over the real application and Postgres. A fight starts clear; the DM sees
  * through fog; *Reveal all*, *Cover all* and *Reset* change the whole board; a
@@ -298,25 +299,46 @@ describeLayer("run-fog", shared, (it) => {
       }),
   );
 
-  it.effect("keeps a player's own character under fog, and hides an ally's", () =>
-    Effect.gen(function* () {
-      const { ilse, bram } = yield* Fixture;
-      const session = yield* night();
-      const { params, tamsin, wren, sentry } = yield* aFight(session);
-      yield* fog(params, { hide: [TAMSIN, WREN, ARCHER] });
+  it.effect(
+    "keeps a player's own character under fog, and a fogged ally's row without its token",
+    () =>
+      Effect.gen(function* () {
+        const { ilse, bram } = yield* Fixture;
+        const session = yield* night();
+        const { fight, params, tamsin, wren, archer, sentry } = yield* aFight(session);
+        yield* fog(params, { hide: [TAMSIN, WREN, ARCHER] });
 
-      const ilses = yield* tableOf(ilse);
-      expect(orderOf(ilses)).toEqual([tamsin.id, sentry.id].sort());
-      expect(tokensOf(ilses)).toEqual([tamsin.id, sentry.id].sort());
-      expect(ilses?.fight?.seats.map((seat) => seat.combatantId)).toEqual([tamsin.id]);
-      expect((yield* rawTableOf(ilse)).body).not.toContain(wren.id);
+        const ilses = yield* tableOf(ilse);
+        expect(orderOf(ilses)).toEqual([tamsin.id, wren.id, sentry.id].sort());
+        expect(tokensOf(ilses)).toEqual([tamsin.id, sentry.id].sort());
+        expect(ilses?.fight?.seats.map((seat) => seat.combatantId)).toEqual([tamsin.id]);
+        const wrenRow = ilses?.fight?.order.find((row) => row.combatantId === wren.id);
+        expect(wrenRow?.kind).toBe("ally");
+        expect(wrenRow?.displayName).toBe("Wren");
+        expect(wrenRow?.kind === "ally" && wrenRow.hpMax).toBe(24);
+        const ilsesRaw = (yield* rawTableOf(ilse)).body;
+        expect(ilsesRaw).not.toContain(archer.id);
+        // The fogged square is on the board as fog, never as Wren's position.
+        expect(ilsesRaw).not.toContain(`"position":{"column":${WREN.column},"row":${WREN.row}}`);
 
-      const brams = yield* tableOf(bram);
-      expect(orderOf(brams)).toEqual([wren.id, sentry.id].sort());
-      expect(tokensOf(brams)).toEqual([wren.id, sentry.id].sort());
-      expect((yield* rawTableOf(bram)).body).not.toContain(tamsin.id);
-      yield* endNight(session);
-    }),
+        const brams = yield* tableOf(bram);
+        expect(orderOf(brams)).toEqual([tamsin.id, wren.id, sentry.id].sort());
+        expect(tokensOf(brams)).toEqual([wren.id, sentry.id].sort());
+        expect((yield* rawTableOf(bram)).body).not.toContain(archer.id);
+
+        // The recap mid-fight follows the same rule: the ally named, the creature not.
+        const recap = yield* as(ilse.token, (client) =>
+          client.recap.readAsPlayer({
+            params: { campaignId: params.campaignId, sessionId: session },
+          }),
+        );
+        const named = recap.fights
+          .find((one) => one.run.id === fight.id)!
+          .combatants.map((row) => row.id)
+          .sort();
+        expect(named).toEqual([tamsin.id, wren.id, sentry.id].sort());
+        yield* endNight(session);
+      }),
   );
 
   it.effect("brings everything back on Reveal all", () =>
@@ -325,7 +347,9 @@ describeLayer("run-fog", shared, (it) => {
       const session = yield* night();
       const { params, tamsin, wren, archer, sentry } = yield* aFight(session);
       yield* fog(params, { hide: [WREN, ARCHER, SENTRY] });
-      expect(orderOf(yield* tableOf(ilse))).toEqual([tamsin.id]);
+      const fogged = yield* tableOf(ilse);
+      expect(orderOf(fogged)).toEqual([tamsin.id, wren.id].sort());
+      expect(tokensOf(fogged)).toEqual([tamsin.id]);
 
       const board = yield* fog(params, { revealAll: true });
       expect(board.fog).toEqual([]);
@@ -342,13 +366,15 @@ describeLayer("run-fog", shared, (it) => {
     Effect.gen(function* () {
       const { ilse } = yield* Fixture;
       const session = yield* night();
-      const { params, tamsin } = yield* aFight(session);
+      const { params, tamsin, wren } = yield* aFight(session);
 
       const covered = yield* fog(params, { coverAll: true });
       expect(covered.fog).toHaveLength(covered.columns * covered.rows);
       expect(covered.fog[0]).toEqual({ column: 0, row: 0 });
       expect(covered.fog.at(-1)).toEqual({ column: covered.columns - 1, row: covered.rows - 1 });
-      expect(orderOf(yield* tableOf(ilse))).toEqual([tamsin.id]);
+      const covering = yield* tableOf(ilse);
+      expect(orderOf(covering)).toEqual([tamsin.id, wren.id].sort());
+      expect(tokensOf(covering)).toEqual([tamsin.id]);
 
       // The whole-board change first, then `hide`, then `reveal`.
       const opened = yield* fog(params, {

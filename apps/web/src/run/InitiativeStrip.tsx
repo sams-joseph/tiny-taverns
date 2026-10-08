@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
   cn,
 } from "@taverns/ui";
-import { type WheelEvent, useEffect, useRef } from "react";
+import { type ReactNode, type WheelEvent, useEffect, useRef } from "react";
 import { apiUrl } from "../api/client";
 import { DrawnImage } from "../hob/DrawnImage";
 import { wheelUnit } from "./canvas";
@@ -88,67 +88,41 @@ export function InitiativeStrip({
   const standing = combatants
     .filter((combatant) => combatant.kind === "npc")
     .filter((combatant) => hpOf(combatant) > 0).length;
-
-  const scroller = useRef<HTMLOListElement>(null);
-  const activeId = run.activeCombatantId;
-  useEffect(() => {
-    if (activeId === null) return;
-    const chip = scroller.current?.querySelector<HTMLElement>(`[data-combatant="${activeId}"]`);
-    if (chip) reveal(chip);
-  }, [activeId]);
-
-  // A mouse wheel has no sideways axis, and on the canvas nothing scrolls
-  // down under it: the wheel walks the strip along instead.
-  const walk = (event: WheelEvent<HTMLOListElement>) => {
-    const strip = event.currentTarget;
-    if (!floating || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    if (strip.scrollWidth <= strip.clientWidth) return;
-    strip.scrollLeft += event.deltaY * wheelUnit(event);
-  };
+  const rows = combatants.map((combatant): StripRow => {
+    const hp = hpOf(combatant);
+    return {
+      id: combatant.id,
+      displayName: combatant.displayName,
+      initiative: combatant.initiative,
+      party: combatant.kind === "pc",
+      health: { hp, max: combatant.hpMax },
+      ac: combatant.ac,
+      conditions: combatant.conditions,
+      portrait:
+        combatant.kind === "pc" && combatant.portrait !== null
+          ? combatant.portrait.thumbUrl
+          : undefined,
+      out: outOfTheFight(combatant, hp),
+      hidden: shared && combatant.visibility === "dm",
+      unplaced: board && combatant.position === null,
+    };
+  });
+  const byId = new Map(combatants.map((combatant) => [combatant.id, combatant]));
 
   return (
-    <section
-      aria-label="Initiative"
-      data-slot="initiative-strip"
-      className="flex min-w-0 items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3"
+    <StripFrame
+      round={run.round}
+      rows={rows}
+      labels={labels}
+      activeId={run.activeCombatantId}
+      selectedId={selectedId}
+      floating={floating}
+      empty="Nobody is in the order. Add whoever is at the table, or end the fight and start one with a roster."
+      onSelect={(row) => {
+        const combatant = byId.get(row.id);
+        if (combatant !== undefined) onSelect(combatant);
+      }}
     >
-      <div
-        data-slot="initiative-round"
-        className="flex h-13 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-hairline bg-surface-sunken"
-      >
-        <span className="text-caption leading-none text-muted-foreground">Round</span>
-        <span className="text-title leading-none font-semibold text-heading">{run.round}</span>
-      </div>
-
-      {combatants.length === 0 ? (
-        <p className="mb-0 min-w-0 flex-1 text-body-s leading-snug text-muted-foreground">
-          Nobody is in the order. Add whoever is at the table, or end the fight and start one with a
-          roster.
-        </p>
-      ) : (
-        <ol
-          ref={scroller}
-          aria-label="Initiative order"
-          onWheel={walk}
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
-        >
-          {combatants.map((combatant) => (
-            <li key={combatant.id} className="flex min-w-38 max-w-44 flex-1 basis-0">
-              <StripChip
-                combatant={combatant}
-                label={labels.get(combatant.id) ?? "?"}
-                hp={hpOf(combatant)}
-                active={combatant.id === activeId}
-                selected={combatant.id === selectedId}
-                hidden={shared && combatant.visibility === "dm"}
-                unplaced={board && combatant.position === null}
-                onSelect={() => onSelect(combatant)}
-              />
-            </li>
-          ))}
-        </ol>
-      )}
-
       <div className="flex shrink-0 items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger
@@ -195,40 +169,148 @@ export function InitiativeStrip({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </StripFrame>
+  );
+}
+
+/**
+ * A row of the strip, whoever's strip it is: the DM's, from a `Combatant`, or a
+ * seated player's, from a row of their order (`play/PlayerStrip.tsx`). Each
+ * caller says only what its reader may know — a player's strip has a band for
+ * a creature's health and no armour class but their own.
+ */
+export interface StripRow {
+  readonly id: CombatantId;
+  readonly displayName: string;
+  readonly initiative: number | null;
+  /** The party's colour rather than everyone else's. */
+  readonly party: boolean;
+  /** Exact hit points, or the word a player is told for a creature's (`PlayerLiveHpBand`). */
+  readonly health:
+    | { readonly hp: number; readonly max: number }
+    | { readonly band: string; readonly down: boolean };
+  readonly ac: number | null;
+  readonly conditions: ReadonlyArray<string>;
+  readonly portrait: string | undefined;
+  /** Faded and struck through (`outOfTheFight`). */
+  readonly out: boolean;
+  /** Held back from players while they can see the fight: the DM's ring, dashed. */
+  readonly hidden: boolean;
+  /** On a fight with a board, and not on it. */
+  readonly unplaced: boolean;
+  /** Said in its accessible name after the name: `"you"`. */
+  readonly note?: string;
+}
+
+/**
+ * The strip itself: the round, boxed, then a chip per row in the order given,
+ * with whatever the caller adds at its end (the DM's *Add* and menu). Read-only
+ * but for selection, so a player's table draws the same strip as the DM's.
+ */
+export function StripFrame({
+  round,
+  rows,
+  labels,
+  activeId,
+  selectedId,
+  floating,
+  empty,
+  onSelect,
+  children,
+}: {
+  readonly round: number;
+  readonly rows: ReadonlyArray<StripRow>;
+  readonly labels: ReadonlyMap<CombatantId, string>;
+  readonly activeId: CombatantId | null;
+  readonly selectedId: CombatantId | undefined;
+  readonly floating: boolean;
+  /** What an empty order says. */
+  readonly empty: string;
+  readonly onSelect: (row: StripRow) => void;
+  readonly children?: ReactNode;
+}) {
+  const scroller = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (activeId === null) return;
+    const chip = scroller.current?.querySelector<HTMLElement>(`[data-combatant="${activeId}"]`);
+    if (chip) reveal(chip);
+  }, [activeId]);
+
+  // A mouse wheel has no sideways axis, and on the canvas nothing scrolls
+  // down under it: the wheel walks the strip along instead.
+  const walk = (event: WheelEvent<HTMLOListElement>) => {
+    const strip = event.currentTarget;
+    if (!floating || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    if (strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollLeft += event.deltaY * wheelUnit(event);
+  };
+
+  return (
+    <section
+      aria-label="Initiative"
+      data-slot="initiative-strip"
+      className="flex min-w-0 items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3"
+    >
+      <div
+        data-slot="initiative-round"
+        className="flex h-13 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-hairline bg-surface-sunken"
+      >
+        <span className="text-caption leading-none text-muted-foreground">Round</span>
+        <span className="text-title leading-none font-semibold text-heading">{round}</span>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="mb-0 min-w-0 flex-1 text-body-s leading-snug text-muted-foreground">
+          {empty}
+        </p>
+      ) : (
+        <ol
+          ref={scroller}
+          aria-label="Initiative order"
+          onWheel={walk}
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
+        >
+          {rows.map((row) => (
+            <li key={row.id} className="flex min-w-38 max-w-44 flex-1 basis-0">
+              <StripChip
+                row={row}
+                label={labels.get(row.id) ?? "?"}
+                active={row.id === activeId}
+                selected={row.id === selectedId}
+                onSelect={() => onSelect(row)}
+              />
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {children}
     </section>
   );
 }
 
 function StripChip({
-  combatant,
+  row,
   label,
-  hp,
   active,
   selected,
-  hidden,
-  unplaced,
   onSelect,
 }: {
-  readonly combatant: Combatant;
+  readonly row: StripRow;
   readonly label: string;
-  readonly hp: number;
   readonly active: boolean;
   readonly selected: boolean;
-  /** Held back from players while they can see the fight. */
-  readonly hidden: boolean;
-  /** On a fight with a board, and not on it. */
-  readonly unplaced: boolean;
   readonly onSelect: () => void;
 }) {
-  const out = outOfTheFight(combatant, hp);
-  const party = combatant.kind === "pc";
-  const max = combatant.hpMax;
+  const { out, hidden, unplaced, health } = row;
+  const exact = "hp" in health;
+  const down = exact ? health.hp === 0 : health.down;
   const name = [
-    combatant.displayName,
-    `initiative ${combatant.initiative === null ? "not rolled" : String(combatant.initiative)}`,
-    `${String(hp)} of ${String(max)} hit points`,
-    combatant.ac === null ? undefined : `AC ${String(combatant.ac)}`,
-    combatant.conditions.length === 0 ? undefined : combatant.conditions.join(", "),
+    `${row.displayName}${row.note === undefined ? "" : ` (${row.note})`}`,
+    `initiative ${row.initiative === null ? "not rolled" : String(row.initiative)}`,
+    exact ? `${String(health.hp)} of ${String(health.max)} hit points` : health.band.toLowerCase(),
+    row.ac === null ? undefined : `AC ${String(row.ac)}`,
+    row.conditions.length === 0 ? undefined : row.conditions.join(", "),
     active ? "up now" : undefined,
     out ? "out of the fight" : undefined,
     hidden ? "hidden from players" : undefined,
@@ -240,7 +322,7 @@ function StripChip({
   const chip = (
     <button
       type="button"
-      data-combatant={combatant.id}
+      data-combatant={row.id}
       aria-label={name}
       aria-pressed={selected}
       aria-current={active ? "step" : undefined}
@@ -264,23 +346,23 @@ function StripChip({
           active ? "text-accent-ink" : "text-muted-foreground",
         )}
       >
-        {combatant.initiative ?? "—"}
+        {row.initiative ?? "—"}
       </span>
       <span className="flex shrink-0 flex-col items-center gap-0.5">
         <StripDisc
           label={label}
-          party={party}
+          party={row.party}
           hidden={hidden}
-          conditions={combatant.conditions.length}
-          portrait={party && combatant.portrait !== null ? combatant.portrait.thumbUrl : undefined}
+          conditions={row.conditions.length}
+          portrait={row.portrait}
         />
-        {combatant.ac !== null && (
+        {row.ac !== null && (
           <span
             aria-hidden="true"
             data-slot="strip-ac"
             className="text-micro leading-none whitespace-nowrap text-muted-foreground"
           >
-            AC {combatant.ac}
+            AC {row.ac}
           </span>
         )}
       </span>
@@ -293,7 +375,7 @@ function StripChip({
               out && "line-through",
             )}
           >
-            {combatant.displayName}
+            {row.displayName}
           </span>
           {unplaced && (
             <Icon
@@ -304,17 +386,34 @@ function StripChip({
             />
           )}
         </span>
-        <span className="flex items-center gap-1.5">
-          <HpBar fraction={max <= 0 ? 0 : hp / max} className="h-1 min-w-0 flex-1" />
+        {exact ? (
+          <span className="flex items-center gap-1.5">
+            <HpBar
+              fraction={health.max <= 0 ? 0 : health.hp / health.max}
+              className="h-1 min-w-0 flex-1"
+            />
+            <span
+              className={cn(
+                "font-mono text-micro leading-none whitespace-nowrap",
+                down ? "text-danger" : "text-muted-foreground",
+              )}
+            >
+              {health.hp}/{health.max}
+            </span>
+          </span>
+        ) : (
+          // A player is told a creature's band, never a number, so no bar
+          // pretends to a fraction the table does not have.
           <span
+            data-slot="strip-band"
             className={cn(
-              "font-mono text-micro leading-none whitespace-nowrap",
-              hp === 0 ? "text-danger" : "text-muted-foreground",
+              "text-micro leading-none whitespace-nowrap",
+              down ? "text-danger" : "text-muted-foreground",
             )}
           >
-            {hp}/{max}
+            {health.band}
           </span>
-        </span>
+        )}
       </span>
     </button>
   );
@@ -324,7 +423,7 @@ function StripChip({
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipContent>{[combatant.displayName, ...combatant.conditions].join(", ")}</TooltipContent>
+      <TooltipContent>{[row.displayName, ...row.conditions].join(", ")}</TooltipContent>
     </Tooltip>
   );
 }
