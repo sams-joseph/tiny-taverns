@@ -506,8 +506,8 @@ describeLayer("turn-economy", shared, (it) => {
     );
   });
 
-  describe("the creator's alone", () => {
-    it.effect("reaches no player's table or recap", () =>
+  describe("the creator's, and each player's own row", () => {
+    it.effect("reaches a player's table only on their own row, and no recap", () =>
       Effect.gen(function* () {
         const { jo, ilse, table } = yield* Fixture;
         const session = yield* night;
@@ -530,8 +530,19 @@ describeLayer("turn-economy", shared, (it) => {
         expect(tableRead.status).toBe(200);
         // The rows are there, so the absence is the narrowing and not an empty fight.
         expect(tableRead.body).toContain('"Tamsin"');
-        for (const key of ["actionUsed", "bonusUsed", "reactionUsed", "feetMoved"]) {
-          expect(tableRead.body).not.toContain(key);
+        const order = (
+          JSON.parse(tableRead.body) as { fight: { order: Array<Record<string, unknown>> } }
+        ).fight.order;
+        // Ilse's own Tamsin carries her turn (`PlayerTable.turn` writes it);
+        // nobody else's row does.
+        expect(order.find((row) => row["kind"] === "you")).toMatchObject({
+          actionUsed: true,
+          feetMoved: 15,
+        });
+        for (const row of order.filter((row) => row["kind"] !== "you")) {
+          for (const key of ["actionUsed", "bonusUsed", "reactionUsed", "feetMoved"]) {
+            expect(Object.keys(row)).not.toContain(key);
+          }
         }
 
         yield* endNight(session);

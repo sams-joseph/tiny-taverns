@@ -1266,7 +1266,7 @@ export const ownSeatedCombatant = (
 /**
  * Over `combatant` in scope: its character sits in an active seat this account
  * holds at this campaign — the seat test half of `ownSeatedCombatant`, and the
- * one fog never hides from (`liveTables.ts`' `hiddenByFog`). It grants no
+ * one whose token fog never hides (`liveTables.ts`' `tokenShownTo`). It grants no
  * reach on its own: a caller composes it under a row predicate or uses it to
  * keep a row the predicate already allowed.
  */
@@ -1280,6 +1280,26 @@ export const seatedByActor = (
                 and campaign_character.character_id = combatant.character_id
                 and campaign_character.account_id = ${actor.accountId}
                 and campaign_character.left_at is null)`;
+
+/**
+ * Over `combatant` in scope: its character sits in an active seat at this
+ * campaign that this reader may see — a shared seat, or one this account
+ * holds. The seat test the player's live order reads a party row through
+ * (`repo/PlayerTable.ts`' `seated` join), spelled once for the fog rule
+ * (`liveTables.ts`' `hiddenByFog`), which keeps such a row under fog. Like
+ * `seatedByActor` it grants no reach on its own.
+ */
+export const seatSeenByActor = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign_character
+              where campaign_character.campaign_id = ${campaignId}
+                and campaign_character.character_id = combatant.character_id
+                and campaign_character.left_at is null
+                and (campaign_character.visibility = 'shared'
+                  or campaign_character.account_id = ${actor.accountId}))`;
 
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (

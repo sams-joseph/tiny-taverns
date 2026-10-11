@@ -152,8 +152,9 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    * a reaction spent off-turn comes back at the start of its own turn, as the
    * SRD has it. `feetMoved` is counted by `move` while this combatant is up
    * and the fight is taking turns, under the campaign's `diagonalRule`, and
-   * reset by the server alone; the DM's ticks on the other three are
-   * `CombatantTurn`. The creator's alone: no player read carries any of it.
+   * reset by the server alone; the ticks on the other three are
+   * `CombatantTurn`. A player reads and writes them for their own row alone
+   * (`PlayerLiveCombatantYou`, `PlayerTable.turn` and `PlayerTable.move`).
    */
   actionUsed: Schema.Boolean,
   bonusUsed: Schema.Boolean,
@@ -292,7 +293,7 @@ export const CombatantMove = Schema.Struct({
 export type CombatantMove = typeof CombatantMove.Type;
 
 /**
- * The DM's ticks on a combatant's turn — *Action*, *Bonus*, *Reaction* — each
+ * Ticks on a combatant's turn — *Action*, *Bonus*, *Reaction* — each
  * an absolute value, so marking one used twice is the same as once and
  * unmarking is the same write. Feet moved is not here: only `move` counts it.
  *
@@ -300,7 +301,8 @@ export type CombatantMove = typeof CombatantMove.Type;
  * `CombatantMove` is: it is pressed over and over while the fight runs, so it
  * carries a `requestId`. Any combatant may be ticked, up or not, because a
  * reaction is spent on somebody else's turn. Only the start of a creature's
- * own turn clears it (`Combatant.actionUsed`).
+ * own turn clears it (`Combatant.actionUsed`). A player sends the same payload
+ * for their own row (`PlayerTable.turn`), which is narrower about when.
  */
 export const CombatantTurn = Schema.Struct({
   actionUsed: Schema.optional(Schema.Boolean),
@@ -342,3 +344,17 @@ export type InitiativeSet = typeof InitiativeSet.Type;
  */
 export const PlayerInitiative = Schema.Struct({ initiative });
 export type PlayerInitiative = typeof PlayerInitiative.Type;
+
+/**
+ * A player moving their own token, from their Table, on their own turn.
+ *
+ * `CombatantMove` narrowed: a square, never `null`, because putting a token on
+ * or taking it off the board is the DM's. The square is checked and the feet
+ * counted as the DM's move does (`repo/moves.ts`). See `PlayerTable.move` for
+ * when it is refused.
+ */
+export const PlayerMove = Schema.Struct({
+  position: CombatantPosition,
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type PlayerMove = typeof PlayerMove.Type;

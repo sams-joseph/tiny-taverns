@@ -19,9 +19,7 @@ import {
   deathSaveRolled,
   type DeathSavePayload,
   type DeathSaves,
-  type DiagonalRule,
   EncounterRunId,
-  feetBetween,
   type InitiativeSet,
   NotFound,
   type SessionId,
@@ -48,6 +46,7 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
+import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   type CharacterVitals,
@@ -970,39 +969,9 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
-                  // The fight as this move finds it: who is up, its board, and
-                  // the table's diagonal rule. The run is held `for share` so
-                  // the marker cannot move under the count; `nextTurn` waits.
-                  const fights = yield* sql<{
-                    readonly phase: "initiative" | "turns";
-                    readonly active_combatant_id: CombatantId | null;
-                    readonly diagonal_rule: DiagonalRule;
-                    readonly board_columns: number | null;
-                    readonly board_rows: number | null;
-                    readonly feet_per_cell: number | null;
-                  }>`
-                    select encounter_run.phase, encounter_run.active_combatant_id,
-                           campaign.diagonal_rule, encounter_run_board.board_columns,
-                           encounter_run_board.board_rows, encounter_run_board.feet_per_cell
-                    from encounter_run
-                    join session on session.id = encounter_run.session_id
-                    join campaign on campaign.id = session.campaign_id
-                    left join encounter_run_board on encounter_run_board.run_id = encounter_run.id
-                    where encounter_run.id = ${runId}
-                    for share of encounter_run
-                  `;
-                  // Proved writable above, in this transaction.
-                  const fight = fights[0]!;
-
+                  const fight = yield* fightForMove(sql, runId);
                   const to = payload.position;
-                  if (to !== null) {
-                    if (fight.board_columns === null || fight.board_rows === null) {
-                      return yield* new Conflict({ message: "this fight has no board" });
-                    }
-                    if (to.column >= fight.board_columns || to.row >= fight.board_rows) {
-                      return yield* new Conflict({ message: "that square is off the board" });
-                    }
-                  }
+                  if (to !== null) yield* ensureOnBoard(fight, to);
 
                   // Where it stood, locked for the rest of this transaction, so
                   // the log's `from` is the square this move actually left.
@@ -1018,18 +987,7 @@ export class Combatants extends Context.Service<
                   const from = before[0];
                   if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
 
-                  const feet =
-                    to !== null &&
-                    from.board_column !== null &&
-                    from.board_row !== null &&
-                    fight.feet_per_cell !== null &&
-                    fight.phase === "turns" &&
-                    fight.active_combatant_id === id
-                      ? feetBetween({ column: from.board_column, row: from.board_row }, to, {
-                          feetPerCell: fight.feet_per_cell,
-                          diagonals: fight.diagonal_rule,
-                        })
-                      : 0;
+                  const feet = feetWalked(fight, id, from, to);
 
                   const { tokenShown: shown, ...moved } = yield* place({
                     campaignId,

@@ -166,7 +166,8 @@ export class Rolls extends Context.Service<
       /**
        * Whether this reader may be told the roll's combatant in this column:
        * through the combatant's own predicate and, while its fight is live, not
-       * under fog (`liveTables.ts`' `hiddenByFog`), as the player's order reads it.
+       * hidden by fog (`liveTables.ts`' `hiddenByFog`: a creature under it, not
+       * an ally the reader may see), as the player's order reads it.
        */
       const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) => sql`
         exists (

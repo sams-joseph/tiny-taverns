@@ -199,28 +199,42 @@ describeLayer("rolls", services, (it) => {
       ...extra,
     });
 
-    /** A fight on the shared night: the party's Brannoc and a hidden Marsh Hag. */
-    const aFight = Effect.gen(function* () {
-      const f = yield* fixture;
-      const encounters = yield* Encounters;
-      const combatants = yield* Combatants;
-      const dm = yield* asDm(f.dm, f.campaign.id);
-      const encounter = yield* as(f.dm, encounters.create(f.campaign.id, { name: "Reeds" }));
-      const run = yield* aFightUnderWay(dm, f.sessionId, { encounterId: encounter.id });
-      yield* (yield* EncounterRuns).update(dm, f.sessionId, run.id, { visibility: "shared" });
-      const brannoc = yield* combatants.create(dm, f.sessionId, run.id, {
-        displayName: "Brannoc",
-        kind: "pc",
-        ac: 17,
-        visibility: "shared",
+    /**
+     * A fight on the shared night: the party's Brannoc and a hidden Marsh Hag,
+     * and, when asked, the other player's Wren in a shared seat, seated before
+     * the fight starts so the run seeds her row.
+     */
+    const aFightWith = (options: { readonly ally: boolean }) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const ally = options.ally
+          ? yield* aCharacterAt(
+              f.campaign.id,
+              f.other,
+              { name: "Wren" },
+              { seatVisibility: "shared" },
+            )
+          : null;
+        const encounters = yield* Encounters;
+        const combatants = yield* Combatants;
+        const dm = yield* asDm(f.dm, f.campaign.id);
+        const encounter = yield* as(f.dm, encounters.create(f.campaign.id, { name: "Reeds" }));
+        const run = yield* aFightUnderWay(dm, f.sessionId, { encounterId: encounter.id });
+        yield* (yield* EncounterRuns).update(dm, f.sessionId, run.id, { visibility: "shared" });
+        const brannoc = yield* combatants.create(dm, f.sessionId, run.id, {
+          displayName: "Brannoc",
+          kind: "pc",
+          ac: 17,
+          visibility: "shared",
+        });
+        const hag = yield* combatants.create(dm, f.sessionId, run.id, {
+          displayName: "Marsh Hag",
+          ac: 15,
+          visibility: "dm",
+        });
+        return { ...f, dmProof: dm, run, brannoc, hag, ally };
       });
-      const hag = yield* combatants.create(dm, f.sessionId, run.id, {
-        displayName: "Marsh Hag",
-        ac: 15,
-        visibility: "dm",
-      });
-      return { ...f, dmProof: dm, run, brannoc, hag };
-    });
+    const aFight = aFightWith({ ally: false });
 
     it.effect(
       "keeps a roll with no character to the creator on a shared night, in the list, by id and in ticks",
@@ -490,9 +504,9 @@ describeLayer("rolls", services, (it) => {
         }),
     );
 
-    it.effect("names a shared combatant under fog to the creator alone", () =>
+    it.effect("names a shared creature under fog to the creator alone, and an ally to all", () =>
       Effect.gen(function* () {
-        const f = yield* aFight;
+        const f = yield* aFightWith({ ally: true });
         const rolls = yield* Rolls;
         const combatants = yield* Combatants;
         const maps = yield* BattleMaps;
@@ -516,12 +530,36 @@ describeLayer("rolls", services, (it) => {
         const clear = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
         expect(clear).toMatchObject({ combatantId: goblin.id, targetCombatantId: goblin.id });
 
-        yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [square] });
+        // Wren, in the other player's shared seat, is an ally to this player.
+        const wren = (yield* combatants.list(f.dmProof, f.sessionId, f.run.id)).find(
+          (row) => row.characterId === f.ally!.character.id,
+        )!;
+        yield* combatants.update(f.dmProof, f.sessionId, f.run.id, wren.id, {
+          visibility: "shared",
+        });
+        const wrenSquare = { column: 5, row: 6 };
+        yield* combatants.move(f.dmProof, f.sessionId, f.run.id, wren.id, {
+          position: wrenSquare,
+        });
+        const atWren = yield* as(
+          f.dm,
+          rolls.create(f.campaign.id, {
+            ...payload(own.character.id),
+            kind: "attack",
+            targetCombatantId: wren.id,
+          }),
+        );
+
+        yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [square, wrenSquare] });
         const listed = yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}));
         const byId = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
         for (const read of [listed.find((row) => row.id === shot.id), byId]) {
           expect(read).toMatchObject({ combatantId: null, targetCombatantId: null });
         }
+        // Fog hides a creature; the party knows where its ally is in the order.
+        expect(listed.find((row) => row.id === atWren.id)).toMatchObject({
+          targetCombatantId: wren.id,
+        });
         const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
         expect(asCreator).toMatchObject({ combatantId: goblin.id, targetCombatantId: goblin.id });
       }),

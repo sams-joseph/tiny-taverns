@@ -251,9 +251,10 @@ describeLayer("player-initiative", shared, (it) => {
           if (row.kind === "you") continue;
           expect(Object.keys(row)).not.toContain("initiativeBonus");
           expect(Object.keys(row)).not.toContain("initiativeSetBy");
+          // The monster's bonus is a number from its stat block, like its AC,
+          // and an armour class reaches a player for their own row alone.
+          expect(Object.keys(row)).not.toContain("ac");
         }
-        // The monster's bonus is a number from its stat block, like its AC.
-        expect(JSON.stringify(answer)).not.toContain('"ac"');
       }),
     );
   });

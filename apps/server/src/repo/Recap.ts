@@ -308,7 +308,8 @@ export class Recap extends Context.Service<
        * different select list, and only a fight's — a conversation, a skill
        * challenge or a hazard had no initiative order at the table — less,
        * while the fight is live (`fightLive`, carried runs included), what
-       * stands under its fog, as at the table. Fog is a live-board tool: once
+       * fog hides at the table (`hiddenByFog`: a creature under it; an ally
+       * the reader may see keeps its row). Fog is a live-board tool: once
        * the fight's last run ends other than carried, its rows follow the
        * ordinary per-row rule alone.
        */

@@ -286,7 +286,10 @@ describeLayer("player-table", shared, (it) => {
         const text = JSON.stringify(answer);
 
         expect(npc).toMatchObject({ displayName: "Marsh Hag", hpBand: "bloodied" });
-        expect(text).not.toContain('"ac"');
+        // An armour class reaches a player for their own row alone.
+        for (const row of answer?.fight?.order ?? []) {
+          if (row.kind !== "you") expect(Object.keys(row)).not.toContain("ac");
+        }
         expect(text).not.toContain('"encounterName"');
         expect(numbersIn(answer)).not.toContain(fixture.hag.hpCurrent);
         expect(numbersIn(answer)).not.toContain(fixture.hag.hpMax);

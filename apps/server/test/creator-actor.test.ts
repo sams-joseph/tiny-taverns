@@ -522,8 +522,9 @@ describeLayer("creator-actor", shared, (it) => {
       // and a roster line its creature's numbers, which a player is not told
       // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
       // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
-      // Ninety-six is `Combatants.move`: a token's square is the DM's alone
-      // until the map is shared.
+      // Ninety-six is `Combatants.move`: the DM's move of any token, gated
+      // with the rest of the order. A player moves their own through
+      // `PlayerTable.move`, ungated below.
       // Ninety-seven is `EncounterRuns.escalate`, and ninety-eight to a hundred
       // and two are `RunScenes`' four and the run read they share: a running
       // scene is copied from the prep and its checks carry DCs a player is not
@@ -568,9 +569,9 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and thirty-three and thirty-four are `Combatants.setDeathSaves`
       // and `rollDeathSave`: the DM's dots and roll on the fight's row, gated
       // like every other write to the initiative list.
-      // A hundred and thirty-five is `Combatants.turn`: a turn's spending is
-      // the runner's, gated with the rest of the order from the day declared,
-      // and no player read selects it.
+      // A hundred and thirty-five is `Combatants.turn`: the DM's ticks on any
+      // row, gated with the rest of the order from the day declared. A player
+      // ticks their own through `PlayerTable.turn`, ungated below.
       // A hundred and thirty-six is `BattleMaps.updateFog`: a fight's fog of
       // war is written on the board `forRun` reads, the creator's alone, and a
       // player sees only its squares, on `PlayerLiveBoard`.
@@ -880,7 +881,12 @@ describeLayer("creator-actor", shared, (it) => {
       // through `OWNED_SUBJECT`, the statement a draw uses, whose campaign arms
       // are already the creator predicate and whose character arm is in no
       // campaign; a ticket is reached only by the account that took it.
-      expect(ungated).toBe(188);
+      // A hundred and eighty-nine and ninety are `PlayerTable.move` and
+      // `turn`, a player's own token and own turn's ticks, for
+      // `PlayerTable.setInitiative`'s reason: each reaches exactly the row
+      // `ownSeatedCombatant` allows, and the DM, who holds no seat, writes
+      // through the gated `Combatants` instead.
+      expect(ungated).toBe(190);
     });
   });
 });

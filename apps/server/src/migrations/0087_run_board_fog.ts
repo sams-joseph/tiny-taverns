@@ -27,8 +27,9 @@ import { SqlClient } from "effect/sql";
  * ### What fog hides, and from whom
  *
  * A player's table drops the token and the initiative row of a creature
- * standing under fog, except the player's own character; that rule is
- * `liveTables.ts`' `hiddenByFog`. The DM sees everything.
+ * standing under fog; an ally under fog keeps its row but not its token, and
+ * the player's own token always shows. The rule is `liveTables.ts`'
+ * `hiddenByFog` and `tokenShownTo`. The DM sees everything.
  *
  * ### `board-fog-updated`
  *

@@ -38,7 +38,7 @@ import { Ruler } from "./RunTokens";
 /** The dock's tools, one at a time. Fog's brush is `Fog.tsx`'s. */
 export type BoardTool = "move" | "measure" | "area" | "fog";
 
-type DrawnBoard = BattleMapBoard & {
+export type DrawnBoard = BattleMapBoard & {
   readonly image: BattleMapImages | null;
   readonly feetPerCell: number;
 };

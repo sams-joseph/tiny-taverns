@@ -81,7 +81,7 @@ const RUNNER_CONDITIONS = [
 /** `Combatant.ts`'s `Condition`: one to forty characters. */
 const MAX_CONDITION_LENGTH = 40;
 
-function Tile({
+export function Tile({
   label,
   value,
   danger = false,
@@ -106,7 +106,13 @@ function Tile({
 }
 
 /** A section's heading, with what it counts at the far end when it counts something. */
-function SectionTitle({ title, aside }: { readonly title: string; readonly aside?: string }) {
+export function SectionTitle({
+  title,
+  aside,
+}: {
+  readonly title: string;
+  readonly aside?: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-2">
       <SectionHeading as="h3" className="text-label leading-none font-semibold">
@@ -124,20 +130,30 @@ function SectionTitle({ title, aside }: { readonly title: string; readonly aside
  * its seat lets this reader see one) in a ring the side's colour, dashed while
  * the row is hidden from players — the strip's and the board's ring.
  */
-function Disc({ combatant, label }: { readonly combatant: Combatant; readonly label: string }) {
-  const portrait = combatant.kind === "pc" ? combatant.portrait : null;
+export function Disc({
+  label,
+  party,
+  hidden,
+  portrait,
+}: {
+  readonly label: string;
+  readonly party: boolean;
+  readonly hidden: boolean;
+  /** A character's portrait thumbnail, when this reader may see one. */
+  readonly portrait: string | undefined;
+}) {
   return (
     <span
       aria-hidden="true"
       className={cn(
         "relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-surface-raised font-sans text-body-s leading-none font-semibold text-heading",
-        combatant.kind === "pc" ? "border-info" : "border-danger",
-        combatant.visibility === "dm" && "border-dashed",
+        party ? "border-info" : "border-danger",
+        hidden && "border-dashed",
       )}
     >
       {label}
       <DrawnImage
-        src={portrait === null ? undefined : apiUrl(portrait.thumbUrl)}
+        src={portrait === undefined ? undefined : apiUrl(portrait)}
         className="object-top"
       />
     </span>
@@ -262,24 +278,25 @@ function SaveDots({
  * is nothing left to roll for. A stable character hit again starts dying
  * again — the server's rule, which the row it answers with carries here.
  */
-function DeathSaveBlock({
-  combatant,
+export function DeathSaveBlock({
+  name,
   saves,
   disabled,
   onSet,
   onRoll,
 }: {
-  readonly combatant: Combatant;
+  readonly name: string;
   readonly saves: DeathSaves;
   readonly disabled: boolean;
-  readonly onSet: (saves: DeathSaves) => void;
-  readonly onRoll: () => void;
+  /** Absent where they are only read: an ally's, on a player's table. */
+  readonly onSet?: (saves: DeathSaves) => void;
+  readonly onRoll?: () => void;
 }) {
   const status = STATUS[deathStatusOf(saves)];
   const settled = saves.successes >= 3 || saves.failures >= 3;
   return (
     <section
-      aria-label={`Death saves of ${combatant.displayName}`}
+      aria-label={`Death saves of ${name}`}
       className="-mx-panel flex flex-col gap-2.5 border-t border-hairline bg-danger/6 px-panel py-3.5"
     >
       <div className="flex items-center justify-between gap-2">
@@ -294,20 +311,22 @@ function DeathSaveBlock({
         <SaveDots
           kind="Success"
           count={saves.successes}
-          disabled={disabled}
-          onSet={(successes) => onSet({ ...saves, successes })}
+          disabled={disabled || onSet === undefined}
+          onSet={(successes) => onSet?.({ ...saves, successes })}
         />
         <SaveDots
           kind="Fail"
           count={saves.failures}
-          disabled={disabled}
-          onSet={(failures) => onSet({ ...saves, failures })}
+          disabled={disabled || onSet === undefined}
+          onSet={(failures) => onSet?.({ ...saves, failures })}
         />
       </div>
-      <Button variant="outline" size="sm" disabled={disabled || settled} onClick={onRoll}>
-        <Icon name="dice-5" size={14} />
-        Roll death save
-      </Button>
+      {onRoll !== undefined && (
+        <Button variant="outline" size="sm" disabled={disabled || settled} onClick={onRoll}>
+          <Icon name="dice-5" size={14} />
+          Roll death save
+        </Button>
+      )}
     </section>
   );
 }
@@ -325,15 +344,21 @@ const TURN_TICKS = [
  * against its speed, red past it. The server counts the feet and clears all
  * four when the marker moves on (`run/turn.ts`); the toggles are the DM's.
  */
-function ThisTurn({
+export function ThisTurn({
   combatant,
   speed,
   disabled,
+  locked,
   onTick,
 }: {
-  readonly combatant: Combatant;
+  readonly combatant: Pick<
+    Combatant,
+    "displayName" | "actionUsed" | "bonusUsed" | "reactionUsed" | "feetMoved"
+  >;
   readonly speed: number | undefined;
   readonly disabled: boolean;
+  /** Ticks this reader may not press now: a player's action off their own turn. */
+  readonly locked?: ReadonlySet<keyof TurnTicks>;
   readonly onTick: (ticks: TurnTicks) => void;
 }) {
   const moved = combatant.feetMoved;
@@ -357,7 +382,7 @@ function ThisTurn({
             size="sm"
             className="flex-1 data-pressed:line-through"
             pressed={combatant[key]}
-            disabled={disabled}
+            disabled={disabled || locked?.has(key) === true}
             onPressedChange={(used) => onTick({ [key]: used })}
           >
             {label}
@@ -405,8 +430,8 @@ function ThisTurn({
  * and the damage together, with no target. *Attack* is `outline` so that *Next
  * turn* stays the screen's one peach.
  */
-function Actions({
-  combatant,
+export function Actions({
+  name,
   actions,
   active,
   disabled,
@@ -414,7 +439,7 @@ function Actions({
   onAttack,
   onRoll,
 }: {
-  readonly combatant: Combatant;
+  readonly name: string;
   readonly actions: ReadonlyArray<ActionLine>;
   readonly active: boolean;
   readonly disabled: boolean;
@@ -425,7 +450,7 @@ function Actions({
   readonly onRoll: ((action: ActionLine) => void) | undefined;
 }) {
   return (
-    <section aria-label={`Actions of ${combatant.displayName}`} className="flex flex-col gap-2">
+    <section aria-label={`Actions of ${name}`} className="flex flex-col gap-2">
       <SectionTitle title="Actions" />
       <ul className="flex flex-col">
         {actions.map((action) => (
@@ -735,7 +760,16 @@ export function CombatantPanel({
   return (
     <Card role="region" aria-label="Selected combatant">
       <div className="flex items-start gap-3 border-b border-hairline p-panel">
-        <Disc combatant={combatant} label={label} />
+        <Disc
+          label={label}
+          party={combatant.kind === "pc"}
+          hidden={combatant.visibility === "dm"}
+          portrait={
+            combatant.kind === "pc" && combatant.portrait !== null
+              ? combatant.portrait.thumbUrl
+              : undefined
+          }
+        />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <SectionHeading as="h2" size="display" className="min-w-0 truncate font-semibold">
@@ -804,7 +838,7 @@ export function CombatantPanel({
             off zero clears them (the server's rule). An NPC has none. */}
         {combatant.deathSaves !== null && hp === 0 && (
           <DeathSaveBlock
-            combatant={combatant}
+            name={combatant.displayName}
             saves={combatant.deathSaves}
             disabled={disabled || deathSavesBusy}
             onSet={onDeathSaves}
@@ -827,7 +861,7 @@ export function CombatantPanel({
         {actions.length > 0 && (
           <div className="border-t border-hairline pt-3.5">
             <Actions
-              combatant={combatant}
+              name={combatant.displayName}
               actions={actions}
               active={active}
               disabled={disabled}

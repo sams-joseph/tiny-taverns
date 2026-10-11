@@ -151,6 +151,11 @@ describe("PlayerTableScreen", () => {
             hpCurrent: 44,
             hpMax: 52,
             tempHp: 3,
+            ac: 18,
+            actionUsed: false,
+            bonusUsed: false,
+            reactionUsed: false,
+            feetMoved: 0,
             conditions: ["Blessed"],
             deathSaves: { successes: 0, failures: 0 },
             portrait: null,
@@ -184,12 +189,26 @@ describe("PlayerTableScreen", () => {
 
     await renderTable();
 
-    await screen.findByText("Initiative");
-    expect(screen.getByText("Brannoc Duskharrow")).toBeTruthy();
-    expect(screen.getByText("44/52 hp · 3 temp")).toBeTruthy();
-    expect(screen.getByText("Nessa")).toBeTruthy();
-    expect(screen.getByText("Marsh Hag")).toBeTruthy();
-    expect(screen.getByText("Medium Fey · Bloodied")).toBeTruthy();
+    const strip = within(await screen.findByRole("region", { name: "Initiative" }));
+    // Your own chip: your numbers and your armour class.
+    expect(
+      strip.getByRole("button", {
+        name: "Brannoc Duskharrow (you), initiative 16, 44 of 52 hit points, AC 18, Blessed",
+      }),
+    ).toBeInTheDocument();
+    // An ally's numbers, and no armour class.
+    expect(
+      strip.getByRole("button", { name: "Nessa, initiative 14, 30 of 34 hit points" }),
+    ).toBeInTheDocument();
+    // A creature's band, never a number.
+    expect(
+      strip.getByRole("button", { name: "Marsh Hag, initiative 12, bloodied, Frightened" }),
+    ).toBeInTheDocument();
+    expect(strip.getByText("Bloodied")).toBeInTheDocument();
+    // Your card opens on your own character.
+    const card = within(screen.getByRole("region", { name: "Your character" }));
+    expect(card.getByText("44/52")).toBeInTheDocument();
+    expect(card.getByText("3 temporary hit points.")).toBeInTheDocument();
     expect(screen.queryByText(/82/)).toBeNull();
     expect(screen.queryByText(/AC 17|17 AC/i)).toBeNull();
   });
@@ -197,7 +216,7 @@ describe("PlayerTableScreen", () => {
   it("shows no map until the DM shares one, and asks for no board of its own", async () => {
     server.routes.set(...playing(campaignId, {}));
     await renderTable();
-    await screen.findByText("Initiative");
+    await screen.findByRole("region", { name: "Initiative" });
     expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Map/ })).toBeNull();
     expect(
@@ -221,15 +240,16 @@ describe("PlayerTableScreen", () => {
 
     // A token for each row the table put down, on its square; Nessa is in the
     // order but not on the board, so she has none.
-    const you = map.getByRole("img", { name: "Brannoc Duskharrow (you), column 6, row 5" });
+    const you = map.getByRole("button", { name: "Brannoc Duskharrow (you), column 6, row 5" });
     expect(you.style.left).toMatch(/^20\.8333/);
     expect(you.style.top).toBe("25%");
     expect(you).toHaveTextContent("BD");
-    expect(map.getByRole("img", { name: "Marsh Hag, column 12, row 7" })).toHaveTextContent("MH");
-    expect(map.queryByRole("img", { name: /^Nessa/ })).toBeNull();
+    expect(map.getByRole("button", { name: "Marsh Hag, column 12, row 7" })).toHaveTextContent(
+      "MH",
+    );
+    expect(map.queryByRole("button", { name: /^Nessa/ })).toBeNull();
 
-    // Read-only: nothing on the map to press, and nothing more to fetch.
-    expect(map.queryAllByRole("button")).toEqual([]);
+    // A token selects; nothing is written by looking, and nothing more is fetched.
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
     expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(false);
   });
@@ -246,11 +266,11 @@ describe("PlayerTableScreen", () => {
     await renderTable();
 
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
-    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
     expect(you.querySelector("[data-slot=token-portrait] img")?.getAttribute("src")).toBe(
       apiUrl(drawnPortrait.thumbUrl),
     );
-    const hag = map.getByRole("img", { name: /^Marsh Hag/ });
+    const hag = map.getByRole("button", { name: /^Marsh Hag/ });
     expect(hag.querySelector("[data-slot=token-portrait]")).toBeNull();
     expect(hag).toHaveTextContent("MH");
   });
@@ -282,13 +302,13 @@ describe("PlayerTableScreen", () => {
     expect(cover?.getAttribute("class")).toBe("fill-surface-sunken");
     expect(cover?.getAttribute("d")).toBe("M320 256h64v64h-64zM384 256h64v64h-64z");
     // Over the picture and the grid, under the player's own token.
-    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
     expect(fog!.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
       document.querySelector("[data-slot=battle-map-grid]")!.compareDocumentPosition(fog!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(map.queryByRole("img", { name: /^Marsh Hag/ })).toBeNull();
+    expect(map.queryByRole("button", { name: /^Marsh Hag/ })).toBeNull();
   });
 
   it("draws no fog over a clear board", async () => {
@@ -309,13 +329,13 @@ describe("PlayerTableScreen", () => {
     await renderTable();
 
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
-    const hag = map.getByRole("img", { name: /^Marsh Hag/ });
+    const hag = map.getByRole("button", { name: /^Marsh Hag/ });
     expect(hag.className).toMatch(/opacity-45/);
-    expect(map.getByRole("img", { name: /^Brannoc/ }).className).not.toMatch(/opacity-/);
+    expect(map.getByRole("button", { name: /^Brannoc/ }).className).not.toMatch(/opacity-/);
     // The turn's ring is on the hag's face, and on nobody else's.
     expect(hag.querySelector("[data-ring=active]")).not.toBeNull();
     expect(
-      map.getByRole("img", { name: /^Brannoc/ }).querySelector("[data-ring=active]"),
+      map.getByRole("button", { name: /^Brannoc/ }).querySelector("[data-ring=active]"),
     ).toBeNull();
   });
 
@@ -333,7 +353,7 @@ describe("PlayerTableScreen", () => {
     expect(tokens.map((token) => token.getAttribute("aria-label"))).toEqual([
       "Brannoc Duskharrow (you), column 6, row 5",
     ]);
-    expect(map.queryByRole("img", { name: /^Marsh Hag/ })).toBeNull();
+    expect(map.queryByRole("button", { name: /^Marsh Hag/ })).toBeNull();
   });
 
   it("draws the area the DM pinned under the tokens, and names nobody it catches", async () => {
@@ -349,7 +369,7 @@ describe("PlayerTableScreen", () => {
     expect(area.querySelector("[data-square='5,4']")).not.toBeNull();
     expect(area.querySelector("[data-square='7,4']")).not.toBeNull();
     expect(area.querySelector("[data-square='8,4']")).toBeNull();
-    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
     expect(area.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Who it catches is the DM's banner, over creatures this player may not see.
     expect(screen.queryByText(/caught/)).toBeNull();
@@ -359,7 +379,7 @@ describe("PlayerTableScreen", () => {
     server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
     await renderTable();
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
-    expect(map.getByRole("img", { name: /^Brannoc Duskharrow/ })).toBeInTheDocument();
+    expect(map.getByRole("button", { name: /^Brannoc Duskharrow/ })).toBeInTheDocument();
     expect(map.queryByRole("img", { name: /^Pinned/ })).toBeNull();
   });
 
@@ -381,6 +401,11 @@ describe("PlayerTableScreen", () => {
             hpCurrent: 44,
             hpMax: 52,
             tempHp: 0,
+            ac: 18,
+            actionUsed: false,
+            bonusUsed: false,
+            reactionUsed: false,
+            feetMoved: 0,
             conditions: [],
             deathSaves: { successes: 0, failures: 0 },
             portrait: null,
@@ -406,11 +431,14 @@ describe("PlayerTableScreen", () => {
     await renderTable();
     await screen.findByText("Nessa");
 
-    const rowOf = (name: string) => screen.getByText(name).closest(".min-h-row")!;
-    expect(rowOf("Nessa").querySelector("img")?.getAttribute("src")).toBe(
-      apiUrl(drawnPortrait.thumbUrl),
-    );
-    expect(rowOf("Brannoc Duskharrow").querySelector("img")).toBeNull();
+    const strip = within(screen.getByRole("region", { name: "Initiative" }));
+    const chipOf = (name: RegExp) => strip.getByRole("button", { name });
+    expect(
+      chipOf(/^Nessa/)
+        .querySelector("img")
+        ?.getAttribute("src"),
+    ).toBe(apiUrl(drawnPortrait.thumbUrl));
+    expect(chipOf(/^Brannoc Duskharrow/).querySelector("img")).toBeNull();
   });
 
   it("persists a browser-submitted roll and shows only this character's log", async () => {
@@ -426,19 +454,37 @@ describe("PlayerTableScreen", () => {
     await screen.findByText("Your rolls");
     expect(screen.getAllByText("Halberd").length).toBeGreaterThan(0);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Halberd/ }));
+    await user.click(screen.getByRole("button", { name: "Roll Halberd" }));
 
+    // The to-hit and the damage, as one act, under your character and naming
+    // no combatant: the table never tells a player a creature's armour class.
     await waitFor(() => {
-      const call = server.calls.find(
-        (entry) => entry.method === "POST" && entry.pathname === `/campaigns/${campaignId}/rolls`,
-      );
-      expect(call).toBeDefined();
-      const body = JSON.parse(call!.body) as Record<string, unknown>;
-      expect(body.characterId).toBe(brannocId);
-      expect(body.label).toBe("Halberd");
-      expect(body.notation).toBe("1d10+4");
-      expect(body.dice).toEqual([6]);
-      expect(body.total).toBe(10);
+      const bodies = server.calls
+        .filter(
+          (entry) => entry.method === "POST" && entry.pathname === `/campaigns/${campaignId}/rolls`,
+        )
+        .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+      expect(bodies).toHaveLength(2);
+      expect(bodies[0]).toMatchObject({
+        characterId: brannocId,
+        label: "Brannoc Duskharrow · Halberd",
+        kind: "attack",
+        notation: "1d20+7",
+        dice: [11],
+        total: 18,
+      });
+      expect(bodies[1]).toMatchObject({
+        characterId: brannocId,
+        label: "Brannoc Duskharrow · Halberd",
+        kind: "damage",
+        notation: "1d10+4",
+        dice: [6],
+        total: 10,
+      });
+      for (const body of bodies) {
+        expect(Object.keys(body)).not.toContain("combatantId");
+        expect(Object.keys(body)).not.toContain("targetCombatantId");
+      }
     });
   });
 
@@ -459,9 +505,9 @@ describe("PlayerTableScreen", () => {
     // of it — no round, no initiative, no DC.
     expect(screen.getByText("A skill challenge")).toBeInTheDocument();
     expect(screen.getByText("Session 12 · a skill challenge")).toBeInTheDocument();
-    expect(screen.queryByText("Initiative")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Initiative" })).toBeNull();
     expect(screen.queryByText(/round \d|DC/)).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: /Halberd/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Roll Halberd" }));
     await waitFor(() => {
       const call = server.calls.find(
         (entry) => entry.method === "POST" && entry.pathname === `/campaigns/${campaignId}/rolls`,
@@ -480,7 +526,7 @@ describe("PlayerTableScreen", () => {
 
     expect(await screen.findByText(name)).toBeInTheDocument();
     expect(screen.getByText(asked)).toBeInTheDocument();
-    expect(screen.queryByText("Initiative")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Initiative" })).toBeNull();
   });
 
   it("re-reads the narrow table when a contentless stream tick arrives", async () => {
@@ -651,6 +697,11 @@ describe("rolling initiative at your table", () => {
     hpCurrent: 44,
     hpMax: 52,
     tempHp: 0,
+    ac: 18,
+    actionUsed: false,
+    bonusUsed: false,
+    reactionUsed: false,
+    feetMoved: 0,
     conditions: [],
     deathSaves: { successes: 0, failures: 0 },
     portrait: null,
@@ -687,8 +738,9 @@ describe("rolling initiative at your table", () => {
     const card = within(
       (await screen.findByText("Your initiative")).closest("[data-slot=card]") as HTMLElement,
     );
-    expect(screen.getByText(/Rolling initiative\. The first round starts/)).toBeInTheDocument();
-    expect(screen.getAllByText("Initiative —")).toHaveLength(2);
+    expect(screen.getByText("Session 12 · rolling initiative")).toBeInTheDocument();
+    const strip = within(screen.getByRole("region", { name: "Initiative" }));
+    expect(strip.getAllByRole("button", { name: /initiative not rolled/ })).toHaveLength(2);
     const send = card.getByRole("button", { name: "Send" });
     expect(send).toBeDisabled();
 
@@ -753,7 +805,7 @@ describe("rolling initiative at your table", () => {
 
     await renderTable();
 
-    await screen.findByText("Initiative");
+    await screen.findByRole("region", { name: "Initiative" });
     expect(screen.queryByText("Your initiative")).toBeNull();
   });
 });
@@ -889,5 +941,123 @@ describe("the turn banner", () => {
     await screen.findByText(/Session 12/);
     expect(screen.queryByRole("status", { name: "Turn" })).toBeNull();
     expect(screen.queryByText(/'s turn$|^Something moves$/)).toBeNull();
+  });
+});
+
+describe("your turn at the table", () => {
+  const ownRow = `/campaigns/${campaignId}/table/runs/${liveRunId}/combatants/${yourCombatantId}`;
+  const writes = (what: "turn" | "move") =>
+    server.calls
+      .filter((call) => call.method === "POST" && call.pathname === `${ownRow}/${what}`)
+      .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+  const offTurn = {
+    kind: "visible",
+    combatantId: hagCombatantId,
+    displayName: "Marsh Hag",
+  } as const;
+
+  beforeEach(() => {
+    server.routes.set(`POST ${ownRow}/turn`, { status: 204, body: null });
+    server.routes.set(`POST ${ownRow}/move`, { status: 204, body: null });
+  });
+
+  it("ticks your own action on your turn, with the DM's This turn block", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder }));
+    await renderTable();
+
+    const turn = within(
+      await screen.findByRole("region", { name: "This turn of Brannoc Duskharrow" }),
+    );
+    await userEvent.click(turn.getByRole("button", { name: "Action" }));
+    await waitFor(() => expect(writes("turn")).toHaveLength(1));
+    expect(writes("turn")[0]).toMatchObject({ actionUsed: true });
+    expect(typeof writes("turn")[0]!.requestId).toBe("string");
+  });
+
+  it("leaves only your reaction to tick off your turn", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, upNext: offTurn }));
+    await renderTable();
+
+    const turn = within(
+      await screen.findByRole("region", { name: "This turn of Brannoc Duskharrow" }),
+    );
+    expect(turn.getByRole("button", { name: "Action" })).toBeDisabled();
+    expect(turn.getByRole("button", { name: "Bonus" })).toBeDisabled();
+    await userEvent.click(turn.getByRole("button", { name: "Reaction" }));
+    await waitFor(() =>
+      expect(writes("turn")).toEqual([expect.objectContaining({ reactionUsed: true })]),
+    );
+  });
+
+  it("moves your own token on your turn, and nobody else's", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
+    you.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    await waitFor(() => expect(writes("move")).toHaveLength(1));
+    expect(writes("move")[0]).toMatchObject({ position: { column: 6, row: 4 } });
+
+    const hag = map.getByRole("button", { name: /^Marsh Hag/ });
+    hag.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(writes("move")).toHaveLength(1);
+  });
+
+  it("moves nothing off your turn", async () => {
+    server.routes.set(
+      ...playing(campaignId, { order: tableOrder, board: sharedBoard, upNext: offTurn }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(writes("move")).toEqual([]);
+  });
+
+  it("opens anyone else on the card with what the table says of them, and back to you", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder }));
+    await renderTable();
+
+    const strip = within(await screen.findByRole("region", { name: "Initiative" }));
+    await userEvent.click(strip.getByRole("button", { name: /^Marsh Hag/ }));
+    const card = within(screen.getByRole("region", { name: "Selected combatant" }));
+    expect(card.getByText("Marsh Hag")).toBeInTheDocument();
+    expect(card.getByText("Hostile")).toBeInTheDocument();
+    expect(card.getByText("Bloodied")).toBeInTheDocument();
+    expect(card.getByText("Frightened")).toBeInTheDocument();
+    // Nothing to press on somebody else but the way back.
+    expect(card.getAllByRole("button").map((button) => button.textContent)).toEqual(["You"]);
+
+    await userEvent.click(card.getByRole("button", { name: "You" }));
+    expect(screen.getByRole("region", { name: "Your character" })).toBeInTheDocument();
+  });
+
+  it("marks your own death saves at zero hit points", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.map((row) => (row.kind === "you" ? { ...row, hpCurrent: 0 } : row)),
+      }),
+    );
+    server.routes.set(`POST /me/characters/${brannocId}/death-saves`, {
+      status: 200,
+      body: { ...brannoc, deathSaves: { successes: 1, failures: 0 } },
+    });
+    await renderTable();
+
+    const saves = within(
+      await screen.findByRole("region", { name: "Death saves of Brannoc Duskharrow" }),
+    );
+    await userEvent.click(saves.getByRole("button", { name: "Success 1 of 3" }));
+    await waitFor(() => {
+      const call = server.calls.find(
+        (entry) =>
+          entry.method === "POST" && entry.pathname === `/me/characters/${brannocId}/death-saves`,
+      );
+      expect(JSON.parse(call!.body)).toMatchObject({ successes: 1, failures: 0 });
+    });
   });
 });
