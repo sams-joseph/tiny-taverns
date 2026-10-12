@@ -369,7 +369,7 @@ describeLayer(
           account: shown(accountToolkitOver(NO_VOCABULARY, WORLDS)),
           accountListing: shown(accountToolkitListing(NO_VOCABULARY, WORLDS)),
         }).toEqual({
-          creator: "fe65bd8eb0cbf6dbf3f2127f421fbd02f2537036c164aee940dd1c0cf389a1a3",
+          creator: "1e4bb3e8de7d942998fbf2c4194d28078d416cd4074facd86f20f2d5c37a65af",
           sharedWorld: "605ead7fad5f09d1fde9b8173e608ca83ea65132b673aa65c8055af9cc1072fa",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",

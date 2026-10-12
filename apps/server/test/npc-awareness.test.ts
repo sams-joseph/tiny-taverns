@@ -31,6 +31,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
+import { TableFight } from "../src/repo/TableFight.js";
 import { anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
@@ -66,6 +67,7 @@ const services = Layer.mergeAll(
   Acts.layer,
   PrepItems.layer,
   Spells.layer,
+  TableFight.unsigned,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npc_awareness")));
 
 const withActor =

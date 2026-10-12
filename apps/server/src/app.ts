@@ -91,6 +91,7 @@ import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 import { Spells } from "./repo/Spells.js";
+import { TableFight } from "./repo/TableFight.js";
 import * as FileSystemStorage from "./storage/FileSystemStorage.js";
 import { ObjectStorage, type StorageError } from "./storage/ObjectStorage.js";
 
@@ -212,6 +213,7 @@ export const assistantFromConfig: Layer.Layer<
   | SessionEvents
   | Sessions
   | Spells
+  | TableFight
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* hobApiUrl;
@@ -458,6 +460,7 @@ export const servicesOver = <E>(
     | SessionEvents
     | Sessions
     | Spells
+    | TableFight
   > = assistantFromConfig,
   npcAgent: Layer.Layer<
     NpcAgent,
@@ -596,8 +599,9 @@ export const servicesOver = <E>(
     // streaming handler subscribes to it — and `Layer` memoises by identity, so
     // all three share one `PubSub` rather than one each, which is the whole
     // point of a doorbell. A combatant carries its character's portrait, so it
-    // signs URLs too (`seatedPortraitColumn`).
-    Combatants.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
+    // signs URLs too (`seatedPortraitColumn`): `fresh`, for `Recap`'s reason,
+    // so the bare layer Hob's `TableFight.unsigned` reads through stays unsigned.
+    Layer.fresh(Combatants.layer).pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     Creatures.layer,
     // The DM gate the three live groups spend. It is a repository like any
     // other — one read of `campaign_member` through the shipped predicate —
@@ -612,8 +616,9 @@ export const servicesOver = <E>(
     // Every encounter's battle map: creator-only, every method behind the
     // `CampaignCreatorActor` proof. A read signs the picture's URLs, and only
     // the handlers hold this repository — no toolkit has a map tool. A fight's
-    // fog is a live write, so it rings the doorbell too.
-    BattleMaps.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
+    // fog is a live write, so it rings the doorbell too. `fresh`, as
+    // `Combatants` is: Hob's `TableFight` reads the bare board, unsigned.
+    Layer.fresh(BattleMaps.layer).pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // The conversation with Hob, as rows. An ordinary campaign-scoped
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.
@@ -817,6 +822,9 @@ export const servicesOver = <E>(
         // Each NPC's sheet: `getNpc` returns it and `proposeNpcSheet` checks it.
         NpcSheets.layer,
         HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
+        // The fight on the table, which `readFight` reads out, over the bare
+        // live repositories (`TableFight.unsigned` says why).
+        TableFight.unsigned,
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of
         // `proposeCharacter`, so the player's toolkit is built per request.

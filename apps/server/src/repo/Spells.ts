@@ -32,6 +32,7 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   orderClause,
   orderColumn,
@@ -46,6 +47,7 @@ import {
   libraryRowReadable,
   libraryRowWritable,
   ownCharacter,
+  usableInCampaign,
   type Vocabulary,
   vocabularyAt,
 } from "./visibility.js";
@@ -470,6 +472,18 @@ export class Spells extends Context.Service<
         readonly sheet: CharacterSheet;
       },
     ) => Effect.Effect<CharacterSpellRules, NotFound, CurrentActor>;
+    /**
+     * The spells a fight's stat blocks name, by name and in any case, as this
+     * campaign may use them (`usableInCampaign`): what `npcTurnOptions` reads a
+     * monster's spellcasting against (`repo/TableFight.ts`). One row a name,
+     * **the bundle's first** where a Library spell shares it, since a stat
+     * block names the SRD's spell; then the creator's own, then a share. A
+     * name nothing answers is simply absent.
+     */
+    readonly named: (
+      creator: CampaignCreatorActor,
+      names: ReadonlyArray<string>,
+    ) => Effect.Effect<ReadonlyArray<Spell>>;
     readonly libraryFindById: (id: SpellId) => Effect.Effect<Spell, NotFound, CurrentActor>;
     readonly libraryCreate: (
       payload: SpellLibraryCreate,
@@ -507,6 +521,19 @@ export class Spells extends Context.Service<
               limit ${pageLimit(filter.limit)}
             `;
           }),
+      });
+      const byName = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, names: Schema.Array(Schema.String) }),
+        ),
+        Result: SpellRow,
+        execute: ({ campaign, actor, names }) => sql`
+          select distinct on (lower(spell.name)) * from spell
+          where lower(spell.name) = any(${textArray(names.map((name) => name.toLowerCase()))})
+            and ${usableInCampaign(sql, "spell", campaign, actor)}
+          order by lower(spell.name), spell.account_id is not null,
+                   spell.account_id is distinct from ${actor.accountId}, spell.id
+        `,
       });
       /** One spell this Library reads — its own originals and the bundle — by id. */
       const inLibrary = SqlSchema.findOne({
@@ -607,6 +634,11 @@ export class Spells extends Context.Service<
               });
             }),
           ),
+
+        named: (creator, names) =>
+          names.length === 0
+            ? Effect.succeed([])
+            : dieOnSqlError(byName({ ...asked(creator), names })),
 
         libraryFindById: (id) => dieOnSqlError(inLibrary(id).pipe(orNotFound("spell", id))),
 
