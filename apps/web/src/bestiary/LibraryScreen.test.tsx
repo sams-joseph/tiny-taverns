@@ -269,6 +269,43 @@ describe("LibraryScreen", () => {
       });
     });
 
+    it("sends how far a trait reaches as numbers the runner can measure", async () => {
+      server.routes.set("POST /library/creatures", { status: 200, body: owlbear });
+      await renderLibrary(mintingSession());
+      await screen.findByText("Bog Owlbear");
+
+      await userEvent.click(screen.getByRole("button", { name: /Write a creature/ }));
+      await fillRequired("Fen Lurker");
+      await userEvent.click(screen.getByRole("button", { name: /Add a trait/ }));
+      await userEvent.type(screen.getByLabelText("Trait"), "Spit");
+      await userEvent.type(screen.getByLabelText("Reach"), "10");
+      await userEvent.type(screen.getByLabelText("Range"), "30");
+      await userEvent.type(screen.getByLabelText("Long"), "90");
+      await userEvent.click(screen.getByRole("button", { name: "Add to your Library" }));
+
+      await waitFor(() => expect(bodyOf(server, "POST", "/library/creatures")).toBeDefined());
+      expect(bodyOf(server, "POST", "/library/creatures")).toMatchObject({
+        statBlock: { traits: [{ name: "Spit", reach: 10, range: { normal: 30, long: 90 } }] },
+      });
+    });
+
+    it("refuses a trait whose long range comes before its normal one", async () => {
+      await renderLibrary(mintingSession());
+      await screen.findByText("Bog Owlbear");
+
+      await userEvent.click(screen.getByRole("button", { name: /Write a creature/ }));
+      await fillRequired("Fen Lurker");
+      await userEvent.click(screen.getByRole("button", { name: /Add a trait/ }));
+      await userEvent.type(screen.getByLabelText("Trait"), "Spit");
+      await userEvent.type(screen.getByLabelText("Long"), "90");
+      await userEvent.click(screen.getByRole("button", { name: "Add to your Library" }));
+
+      expect(
+        await screen.findByText("A long range needs a normal range before it."),
+      ).toBeInTheDocument();
+      expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+    });
+
     it("refuses to send a creature with no name, and says so before the schema does", async () => {
       await renderLibrary(mintingSession());
       await screen.findByText("Bog Owlbear");

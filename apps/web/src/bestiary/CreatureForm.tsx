@@ -1,4 +1,4 @@
-import type { Creature, StatBlock, Trait } from "@taverns/api";
+import type { AreaShape, Creature, StatBlock } from "@taverns/api";
 import { emptyStatBlock } from "@taverns/api";
 import {
   Button,
@@ -10,12 +10,18 @@ import {
   DialogTitle,
   Icon,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea } from "../ui/form";
+import { blankDraft, draftOf, traitOf, type DraftTrait } from "./traitDraft";
 
 /**
  * Writing a monster — **the thing the Library is for.**
@@ -83,21 +89,15 @@ const parseList = (raw: string): ReadonlyArray<string> =>
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "");
 
-/** A trait as it is being typed: `name` may still be blank, which the wire refuses. */
-interface DraftTrait {
-  readonly key: string;
-  readonly name: string;
-  readonly text: string;
-  readonly dice: string;
-}
-
-const draftsOf = (traits: ReadonlyArray<Trait>): ReadonlyArray<DraftTrait> =>
-  traits.map((trait, index) => ({
-    key: `existing-${String(index)}`,
-    name: trait.name,
-    text: trait.text,
-    dice: trait.dice ?? "",
-  }));
+/** What the area box offers: no area, or one of the board's four shapes. */
+const AREA_CHOICES: ReadonlyArray<{ readonly value: AreaShape | "none"; readonly label: string }> =
+  [
+    { value: "none", label: "No area" },
+    { value: "sphere", label: "Sphere" },
+    { value: "cone", label: "Cone" },
+    { value: "line", label: "Line" },
+    { value: "cube", label: "Cube" },
+  ];
 
 export function CreatureForm({
   creature,
@@ -124,7 +124,15 @@ export function CreatureForm({
   const [hpLine, setHpLine] = useState(block.hp);
   const [speed, setSpeed] = useState(block.speed);
   const [crLine, setCrLine] = useState(block.cr);
-  const [traits, setTraits] = useState<ReadonlyArray<DraftTrait>>(draftsOf(block.traits));
+  const [traits, setTraits] = useState<ReadonlyArray<DraftTrait>>(
+    block.traits.map((trait, index) => draftOf(trait, `existing-${String(index)}`)),
+  );
+  // Only for a creature whose document has legendary actions — one copied
+  // from the SRD — since this form writes traits, not legendary actions.
+  const hasLegendary = (block.legendaryActions ?? []).length > 0;
+  const [legendaryText, setLegendaryText] = useState(
+    block.legendaryActionsPerRound === undefined ? "" : String(block.legendaryActionsPerRound),
+  );
   const [nextKey, setNextKey] = useState(0);
   const [showProblems, setShowProblems] = useState(false);
 
@@ -142,7 +150,15 @@ export function CreatureForm({
    * ["ac"]` is a sentence for whoever wrote the schema. `SaveFailure` is the
    * backstop.
    */
-  const problems: { name?: string; type?: string; cr?: string; ac?: string; hp?: string } = {};
+  const problems: {
+    name?: string;
+    type?: string;
+    cr?: string;
+    ac?: string;
+    hp?: string;
+    legendary?: string;
+    traits?: string;
+  } = {};
   if (name.trim() === "") problems.name = "Give it a name.";
   if (type.trim() === "") problems.type = "Humanoid, Beast, Undead — whatever it is.";
   // Required rather than optional, because every card renders `CR {cr}`. `"—"`
@@ -152,13 +168,17 @@ export function CreatureForm({
   else if (ac < 0 || ac > MAX_AC) problems.ac = `Between 0 and ${String(MAX_AC)}.`;
   if (hp === undefined) problems.hp = "Hit points are a whole number.";
   else if (hp < 0 || hp > MAX_HP) problems.hp = `Between 0 and ${MAX_HP.toLocaleString("en")}.`;
+  const legendary = parseWhole(legendaryText);
+  if (legendaryText.trim() !== "" && (legendary === undefined || legendary < 0 || legendary > 10))
+    problems.legendary = "Between 0 and 10.";
+  const written = traits.map(traitOf);
+  const traitProblem = written.find((entry) => "problem" in entry);
+  if (traitProblem !== undefined && "problem" in traitProblem)
+    problems.traits = traitProblem.problem;
   const refused = Object.keys(problems).length > 0;
 
   const addTrait = () => {
-    setTraits((current) => [
-      ...current,
-      { key: `new-${String(nextKey)}`, name: "", text: "", dice: "" },
-    ]);
+    setTraits((current) => [...current, blankDraft(`new-${String(nextKey)}`)]);
     setNextKey((key) => key + 1);
   };
 
@@ -176,23 +196,21 @@ export function CreatureForm({
     // The whole document, with the parts this form shows replaced and the
     // abilities it does not show carried through untouched. A payload that sent
     // only what is on screen would erase ability cells the form never drew.
+    const { legendaryActionsPerRound: _legendary, ...rest } = block;
     const statBlock: StatBlock = {
-      ...block,
+      ...rest,
       meta: meta.trim(),
       ac: acLine.trim(),
       hp: hpLine.trim(),
       speed: speed.trim(),
       cr: crLine.trim(),
+      ...(legendary === undefined ? {} : { legendaryActionsPerRound: legendary }),
       // A trait with no name cannot be saved (`Schema.NonEmptyString`), and an
       // empty row is somebody who pressed *Add a trait* and changed their mind
-      // — dropped rather than refused.
-      traits: traits
-        .filter((trait) => trait.name.trim() !== "")
-        .map((trait) => ({
-          name: trait.name.trim(),
-          text: trait.text.trim(),
-          ...(trait.dice.trim() === "" ? {} : { dice: trait.dice.trim() }),
-        })),
+      // — dropped rather than refused (`traitOf`).
+      traits: written.flatMap((entry) =>
+        "trait" in entry && entry.trait !== undefined ? [entry.trait] : [],
+      ),
     };
 
     const saved = await submit(
@@ -431,6 +449,27 @@ export function CreatureForm({
                 />
               </Field>
             </div>
+
+            {hasLegendary && (
+              <Field
+                label="Legendary actions a round"
+                htmlFor="creature-legendary"
+                hint="Regained at the start of its turn. The SRD gives every legendary creature three."
+                error={showProblems ? problems.legendary : undefined}
+              >
+                <Input
+                  id="creature-legendary"
+                  mono
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={legendaryText}
+                  aria-invalid={showProblems && problems.legendary !== undefined}
+                  onChange={(event) => setLegendaryText(event.target.value)}
+                  className="w-24"
+                />
+              </Field>
+            )}
           </div>
 
           <div className="flex flex-col gap-4 border-t border-hairline pt-4">
@@ -443,6 +482,12 @@ export function CreatureForm({
                 Add a trait
               </Button>
             </div>
+
+            {showProblems && problems.traits !== undefined && (
+              <p role="alert" className="text-caption leading-body text-danger-ink">
+                {problems.traits}
+              </p>
+            )}
 
             {traits.length === 0 ? (
               <p className="text-caption leading-body text-muted-foreground">
@@ -496,6 +541,7 @@ export function CreatureForm({
                     value={trait.text}
                     onChange={(event) => setTrait(trait.key, { text: event.target.value })}
                   />
+                  <TraitDistances trait={trait} onChange={(patch) => setTrait(trait.key, patch)} />
                 </div>
               ))
             )}
@@ -533,5 +579,126 @@ export function CreatureForm({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * How far a trait reaches, in feet — the boxes the runner measures targets by.
+ * All blank for a trait that is not something it does to somebody.
+ */
+function TraitDistances({
+  trait,
+  onChange,
+}: {
+  readonly trait: DraftTrait;
+  readonly onChange: (patch: Partial<DraftTrait>) => void;
+}) {
+  const id = (what: string) => `creature-trait-${what}-${trait.key}`;
+  return (
+    <div className="flex flex-wrap items-end gap-2.5">
+      <Field label="Reach" htmlFor={id("reach")}>
+        <Input
+          id={id("reach")}
+          mono
+          type="number"
+          min={0}
+          placeholder="5"
+          value={trait.reach}
+          onChange={(event) => onChange({ reach: event.target.value })}
+          className="w-20"
+        />
+      </Field>
+      <Field label="Range" htmlFor={id("range")}>
+        <Input
+          id={id("range")}
+          mono
+          type="number"
+          min={0}
+          placeholder="80"
+          value={trait.rangeNormal}
+          onChange={(event) => onChange({ rangeNormal: event.target.value })}
+          className="w-20"
+        />
+      </Field>
+      <Field label="Long" htmlFor={id("long")}>
+        <Input
+          id={id("long")}
+          mono
+          type="number"
+          min={0}
+          placeholder="320"
+          value={trait.rangeLong}
+          onChange={(event) => onChange({ rangeLong: event.target.value })}
+          className="w-20"
+        />
+      </Field>
+      <Field label="Area" htmlFor={id("area")}>
+        <Select
+          value={trait.areaShape}
+          onValueChange={(value) => onChange({ areaShape: value as DraftTrait["areaShape"] })}
+        >
+          <SelectTrigger id={id("area")} className="w-28">
+            <SelectValue>
+              {(value) => AREA_CHOICES.find((choice) => choice.value === value)?.label ?? ""}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {AREA_CHOICES.map((choice) => (
+              <SelectItem key={choice.value} value={choice.value}>
+                {choice.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {trait.areaShape !== "none" && (
+        <>
+          <Field label="Size" htmlFor={id("area-feet")}>
+            <Input
+              id={id("area-feet")}
+              mono
+              type="number"
+              min={0}
+              placeholder="15"
+              value={trait.areaFeet}
+              onChange={(event) => onChange({ areaFeet: event.target.value })}
+              className="w-20"
+            />
+          </Field>
+          {trait.areaShape === "line" && (
+            <Field label="Width" htmlFor={id("area-width")}>
+              <Input
+                id={id("area-width")}
+                mono
+                type="number"
+                min={0}
+                placeholder="5"
+                value={trait.areaWidth}
+                onChange={(event) => onChange({ areaWidth: event.target.value })}
+                className="w-20"
+              />
+            </Field>
+          )}
+          <Field label="From" htmlFor={id("area-origin")}>
+            <Select
+              value={trait.areaOrigin}
+              onValueChange={(value) =>
+                onChange({ areaOrigin: value === "point" ? "point" : "self" })
+              }
+            >
+              <SelectTrigger id={id("area-origin")} className="w-36">
+                <SelectValue>
+                  {(value) => (value === "point" ? "A point in range" : "Itself")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="self">Itself</SelectItem>
+                <SelectItem value="point">A point in range</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+    </div>
   );
 }

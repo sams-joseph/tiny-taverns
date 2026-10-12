@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AreaShape } from "./AreaShape.js";
 import { CombatantPosition } from "./Combatant.js";
 import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
 
@@ -127,10 +128,6 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
-
-/** The shapes an area of effect takes on the board; {@link areaSquares} draws each. */
-export const AreaShape = Schema.Literals(["sphere", "cone", "line", "cube"]);
-export type AreaShape = typeof AreaShape.Type;
 
 /** The sizes an area takes, in feet: the Area tool's − and + stop here (its steps of 5 are its own). */
 export const AREA_FEET = { minimum: 5, maximum: 120 } as const;
