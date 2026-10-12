@@ -335,7 +335,18 @@ export const levelUpLines = (
  * absent because no shipped column holds a creature's XP. The rule is the one
  * every screen here follows — do not render a field the API does not have.
  */
-export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): HobArtifact => {
+/**
+ * What the panel can be handed: everything but a monster's turn, which lives in
+ * a fight's own thread (never in the panel's list) and is the runner's card,
+ * not a panel card (`run/HobTurnCard.tsx`).
+ */
+export type PanelProposal = Exclude<HobProposal, { readonly target: "npcTurn" }>;
+
+/** Whether a proposal is one the panel draws. */
+export const isPanelProposal = (proposal: HobProposal): proposal is PanelProposal =>
+  proposal.target !== "npcTurn";
+
+export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): HobArtifact => {
   switch (proposal.target) {
     case "encounter": {
       const creatures = proposal.roster.reduce((total, line) => total + line.count, 0);

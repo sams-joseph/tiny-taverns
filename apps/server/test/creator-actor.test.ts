@@ -586,7 +586,10 @@ describeLayer("creator-actor", shared, (it) => {
       // creator sees it, which Hob's `readFight` reads out to the creator's
       // toolkits alone. A hundred and forty-two is `Spells.named`, the spells
       // that fight's stat blocks name, read beneath the same proof.
-      expect(gated).toBe(142);
+      // A hundred and forty-three and forty-four are `HobThreads.forFight` and
+      // `ofFight`: a fight's own Hob conversation, the campaign's, found or
+      // started beneath the proof that reads its run.
+      expect(gated).toBe(144);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

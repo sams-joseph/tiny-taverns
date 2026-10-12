@@ -4,8 +4,10 @@ import {
   type AssistantTurnId,
   type Campaign,
   type CampaignId,
-  type Conflict,
+  type CombatantId,
+  Conflict,
   CurrentActor,
+  type EncounterRunId,
   SharedWorldHobStatus,
   type SharedWorldId,
   type HobAsk,
@@ -17,6 +19,7 @@ import {
   HobDraftStatus,
   type HobEvent,
   HobFailure,
+  type HobFightAsk,
   type HobProposal,
   HobProposed,
   HobStatus,
@@ -24,7 +27,10 @@ import {
   type HobTurn,
   HobUnavailable,
   NotFound,
+  npcMomentRefusal,
+  npcTurnOptions,
   type Session,
+  type SessionId,
 } from "@taverns/api";
 import { Cause, Context, Effect, Layer, Option, Ref, Result, Schema, Stream } from "effect";
 import {
@@ -60,7 +66,7 @@ import { Search } from "../repo/Search.js";
 import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
 import { Spells } from "../repo/Spells.js";
-import { TableFight } from "../repo/TableFight.js";
+import { TableFight, type TableFightRead, turnFightOf } from "../repo/TableFight.js";
 import {
   accountBindListing,
   accountBindOver,
@@ -70,6 +76,9 @@ import {
   coreBindOver,
   dmBindWithDirect,
   dmHandlersFor,
+  fightBind,
+  fightFocusText,
+  type HobFightContext,
   groupHandlersFor,
   type LevelUpDraftContext,
   levelUpBindOver,
@@ -178,6 +187,21 @@ export class Hob extends Context.Service<
     readonly askDraft: (
       ask: HobDraftAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | Conflict | HobUnavailable, CurrentActor>;
+    /**
+     * A monster's turn in a live fight, chosen over the fight toolkit and
+     * saved in the fight's own thread (`HobThreads.forFight`). Everything is
+     * decided before the stream: a player or another campaign's run is a
+     * `NotFound` (see {@link fightGate}), no model a `HobUnavailable`, and a
+     * fight not taking turns, a combatant that is not a monster or a moment
+     * it does not have now a `Conflict`.
+     */
+    readonly askFight: (
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      combatantId: CombatantId,
+      ask: HobFightAsk,
+    ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | Conflict | HobUnavailable, CurrentActor>;
   }
 >()("Hob") {
   /**
@@ -188,52 +212,59 @@ export class Hob extends Context.Service<
    * assistant is switched off here" must not be a way to probe which campaigns
    * exist.
    */
-  static readonly unavailable: Layer.Layer<Hob, never, Advancement | Campaigns | Groups> =
-    Layer.effect(this)(
-      Effect.gen(function* () {
-        const campaigns = yield* Campaigns;
-        const groups = yield* Groups;
-        const advancement = yield* Advancement;
-        const off = new HobUnavailable({
-          message:
-            "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
-            "apps/server/.env.local (see .env.example) and restart the server.",
-        });
-        return {
-          status: (campaignId) =>
-            Effect.map(
-              campaigns.findById(campaignId),
-              (campaign) =>
-                new HobStatus({ available: false, model: null, campaign: campaign.name }),
-            ),
-          ask: (campaignId) => Effect.andThen(campaigns.findById(campaignId), Effect.fail(off)),
-          // Same shape as the campaign pair: the group is still resolved, so
-          // "the assistant is off" is not a cheaper way to probe which groups
-          // exist.
-          sharedWorldStatus: (groupId) =>
-            Effect.map(
-              groups.findById(groupId),
-              (group) =>
-                new SharedWorldHobStatus({
-                  available: false,
-                  model: null,
-                  sharedWorld: group.name,
-                }),
-            ),
-          askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
-          // Nothing to resolve first: the path names no campaign and no world,
-          // so there is nothing a denial here could disclose — except the
-          // level-up composer's character, which is resolved as `ask`'s
-          // campaign is, so "the assistant is off" is no cheaper probe of
-          // whose characters exist.
-          draftStatus: Effect.succeed(new HobDraftStatus({ available: false, model: null })),
-          askDraft: (ask) =>
-            ask.intent === "levelUp"
-              ? Effect.andThen(advancement.offerToDraft(ask.characterId), Effect.fail(off))
-              : Effect.fail(off),
-        };
-      }),
-    );
+  static readonly unavailable: Layer.Layer<
+    Hob,
+    never,
+    Advancement | Campaigns | CampaignCreatorActors | Groups | TableFight
+  > = Layer.effect(this)(
+    Effect.gen(function* () {
+      const campaigns = yield* Campaigns;
+      const groups = yield* Groups;
+      const advancement = yield* Advancement;
+      const gate = fightGate(yield* CampaignCreatorActors, yield* TableFight);
+      const off = new HobUnavailable({
+        message:
+          "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
+          "apps/server/.env.local (see .env.example) and restart the server.",
+      });
+      return {
+        status: (campaignId) =>
+          Effect.map(
+            campaigns.findById(campaignId),
+            (campaign) => new HobStatus({ available: false, model: null, campaign: campaign.name }),
+          ),
+        ask: (campaignId) => Effect.andThen(campaigns.findById(campaignId), Effect.fail(off)),
+        // Same shape as the campaign pair: the group is still resolved, so
+        // "the assistant is off" is not a cheaper way to probe which groups
+        // exist.
+        sharedWorldStatus: (groupId) =>
+          Effect.map(
+            groups.findById(groupId),
+            (group) =>
+              new SharedWorldHobStatus({
+                available: false,
+                model: null,
+                sharedWorld: group.name,
+              }),
+          ),
+        askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
+        // Nothing to resolve first: the path names no campaign and no world,
+        // so there is nothing a denial here could disclose — except the
+        // level-up composer's character, which is resolved as `ask`'s
+        // campaign is, so "the assistant is off" is no cheaper probe of
+        // whose characters exist.
+        draftStatus: Effect.succeed(new HobDraftStatus({ available: false, model: null })),
+        askDraft: (ask) =>
+          ask.intent === "levelUp"
+            ? Effect.andThen(advancement.offerToDraft(ask.characterId), Effect.fail(off))
+            : Effect.fail(off),
+        // The fight is resolved behind the creator's proof first, as `ask`
+        // resolves its campaign: "off" is no cheaper probe of whose fights exist.
+        askFight: (campaignId, sessionId, runId, combatantId) =>
+          Effect.andThen(gate(campaignId, sessionId, runId, combatantId), Effect.fail(off)),
+      };
+    }),
+  );
 
   /**
    * Hob with a model behind it.
@@ -946,6 +977,93 @@ export class Hob extends Context.Service<
                 failing: "Hob's draft with no campaign failed",
               });
             }),
+
+          askFight: (campaignId, sessionId, runId, combatantId, ask) =>
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const { dm, read, combatant } = yield* fightGate(dmActors, repositories.tableFight)(
+                campaignId,
+                sessionId,
+                runId,
+                combatantId,
+              );
+              const { run } = read;
+              if (run.mode !== "combat") {
+                return yield* new Conflict({ message: "this scene is not a fight" });
+              }
+              if (run.endedAt !== null)
+                return yield* new Conflict({ message: "this fight is over" });
+              if (run.phase !== "turns") {
+                return yield* new Conflict({ message: "this fight is still rolling initiative" });
+              }
+              if (combatant.kind !== "npc") {
+                return yield* new Conflict({
+                  message: "Hob takes turns for monsters; a player character's player chooses",
+                });
+              }
+              const refused = npcMomentRefusal(
+                npcTurnOptions(turnFightOf(read), combatantId),
+                ask.moment,
+              );
+              if (refused !== undefined) return yield* new Conflict({ message: refused });
+
+              // The fight's own conversation, found or started: one per run,
+              // the campaign's, and never in the panel's list.
+              const thread = yield* threads.forFight(
+                dm,
+                sessionId,
+                runId,
+                `Fight: ${run.encounterName}`,
+              );
+              const history = yield* threads.turns("dm", campaignId, thread.id);
+              const context: HobFightContext = {
+                dm,
+                sessionId,
+                runId,
+                combatantId,
+                moment: ask.moment,
+                instruction: blankText(ask.instruction),
+              };
+              const asked = { text: fightRequest(read, context) };
+              yield* threads.append("dm", campaignId, thread.id, {
+                id: yield* freshTurnId,
+                who: "user",
+                text: asked.text,
+              });
+              const answerId = yield* freshTurnId;
+              const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+              const finished = yield* Ref.make("stop");
+
+              return yield* deliver({
+                threadId: thread.id,
+                answerId,
+                // The fight is bound into the prompt — the gate has just read
+                // it — so no round is spent calling `readFight`, and the loop
+                // ends as soon as a turn is offered: its narration is the reply.
+                answering: conversation(
+                  fightBind(repositories.tableFight, context, proposal),
+                  fightPrompt(fightFocusText(read, context)),
+                  history,
+                  asked,
+                  finished,
+                  { proposal, stopOnOffer: true },
+                  FIGHT_RECENT_TURNS,
+                ),
+                proposal,
+                finished,
+                asked: asked.text,
+                surface: "fight",
+                save: (turn) =>
+                  threads
+                    .append("dm", campaignId, thread.id, turn)
+                    .pipe(Effect.provideService(CurrentActor, actor)),
+                // A fight's thread is named for its fight, not by the model:
+                // a naming round would compete with the next monster's turn.
+                name: Effect.void,
+                languageModel,
+                failing: "Hob's fight turn failed",
+              });
+            }),
         };
       }),
     );
@@ -1071,10 +1189,12 @@ const conversation = <Tools extends AnyTools>(
   ask: Pick<HobAsk, "text">,
   finished: Ref.Ref<string>,
   outputs: OutputSlots,
+  /** How much of the thread's end the prompt carries. */
+  recent: number = RECENT_TURNS,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
   Stream.unwrap(
     Effect.map(
-      Effect.all([bind, Chat.fromPrompt(promptFor(system, history, ask))]),
+      Effect.all([bind, Chat.fromPrompt(promptFor(system, history, ask, recent))]),
       ([toolkit, chat]) => round(chat, toolkit, MAX_ROUNDS, finished, outputs),
     ),
   );
@@ -1083,6 +1203,12 @@ interface OutputSlots {
   readonly proposal: ProposalSlot;
   readonly awareness?: AwarenessSlot;
   readonly touchedDirect?: Ref.Ref<boolean>;
+  /**
+   * End the answer once something is offered, rather than spending a round
+   * on the line about it: the fight toolkit's proposal carries its own
+   * narration, and a monster's turn is waited on at the table.
+   */
+  readonly stopOnOffer?: true;
 }
 
 /**
@@ -1217,13 +1343,16 @@ const round = <Tools extends AnyTools>(
         Stream.concat(
           Stream.unwrap(
             Effect.map(
-              Effect.all([Ref.get(calledTool), Ref.get(finished)]),
+              Effect.all([Ref.get(calledTool), Ref.get(finished), Ref.get(outputs.proposal)]),
               // A round the model was cut off in the middle of has no next
               // round: whatever it was going to ask for, it never finished
               // asking. Spending the rest of the budget re-truncating the same
               // answer costs the DM four provider calls to reach the same place.
-              ([used, reason]) =>
-                used && budget > 1 && reason !== "length"
+              ([used, reason, offered]) =>
+                used &&
+                budget > 1 &&
+                reason !== "length" &&
+                !(outputs.stopOnOffer === true && offered !== undefined)
                   ? round(chat, toolkit, budget - 1, finished, outputs)
                   : Stream.empty,
             ),
@@ -1858,9 +1987,10 @@ export const aQuestionAboutIt = (asked: string): boolean => {
  * (`own`), the account's own panel (`account`), which is general chat like
  * the creator's and builds a campaign, a Shared World or a character, or the
  * sheet's level-up composer (`levelUp`), which proposes by default as a
- * drafting composer does.
+ * drafting composer does, or the runner asking for a monster's turn
+ * (`fight`), which is always asking for one.
  */
-export type BuildSurface = "dm" | "own" | "account" | "levelUp";
+export type BuildSurface = "dm" | "own" | "account" | "levelUp" | "fight";
 
 /** The judgement, once. See the block comment above for all four gates. */
 const wouldNotBuild = (
@@ -1876,8 +2006,10 @@ const wouldNotBuild = (
     ? askedForABuild(asked)
     : surface === "account"
       ? askedForABuild(asked, ACCOUNT_NOUNS)
-      : // A drafting composer and the level-up composer propose by default.
-        !aQuestionAboutIt(asked));
+      : surface === "fight"
+        ? true
+        : // A drafting composer and the level-up composer propose by default.
+          !aQuestionAboutIt(asked));
 
 /**
  * What the person is told, in their own terms.
@@ -1893,21 +2025,24 @@ const unbuilt = (surface: BuildSurface): HobEvent => ({
   event: "failed",
   data: new HobFailure({
     message:
-      surface === "account"
-        ? "Hob answered in words and drafted nothing you can keep — this model did not make " +
-          "a usable drafting call, which smaller models often do not. Ask again, or start " +
-          "it yourself from the Campaigns, Shared Worlds or Characters screen."
-        : surface === "levelUp"
-          ? "Hob answered in words and proposed no level-up — this model did not make a " +
-            "usable proposal call, which smaller models often do not. Ask again, or choose " +
-            "the level yourself with Level up."
-          : surface === "dm"
-            ? "Hob answered in words and built nothing you can save — this model did not make " +
-              "a usable build tool call, which smaller models often do not. Ask again, or " +
-              "write it yourself; a model that handles tool calls better offers a card more often."
-            : "Hob answered in words and drafted no sheet — this model did not make a usable " +
-              "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
-              "in yourself; you can change any of it afterwards.",
+      surface === "fight"
+        ? "Hob answered in words and proposed no turn — this model did not make a usable " +
+          "proposal call, which smaller models often do not. Ask again, or run the turn yourself."
+        : surface === "account"
+          ? "Hob answered in words and drafted nothing you can keep — this model did not make " +
+            "a usable drafting call, which smaller models often do not. Ask again, or start " +
+            "it yourself from the Campaigns, Shared Worlds or Characters screen."
+          : surface === "levelUp"
+            ? "Hob answered in words and proposed no level-up — this model did not make a " +
+              "usable proposal call, which smaller models often do not. Ask again, or choose " +
+              "the level yourself with Level up."
+            : surface === "dm"
+              ? "Hob answered in words and built nothing you can save — this model did not make " +
+                "a usable build tool call, which smaller models often do not. Ask again, or " +
+                "write it yourself; a model that handles tool calls better offers a card more often."
+              : "Hob answered in words and drafted no sheet — this model did not make a usable " +
+                "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
+                "in yourself; you can change any of it afterwards.",
   }),
 });
 
@@ -2254,6 +2389,84 @@ const levelUpPrompt = (levelling: LevelUpDraftContext): string =>
 const RECENT_TURNS = 40;
 
 /**
+ * How much of a fight's own thread a turn's prompt carries: the last two
+ * exchanges, enough for "try again, have it flee" to see the turn it
+ * replaces. A fight asks once per monster per round, so the whole thread
+ * would grow every prompt for turns already played; the fight itself is
+ * bound fresh each time.
+ */
+const FIGHT_RECENT_TURNS = 4;
+
+/**
+ * The fight, the creature and the creator's proof, resolved before a byte of
+ * stream: the proof first (a player has none, and is `NotFound` about the
+ * campaign), then the run through the creator's own read (another
+ * campaign's, or a night that is not this one, is its `NotFound`), then the
+ * combatant in it. Both of `Hob`'s layers answer through it, so Hob being off
+ * is not a cheaper way to learn whose fights exist.
+ */
+const fightGate =
+  (
+    dmActors: (typeof CampaignCreatorActors)["Service"],
+    tableFight: (typeof TableFight)["Service"],
+  ) =>
+  (campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId, combatantId: CombatantId) =>
+    Effect.gen(function* () {
+      const dm = yield* dmActors.of(campaignId);
+      const read: TableFightRead = yield* tableFight.read(dm, sessionId, runId);
+      const combatant = read.combatants.find((row) => row.id === combatantId);
+      if (combatant === undefined) {
+        return yield* new NotFound({ resource: "combatant", id: combatantId });
+      }
+      return { dm, read, combatant };
+    });
+
+/** A blank steer is no steer. */
+const blankText = (value: string | undefined): string | undefined => {
+  const text = (value ?? "").trim();
+  return text === "" ? undefined : text;
+};
+
+/** The question the runner asks, as the fight's thread records it. */
+const fightRequest = (read: TableFightRead, context: HobFightContext): string => {
+  const index = read.combatants.findIndex((row) => row.id === context.combatantId);
+  const who = `#${String(index + 1)} ${JSON.stringify(read.combatants[index]?.displayName ?? "")}`;
+  const asked =
+    context.moment === "turn"
+      ? `Take ${who}'s turn.`
+      : context.moment === "legendary"
+        ? `${who} takes a legendary action now, at the end of another creature's turn.`
+        : `${who} uses its reaction now.`;
+  return context.instruction === undefined
+    ? asked
+    : `${asked} ${context.moment === "reaction" ? "What triggered it" : "The DM says"}: ${context.instruction}`;
+};
+
+/**
+ * What Hob is told when it runs a monster: play the creature as its stat block,
+ * its wits and the encounter's tactics have it, choose only from what the
+ * options say is legal, and say it in a line the table can hear. The fight is
+ * bound below it, read just now through the creator's own read of this run.
+ */
+const fightPrompt = (fight: string): string =>
+  [
+    "You are Hob, running a monster in a live fight for the DM of a tabletop roleplaying",
+    "game (5e). Choose what the creature does now, the way its stat block, its Intelligence",
+    "and the encounter's tactics say it would: a beast fights like a beast, a clever foe like",
+    "a clever one, and one that is losing may run. Follow the DM's words when they give some.",
+    "",
+    "Offer the choice with proposeNpcTurn: its steps in order, as moves and the options",
+    "listed below by their ids, with targets by their number in the order; and one or two",
+    "sentences of narration the players will hear. Narrate what the creature does and how,",
+    "never a number, a roll, an outcome, or anything hidden from the players or under fog.",
+    "Only the options listed are legal now. Do not ask the DM anything: offer a turn.",
+    ...REFUSED_OFFERS,
+    "",
+    "The fight, read just now:",
+    fight,
+  ].join("\n");
+
+/**
  * What Hob offered on a turn, as one line of the conversation it was part of.
  *
  * **A proposal is half of what was said, and leaving it out made Hob forget its
@@ -2497,6 +2710,26 @@ const offered = (turn: HobTurn): string | undefined => {
       ].filter((part) => part !== undefined);
       return `[You offered a level-up for ${JSON.stringify(proposal.characterName)} — ${draft}: ${parts.join("; ")}]`;
     }
+    case "npcTurn": {
+      const steps = proposal.steps.map((step) =>
+        step.kind === "move"
+          ? `move to (${String(step.to.column)},${String(step.to.row)})`
+          : step.optionId +
+            (step.placement === undefined
+              ? ""
+              : ` toward (${String(step.placement.toward.column)},${String(step.placement.toward.row)})`) +
+            (step.targets.length === 0
+              ? ""
+              : ` at ${step.targets.map((target) => JSON.stringify(target.name)).join(", ")}`),
+      );
+      const moment =
+        proposal.moment === "turn"
+          ? "turn"
+          : proposal.moment === "legendary"
+            ? "legendary action"
+            : "reaction";
+      return `[You offered the DM ${JSON.stringify(proposal.combatantName)}'s ${moment} in round ${String(proposal.round)} — ${kept}: ${steps.join("; ")}. Narration: ${proposal.narration}]`;
+    }
     case "nightSummary":
       return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;
     case "sharedWorldHistory":
@@ -2510,9 +2743,10 @@ const promptFor = (
   system: string,
   history: ReadonlyArray<HobTurn>,
   ask: Pick<HobAsk, "text">,
+  recent: number,
 ): Prompt.RawInput => [
   { role: "system" as const, content: system },
-  ...history.slice(-RECENT_TURNS).flatMap((turn) => {
+  ...history.slice(-recent).flatMap((turn) => {
     // A turn that carries neither words nor an offer has nothing a prompt can
     // use, and an empty message is a shape some providers reject outright.
     const content = [turn.text, offered(turn)].filter((part) => part !== undefined && part !== "");

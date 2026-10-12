@@ -18,6 +18,7 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, Deferred, Effect, Fiber, Layer, Stream } from "effect";
+import { TableFight } from "../src/repo/TableFight.js";
 import { Tool } from "effect/ai";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
@@ -29,6 +30,7 @@ import {
   accountToolkitOver,
   coreToolkitListing,
   coreToolkitOver,
+  FightToolkit,
   HobToolkit,
   NO_VOCABULARY,
   playerToolkitListing,
@@ -60,7 +62,7 @@ import { describeLayer } from "./support/suite.js";
  * offer, the toolkit built from it, the accept and the level-up write are the
  * shipped ones; only the model is scripted. The claims:
  *
- * - **the other five toolkits are byte-identical**: what each is shown is
+ * - **the other toolkits are byte-identical**: what each is shown is
  *   pinned by a hash taken before this surface existed;
  * - **the toolkit is the offer's**: two tools, every name an enum of what the
  *   offer lists (an option whose prerequisites are unmet is not in it), and no
@@ -354,7 +356,7 @@ describeLayer(
   "hob-level-up",
   shared,
   (it) => {
-    describe("the other five toolkits", () => {
+    describe("the other toolkits", () => {
       it("are byte-identical to what they were before the level-up composer existed", () => {
         // Hashed on `main` before `proposeLevelUp` was written. A level-up
         // tool added to any of them — or any other change to what they show
@@ -368,6 +370,8 @@ describeLayer(
           coreListing: shown(coreToolkitListing(NO_VOCABULARY)),
           account: shown(accountToolkitOver(NO_VOCABULARY, WORLDS)),
           accountListing: shown(accountToolkitListing(NO_VOCABULARY, WORLDS)),
+          // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
+          fight: shown(FightToolkit),
         }).toEqual({
           creator: "1e4bb3e8de7d942998fbf2c4194d28078d416cd4074facd86f20f2d5c37a65af",
           sharedWorld: "605ead7fad5f09d1fde9b8173e608ca83ea65132b673aa65c8055af9cc1072fa",
@@ -377,6 +381,7 @@ describeLayer(
           coreListing: "3b51f22a3bdeab5ffd5472160933fe6011ae8707b4469790f26e9f4d80212f73",
           account: "d232b6fa3fcef517229fcf319b13821192ee31c8cc712ccf5d0d1471790acc71",
           accountListing: "fa3a35cfad02f9cf449d98d3d44bb9e175c2a3c51eb85a141a18b883dad62e54",
+          fight: "83b03321fc9c18a73cd7958f501308582a50b6e147c61999fca9b5a2bbd94829",
         });
       });
     });
@@ -747,7 +752,7 @@ describeLayer(
               hob.askDraft({ text: ASKED, intent: "levelUp", characterId: champion.id }),
             );
           }).pipe(
-            Effect.provide(Hob.unavailable),
+            Effect.provide(Hob.unavailable.pipe(Layer.provide(TableFight.unsigned))),
             Effect.provideService(CurrentActor, stranger.actor),
           );
           expect(off._tag).toBe("NotFound");

@@ -6,6 +6,8 @@ import {
   CampaignId,
   CurrentActor,
   Conflict,
+  EncounterRunId,
+  SessionId,
   SharedWorldId,
   type HobKept,
   HobProposal,
@@ -16,6 +18,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import {
   classFromColumns,
   defined,
@@ -158,7 +161,11 @@ const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 export class HobThreads extends Context.Service<
   HobThreads,
   {
-    /** Newest first — the panel resumes the one at the front. */
+    /**
+     * Newest first — the panel resumes the one at the front. A fight's own
+     * conversation (`0094`) is not among them: it is the runner's, read by
+     * {@link ofFight}.
+     */
     readonly list: (
       reach: ConversationReach,
       scopeId: ConversationScope,
@@ -185,6 +192,24 @@ export class HobThreads extends Context.Service<
       campaignId: CampaignId,
       id: AssistantThreadId,
     ) => Effect.Effect<"dm" | "own", NotFound, CurrentActor>;
+    /**
+     * A fight's own conversation (`0094`), found or started: the campaign's,
+     * one per run, titled `title` when it is started. The run is read through
+     * its night and the proof's campaign in the same statement, so a run of
+     * another campaign is `NotFound`.
+     */
+    readonly forFight: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      title: string,
+    ) => Effect.Effect<HobThread, NotFound>;
+    /** A fight's own conversation, or `NotFound` when Hob has not been asked in it. */
+    readonly ofFight: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+    ) => Effect.Effect<HobThread, NotFound>;
     /** Starts one, named after the question that started it. */
     readonly start: (
       reach: ConversationReach,
@@ -243,6 +268,7 @@ export class HobThreads extends Context.Service<
             (actor) => sql`
               select assistant_thread.* from assistant_thread
               where ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
+                and assistant_thread.encounter_run_id is null
               order by assistant_thread.updated_at desc, assistant_thread.id desc
             `,
           ),
@@ -277,6 +303,44 @@ export class HobThreads extends Context.Service<
             `,
           ),
       });
+      const FightRequest = Schema.toType(
+        Schema.Struct({
+          campaignId: CampaignId,
+          sessionId: SessionId,
+          runId: EncounterRunId,
+          title: Schema.String,
+        }),
+      );
+      /** The run, through its night, in the proof's campaign: the fight's thread is only ever that run's. */
+      const runOfCampaign = (campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId) =>
+        sql`
+          select encounter_run.id from encounter_run
+          join session on session.id = encounter_run.session_id
+          where encounter_run.id = ${runId}
+            and session.id = ${sessionId}
+            and session.campaign_id = ${campaignId}
+        `;
+      const fightThread = (actor: Actor) =>
+        SqlSchema.findOne({
+          Request: FightRequest,
+          Result: ThreadRow,
+          execute: ({ campaignId, sessionId, runId }) => sql`
+            select assistant_thread.* from assistant_thread
+            where assistant_thread.encounter_run_id in (${runOfCampaign(campaignId, sessionId, runId)})
+              and ${conversationReachable(sql, "assistant_thread", "dm", campaignId, actor)}
+          `,
+        });
+      const startFightThread = ({
+        campaignId,
+        sessionId,
+        runId,
+        title,
+      }: typeof FightRequest.Type) => sql`
+        insert into assistant_thread (campaign_id, title, encounter_run_id)
+        select ${campaignId}, ${title}, run.id
+        from (${runOfCampaign(campaignId, sessionId, runId)}) as run
+        on conflict (encounter_run_id) where encounter_run_id is not null do nothing
+      `;
       const insertThread = SqlSchema.findOne({
         Request: Columns,
         Result: ThreadRow,
@@ -332,6 +396,30 @@ export class HobThreads extends Context.Service<
             threadOwner({ campaignId, id }).pipe(
               orNotFound("assistant_thread", id),
               Effect.map((row) => (row.accountId === null ? ("dm" as const) : ("own" as const))),
+            ),
+          ),
+
+        forFight: (dm, sessionId, runId, title) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const request = {
+                campaignId: dm.campaign,
+                sessionId,
+                runId,
+                title: titleFrom(title),
+              };
+              // The proof has already shown the campaign writable; the insert
+              // reads the run beneath it, and a second ask racing this one is
+              // the unique index's `do nothing`.
+              yield* startFightThread(request);
+              return yield* fightThread(dm.actor)(request).pipe(orNotFound("encounter_run", runId));
+            }),
+          ),
+
+        ofFight: (dm, sessionId, runId) =>
+          dieOnSqlError(
+            fightThread(dm.actor)({ campaignId: dm.campaign, sessionId, runId, title: "" }).pipe(
+              orNotFound("assistant_thread", runId),
             ),
           ),
 

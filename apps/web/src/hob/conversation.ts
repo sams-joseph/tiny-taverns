@@ -23,6 +23,7 @@ import {
   ARTIFACT_KINDS,
   artifactFrom,
   type HobArtifact,
+  isPanelProposal,
   type HobContextChip,
   type HobThreadList,
   type HobTurn,
@@ -193,7 +194,7 @@ const activityFor = (name: string, detail: string): string => {
  * reply channel. It is a turn rather than a banner so it stays where the
  * question it failed is, which is what a DM scrolling back needs.
  */
-const sentenceFor = (failure: ApiFailure): string => {
+export const sentenceFor = (failure: ApiFailure): string => {
   switch (failure.kind) {
     case "unavailable":
       return failure.message;
@@ -221,7 +222,7 @@ const openFailureFor = (failure: ApiFailure): string =>
   `That conversation could not be opened: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
 
 /** And when the discard failed, in the same shape. */
-const discardFailureFor = (failure: ApiFailure): string =>
+export const discardFailureFor = (failure: ApiFailure): string =>
   failure.kind === "conflict"
     ? `Nothing was discarded: ${failure.message}.`
     : `Nothing was discarded: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
@@ -249,7 +250,7 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
     const said: ReadonlyArray<HobTurn> =
       turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }];
     // A discarded offer is no longer one: the words stay, the card does not.
-    return turn.proposal === null || turn.discardedAt !== null
+    return turn.proposal === null || turn.discardedAt !== null || !isPanelProposal(turn.proposal)
       ? said
       : [
           ...said,
@@ -623,6 +624,7 @@ export function useHobConversation(
             return;
           case "proposal": {
             setActivity(undefined);
+            if (!isPanelProposal(event.data.proposal)) return;
             append({
               id: `${event.data.turnId}:card`,
               who: "artifact",

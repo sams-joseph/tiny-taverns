@@ -5,6 +5,7 @@ import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { CampaignAct } from "./CampaignAct.js";
 import { CampaignStory } from "./CampaignStory.js";
 import { Character, CharacterSheet, SheetBody } from "./Character.js";
+import { CombatantPosition } from "./Combatant.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
 import { ChallengeRating } from "./EncounterDifficulty.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
@@ -16,8 +17,10 @@ import {
   CampaignId,
   CampaignStoryId,
   CharacterId,
+  CombatantId,
   CreatureId,
   EncounterId,
+  EncounterRunId,
   NoteId,
   NpcId,
   SessionId,
@@ -26,6 +29,7 @@ import {
   SharedWorldId,
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
+import { NpcTurnMoment } from "./NpcTurnCheck.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
 import { OwnedCharacter } from "./Party.js";
 import { PrepItem } from "./PrepItem.js";
@@ -157,6 +161,30 @@ export const HobRosterLine = Schema.Struct({
 });
 export type HobRosterLine = typeof HobRosterLine.Type;
 
+/** A creature a step is aimed at, with its name as it stood when Hob proposed. */
+const NpcTurnTarget = Schema.Struct({ combatantId: CombatantId, name: Schema.String });
+
+/** One step of an `npcTurn` proposal: a move, or an option with its aim. */
+export const NpcTurnProposalStep = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("move"), to: CombatantPosition, feet: Schema.Int }),
+  Schema.Struct({
+    kind: Schema.Literal("option"),
+    optionId: Schema.String,
+    name: Schema.String,
+    slot: Schema.Literals(["action", "bonus", "reaction", "legendary"]),
+    targets: Schema.Array(NpcTurnTarget),
+    placement: Schema.optional(
+      Schema.Struct({ origin: CombatantPosition, toward: CombatantPosition }),
+    ),
+    strikes: Schema.optional(
+      Schema.Array(
+        Schema.Struct({ optionId: Schema.String, name: Schema.String, target: NpcTurnTarget }),
+      ),
+    ),
+  }),
+]);
+export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
+
 /**
  * What Hob is offering to add, if the person who asked says yes.
  *
@@ -169,8 +197,9 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
  * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
  * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
- * `sharedWorld` (the asker's new world) and a `levelUp` (the next level of a
- * character the asker owns). The union is discriminated on `target` for the reason
+ * `sharedWorld` (the asker's new world), a `levelUp` (the next level of a
+ * character the asker owns) and an `npcTurn` (a monster's turn in a fight,
+ * which nothing keeps yet). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
  * the client renders anyway is the failure this schema style exists to
@@ -184,7 +213,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter`, `proposeCampaign` and
  * `proposeSharedWorld`; the level-up composer (`HobDraftAsk.intent:
- * "levelUp"`) has `proposeLevelUp` and nothing else. So the halves of this
+ * "levelUp"`) has `proposeLevelUp` and nothing else; the fight toolkit has
+ * `proposeNpcTurn`, which it files into the fight's own thread. So the halves of this
  * union are reachable from disjoint conversations: a character, a campaign, a
  * Shared World or a level-up proposal only ever lives in the asker's *own* thread and
  * materialises into their own ownership, and a member who cannot write the
@@ -556,6 +586,35 @@ export const HobProposal = Schema.Union([
     choices: AdvancementChoices,
     rationale: Schema.Array(Schema.String),
   }),
+  /**
+   * A monster's turn in a live fight, chosen by the fight's Hob
+   * (`/campaigns/:c/sessions/:s/runs/:r/combatants/:id/hob/turn`) — what it
+   * does, never what came of it: no dice, no hit, no damage.
+   *
+   * `steps` are the ones `npcTurnCheck` passed, resolved when Hob proposed:
+   * targets by combatant id (the model named them by their place in the
+   * order), an area by the placement it chose and whoever that catches.
+   * Names are snapshots for the card. `stamp` fingerprints the fight state
+   * the steps were checked against (`TableFight`), so a turn offered against
+   * a fight that has moved since can be refused rather than replayed.
+   * `narration` is the line the table hears once the turn is carried out;
+   * `instruction` is what the DM asked for, when they asked for something.
+   *
+   * Nothing keeps one yet: every accept refuses it.
+   */
+  Schema.Struct({
+    target: Schema.Literal("npcTurn"),
+    sessionId: SessionId,
+    runId: EncounterRunId,
+    combatantId: CombatantId,
+    combatantName: Schema.String,
+    moment: NpcTurnMoment,
+    round: Schema.Int,
+    stamp: Schema.String,
+    steps: Schema.Array(NpcTurnProposalStep),
+    narration: Schema.String,
+    instruction: Schema.NullOr(Schema.String),
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -743,6 +802,25 @@ export const HobDraftAsk = Schema.Union([
   }),
 ]);
 export type HobDraftAsk = typeof HobDraftAsk.Type;
+
+/** How long the DM's steer for a fight turn may be. */
+export const NPC_TURN_INSTRUCTION_MAX = 500;
+
+/**
+ * A monster's turn, asked for from the runner
+ * (`/campaigns/:c/sessions/:s/runs/:r/combatants/:id/hob/turn`). The fight
+ * and the combatant are the path's; the thread is the fight's own, found or
+ * started by the server, so there is no `threadId`. `moment` is which of the
+ * creature's chances to act this is (`NpcTurnMoment`); `instruction` is what
+ * the DM wants of it, and for a reaction what triggered it.
+ */
+export const HobFightAsk = Schema.Struct({
+  moment: NpcTurnMoment,
+  instruction: Schema.optional(
+    Schema.String.check(Schema.isBetweenLength(1, NPC_TURN_INSTRUCTION_MAX)),
+  ),
+});
+export type HobFightAsk = typeof HobFightAsk.Type;
 
 /**
  * The thread and the turn this answer is being written into, said first.

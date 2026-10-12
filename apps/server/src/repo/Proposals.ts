@@ -475,6 +475,16 @@ export class Proposals extends Context.Service<
               }),
             );
 
+          case "npcTurn":
+            // A monster's turn is carried out in its fight, from the runner,
+            // and nothing carries one out yet: keeping it here would write a
+            // turn nobody rolled for.
+            return Effect.fail(
+              new Conflict({
+                message: "that is a monster's turn — it is not kept through Hob's panel",
+              }),
+            );
+
           case "sharedWorldHistory":
           case "sharedWorldSummary":
             // Only a group thread ever carries one — the group toolkit is the

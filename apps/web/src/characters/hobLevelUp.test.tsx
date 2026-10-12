@@ -1,8 +1,8 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { AssistantTurnId, HobProposal } from "@taverns/api";
-import { artifactFrom } from "../hob/transcript";
+import type { AssistantTurnId } from "@taverns/api";
+import { artifactFrom, type PanelProposal } from "../hob/transcript";
 import {
   bodyOf,
   brannoc,
@@ -245,7 +245,7 @@ describe("a level-up proposal's card", () => {
             to: { spellId: "s4", name: "Heroism", level: 1 },
           },
         },
-      } as unknown as HobProposal,
+      } as unknown as PanelProposal,
     );
     expect(artifact).toMatchObject({
       kind: "levelUp",

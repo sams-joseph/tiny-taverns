@@ -1253,6 +1253,38 @@ const HobLive = HttpApiBuilder.group(
 );
 
 /**
+ * Hob in a live fight. `turn` is `Hob.askFight`, which resolves the creator's
+ * proof and the run before a byte of stream; `thread` reads the fight's own
+ * conversation behind the same proof, so the runner can find a proposed turn
+ * again after a reload. Turning one down is `hob.discard`, on that thread.
+ */
+const HobFightLive = HttpApiBuilder.group(
+  TavernsApi,
+  "hobFight",
+  Effect.fnUntraced(function* (handlers) {
+    const hob = yield* Hob;
+    const threads = yield* HobThreads;
+    const dmActors = yield* CampaignCreatorActors;
+
+    return handlers
+      .handle("turn", ({ params, payload }) =>
+        hob.askFight(
+          params.campaignId,
+          params.sessionId,
+          params.runId,
+          params.combatantId,
+          payload,
+        ),
+      )
+      .handle("thread", ({ params }) =>
+        Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
+          threads.ofFight(dm, params.sessionId, params.runId),
+        ),
+      );
+  }),
+);
+
+/**
  * Hob with no campaign — `HobLive`'s six with one reach, the caller's own
  * account (`"account"`), so there is no proof to resolve and no two sets to
  * tell apart. A kept character starts its portrait after the accept commits,
@@ -1938,6 +1970,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SearchLive,
     HobLive,
     MeHobLive,
+    HobFightLive,
     SharedWorldHobLive,
     NpcsLive,
     RunsLive,
