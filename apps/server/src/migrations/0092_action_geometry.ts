@@ -16,6 +16,8 @@ import { SqlClient } from "effect/sql";
  *   already set stays as it is, so a row edited after this and a row that
  *   already had the keys are both left alone; running it twice changes nothing.
  * - **Bundle rows are not touched.** They are the import's, and it rewrites them.
+ * - **Bonus actions**: the 2014 source has no section for them, so a special
+ *   ability whose prose grants one is marked `bonusAction`.
  * - **Plain traits too**: a creature typed in the bestiary whose own text says
  *   `"reach 5 ft."` gets `reach: 5`. That is its author's prose read, not a
  *   distance invented for it; a trait whose text gives none gets none.
@@ -148,6 +150,20 @@ const performsOf = (desc: string, actionNames: ReadonlyArray<string>): ReadonlyA
   return [...found].sort((a, b) => a.at - b.at).map((f) => f.name);
 };
 
+const GRANTS_BONUS = new RegExp(
+  String.raw`\b(?:can|may)\b[^.]*?\b(?:as a |use (?:a|its) |take a )bonus action\b|^as a bonus action,? (?:the|it|she|he)\b[^.]*?\bcan\b`,
+  "i",
+);
+const REFUSES_BONUS = /\bcan.t take\b[^.]*bonus action|\bno bonus action/i;
+
+const bonusActionOf = (desc: string): "always" | "triggered" | undefined => {
+  const grants = sentencesOf(desc).some(
+    (sentence) => GRANTS_BONUS.test(sentence) && !REFUSES_BONUS.test(sentence),
+  );
+  if (!grants) return undefined;
+  return /^(?:if|when)\b/i.test(desc.trim()) ? "triggered" : "always";
+};
+
 /** A raw source reference, as the stored `options` payload keeps it. */
 const refOf = (value: unknown): Json | undefined =>
   isRecord(value) && typeof value.index === "string" && typeof value.name === "string"
@@ -221,9 +237,12 @@ const missing = (existing: Json, extra: Json): Json =>
 
 const upgradedFeature = (
   feature: Json,
-  legendary: boolean,
+  section: string,
   actionNames: ReadonlyArray<string>,
 ): Json => {
+  const legendary = section === "legendaryActions";
+  const bonusAction =
+    section === "specialAbilities" ? bonusActionOf(textIn(feature.desc)) : undefined;
   const desc = textIn(feature.desc);
   const hasGeometry = GEOMETRY_KEYS.some((key) => key in feature) || "choices" in feature;
   const choices = isRecord(feature.options) ? choicesOf(feature.options, desc) : undefined;
@@ -242,6 +261,7 @@ const upgradedFeature = (
         : {}),
       ...(cost === null ? {} : { legendaryCost: Number(cost[1]) }),
       ...(performs.length === 0 ? {} : { performs }),
+      ...(bonusAction === undefined ? {} : { bonusAction }),
     }),
   };
 };
@@ -261,9 +281,7 @@ export const upgradedStatBlock = (body: Json): Json => {
   for (const section of ["specialAbilities", "actions", "reactions", "legendaryActions"]) {
     if (!Array.isArray(body[section])) continue;
     next[section] = (body[section] as ReadonlyArray<unknown>).map((feature) =>
-      isRecord(feature)
-        ? upgradedFeature(feature, section === "legendaryActions", actionNames)
-        : feature,
+      isRecord(feature) ? upgradedFeature(feature, section, actionNames) : feature,
     );
   }
   if (Array.isArray(body.traits)) {

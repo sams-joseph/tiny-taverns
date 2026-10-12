@@ -185,3 +185,26 @@ export const performsOf = (
   }
   return [...found].sort((a, b) => a.at - b.at).map((f) => f.name);
 };
+
+const GRANTS_BONUS = new RegExp(
+  String.raw`\b(?:can|may)\b[^.]*?\b(?:as a |use (?:a|its) |take a )bonus action\b|^as a bonus action,? (?:the|it|she|he)\b[^.]*?\bcan\b`,
+  "i",
+);
+const REFUSES_BONUS = /\bcan.t take\b[^.]*bonus action|\bno bonus action/i;
+
+/**
+ * Whether a special ability is something the creature does with its bonus
+ * action. The 2014 source has no bonus-action section, so a bonus action is a
+ * special ability whose prose grants one: `"The goblin can take the Disengage
+ * or Hide action as a bonus action"`, `"As a bonus action, the orc can move
+ * up to its speed"`. `triggered` when the prose opens on the condition that
+ * offers it (`"If the target is prone, the lion can make one bite attack
+ * against it as a bonus action"`), which the turn's own events decide.
+ */
+export const bonusActionOf = (desc: string): "always" | "triggered" | undefined => {
+  const grants = sentencesOf(desc).some(
+    (sentence) => GRANTS_BONUS.test(sentence) && !REFUSES_BONUS.test(sentence),
+  );
+  if (!grants) return undefined;
+  return /^(?:if|when)\b/i.test(desc.trim()) ? "triggered" : "always";
+};

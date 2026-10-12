@@ -184,6 +184,47 @@ describe("the SRD's legendary actions and multiattacks", () => {
     ).toBeUndefined();
   });
 
+  /**
+   * The 2014 source has no bonus-action section; these are the special
+   * abilities whose prose grants one, every one of them, so a spelling the
+   * import misses or a sentence it misreads is a diff here.
+   */
+  it("marks the special abilities that are bonus actions, and which wait on a trigger", () => {
+    const marked = monsters.flatMap((monster) =>
+      (monster.statBlock.specialAbilities ?? []).flatMap((entry) =>
+        entry.bonusAction === undefined
+          ? []
+          : [`${monster.name}: ${entry.name} (${entry.bonusAction})`],
+      ),
+    );
+    expect(marked).toEqual([
+      "Elephant: Trampling Charge (triggered)",
+      "Giant Hyena: Rampage (triggered)",
+      "Gnoll: Rampage (triggered)",
+      "Goblin: Nimble Escape (always)",
+      "Gorgon: Trampling Charge (triggered)",
+      "Lion: Pounce (triggered)",
+      "Magmin: Ignited Illumination (always)",
+      "Mammoth: Trampling Charge (triggered)",
+      "Orc: Aggressive (always)",
+      "Panther: Pounce (triggered)",
+      "Phase Spider: Ethereal Jaunt (always)",
+      "Priest: Divine Eminence (always)",
+      "Saber-Toothed Tiger: Pounce (triggered)",
+      "Shadow: Shadow Stealth (always)",
+      "Spy: Cunning Action (always)",
+      "Tiger: Pounce (triggered)",
+      "Triceratops: Trampling Charge (triggered)",
+      "Warhorse: Trampling Charge (triggered)",
+      "Weretiger, Hybrid Form: Pounce (triggered)",
+      "Weretiger, Tiger Form: Pounce (triggered)",
+      "Will-o'-Wisp: Consume Life (always)",
+      "Will-o'-Wisp: Variable Illumination (always)",
+    ]);
+    // An action that only mentions one (a hasted golem's) is not one.
+    expect(feature("Clay Golem", "actions", "Haste").bonusAction).toBeUndefined();
+  });
+
   it("lists a multiattack's alternatives as the strikes each makes", () => {
     const multiattack = feature("Bandit Captain", "actions", "Multiattack");
     expect(multiattack.multiattackOptions).toEqual([
@@ -208,6 +249,7 @@ const NEW_FEATURE_KEYS = [
   "multiattackOptions",
   "legendaryCost",
   "performs",
+  "bonusAction",
 ] as const;
 
 const withoutNewKeys = (statBlock: StatBlock): Record<string, unknown> => {

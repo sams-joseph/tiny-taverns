@@ -284,6 +284,13 @@ export const CreatureFeature = Schema.Struct({
    * alternative. Names are the stat block's own `actions`, matched at import.
    */
   performs: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+  /**
+   * A special ability that is a bonus action, from its prose (the 2014 source
+   * has no bonus-action section): `always` on any of its turns, `triggered`
+   * only once the condition its prose opens on has happened (a pounce after a
+   * charge, a rampage after a kill).
+   */
+  bonusAction: Schema.optional(Schema.Literals(["always", "triggered"])),
 });
 export type CreatureFeature = typeof CreatureFeature.Type;
 

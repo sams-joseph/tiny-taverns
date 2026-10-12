@@ -24,7 +24,7 @@ import {
   MONSTER_RAW,
 } from "./systemMonsters.js";
 import { textArray } from "../repo/rows.js";
-import { geometryOf, legendaryCostOf, performsOf } from "./geometry.js";
+import { bonusActionOf, geometryOf, legendaryCostOf, performsOf } from "./geometry.js";
 
 /** What one run of the import did. */
 export interface ImportResult {
@@ -367,6 +367,7 @@ const featureOf =
     const legendary = section === "legendary_actions";
     const legendaryCost = legendary ? legendaryCostOf(name) : undefined;
     const performs = legendary ? performsOf(desc, actionNames) : [];
+    const bonusAction = section === "special_abilities" ? bonusActionOf(desc) : undefined;
     return {
       name,
       desc,
@@ -389,6 +390,7 @@ const featureOf =
       ...(multiattackOptions === undefined ? {} : { multiattackOptions }),
       ...(legendaryCost === undefined ? {} : { legendaryCost }),
       ...(performs.length === 0 ? {} : { performs }),
+      ...(bonusAction === undefined ? {} : { bonusAction }),
     };
   };
 
