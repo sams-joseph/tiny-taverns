@@ -55,6 +55,7 @@ import {
   CombatantDeathSaveRoll,
   CombatantDeathSaves,
   CombatantMove,
+  CombatantResources,
   CombatantTurn,
   CombatantUpdate,
   InitiativeSet,
@@ -3417,6 +3418,18 @@ class CombatantsGroup extends HttpApiGroup.make("combatants")
       payload: CombatantTurn,
       success: Combatant,
       error: NotFound,
+    }),
+    /** The DM's hand on a monster's spending. See `CombatantResources`. */
+    HttpApiEndpoint.post("resources", "/:combatantId/resources", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantResources,
+      success: Combatant,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.delete("remove", "/:combatantId", {
       params: {

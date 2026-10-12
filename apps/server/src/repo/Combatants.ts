@@ -11,6 +11,7 @@ import {
   CombatantId,
   type CombatantMove,
   CombatantPosition,
+  type CombatantResources,
   type CombatantTurn,
   type CombatantUpdate,
   type CombatantUpdatedPayload,
@@ -184,6 +185,13 @@ export class Combatants extends Context.Service<
       id: CombatantId,
       payload: CombatantTurn,
     ) => Effect.Effect<Combatant, NotFound>;
+    readonly resources: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      id: CombatantId,
+      payload: CombatantResources,
+    ) => Effect.Effect<Combatant, NotFound | Conflict>;
     readonly setInitiative: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -1075,6 +1083,71 @@ export class Combatants extends Context.Service<
               )
               .pipe(
                 // Two presses that raced past the idempotency check, as for `damage`.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readCombatant(campaignId, runId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
+         * The DM's hand on a monster's spending (`CombatantResources`): each
+         * named field replaces what the row holds, so a repeat lands where the
+         * first did and a spend is taken back by the same write. A count of
+         * zero is dropped from its map, so nothing spent has one spelling. The
+         * line is `dm`, as the turn's is: no player read carries any of it.
+         */
+        resources: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+
+                  const current = yield* readCombatant(campaignId, runId, id, actor);
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) return current;
+                  if (current.kind === "pc") {
+                    return yield* new Conflict({
+                      message: "a party member's resources are its sheet's",
+                    });
+                  }
+
+                  const { requestId, ...spent } = payload;
+                  const counted = (map: Readonly<Record<string, number>> | undefined) =>
+                    map === undefined
+                      ? undefined
+                      : JSON.stringify(
+                          Object.fromEntries(Object.entries(map).filter(([, count]) => count > 0)),
+                        );
+                  const columns = defined({
+                    legendary_spent: spent.legendarySpent,
+                    recharge_spent:
+                      spent.rechargeSpent === undefined
+                        ? undefined
+                        : textArray([...new Set(spent.rechargeSpent)]),
+                    uses_spent: counted(spent.usesSpent),
+                    slots_spent: counted(spent.slotsSpent),
+                  });
+                  if (Object.keys(columns).length === 0) return current;
+                  const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
+                    orNotFound("combatant", id),
+                  );
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "combatant-updated",
+                    encounterRunId: runId,
+                    combatantId: id,
+                    payload: { ...spent },
+                    requestId,
+                    visibility: "dm",
+                  });
+                  return combatant;
+                }),
+              )
+              .pipe(
+                // Two presses that raced past the idempotency check, as for `turn`.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
                     ? readCombatant(campaignId, runId, id, actor)

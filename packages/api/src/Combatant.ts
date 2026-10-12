@@ -161,6 +161,20 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   reactionUsed: Schema.Boolean,
   feetMoved: Schema.Int,
   /**
+   * What a monster has spent over the fight (`NpcResources.ts`): legendary
+   * actions this round, the keys of recharge abilities waiting on their roll,
+   * and X/day uses and spell slots, each key to a count. How many there are to
+   * spend is the stat block's (`npcLimits`), so a fresh row is zeros and empty
+   * maps and what is left is worked out where both are read. The start of its
+   * own turn zeroes `legendarySpent` and nothing else; the rest is the DM's,
+   * through `CombatantResources`. Always nothing spent for a party member,
+   * whose resources are its sheet's. The creator's alone, as the turn is.
+   */
+  legendarySpent: Schema.Int,
+  rechargeSpent: Schema.Array(Schema.String),
+  usesSpent: Schema.Record(Schema.String, Schema.Int),
+  slotsSpent: Schema.Record(Schema.String, Schema.Int),
+  /**
    * The portrait of the character this row was seeded from — **live, not a
    * snapshot**, and present only while that character sits in a seat of this
    * campaign the reader may see. The same URLs `Character.portrait` carries,
@@ -311,6 +325,32 @@ export const CombatantTurn = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantTurn = typeof CombatantTurn.Type;
+
+const resourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 300));
+const resourceCount = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }));
+const resourceMap = Schema.Record(resourceKey, resourceCount).check(Schema.isMaxProperties(200));
+
+/**
+ * The DM's hand on a monster's spending — a legendary action taken between
+ * turns, a breath weapon used or recharged, a spell slot spent or given back —
+ * each named field the whole new value, so the same press twice lands where
+ * the first did and taking a spend back is the same write. A count of zero is
+ * the same as no entry, and is stored as none.
+ *
+ * Its own endpoint, with a `requestId`, for `CombatantTurn`'s reason. Keys are
+ * not checked against the stat block: the server never reads a creature
+ * through a combatant (`creatureId` is provenance), and a key the block does
+ * not have is never offered (`NpcResources.ts`). A party member's row refuses
+ * it (`Conflict`): its spending is its sheet's.
+ */
+export const CombatantResources = Schema.Struct({
+  legendarySpent: Schema.optional(resourceCount),
+  rechargeSpent: Schema.optional(Schema.Array(resourceKey).check(Schema.isMaxLength(200))),
+  usesSpent: Schema.optional(resourceMap),
+  slotsSpent: Schema.optional(resourceMap),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type CombatantResources = typeof CombatantResources.Type;
 
 /**
  * One line of the DM's initiative write: this combatant's number, or `null` to

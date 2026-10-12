@@ -84,6 +84,7 @@ import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
+import { patchFor, useResources } from "./resources";
 import { feetLeft, isUp, useTurnTicks } from "./turn";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -740,6 +741,7 @@ export function RunScreen() {
   );
   // The *This turn* toggles, and `spendAction`, which an attack calls.
   const turnTicks = useTurnTicks(path, controller);
+  const resources = useResources(path, controller);
 
   // A scene's own state, read only once the run says it is one; a fight reads
   // nothing here. The doorbell re-reads it with the fight.
@@ -1416,6 +1418,28 @@ export function RunScreen() {
               onTick: (ticks) => void turnTicks.tick(selected, ticks),
             }
           : undefined
+      }
+      resources={
+        selected === undefined || over
+          ? undefined
+          : {
+              busy: resources.busy,
+              onSet: (patch) => void resources.set(selected, patch),
+              // The DM's own d6, in the dock like every roll on this screen;
+              // on the face the stat block names it is ready again.
+              onRecharge:
+                dice.roll === undefined
+                  ? undefined
+                  : (row) => {
+                      const rolled = dice.roll?.(
+                        `${selected.displayName} · ${row.label} recharge`,
+                        "1d6",
+                      );
+                      if (rolled !== undefined && rolled.total >= row.on) {
+                        void resources.set(selected, patchFor(selected, row, false));
+                      }
+                    },
+            }
       }
       following={selectedId === undefined}
       disabled={frozen || share.busy}

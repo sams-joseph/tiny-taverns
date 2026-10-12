@@ -194,6 +194,7 @@ describeLayer("creator-actor", shared, (it) => {
         rollDeathSave: true,
         move: true,
         turn: true,
+        resources: true,
         setInitiative: true,
         remove: true,
       };

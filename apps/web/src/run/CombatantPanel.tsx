@@ -20,6 +20,7 @@ import { deathStatusOf, dotPressed, type DeathStatus } from "./deathSaves";
 import { attacks, rolls, type AttackOutcome } from "./attack";
 import { AttackResultCard } from "./AttackResult";
 import { subtitleOf } from "./load";
+import { patchFor, resourceRows, type ResourcePatch, type ResourceRow } from "./resources";
 import type { TurnTicks } from "./turn";
 
 /**
@@ -339,6 +340,106 @@ const TURN_TICKS = [
 ] as const;
 
 /**
+ * *Resources*: what a monster has left of what its stat block gives it to
+ * spend (`run/resources.ts`) — legendary actions this round, recharge
+ * abilities, X/day uses and spell slots — each set by the DM both ways.
+ * Shown whoever is up, because legendary actions and reactions are spent on
+ * somebody else's turn. A spent recharge offers its d6, which recharges it on
+ * the face its stat block names.
+ */
+function Resources({
+  combatant,
+  rows,
+  disabled,
+  onSet,
+  onRecharge,
+}: {
+  readonly combatant: Combatant;
+  readonly rows: ReadonlyArray<ResourceRow>;
+  readonly disabled: boolean;
+  readonly onSet: (patch: ResourcePatch) => void;
+  /** Roll the d6 for a spent recharge; absent while the dice are put away. */
+  readonly onRecharge: ((row: Extract<ResourceRow, { kind: "recharge" }>) => void) | undefined;
+}) {
+  return (
+    <section
+      aria-label={`Resources of ${combatant.displayName}`}
+      className="flex flex-col gap-2 border-t border-hairline pt-3.5"
+    >
+      <SectionTitle title="Resources" />
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+        {rows.map((row) => (
+          <li key={row.key} className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-body-s leading-snug">{row.label}</span>
+            {row.kind === "recharge" ? (
+              <>
+                <span className="text-label-s leading-none whitespace-nowrap text-muted-foreground">
+                  {row.on >= 6 ? "Recharge 6" : `Recharge ${String(row.on)}–6`}
+                </span>
+                {row.spent && onRecharge !== undefined && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    aria-label={`Roll to recharge ${row.label}`}
+                    onClick={() => onRecharge(row)}
+                  >
+                    <Icon name="dice-5" size={14} />
+                    Roll
+                  </Button>
+                )}
+                <Toggle
+                  size="sm"
+                  className="data-pressed:line-through"
+                  pressed={row.spent}
+                  disabled={disabled}
+                  aria-label={`${row.label} used`}
+                  onPressedChange={(used) => onSet(patchFor(combatant, row, used))}
+                >
+                  {row.spent ? "Used" : "Ready"}
+                </Toggle>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-control-sm"
+                  disabled={disabled || row.left === 0}
+                  aria-label={`Spend one of ${row.label}`}
+                  onClick={() => onSet(patchFor(combatant, row, row.left - 1))}
+                >
+                  <Icon name="minus" size={14} />
+                </Button>
+                <span
+                  data-slot="resource-count"
+                  className={cn(
+                    "w-12 text-center font-mono text-mono leading-none",
+                    row.left === 0 ? "text-muted-foreground" : "text-foreground",
+                  )}
+                >
+                  {`${String(row.left)}/${String(row.max)}`}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-control-sm"
+                  disabled={disabled || row.left === row.max}
+                  aria-label={`Give back one of ${row.label}`}
+                  onClick={() => onSet(patchFor(combatant, row, row.left + 1))}
+                >
+                  <Icon name="plus" size={14} />
+                </Button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
  * *This turn*, for the creature whose turn it is: the action, the bonus action
  * and the reaction, struck through once used, and the feet it has walked
  * against its speed, red past it. The server counts the feet and clears all
@@ -637,6 +738,7 @@ export function CombatantPanel({
   onRollAction,
   onApplyResult,
   onDismissResult,
+  resources,
 }: {
   readonly combatant: Combatant | undefined;
   readonly hp: number;
@@ -654,6 +756,16 @@ export function CombatantPanel({
    */
   readonly turn:
     | { readonly busy: boolean; readonly onTick: (ticks: TurnTicks) => void }
+    | undefined;
+  /** The *Resources* block's write; absent once the fight is over. */
+  readonly resources:
+    | {
+        readonly busy: boolean;
+        readonly onSet: (patch: ResourcePatch) => void;
+        readonly onRecharge:
+          | ((row: Extract<ResourceRow, { kind: "recharge" }>) => void)
+          | undefined;
+      }
     | undefined;
   /** Whether the panel is tracking the turn rather than a manual pick. */
   readonly following: boolean;
@@ -722,6 +834,7 @@ export function CombatantPanel({
   }
 
   const creature = combatant.creatureId === null ? undefined : creatures.get(combatant.creatureId);
+  const resourceList = resourceRows(combatant, creature?.statBlock);
   const subtitle = subtitleOf(combatant);
   const hidden = combatant.visibility === "dm";
   // The drawing's words as the tooltip; the name in the accessible one, since
@@ -843,6 +956,16 @@ export function CombatantPanel({
             disabled={disabled || deathSavesBusy}
             onSet={onDeathSaves}
             onRoll={onDeathSaveRoll}
+          />
+        )}
+
+        {resourceList.length > 0 && (
+          <Resources
+            combatant={combatant}
+            rows={resourceList}
+            disabled={disabled || resources === undefined || resources.busy}
+            onSet={(patch) => resources?.onSet(patch)}
+            onRecharge={resources?.onRecharge}
           />
         )}
 

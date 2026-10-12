@@ -4096,3 +4096,94 @@ describe("the fog, on the narrow grid", () => {
     expect(screen.queryByRole("button", { name: "Fog" })).toBeNull();
   });
 });
+
+describe("a monster's resources", () => {
+  const resourcesRoute = `POST ${serverRunBase()}/combatants/${goblinBoss.id}/resources`;
+  const block = () => within(panel().getByRole("region", { name: "Resources of Goblin Boss" }));
+  const withResources = () =>
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          actions: [
+            {
+              name: "Fire Breath",
+              desc: "The boss exhales fire in a 15-foot cone.",
+              usage: { type: "recharge on roll", dice: "1d6", minValue: 5 },
+              area: { shape: "cone", feet: 15, origin: "self" },
+            },
+          ],
+          legendaryActions: [{ name: "Detect", desc: "The boss makes a Wisdom check." }],
+          legendaryActionsPerRound: 3,
+        },
+      },
+    });
+
+  it("draws what its stat block gives it to spend, less what its row has spent", async () => {
+    withResources();
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, legendarySpent: 1, rechargeSpent: ["actions/Fire Breath"] },
+      ],
+    });
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+
+    expect(block().getByText("Legendary actions")).toBeInTheDocument();
+    expect(block().getByText("2/3")).toBeInTheDocument();
+    expect(block().getByText("Recharge 5–6")).toBeInTheDocument();
+    expect(block().getByRole("button", { name: "Fire Breath used" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("spends one and gives a recharge back, each through the resources write", async () => {
+    withResources();
+    server.routes.set(resourcesRoute, {
+      status: 200,
+      body: { ...goblinBoss, legendarySpent: 1 },
+    });
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(block().getByText("3/3")).toBeInTheDocument());
+
+    await userEvent.click(block().getByRole("button", { name: "Spend one of Legendary actions" }));
+    await waitFor(() => expect(block().getByText("2/3")).toBeInTheDocument());
+    expect(bodyOf(server, "POST", "/resources")).toMatchObject({
+      legendarySpent: 1,
+      requestId: expect.any(String),
+    });
+
+    server.routes.set(resourcesRoute, {
+      status: 200,
+      body: { ...goblinBoss, legendarySpent: 1, rechargeSpent: ["actions/Fire Breath"] },
+    });
+    server.calls.length = 0;
+    await userEvent.click(block().getByRole("button", { name: "Fire Breath used" }));
+    await waitFor(() =>
+      expect(block().getByRole("button", { name: "Fire Breath used" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(bodyOf(server, "POST", "/resources")).toMatchObject({
+      rechargeSpent: ["actions/Fire Breath"],
+    });
+    // Nothing outside the fight reads a monster's spending.
+    expect(server.calls.filter((call) => call.method === "GET")).toEqual([]);
+  });
+
+  it("draws no block for a party member", async () => {
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    expect(panel().queryByRole("region", { name: /^Resources of / })).toBeNull();
+  });
+});
