@@ -118,6 +118,11 @@ export interface TokenProps {
    * and nothing else, so no press selects, drags, steps or puts a token down.
    */
   readonly onTarget: ((combatant: Combatant) => void) | undefined;
+  /**
+   * While a target is picked: who the line's reach and range leave out
+   * (`run/options.ts`), faded and said in the token's name, still pickable.
+   */
+  readonly outOfRange?: ReadonlySet<CombatantId> | undefined;
   /** Put it on a square, or `null` to take it off the board; settles once the server answers. */
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<unknown>;
 }
@@ -143,6 +148,8 @@ export interface LayerToken extends Omit<TokenState, "health"> {
   readonly health: number | undefined;
   /** Said after its name on the token's button: `" (you)"`. */
   readonly spoken?: string;
+  /** Beyond the reach and range of the DM's line whose target is being picked. */
+  readonly outOfRange?: boolean;
 }
 
 /** `TokenProps`, over any board's tokens. */
@@ -336,7 +343,16 @@ const STEP: Record<string, readonly [number, number]> = {
 
 /** The DM's tokens: every row of the fight, drawn as the DM may see it. */
 export function RunTokens(props: TokenProps) {
-  const { combatants, hpOf, hostileTokensHidden, movable, fog, speedOf: _speedOf, ...rest } = props;
+  const {
+    combatants,
+    hpOf,
+    hostileTokensHidden,
+    movable,
+    fog,
+    speedOf: _speedOf,
+    outOfRange,
+    ...rest
+  } = props;
   const tokens = combatants.map((combatant) => ({
     ...tokenState(combatant, { hp: hpOf(combatant), hostileTokensHidden }),
     combatant,
@@ -349,6 +365,7 @@ export function RunTokens(props: TokenProps) {
         ? combatant.portrait.thumbUrl
         : undefined,
     conditions: combatant.conditions.length,
+    outOfRange: outOfRange?.has(combatant.id) ?? false,
   }));
   const byId = (id: CombatantId | undefined) => tokens.find((token) => token.id === id);
   return (
@@ -508,7 +525,13 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     return {
       active,
       dragging,
-      fade: combatant.out ? "opacity-45" : combatant.hidden ? "opacity-70" : "",
+      fade: combatant.out
+        ? "opacity-45"
+        : combatant.outOfRange === true
+          ? "opacity-60"
+          : combatant.hidden
+            ? "opacity-70"
+            : "",
       face: (
         <TokenFace
           party={combatant.party}
@@ -555,7 +578,8 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
                     type="button"
                     data-slot="token"
                     data-token={combatant.id}
-                    aria-label={`${combatant.displayName}${combatant.spoken ?? ""}, column ${String(combatant.position.column + 1)}, row ${String(combatant.position.row + 1)}`}
+                    aria-label={`${combatant.displayName}${combatant.spoken ?? ""}, column ${String(combatant.position.column + 1)}, row ${String(combatant.position.row + 1)}${combatant.outOfRange === true ? ", out of range" : ""}`}
+                    data-range={combatant.outOfRange === true ? "out" : undefined}
                     aria-pressed={combatant.id === selected?.id}
                     onPointerDown={press(combatant)}
                     onPointerMove={follow}
