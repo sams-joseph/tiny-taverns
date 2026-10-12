@@ -15,7 +15,7 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { initiativeOrderKeys, RUNS } from "./liveTables.js";
+import { initiativeOrderKeys, RUNS, runOnTable } from "./liveTables.js";
 import { reserveHobTurn } from "./HobThreads.js";
 import { classFromColumns, dieOnSqlError, fromColumns, orNotFound } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
@@ -172,18 +172,7 @@ export class HobDirectWrites extends Context.Service<
       const activeRun = SqlSchema.findOneOption({
         Request: Schema.toType(CampaignId),
         Result: ActiveRunRow,
-        execute: (campaignId) => sql`
-          select session.id as session_id,
-                 encounter_run.id as run_id,
-                 encounter_run.allow_hob_direct_writes
-          from campaign
-          join session on session.id = campaign.current_session_id
-          join encounter_run on encounter_run.id = session.active_encounter_run_id
-          where campaign.id = ${campaignId}
-            and encounter_run.session_id = session.id
-            and encounter_run.ended_at is null
-          limit 1
-        `,
+        execute: (campaignId) => runOnTable(sql, campaignId),
       });
 
       const targets = SqlSchema.findAll({

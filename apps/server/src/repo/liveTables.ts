@@ -167,6 +167,29 @@ export const tokenShownTo = (
     and (not ${underFog(sql)} or ${seatedByActor(sql, campaignId, actor)}))`;
 
 /**
+ * The fight on a campaign's table, as one row or none: the run its current
+ * night has up (`session.active_encounter_run_id`), while it is unended. What
+ * Hob's direct writes spend on (`HobDirectWrites`) and what it reads the fight
+ * from (`TableFight`): one spelling, so the two cannot disagree about which
+ * fight is live. A carried fight waiting to be resumed is not on the table.
+ *
+ * Beneath the caller's creator proof, whose campaign this is.
+ */
+export const runOnTable = (sql: SqlClient.SqlClient, campaignId: CampaignId) =>
+  sql`
+    select session.id as session_id,
+           encounter_run.id as run_id,
+           encounter_run.allow_hob_direct_writes
+    from campaign
+    join session on session.id = campaign.current_session_id
+    join encounter_run on encounter_run.id = session.active_encounter_run_id
+    where campaign.id = ${campaignId}
+      and encounter_run.session_id = session.id
+      and encounter_run.ended_at is null
+    limit 1
+  `;
+
+/**
  * A fresh turn for whoever the marker just landed on: nothing spent, no feet
  * moved (`0086_turn_economy.ts`), and its legendary actions back in hand
  * (`0093_combatant_resources.ts`; the SRD regains them at the start of its

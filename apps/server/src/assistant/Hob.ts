@@ -60,6 +60,7 @@ import { Search } from "../repo/Search.js";
 import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
 import { Spells } from "../repo/Spells.js";
+import { TableFight } from "../repo/TableFight.js";
 import {
   accountBindListing,
   accountBindOver,
@@ -269,6 +270,7 @@ export class Hob extends Context.Service<
     | SessionEvents
     | Sessions
     | Spells
+    | TableFight
   > =>
     Layer.effect(this)(
       Effect.gen(function* () {
@@ -321,6 +323,9 @@ export class Hob extends Context.Service<
           // The campaign's kept story so far, which the creator's Hob reads
           // before drafting a replacement.
           stories: yield* CampaignStories,
+          // The fight on the table, which `readFight` reads out to the
+          // creator's toolkits alone.
+          tableFight: yield* TableFight,
           directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
           // A campaign's classes, races and backgrounds decide the *shape* of
           // `proposeCharacter`, so for a player they are read before the

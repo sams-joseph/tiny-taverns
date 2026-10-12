@@ -37,6 +37,10 @@ import {
   ENCOUNTER_TREASURE_MAX,
   EncounterKind,
   encounterKindLabel,
+  leftOf,
+  type NpcTurnOption,
+  npcLimits,
+  type StatBlock,
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
@@ -112,6 +116,7 @@ import type { SessionEvents } from "../repo/SessionEvents.js";
 import type { Sessions } from "../repo/Sessions.js";
 import type { EquipmentRepo } from "../repo/Equipment.js";
 import type { Spells } from "../repo/Spells.js";
+import type { TableFight, TableFightRead } from "../repo/TableFight.js";
 
 /**
  * What Hob can reach, and the only way it reaches anything.
@@ -641,6 +646,26 @@ export const GetCreature = Tool.make("getCreature", {
     "searchCampaign hit whose source is 'creature'.",
   parameters: Schema.Struct({ creatureId: CreatureId }),
   success: Creature,
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/**
+ * The fight on the table, read out (`repo/TableFight.ts`): the creator's whole
+ * view of it, which is why only the creator's toolkits have it — a player's
+ * Hob must never hear a monster's hit points or what stands under fog.
+ * Takes nothing: the campaign is the path's, and the fight is whichever its
+ * current night has up.
+ */
+export const ReadFight = Tool.make("readFight", {
+  description:
+    "The fight on the table right now, as the DM sees it: the round and who is up, the " +
+    "initiative order with every combatant's hit points, AC, conditions, square and what " +
+    "they have spent, the board and its fog, the encounter's tactics, and — when a monster " +
+    "is up — its stat block and every option it has this turn with who each can reach. " +
+    "Call it before answering anything about the live fight. Combatants are named by " +
+    "their place in the order (#1, #2…); options by their ids (actions/Bite).",
+  success: Schema.Struct({ fight: Schema.String }),
   failure: NotFound,
   failureMode: "return",
 });
@@ -1891,6 +1916,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeCampaignStory,
     ProposeNpc,
     ProposeNpcSheet,
+    ReadFight,
     SpendCharacterResource,
   );
 };
@@ -1926,6 +1952,8 @@ export const HobToolkit = Toolkit.make(
   // the creator's alone, as `getNpc`, which reads both back, is.
   ProposeNpc,
   ProposeNpcSheet,
+  // The fight on the table, read: the creator's alone, as every runner read is.
+  ReadFight,
 );
 
 /**
@@ -2370,6 +2398,8 @@ export interface HobRepositories {
   readonly events: (typeof SessionEvents)["Service"];
   /** The campaign's kept story so far, which a refresh starts from. */
   readonly stories: (typeof CampaignStories)["Service"];
+  /** The fight on the table, as its creator reads it: `readFight`. */
+  readonly tableFight: (typeof TableFight)["Service"];
   /** Slice 6's audited direct counter write, reached only by the conditional DM toolkit. */
   readonly directWrites?: (typeof HobDirectWrites)["Service"] | undefined;
   /**
@@ -2736,6 +2766,10 @@ export const dmHandlersFor = (
     // because the person reading them is the person who set them.
     sessionRecap: ({ sessionId }) => repositories.recap.read(dm, sessionId),
     getCreature: ({ creatureId }) => as(repositories.creatures.findById(campaignId, creatureId)),
+    readFight: () =>
+      Effect.map(repositories.tableFight.onTable(dm), (read) => ({
+        fight: read === undefined ? "No fight is on the table." : fightText(read),
+      })),
     getNpc: ({ npcId }) =>
       Effect.gen(function* () {
         const npc = yield* repositories.npcs.findById(dm, npcId);
@@ -3964,6 +3998,368 @@ const signed = (value: number): string => (value < 0 ? String(value) : `+${Strin
 
 const fromTo = (change: { readonly from?: number | string; readonly to: number | string }) =>
   change.from === undefined ? String(change.to) : `${String(change.from)} → ${String(change.to)}`;
+
+/** A board square as the fight stores it: column, then row, from (0,0) at the top left. */
+const square = (at: { readonly column: number; readonly row: number }): string =>
+  `(${String(at.column)},${String(at.row)})`;
+
+/** How many of an area's placements are read out: the ones that catch the most. */
+const PLACEMENTS_READ = 3;
+
+/** A spending key without its section: `actions/Fire Breath` → `Fire Breath`. */
+const keyName = (key: string): string => key.slice(key.indexOf("/") + 1);
+
+/**
+ * What a monster still has to spend against its stat block (`npcLimits`): its
+ * legendary actions, what is recharging, uses and slots, each as what is left.
+ */
+const spendingOf = (
+  row: TableFightRead["combatants"][number],
+  statBlock: StatBlock | undefined,
+): ReadonlyArray<string> => {
+  const limits = npcLimits(statBlock);
+  return [
+    ...(limits.legendaryActions === undefined
+      ? []
+      : [
+          `legendary actions ${String(leftOf(limits.legendaryActions, row.legendarySpent))} of ${String(limits.legendaryActions)} left`,
+        ]),
+    ...Object.entries(limits.recharge)
+      .filter(([key]) => row.rechargeSpent.includes(key))
+      .map(([key, face]) => `${quoted(keyName(key))} recharging (${String(face)}–6)`),
+    ...Object.entries(limits.uses).map(
+      ([key, count]) =>
+        `${quoted(keyName(key))} ${String(leftOf(count, row.usesSpent[key]))} of ${String(count)} uses left`,
+    ),
+    ...Object.entries(limits.slots).map(
+      ([key, count]) =>
+        `${keyName(key).replace(/\/(\d+)$/, " level $1")} slots ${String(leftOf(count, row.slotsSpent[key]))} of ${String(count)} left`,
+    ),
+  ];
+};
+
+const damageText = (
+  damage: ReadonlyArray<{ readonly dice: string; readonly type?: string | undefined }>,
+): string =>
+  damage.map(({ dice, type }) => (type === undefined ? dice : `${dice} ${type}`)).join(" + ");
+
+/**
+ * One option of `npcTurnOptions`, read out by its id: what it is, what it
+ * rolls, what it spends, and who it reaches — the placements of an area cut
+ * to the few that catch the most.
+ */
+const optionText = (
+  option: NpcTurnOption,
+  handle: (id: string) => string,
+): ReadonlyArray<string> => {
+  const parts = [
+    option.slot === "bonus"
+      ? "bonus action"
+      : option.slot === "legendary"
+        ? "legendary action"
+        : option.slot,
+    ...(option.triggered === undefined ? [] : ["only once its trigger has happened"]),
+    ...(option.level === undefined
+      ? []
+      : [option.level === 0 ? "cantrip" : `level ${String(option.level)} spell`]),
+    ...(option.attack === undefined
+      ? []
+      : [
+          `${signed(option.attack.toHit)} to hit` +
+            (option.attack.damage.length === 0 ? "" : `, ${damageText(option.attack.damage)}`),
+          ...(option.attack.reach === undefined ? [] : [`reach ${String(option.attack.reach)} ft`]),
+          ...(option.attack.range === undefined
+            ? []
+            : [
+                `range ${String(option.attack.range.normal)}` +
+                  (option.attack.range.long === undefined
+                    ? ""
+                    : `/${String(option.attack.range.long)}`) +
+                  " ft",
+              ]),
+        ]),
+    ...(option.save === undefined
+      ? []
+      : [
+          `DC ${String(option.save.dc)} ${option.save.ability} save (${option.save.onSuccess} on a success)` +
+            (option.save.damage.length === 0 ? "" : `, ${damageText(option.save.damage)}`),
+        ]),
+    ...(option.area === undefined
+      ? []
+      : [`${String(option.area.feet)}-ft ${option.area.shape} from ${option.area.origin}`]),
+    ...(option.spends.legendary === undefined || option.spends.legendary <= 1
+      ? []
+      : [`costs ${String(option.spends.legendary)} legendary actions`]),
+    ...(option.spends.recharge === undefined ? [] : ["then recharges"]),
+    ...(option.spends.uses === undefined ? [] : ["spends a use"]),
+    ...(option.spends.slot === undefined
+      ? []
+      : [`spends a ${keyName(option.spends.slot).replace(/^.*\//, "level ")} slot`]),
+  ];
+  const lines = [`- ${option.id} (${quoted(option.name)}): ${parts.join("; ")}.`];
+  if (option.strikes !== undefined) {
+    lines.push(
+      `  Strikes: ${option.strikes.map(({ option: strike, count }) => `${strike.id} ×${String(count)}`).join(", ")}.`,
+    );
+  } else if (
+    option.attack === undefined &&
+    option.save === undefined &&
+    option.text !== undefined
+  ) {
+    lines.push(`  ${gist([option.text], 200)}`);
+  }
+  if (option.targets !== undefined && option.placements === undefined) {
+    lines.push(
+      option.targets.length === 0
+        ? "  Targets: none on the board."
+        : `  Targets: ${option.targets
+            .map(
+              (target) =>
+                `${handle(target.combatantId)} ${String(target.feet)} ft (${
+                  target.band === "out"
+                    ? "out of reach"
+                    : target.band === "long"
+                      ? "long range, at disadvantage"
+                      : target.band
+                })`,
+            )
+            .join(", ")}.`,
+    );
+  }
+  if (option.placements !== undefined) {
+    const best = [...option.placements]
+      .sort((a, b) => b.catches.length - a.catches.length)
+      .slice(0, PLACEMENTS_READ)
+      .filter((placement) => placement.catches.length > 0);
+    lines.push(
+      best.length === 0
+        ? "  Placements: none that catch anybody."
+        : `  Best placements: ${best
+            .map(
+              (placement) =>
+                `at ${square(placement.origin)}` +
+                (placement.toward.column === placement.origin.column &&
+                placement.toward.row === placement.origin.row
+                  ? ""
+                  : ` toward ${square(placement.toward)}`) +
+                ` catches ${placement.catches.map(handle).join(", ")}`,
+            )
+            .join("; ")}.`,
+    );
+  }
+  return lines;
+};
+
+/** A stat block in one line: what it is, how tough, how fast, and what it does by name. */
+const statBlockLine = (statBlock: StatBlock): string => {
+  const named = (label: string, features: ReadonlyArray<{ readonly name: string }> | undefined) =>
+    features === undefined || features.length === 0
+      ? []
+      : [`${label}: ${features.map((feature) => quoted(feature.name)).join(", ")}`];
+  return [
+    `${statBlock.meta}, CR ${statBlock.cr}, AC ${statBlock.ac}, HP ${statBlock.hp}, speed ${statBlock.speed}`,
+    ...named("traits", statBlock.specialAbilities),
+    ...named("actions", statBlock.actions),
+    ...named("bonus actions", statBlock.bonusActions),
+    ...named("reactions", statBlock.reactions),
+    ...named("legendary actions", statBlock.legendaryActions),
+  ].join("; ");
+};
+
+/** The whole stat block of whoever is up, less what its options already say. */
+const statBlockInFull = (statBlock: StatBlock): ReadonlyArray<string> => {
+  const list = (label: string, values: ReadonlyArray<string> | undefined) =>
+    values === undefined || values.length === 0 ? [] : [`${label}: ${values.join(", ")}.`];
+  return [
+    [
+      statBlock.meta,
+      `CR ${statBlock.cr}`,
+      `AC ${statBlock.ac}`,
+      `HP ${statBlock.hp}`,
+      `Speed ${statBlock.speed}`,
+    ]
+      .map((part) => `${part.replace(/\.+$/, "")}.`)
+      .join(" "),
+    `Abilities: ${statBlock.abilities
+      .map((ability) => `${ability.label} ${ability.score} (${ability.modifier})`)
+      .join(", ")}.`,
+    ...list(
+      "Saves and skills",
+      statBlock.proficiencies?.map(
+        (entry) =>
+          `${entry.proficiency.name.replace(/^(Saving Throw|Skill): /, "")} ${signed(entry.value)}`,
+      ),
+    ),
+    ...list("Vulnerable to", statBlock.damageVulnerabilities),
+    ...list("Resists", statBlock.damageResistances),
+    ...list("Immune to", statBlock.damageImmunities),
+    ...list(
+      "Immune to conditions",
+      statBlock.conditionImmunities?.map((entry) => entry.name),
+    ),
+    ...list(
+      "Senses",
+      statBlock.senses === undefined
+        ? undefined
+        : Object.entries(statBlock.senses).map(
+            ([sense, value]) => `${sense.replaceAll("_", " ")} ${String(value)}`,
+          ),
+    ),
+    ...(statBlock.specialAbilities === undefined || statBlock.specialAbilities.length === 0
+      ? []
+      : [
+          "Traits:",
+          ...statBlock.specialAbilities.map(
+            (feature) => `- ${quoted(feature.name)}: ${gist([feature.desc], 240)}`,
+          ),
+        ]),
+  ];
+};
+
+/**
+ * The fight on the table as `readFight` reads it out: one block of plain
+ * lines, the run and the board, the tactics, the order with every row's
+ * numbers, a line for each other creature's stat block, and — when a monster
+ * is up — its stat block in full and its options as `npcTurnOptions` gives
+ * them. Combatants are named by their place in the order (`#2`) rather than by
+ * id, and options by their own ids: both are short, and both are what a
+ * proposal will name. No picture, no portrait, no URL.
+ */
+const fightText = (read: TableFightRead): string => {
+  const { run, board, scene, combatants } = read;
+  const handles = new Map(combatants.map((row, index) => [row.id, index]));
+  const handle = (id: string): string => {
+    const index = handles.get(id as (typeof combatants)[number]["id"]);
+    return index === undefined
+      ? "someone gone"
+      : `#${String(index + 1)} ${quoted(combatants[index]!.displayName)}`;
+  };
+  const tactics =
+    scene.beats.length === 0
+      ? []
+      : ["Tactics:", ...scene.beats.map((beat) => `- [${beat.done ? "x" : " "}] ${beat.text}`)];
+
+  if (run.mode !== "combat") {
+    return [
+      `${quoted(run.encounterName)} is on the table: a ${encounterKindLabel(run.mode).toLowerCase()} scene, not a fight. Nobody takes turns.`,
+      ...tactics,
+    ].join("\n");
+  }
+
+  const up = combatants.find((row) => row.id === run.activeCombatantId);
+  const statBlockOf = (row: (typeof combatants)[number]) =>
+    row.creatureId === null ? undefined : read.creatures.get(row.creatureId)?.statBlock;
+
+  const rowLine = (row: (typeof combatants)[number], index: number): string => {
+    const statBlock = statBlockOf(row);
+    const used = [
+      ...(row.actionUsed ? ["action"] : []),
+      ...(row.bonusUsed ? ["bonus action"] : []),
+      ...(row.reactionUsed ? ["reaction"] : []),
+    ];
+    const notes = [
+      ...(row.conditions.length === 0 ? [] : [`conditions: ${row.conditions.join(", ")}`]),
+      ...(row.deathSaves === null || row.hpCurrent > 0
+        ? []
+        : [
+            `death saves ${String(row.deathSaves.successes)} succeeded, ${String(row.deathSaves.failures)} failed`,
+          ]),
+      ...(used.length === 0 ? [] : [`${used.join(", ")} used`]),
+      ...(row.feetMoved === 0 ? [] : [`moved ${String(row.feetMoved)} ft`]),
+      ...(row.kind === "pc" ? [] : spendingOf(row, statBlock)),
+      ...(row.visibility === "dm" ? ["hidden from the players"] : []),
+      ...(read.underFog.has(row.id) ? ["under fog"] : []),
+    ];
+    return (
+      `#${String(index + 1)} ${row.id === run.activeCombatantId ? "▶ " : ""}${quoted(row.displayName)}` +
+      ` (${row.kind === "pc" ? "player character" : "monster"}${row.initiative === null ? ", no initiative yet" : `, initiative ${String(row.initiative)}`})` +
+      `: HP ${String(row.hpCurrent)}/${String(row.hpMax)}${row.hpCurrent === 0 ? " (down)" : ""}` +
+      (row.ac === null ? "" : `, AC ${String(row.ac)}`) +
+      (board === null
+        ? ""
+        : row.position === null
+          ? ", not on the board"
+          : `, at ${square(row.position)}`) +
+      (notes.length === 0 ? "" : `; ${notes.join("; ")}`)
+    );
+  };
+
+  const creatureRows = new Map<string, Array<number>>();
+  combatants.forEach((row, index) => {
+    if (row.kind === "pc" || row.id === up?.id) return;
+    const key = row.creatureId ?? `row:${row.id}`;
+    creatureRows.set(key, [...(creatureRows.get(key) ?? []), index]);
+  });
+  const others = [...creatureRows.entries()].map(([key, indexes]) => {
+    const statBlock = read.creatures.get(key as CreatureId)?.statBlock;
+    const who = indexes.map((index) => `#${String(index + 1)}`).join(", ");
+    const name =
+      read.creatures.get(key as CreatureId)?.name ?? combatants[indexes[0]!]!.displayName;
+    return statBlock === undefined
+      ? `- ${quoted(name)} (${who}): no stat block.`
+      : `- ${quoted(name)} (${who}): ${statBlockLine(statBlock)}.`;
+  });
+
+  const area = board?.area;
+  const options = read.options;
+  const upBlock = up === undefined ? undefined : statBlockOf(up);
+  return [
+    `${quoted(run.encounterName)}, a fight: round ${String(run.round)}, ${
+      run.phase === "initiative" ? "rolling initiative" : "taking turns"
+    }. ${up === undefined ? "Nobody is up yet." : `Up: ${handle(up.id)}.`}`,
+    board === null
+      ? "No board: nothing is measured."
+      : `Board: ${String(board.columns)}×${String(board.rows)} squares of ${String(board.feetPerCell)} ft, ` +
+        `squares written (column,row) from (0,0) at the top left; diagonals ${
+          read.diagonals === "five" ? "cost 5 ft each" : "alternate 5 ft and 10 ft"
+        }. ` +
+        (board.fog.length === 0
+          ? "No fog."
+          : `Fog covers ${String(board.fog.length)} square${board.fog.length === 1 ? "" : "s"}.`) +
+        (area === null || area === undefined
+          ? ""
+          : ` Template pinned: a ${String(area.feet)}-ft ${area.shape} at ${square(area.origin)}` +
+            ("toward" in area ? ` toward ${square(area.toward)}` : "") +
+            "."),
+    ...tactics,
+    "Order:",
+    ...combatants.map(rowLine),
+    ...(others.length === 0 ? [] : ["Other creatures:", ...others]),
+    ...(up === undefined || up.kind === "pc"
+      ? up === undefined
+        ? []
+        : ["It is a player character's turn: its player chooses."]
+      : [
+          `Up, in full — ${handle(up.id)}:`,
+          ...(upBlock === undefined ? ["No stat block."] : statBlockInFull(upBlock)),
+          ...(options === undefined
+            ? []
+            : [
+                ...(options.options.length === 0 ? [] : ["Options now:"]),
+                ...options.options
+                  .filter((option) => option.kind !== "standard")
+                  .flatMap((option) => optionText(option, handle)),
+                // Dash, Dodge and the rest every creature has: one line, not eight.
+                ...(() => {
+                  const standard = options.options.filter((option) => option.kind === "standard");
+                  return standard.length === 0
+                    ? []
+                    : [
+                        `- Standard actions, each its action: ${standard.map((option) => option.id).join(", ")}.`,
+                      ];
+                })(),
+                ...(options.movement === undefined
+                  ? []
+                  : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+                ...options.omitted.map((omission) =>
+                  omission.id === "*"
+                    ? `It can do nothing now: ${omission.reason}.`
+                    : `Left out: ${omission.id} (${omission.reason}).`,
+                ),
+              ]),
+        ]),
+  ].join("\n");
+};
 
 /** Why an option is not available yet, in the prerequisites' own terms. */
 const unmet = (option: LevelUpFeatureOption): string =>

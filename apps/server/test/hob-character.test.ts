@@ -47,6 +47,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
+import { TableFight } from "../src/repo/TableFight.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
@@ -132,6 +133,7 @@ const services = Layer.mergeAll(
   Acts.layer,
   PrepItems.layer,
   Spells.layer,
+  TableFight.unsigned,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_character")));
 
 const withActor =

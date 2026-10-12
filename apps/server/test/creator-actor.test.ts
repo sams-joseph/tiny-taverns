@@ -581,7 +581,12 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and thirty-eight is `Combatants.resources`: a monster's
       // spending over the fight, the creator's like the turn's, and no player
       // read selects it.
-      expect(gated).toBe(138);
+      // A hundred and thirty-nine to forty-one are `TableFight.onTable`,
+      // `read` and the inner read they share: the fight on the table as its
+      // creator sees it, which Hob's `readFight` reads out to the creator's
+      // toolkits alone. A hundred and forty-two is `Spells.named`, the spells
+      // that fight's stat blocks name, read beneath the same proof.
+      expect(gated).toBe(142);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

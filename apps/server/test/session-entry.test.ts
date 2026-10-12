@@ -43,6 +43,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
+import { TableFight } from "../src/repo/TableFight.js";
 import { aCampaignBy, aCharacterAt, aPlayerAt, anAccount, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
@@ -118,6 +119,7 @@ const services = Layer.mergeAll(
   Acts.layer,
   PrepItems.layer,
   Spells.layer,
+  TableFight.unsigned,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_session_entry")));
 
 const as = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R | CurrentActor>) =>
