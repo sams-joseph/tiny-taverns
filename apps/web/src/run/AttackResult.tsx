@@ -47,6 +47,8 @@ export function AttackResultCard({
   onApply,
   onRollSave,
   onDismiss,
+  range,
+  next,
 }: {
   readonly outcome: AttackOutcome;
   /** The damage was sent, whole or halved. */
@@ -60,6 +62,13 @@ export function AttackResultCard({
   /** Offered once the damage is sent, for a target whose Con save is written, until rolled. */
   readonly onRollSave: (() => void) | undefined;
   readonly onDismiss: () => void;
+  /**
+   * Where the target stood against the line's reach and range, when it was not
+   * plainly within them (`run/options.ts`). Said, never refused.
+   */
+  readonly range?: "out" | "long" | undefined;
+  /** The next strike of a multiattack, while one is being run. */
+  readonly next?: { readonly label: string; readonly onNext: () => void } | undefined;
 }) {
   const landed = lands(outcome.verdict);
   return (
@@ -93,6 +102,13 @@ export function AttackResultCard({
         <span>{hitLine(outcome)}</span>
         {landed && outcome.damage.length > 0 && <span>{damageLine(outcome.damage)}</span>}
       </div>
+      {range !== undefined && (
+        <p data-slot="attack-range" className="mb-0 text-caption leading-snug text-danger-ink">
+          {range === "out"
+            ? `${outcome.target} was beyond its reach and range.`
+            : `${outcome.target} was at long range: the attack has disadvantage, which this roll did not take.`}
+        </p>
+      )}
       {concentrationDc !== undefined && (
         <div className="flex items-center gap-2">
           <p className="mb-0 min-w-0 flex-1 text-caption leading-snug text-magic-ink">
@@ -137,6 +153,12 @@ export function AttackResultCard({
         <Button variant="ghost" size="sm" className="ml-auto" onClick={onDismiss}>
           Dismiss
         </Button>
+        {next !== undefined && (
+          <Button variant="outline" size="sm" disabled={disabled} onClick={next.onNext}>
+            <Icon name="swords" size={13} />
+            {next.label}
+          </Button>
+        )}
       </div>
     </section>
   );

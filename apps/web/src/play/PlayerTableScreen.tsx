@@ -7,6 +7,7 @@ import {
   type PlayerLiveCombatantYou,
   type RollMode,
   deathSaveRolled,
+  walkingFeet,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import {
@@ -32,7 +33,6 @@ import { rollActionThrows } from "../run/attack";
 import { RunLayout } from "../run/RunLayout";
 import { RunStage } from "../run/RunStage";
 import { useStage } from "../run/stage";
-import { leadingFeet } from "../run/tokens";
 import { feetLeft, type TurnTicks } from "../run/turn";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
@@ -97,7 +97,7 @@ export function PlayerTableScreen() {
   const owned = view?.characters.find((row) => row.character.id === seat?.characterId);
   const sheet = owned?.character.sheet;
   const actions = useMemo(() => (sheet === undefined ? [] : actionsOf({ sheet })), [sheet]);
-  const speed = leadingFeet(sheet?.identity?.speed);
+  const speed = walkingFeet(sheet?.identity?.speed);
   const upNextId = fight?.upNext?.kind === "visible" ? fight.upNext.combatantId : undefined;
   const turns = fight?.mode === "combat" && fight.phase === "turns";
   const yourTurn = you !== undefined && turns && upNextId === you.combatantId;

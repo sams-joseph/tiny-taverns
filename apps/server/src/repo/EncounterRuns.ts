@@ -175,6 +175,10 @@ interface CarriedCombatantRow {
   readonly bonus_used: boolean;
   readonly reaction_used: boolean;
   readonly feet_moved: number;
+  readonly legendary_spent: number;
+  readonly recharge_spent: ReadonlyArray<string>;
+  readonly uses_spent: unknown;
+  readonly slots_spent: unknown;
   readonly visibility: Visibility;
   readonly origin: Origin;
   readonly assistant_turn_id: AssistantTurnId | null;
@@ -975,6 +979,8 @@ export class EncounterRuns extends Context.Service<
                              combatant.board_column, combatant.board_row,
                              combatant.action_used, combatant.bonus_used,
                              combatant.reaction_used, combatant.feet_moved,
+                             combatant.legendary_spent, combatant.recharge_spent,
+                             combatant.uses_spent, combatant.slots_spent,
                              combatant.visibility, combatant.origin, combatant.assistant_turn_id
                       from combatant
                       where ${containedChildWritable(sql, COMBATANT, from.id, campaignId, actor)}
@@ -1012,6 +1018,12 @@ export class EncounterRuns extends Context.Service<
                         bonus_used: row.bonus_used,
                         reaction_used: row.reaction_used,
                         feet_moved: row.feet_moved,
+                        // The same fight, so the same spending: a breath used
+                        // last week is still waiting on its roll.
+                        legendary_spent: row.legendary_spent,
+                        recharge_spent: textArray(row.recharge_spent),
+                        uses_spent: JSON.stringify(row.uses_spent),
+                        slots_spent: JSON.stringify(row.slots_spent),
                         visibility: row.visibility,
                         origin: row.origin,
                         assistant_turn_id: row.assistant_turn_id,

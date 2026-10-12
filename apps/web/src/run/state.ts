@@ -310,6 +310,7 @@ export function useRunState(path: RunPath): RunController {
                   bonusUsed: false,
                   reactionUsed: false,
                   feetMoved: 0,
+                  legendarySpent: 0,
                 },
                 { disableChecks: true },
               )

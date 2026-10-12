@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AreaShape } from "./AreaShape.js";
 import { AccountId, CampaignId, CreatureId } from "./Ids.js";
 import { pageFilter } from "./Page.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
@@ -65,6 +66,54 @@ export const Ability = Schema.Struct({
 export type Ability = typeof Ability.Type;
 
 /**
+ * Where a stat block's action reaches, as numbers a board can measure: the
+ * structured half of `"reach 5 ft."`, `"range 80/320 ft."` and `"a 60-foot
+ * cone"`, which the prose (`CreatureFeature.desc`, `Trait.text`) still says
+ * in full.
+ *
+ * Extracted once, where the document is written — the SRD import reads it out
+ * of the source's prose (`bestiary/geometry.ts`), the creature form takes it
+ * as typed — rather than parsed from the prose on every read, so the runner
+ * and the NPC turn options measure the same numbers. Every key is optional:
+ * an action the prose gives no distance for has none, and an option that needs
+ * one is left out rather than guessed.
+ */
+const actionFeet = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
+
+/** `"range 80/320 ft."`: the normal range, and the long one beyond it at disadvantage. */
+export const ActionRange = Schema.Struct({
+  normal: actionFeet,
+  long: Schema.optional(actionFeet),
+});
+export type ActionRange = typeof ActionRange.Type;
+
+/**
+ * An area the action fills: `"a 60-foot cone"`, `"a 90-foot line that is 10
+ * feet wide"`, `"each creature within 10 ft. of the dragon"` (a sphere about
+ * the creature itself), `"a 20-foot-radius sphere centered on a point it can
+ * see within 120 feet"`.
+ *
+ * `origin` says where it starts: `self` is the creature's own square (a cone,
+ * a line, a burst around it), `point` a square the creature picks within the
+ * action's `range`. `width` is a line's, absent for the SRD's usual 5 feet.
+ */
+export const ActionArea = Schema.Struct({
+  shape: AreaShape,
+  feet: actionFeet,
+  width: Schema.optional(actionFeet),
+  origin: Schema.Literals(["self", "point"]),
+});
+export type ActionArea = typeof ActionArea.Type;
+
+/** The three distances an action may carry, spread into both shapes that hold one. */
+const actionGeometryFields = {
+  /** `"reach 10 ft."`: a melee attack's reach, in feet. */
+  reach: Schema.optional(actionFeet),
+  range: Schema.optional(ActionRange),
+  area: Schema.optional(ActionArea),
+};
+
+/**
  * A named trait, action or reaction (`data.js:27-32`) — and, since the
  * character sheet, a feature and an attack as well.
  *
@@ -90,6 +139,8 @@ export const Trait = Schema.Struct({
   hit: Schema.optional(Schema.String),
   /** `"1/short rest"`, `"10 ft."` — the short label beside the name. */
   note: Schema.optional(Schema.String),
+  /** Typed in the creature form beside the prose; see {@link ActionRange}. */
+  ...actionGeometryFields,
 });
 export type Trait = typeof Trait.Type;
 
@@ -182,6 +233,20 @@ export const CreatureSpellcasting = Schema.Struct({
 });
 export type CreatureSpellcasting = typeof CreatureSpellcasting.Type;
 
+/**
+ * One of the alternatives a feature offers — `"The dragon uses one of the
+ * following breath weapons."` — with its own save, damage and area. The import
+ * reads it out of the source's choose-one `options` (which `CreatureFeature`
+ * still keeps as written) so nothing downstream decodes the raw payload.
+ */
+export const CreatureChoice = Schema.Struct({
+  name: Schema.NonEmptyString,
+  dc: Schema.optional(CreatureDifficultyClass),
+  damage: Schema.optional(Schema.Array(CreatureDamage)),
+  ...actionGeometryFields,
+});
+export type CreatureChoice = typeof CreatureChoice.Type;
+
 /** A named source section: feature, action, reaction or legendary action. */
 export const CreatureFeature = Schema.Struct({
   name: Schema.NonEmptyString,
@@ -196,6 +261,36 @@ export const CreatureFeature = Schema.Struct({
   options: Schema.optional(sourcePayload),
   damage: Schema.optional(Schema.Array(CreatureDamage)),
   spellcasting: Schema.optional(CreatureSpellcasting),
+  ...actionGeometryFields,
+  /** The alternatives it offers, one of which is used; see {@link CreatureChoice}. */
+  choices: Schema.optional(Schema.Array(CreatureChoice)),
+  /**
+   * A multiattack's alternatives, each the strikes one way of taking it makes:
+   * `"three melee attacks: two with its scimitar and one with its dagger. Or
+   * … two ranged attacks with its daggers"` is `[[Scimitar ×2, Dagger ×1],
+   * [Dagger ×2]]`. Read at import out of the source's `actionOptions`, which
+   * stays as written; a multiattack with one way has `actions` instead.
+   */
+  multiattackOptions: Schema.optional(Schema.Array(Schema.Array(CreatureActionItem))),
+  /**
+   * A legendary action's cost, from `"Wing Attack (Costs 2 Actions)"`; absent
+   * is the SRD's one action. The name keeps the parenthetical as written.
+   */
+  legendaryCost: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10 }))),
+  /**
+   * The actions this one performs by name, when its prose only points at them:
+   * a legendary `"The dragon makes a tail attack."` is `["Tail"]`, `"makes one
+   * tentacle attack or uses its Fling"` is `["Tentacle", "Fling"]`, each an
+   * alternative. Names are the stat block's own `actions`, matched at import.
+   */
+  performs: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+  /**
+   * A special ability that is a bonus action, from its prose (the 2014 source
+   * has no bonus-action section): `always` on any of its turns, `triggered`
+   * only once the condition its prose opens on has happened (a pounce after a
+   * charge, a rampage after a kill).
+   */
+  bonusAction: Schema.optional(Schema.Literals(["always", "triggered"])),
 });
 export type CreatureFeature = typeof CreatureFeature.Type;
 
@@ -246,6 +341,16 @@ export const StatBlock = Schema.Struct({
   bonusActions: Schema.optional(Schema.Array(CreatureFeature)),
   reactions: Schema.optional(Schema.Array(CreatureFeature)),
   legendaryActions: Schema.optional(Schema.Array(CreatureFeature)),
+  /**
+   * How many legendary actions it takes each round, spent between other
+   * creatures' turns and regained at the start of its own. The SRD's prose says
+   * three for every legendary creature it has; the 2014 source the import reads
+   * dropped that sentence, so the import writes the SRD's three wherever it
+   * writes `legendaryActions`, and the creature form edits it.
+   */
+  legendaryActionsPerRound: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10 })),
+  ),
   forms: Schema.optional(Schema.Array(CreatureSourceReference)),
   image: Schema.optional(Schema.String),
 });

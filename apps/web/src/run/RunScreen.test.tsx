@@ -4096,3 +4096,190 @@ describe("the fog, on the narrow grid", () => {
     expect(screen.queryByRole("button", { name: "Fog" })).toBeNull();
   });
 });
+
+describe("a monster's resources", () => {
+  const resourcesRoute = `POST ${serverRunBase()}/combatants/${goblinBoss.id}/resources`;
+  const block = () => within(panel().getByRole("region", { name: "Resources of Goblin Boss" }));
+  const withResources = () =>
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          actions: [
+            {
+              name: "Fire Breath",
+              desc: "The boss exhales fire in a 15-foot cone.",
+              usage: { type: "recharge on roll", dice: "1d6", minValue: 5 },
+              area: { shape: "cone", feet: 15, origin: "self" },
+            },
+          ],
+          legendaryActions: [{ name: "Detect", desc: "The boss makes a Wisdom check." }],
+          legendaryActionsPerRound: 3,
+        },
+      },
+    });
+
+  it("draws what its stat block gives it to spend, less what its row has spent", async () => {
+    withResources();
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, legendarySpent: 1, rechargeSpent: ["actions/Fire Breath"] },
+      ],
+    });
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+
+    expect(block().getByText("Legendary actions")).toBeInTheDocument();
+    expect(block().getByText("2/3")).toBeInTheDocument();
+    expect(block().getByText("Recharge 5–6")).toBeInTheDocument();
+    expect(block().getByRole("button", { name: "Fire Breath used" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("spends one and gives a recharge back, each through the resources write", async () => {
+    withResources();
+    server.routes.set(resourcesRoute, {
+      status: 200,
+      body: { ...goblinBoss, legendarySpent: 1 },
+    });
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(block().getByText("3/3")).toBeInTheDocument());
+
+    await userEvent.click(block().getByRole("button", { name: "Spend one of Legendary actions" }));
+    await waitFor(() => expect(block().getByText("2/3")).toBeInTheDocument());
+    expect(bodyOf(server, "POST", "/resources")).toMatchObject({
+      legendarySpent: 1,
+      requestId: expect.any(String),
+    });
+
+    server.routes.set(resourcesRoute, {
+      status: 200,
+      body: { ...goblinBoss, legendarySpent: 1, rechargeSpent: ["actions/Fire Breath"] },
+    });
+    server.calls.length = 0;
+    await userEvent.click(block().getByRole("button", { name: "Fire Breath used" }));
+    await waitFor(() =>
+      expect(block().getByRole("button", { name: "Fire Breath used" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(bodyOf(server, "POST", "/resources")).toMatchObject({
+      rechargeSpent: ["actions/Fire Breath"],
+    });
+    // Nothing outside the fight reads a monster's spending.
+    expect(server.calls.filter((call) => call.method === "GET")).toEqual([]);
+  });
+
+  it("draws no block for a party member", async () => {
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    expect(panel().queryByRole("region", { name: /^Resources of / })).toBeNull();
+  });
+});
+
+describe("a monster's multiattack, and its reach", () => {
+  // The Goblin Boss is up, two squares from Brannoc: 10 feet, past a
+  // scimitar's 5-foot reach. Its stat block makes two scimitar attacks.
+  beforeEach(() => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          traits: [],
+          actions: [
+            {
+              name: "Multiattack",
+              desc: "The boss makes two attacks with its scimitar.",
+              multiattackType: "actions",
+              actions: [{ actionName: "Scimitar", count: 2, type: "melee" }],
+            },
+            {
+              name: "Scimitar",
+              desc: "Melee Weapon Attack: +4 to hit, reach 5 ft., one target.",
+              attackBonus: 4,
+              reach: 5,
+              damage: [
+                { damageType: { index: "slashing", name: "Slashing" }, damageDice: "1d6+2" },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 7, row: 4 } }],
+    });
+    server.routes.set(`POST ${serverRunBase()}/combatants/${goblinBoss.id}/turn`, {
+      status: 200,
+      body: { ...goblinBoss, position: { column: 7, row: 4 }, actionUsed: true },
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const actions = () => within(panel().getByRole("region", { name: "Actions of Goblin Boss" }));
+  const result = () =>
+    within(panel().getByRole("region", { name: "Attack result, Scimitar → Brannoc" }));
+
+  const open = async () => {
+    await renderRunner();
+    await waitFor(() =>
+      expect(
+        actions().getByRole("button", { name: "Multiattack: Scimitar ×2" }),
+      ).toBeInTheDocument(),
+    );
+  };
+
+  it("runs its strikes one after the other, each its own target and roll", async () => {
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Multiattack: Scimitar ×2" }));
+    expect(screen.getByText("Pick a target for Scimitar (1 of 2)")).toBeInTheDocument();
+
+    await userEvent.click(rowFor("Brannoc"));
+    expect(result().getByRole("button", { name: /Next: Scimitar \(2 of 2\)/ })).toBeInTheDocument();
+
+    await userEvent.click(result().getByRole("button", { name: /Next: Scimitar \(2 of 2\)/ }));
+    expect(screen.getByText("Pick a target for Scimitar (2 of 2)")).toBeInTheDocument();
+    await userEvent.click(rowFor("Brannoc"));
+    // The last strike offers no next one.
+    expect(result().queryByRole("button", { name: /^Next:/ })).toBeNull();
+  });
+
+  it("marks a target its reach does not take in, and says so on the card, refusing nothing", async () => {
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Scimitar" }));
+    expect(rowFor("Brannoc")).toHaveAccessibleName(/out of range/);
+    expect(rowFor("Brannoc")).toHaveAttribute("data-range", "out");
+
+    await userEvent.click(rowFor("Brannoc"));
+    expect(result().getByText("Brannoc was beyond its reach and range.")).toBeInTheDocument();
+    // The pick is over, and with it the marks.
+    expect(rowFor("Brannoc")).not.toHaveAttribute("data-range");
+  });
+
+  it("puts the rest of a multiattack away with the pick", async () => {
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Multiattack: Scimitar ×2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/Pick a target for/)).toBeNull();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Scimitar" }));
+    expect(screen.getByText("Pick a target for Scimitar")).toBeInTheDocument();
+  });
+});

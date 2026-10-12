@@ -164,7 +164,7 @@ const areaOf = (row: Record<string, unknown>): SpellBody["areaOfEffect"] => {
   return { type, size };
 };
 
-const transformedSpell = (row: Record<string, unknown>): SystemSpell => {
+export const transformedSpell = (row: Record<string, unknown>): SystemSpell => {
   const school = refOf(row.school, "school");
   const classes = refsOf(row, "classes");
   const subclasses = refsOf(row, "subclasses");

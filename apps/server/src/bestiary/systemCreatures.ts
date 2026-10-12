@@ -68,6 +68,7 @@ export const SYSTEM_CREATURES: ReadonlyArray<SystemCreature> = [
           name: "Scimitar",
           text: "Melee weapon attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) slashing damage.",
           dice: "1d6+2",
+          reach: 5,
         },
         {
           name: "Redirect Attack",

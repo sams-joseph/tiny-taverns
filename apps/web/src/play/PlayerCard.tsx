@@ -134,11 +134,14 @@ export function YourCard({
             <Actions
               name={name}
               actions={actions}
+              // A sheet has no stat-block multiattack to run.
+              multiattacks={[]}
               // Every line is *Roll*: a player's attack names no target.
               active={false}
               disabled={false}
               targeting={undefined}
               onAttack={undefined}
+              onMultiattack={undefined}
               onRoll={onRollAction}
             />
           </div>

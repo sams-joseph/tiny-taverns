@@ -63,7 +63,13 @@ export function InitiativeStrip({
   onSelect,
   onAdd,
   onReroll,
+  outOfRange,
 }: {
+  /**
+   * While a target is picked: who the line's reach and range leave out
+   * (`run/options.ts`), faded and said in the chip's name, still pickable.
+   */
+  readonly outOfRange?: ReadonlySet<CombatantId> | undefined;
   readonly run: EncounterRun;
   readonly combatants: ReadonlyArray<Combatant>;
   /** The board's initials for each row (`tokenLabels`), so a chip and its token read alike. */
@@ -105,6 +111,7 @@ export function InitiativeStrip({
       out: outOfTheFight(combatant, hp),
       hidden: shared && combatant.visibility === "dm",
       unplaced: board && combatant.position === null,
+      outOfRange: outOfRange?.has(combatant.id) ?? false,
     };
   });
   const byId = new Map(combatants.map((combatant) => [combatant.id, combatant]));
@@ -200,6 +207,8 @@ export interface StripRow {
   readonly unplaced: boolean;
   /** Said in its accessible name after the name: `"you"`. */
   readonly note?: string;
+  /** Beyond the reach and range of the DM's line whose target is being picked. */
+  readonly outOfRange?: boolean;
 }
 
 /**
@@ -302,7 +311,7 @@ function StripChip({
   readonly selected: boolean;
   readonly onSelect: () => void;
 }) {
-  const { out, hidden, unplaced, health } = row;
+  const { out, hidden, unplaced, health, outOfRange = false } = row;
   const exact = "hp" in health;
   const down = exact ? health.hp === 0 : health.down;
   const name = [
@@ -315,6 +324,7 @@ function StripChip({
     out ? "out of the fight" : undefined,
     hidden ? "hidden from players" : undefined,
     unplaced ? "not on the board" : undefined,
+    outOfRange ? "out of range" : undefined,
   ]
     .filter((part) => part !== undefined)
     .join(", ");
@@ -338,7 +348,9 @@ function StripChip({
             ? "border-faint bg-surface-page"
             : "border-hairline bg-surface-page hover:bg-surface-raised",
         out && "opacity-45",
+        outOfRange && "border-dashed opacity-60",
       )}
+      data-range={outOfRange ? "out" : undefined}
     >
       <span
         className={cn(

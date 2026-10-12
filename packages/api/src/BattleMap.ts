@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AreaShape } from "./AreaShape.js";
 import { CombatantPosition } from "./Combatant.js";
 import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
 
@@ -127,10 +128,6 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
-
-/** The shapes an area of effect takes on the board; {@link areaSquares} draws each. */
-export const AreaShape = Schema.Literals(["sphere", "cone", "line", "cube"]);
-export type AreaShape = typeof AreaShape.Type;
 
 /** The sizes an area takes, in feet: the Area tool's − and + stop here (its steps of 5 are its own). */
 export const AREA_FEET = { minimum: 5, maximum: 120 } as const;
@@ -635,7 +632,7 @@ export const reachableSquares = (
  * A cube is `feet` on a side with `origin` at its middle (the square left and
  * up of the middle when the side is an even number of squares). A cone and a
  * line start at `origin` and point at `toward`, `feet` long, never covering
- * `origin` itself: a line is one square wide, and a cone is as wide as it is
+ * `origin` itself: a line is one square wide unless `width` says more, and a cone is as wide as it is
  * far from its point.
  * A cone or a line with nowhere to point (`toward` is `origin`) covers nothing.
  *
@@ -654,12 +651,15 @@ export const areaSquares = (
     feetPerCell,
     origin,
     toward,
+    width,
   }: {
     readonly shape: AreaShape;
     readonly feet: number;
     readonly feetPerCell: number;
     readonly origin: BoardSquare;
     readonly toward: BoardSquare;
+    /** A line's width in feet, when it is wider than one square (a stat block's `width`). */
+    readonly width?: number;
   },
 ): ReadonlyArray<BoardSquare> => {
   const size = feet / feetPerCell;
@@ -696,7 +696,8 @@ export const areaSquares = (
     const ahead = column * along.column + row * along.row;
     const aside = Math.abs(column * along.row - row * along.column);
     if (ahead <= 0.3 || ahead > size + 0.3) return false;
-    return shape === "cone" ? aside <= ahead / 2 + 0.35 : aside <= 0.5;
+    const halfWidth = width === undefined ? 0.5 : Math.max(0.5, width / feetPerCell / 2);
+    return shape === "cone" ? aside <= ahead / 2 + 0.35 : aside <= halfWidth;
   });
 };
 

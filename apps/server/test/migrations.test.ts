@@ -33,6 +33,7 @@ import npcLinks from "../src/migrations/0074_npc_links.js";
 import encounterOrder from "../src/migrations/0078_encounter_order.js";
 import integerSequences from "../src/migrations/0081_integer_sequences.js";
 import deathSaves from "../src/migrations/0085_death_saves.js";
+import actionGeometry from "../src/migrations/0092_action_geometry.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -89,6 +90,8 @@ const orderDatabase = freshDatabase("taverns_test_migrations_order");
 const sequencesDatabase = freshDatabase("taverns_test_migrations_sequences");
 /** A twenty-first, for sheets that kept their death saves in the document. */
 const deathSavesDatabase = freshDatabase("taverns_test_migrations_death_saves");
+/** A twenty-second, for copied stat blocks written before reach and range were structured. */
+const geometryDatabase = freshDatabase("taverns_test_migrations_action_geometry");
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -369,6 +372,8 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
+        { migration_id: 92, name: "action_geometry" },
+        { migration_id: 93, name: "combatant_resources" },
       ]);
     }),
   );
@@ -470,6 +475,8 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
+        { migration_id: 92, name: "action_geometry" },
+        { migration_id: 93, name: "combatant_resources" },
       ]);
     }),
   );
@@ -2126,6 +2133,93 @@ describeLayer(
           );
           expect(measured.summary).toEqual([{ last_group_seq: 1 }]);
         }),
+    );
+  },
+);
+
+describeLayer(
+  "upgrading copied stat blocks that kept reach and range in prose",
+  geometryDatabase,
+  (it) => {
+    it.effect("fills in a copy's distances, and leaves the bundle's to the import", () =>
+      Effect.gen(function* () {
+        const measured = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* migrate;
+          const account = (yield* sql<{ readonly id: string }>`
+            insert into account ${sql.insert({ name: "Jo", token_hash: "geometry-hash" })}
+            returning id
+          `)[0]!.id;
+          // The shape a copy of the SRD's goblin had before `0092`: the source
+          // prose, no structured distance.
+          const body = JSON.stringify({
+            meta: "Small humanoid (goblinoid), neutral evil",
+            ac: "15",
+            hp: "7 (2d6)",
+            speed: "30 ft.",
+            cr: "1/4 (50 XP)",
+            abilities: [],
+            traits: [],
+            actions: [
+              {
+                name: "Shortbow",
+                desc: "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+                attackBonus: 4,
+              },
+              {
+                name: "Scimitar",
+                desc: "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.",
+                attackBonus: 4,
+                reach: 10,
+              },
+            ],
+          });
+          const creature = (row: Record<string, unknown>) => ({
+            name: "Goblin",
+            type: "Humanoid",
+            cr: "1/4",
+            ac: 15,
+            hp: 7,
+            body,
+            ...row,
+          });
+          yield* sql`
+            insert into creature ${sql.insert([
+              // Every row names every column: `sql.insert` takes its column
+              // list from the first row.
+              creature({
+                campaign_id: null,
+                account_id: account,
+                origin: "authored",
+                name: "Library Goblin",
+              }),
+              creature({
+                campaign_id: null,
+                account_id: null,
+                origin: "system",
+                name: "Bundle Goblin",
+              }),
+            ])}
+          `;
+
+          yield* actionGeometry;
+          yield* actionGeometry;
+          return yield* sql<{ readonly name: string; readonly actions: unknown }>`
+            select name, body -> 'actions' as actions from creature order by name
+          `;
+        }).pipe(Effect.orDie);
+
+        const actionsOf = (name: string) =>
+          measured.find((row) => row.name === name)?.actions as ReadonlyArray<
+            Record<string, unknown>
+          >;
+        expect(actionsOf("Library Goblin")).toMatchObject([
+          { name: "Shortbow", range: { normal: 80, long: 320 } },
+          // Already set, so kept: the migration writes only what is missing.
+          { name: "Scimitar", reach: 10 },
+        ]);
+        expect(actionsOf("Bundle Goblin")[0]).not.toHaveProperty("range");
+      }),
     );
   },
 );

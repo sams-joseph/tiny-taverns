@@ -12,6 +12,7 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
+import { walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -82,7 +83,17 @@ import { dockLines } from "./rollsLog";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
-import { leadingFeet, tokenLabels } from "./tokens";
+import { tokenLabels } from "./tokens";
+import {
+  longRangeFor,
+  multiattacksOf,
+  type MultiattackRun,
+  outOfRangeFor,
+  rangeOptionsFor,
+  runOptionsFor,
+  type RunOptionsSource,
+} from "./options";
+import { patchFor, useResources } from "./resources";
 import { feetLeft, isUp, useTurnTicks } from "./turn";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -739,6 +750,7 @@ export function RunScreen() {
   );
   // The *This turn* toggles, and `spendAction`, which an attack calls.
   const turnTicks = useTurnTicks(path, controller);
+  const resources = useResources(path, controller);
 
   // A scene's own state, read only once the run says it is one; a fight reads
   // nothing here. The doorbell re-reads it with the fight.
@@ -760,11 +772,23 @@ export function RunScreen() {
   const [targeting, setTargeting] = useState<
     { readonly attackerId: CombatantId; readonly line: ActionLine } | undefined
   >();
+  // A multiattack being run (`run/options.ts`): its attack rolls, and which
+  // comes next once the DM has the last one's card. The turn's, like the pick.
+  const [sequence, setSequence] = useState<
+    | {
+        readonly attackerId: CombatantId;
+        readonly run: MultiattackRun;
+        readonly next: number;
+      }
+    | undefined
+  >();
   const [attack, setAttack] = useState<
     | {
         readonly attackerId: CombatantId;
         readonly targetId: CombatantId;
         readonly outcome: AttackOutcome;
+        /** Where the target stood against the line's reach and range, when not plainly within. */
+        readonly range: "out" | "long" | undefined;
         /** What was sent, and the target's hit points before it. */
         readonly applied: { readonly amount: number; readonly hpBefore: number } | undefined;
         /** The concentration save the hit set up was rolled. */
@@ -850,16 +874,55 @@ export function RunScreen() {
       ? targeting
       : undefined;
 
+  // The turn options (`run/options.ts`), over what the screen already holds.
+  const optionsSource: RunOptionsSource | undefined =
+    state === undefined || view === undefined
+      ? undefined
+      : {
+          run: state.run,
+          combatants: state.combatants,
+          board: boardResource.state === "ready" ? boardResource.value : undefined,
+          diagonals: view.campaign.diagonalRule,
+          statBlocks: new Map(
+            [...view.creatures].map(([id, creature]) => [id, creature.statBlock] as const),
+          ),
+        };
+  const selectedOptions =
+    optionsSource === undefined || selected === undefined
+      ? undefined
+      : runOptionsFor(optionsSource, selected);
+  // While a target is picked: who the line's reach and range leave out, and
+  // who it takes in only at long range, marked on the strip and the board.
+  const pickingAttacker = state?.combatants.find((row) => row.id === picking?.attackerId);
+  const pickOptions =
+    optionsSource === undefined || pickingAttacker === undefined
+      ? undefined
+      : rangeOptionsFor(optionsSource, pickingAttacker);
+  const marks =
+    picking === undefined
+      ? undefined
+      : {
+          out: outOfRangeFor(pickOptions, picking.line),
+          long: longRangeFor(pickOptions, picking.line),
+        };
+
   // The pick and the card are the turn's: whichever way the turn moves (this
   // tab's *Next turn*, *Make it their turn*, another tab's write), they go.
   const activeId = active?.id;
   useEffect(() => {
     setTargeting(undefined);
+    setSequence(undefined);
     setAttack(undefined);
   }, [activeId]);
 
+  /** Put the pick away, and with it the rest of a multiattack being run. */
+  const cancelPick = () => {
+    setTargeting(undefined);
+    setSequence(undefined);
+  };
+
   // Esc puts a pending target away.
-  useEscapeAway(picking !== undefined, () => setTargeting(undefined));
+  useEscapeAway(picking !== undefined, cancelPick);
 
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
@@ -877,6 +940,7 @@ export function RunScreen() {
       setSelectedId(undefined);
       // And the last creature's attack is over with its turn.
       setTargeting(undefined);
+      setSequence(undefined);
       setAttack(undefined);
     }
   }, [state, turn, path, controller]);
@@ -892,6 +956,7 @@ export function RunScreen() {
       controller.startTurn(begun.success);
       setSelectedId(undefined);
       setTargeting(undefined);
+      setSequence(undefined);
       setAttack(undefined);
     }
   };
@@ -1011,6 +1076,11 @@ export function RunScreen() {
       attackerId: attacker.id,
       targetId: combatant.id,
       outcome,
+      range: marks?.out.has(combatant.id)
+        ? "out"
+        : marks?.long.has(combatant.id)
+          ? "long"
+          : undefined,
       applied: undefined,
       saveRolled: false,
     });
@@ -1265,7 +1335,7 @@ export function RunScreen() {
   });
   const speedOf = (combatant: Combatant): number | undefined => {
     const { statBlock, sheet } = sourceOf(combatant);
-    return leadingFeet(statBlock?.speed ?? sheet?.identity?.speed);
+    return walkingFeet(statBlock?.speed ?? sheet?.identity?.speed);
   };
   /** What is left of that this turn, for the board's range (`feetLeft`). */
   const feetLeftOf = (combatant: Combatant): number | undefined =>
@@ -1361,6 +1431,7 @@ export function RunScreen() {
         board={boardResource.state === "ready" && boardResource.value !== null}
         floating={canvas}
         disabled={frozen}
+        outOfRange={marks?.out}
         onSelect={choose}
         onAdd={() => setAdding(true)}
         onReroll={() => void reroll()}
@@ -1398,6 +1469,20 @@ export function RunScreen() {
       !attack.saveRolled
         ? () => rollConcentration(struck, owed, conSave)
         : undefined,
+    range: attack.range,
+    next: (() => {
+      if (sequence === undefined || sequence.attackerId !== attack.attackerId) return undefined;
+      const line = sequence.run.strikes[sequence.next];
+      if (line === undefined) return undefined;
+      return {
+        label: `Next: ${line.name} (${String(sequence.next + 1)} of ${String(sequence.run.strikes.length)})`,
+        onNext: () => {
+          setAttack(undefined);
+          setTargeting({ attackerId: attack.attackerId, line });
+          setSequence({ ...sequence, next: sequence.next + 1 });
+        },
+      };
+    })(),
   };
   const card = state !== undefined && view !== undefined && (
     <CombatantPanel
@@ -1406,6 +1491,18 @@ export function RunScreen() {
       label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
       speed={selected === undefined ? undefined : speedOf(selected)}
       actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
+      multiattacks={selected === undefined ? [] : multiattacksOf(selectedOptions)}
+      onMultiattack={
+        file === undefined
+          ? undefined
+          : (run) => {
+              const [first] = run.strikes;
+              if (selected === undefined || first === undefined) return;
+              setAttack(undefined);
+              setSequence({ attackerId: selected.id, run, next: 1 });
+              setTargeting({ attackerId: selected.id, line: first });
+            }
+      }
       creatures={view.creatures}
       active={selected !== undefined && selected.id === state.run.activeCombatantId}
       turn={
@@ -1415,6 +1512,28 @@ export function RunScreen() {
               onTick: (ticks) => void turnTicks.tick(selected, ticks),
             }
           : undefined
+      }
+      resources={
+        selected === undefined || over
+          ? undefined
+          : {
+              busy: resources.busy,
+              onSet: (patch) => void resources.set(selected, patch),
+              // The DM's own d6, in the dock like every roll on this screen;
+              // on the face the stat block names it is ready again.
+              onRecharge:
+                dice.roll === undefined
+                  ? undefined
+                  : (row) => {
+                      const rolled = dice.roll?.(
+                        `${selected.displayName} · ${row.label} recharge`,
+                        "1d6",
+                      );
+                      if (rolled !== undefined && rolled.total >= row.on) {
+                        void resources.set(selected, patchFor(selected, row, false));
+                      }
+                    },
+            }
       }
       following={selectedId === undefined}
       disabled={frozen || share.busy}
@@ -1455,6 +1574,7 @@ export function RunScreen() {
           : (line) => {
               if (selected === undefined) return;
               setAttack(undefined);
+              setSequence(undefined);
               setTargeting({ attackerId: selected.id, line });
             }
       }
@@ -1468,12 +1588,22 @@ export function RunScreen() {
               )
       }
       onApplyResult={(amount) => void applyAttack(amount)}
-      onDismissResult={() => setAttack(undefined)}
+      onDismissResult={() => {
+        setAttack(undefined);
+        setSequence(undefined);
+      }}
     />
   );
   const banner =
     picking === undefined ? undefined : (
-      <TargetBanner action={picking.line.name} onCancel={() => setTargeting(undefined)} />
+      <TargetBanner
+        action={
+          sequence !== undefined && sequence.attackerId === picking.attackerId
+            ? `${picking.line.name} (${String(sequence.next)} of ${String(sequence.run.strikes.length)})`
+            : picking.line.name
+        }
+        onCancel={cancelPick}
+      />
     );
   const rollsDock = state !== undefined && (
     <RollsDock
@@ -1507,6 +1637,7 @@ export function RunScreen() {
             onSelect: (combatant) => setSelectedId(combatant.id),
             // While a target is picked a token's click is the target, never a move or a selection.
             onTarget: picking === undefined ? undefined : strike,
+            outOfRange: marks?.out,
             onMove: move,
           },
           hostileTokensHidden: state.run.hostileTokensHidden,

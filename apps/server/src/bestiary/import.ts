@@ -24,6 +24,7 @@ import {
   MONSTER_RAW,
 } from "./systemMonsters.js";
 import { textArray } from "../repo/rows.js";
+import { bonusActionOf, geometryOf, legendaryCostOf, performsOf } from "./geometry.js";
 
 /** What one run of the import did. */
 export interface ImportResult {
@@ -251,6 +252,13 @@ const damagesOf = (
   return value.map(damageOf);
 };
 
+/** One strike of a multiattack: the action it names, how many times, and melee or ranged. */
+const actionItemOf = (action: Record<string, unknown>): Record<string, unknown> => ({
+  actionName: rawText(action, "action_name"),
+  count: typeof action.count === "number" || typeof action.count === "string" ? action.count : 1,
+  type: rawText(action, "type"),
+});
+
 const actionItemsOf = (
   row: Record<string, unknown>,
   key: "actions" | "attacks",
@@ -268,15 +276,7 @@ const actionItemsOf = (
       };
     });
   }
-  return value.map((item) => {
-    const action = recordOf(item, key);
-    return {
-      actionName: rawText(action, "action_name"),
-      count:
-        typeof action.count === "number" || typeof action.count === "string" ? action.count : 1,
-      type: rawText(action, "type"),
-    };
-  });
+  return value.map((item) => actionItemOf(recordOf(item, key)));
 };
 
 const spellcastingOf = (
@@ -303,30 +303,96 @@ const spellcastingOf = (
   };
 };
 
-const featureOf = (row: Record<string, unknown>): Record<string, unknown> => {
-  const usage = usageOf(optionalRecord(row, "usage"));
-  const dc = dcOf(optionalRecord(row, "dc"));
-  const damage = damagesOf(row);
-  const spellcasting = spellcastingOf(optionalRecord(row, "spellcasting"));
-  const actions = actionItemsOf(row, "actions");
-  const attacks = actionItemsOf(row, "attacks");
-  return {
-    name: rawText(row, "name"),
-    desc: rawText(row, "desc"),
-    ...(typeof row.attack_bonus === "number" ? { attackBonus: row.attack_bonus } : {}),
-    ...(dc === undefined ? {} : { dc }),
-    ...(usage === undefined ? {} : { usage }),
-    ...(typeof row.multiattack_type === "string" ? { multiattackType: row.multiattack_type } : {}),
-    ...(actions === undefined ? {} : { actions }),
-    ...(row.action_options === undefined
-      ? {}
-      : { actionOptions: recordOf(row.action_options, "action_options") }),
-    ...(attacks === undefined ? {} : { attacks }),
-    ...(row.options === undefined ? {} : { options: recordOf(row.options, "options") }),
-    ...(damage === undefined ? {} : { damage }),
-    ...(spellcasting === undefined ? {} : { spellcasting }),
-  };
+/**
+ * `action_options` as the alternatives it lists, each a list of strikes: an
+ * `action` option is one strike, a `multiple` option its `items`.
+ */
+const multiattackOptionsOf = (
+  row: Record<string, unknown>,
+): ReadonlyArray<ReadonlyArray<Record<string, unknown>>> | undefined => {
+  if (row.action_options === undefined) return undefined;
+  const from = recordOf(recordOf(row.action_options, "action_options").from, "from");
+  return recordsOf(from, "options").map((option) =>
+    rawText(option, "option_type") === "multiple"
+      ? recordsOf(option, "items").map(actionItemOf)
+      : [actionItemOf(option)],
+  );
 };
+
+/**
+ * The source's choose-one `options` (the metallic dragons' two breaths) as
+ * choices, each with the area its own clause of the prose gives: the text from
+ * `"Fire Breath."` up to the next choice's name.
+ */
+const choicesOf = (
+  row: Record<string, unknown>,
+  desc: string,
+): ReadonlyArray<Record<string, unknown>> | undefined => {
+  if (row.options === undefined) return undefined;
+  const from = recordOf(recordOf(row.options, "options").from, "from");
+  const options = recordsOf(from, "options");
+  const names = options.map((option) => rawText(option, "name"));
+  const starts = names.map((name) => desc.indexOf(`${name}.`));
+  return options.map((option, index) => {
+    const start = starts[index] ?? -1;
+    const next = Math.min(...starts.filter((at) => at > start), desc.length);
+    const clause = start < 0 ? "" : desc.slice(start, next);
+    const dc = dcOf(optionalRecord(option, "dc"));
+    const damage = damagesOf(option);
+    return {
+      name: names[index],
+      ...(dc === undefined ? {} : { dc }),
+      ...(damage === undefined ? {} : { damage }),
+      ...geometryOf(clause),
+    };
+  });
+};
+
+const featureOf =
+  (
+    section: "special_abilities" | "actions" | "reactions" | "legendary_actions",
+    actionNames: ReadonlyArray<string>,
+  ) =>
+  (row: Record<string, unknown>): Record<string, unknown> => {
+    const usage = usageOf(optionalRecord(row, "usage"));
+    const dc = dcOf(optionalRecord(row, "dc"));
+    const damage = damagesOf(row);
+    const spellcasting = spellcastingOf(optionalRecord(row, "spellcasting"));
+    const actions = actionItemsOf(row, "actions");
+    const attacks = actionItemsOf(row, "attacks");
+    const name = rawText(row, "name");
+    const desc = rawText(row, "desc");
+    const choices = choicesOf(row, desc);
+    const multiattackOptions = multiattackOptionsOf(row);
+    const legendary = section === "legendary_actions";
+    const legendaryCost = legendary ? legendaryCostOf(name) : undefined;
+    const performs = legendary ? performsOf(desc, actionNames) : [];
+    const bonusAction = section === "special_abilities" ? bonusActionOf(desc) : undefined;
+    return {
+      name,
+      desc,
+      ...(typeof row.attack_bonus === "number" ? { attackBonus: row.attack_bonus } : {}),
+      ...(dc === undefined ? {} : { dc }),
+      ...(usage === undefined ? {} : { usage }),
+      ...(typeof row.multiattack_type === "string"
+        ? { multiattackType: row.multiattack_type }
+        : {}),
+      ...(actions === undefined ? {} : { actions }),
+      ...(row.action_options === undefined
+        ? {}
+        : { actionOptions: recordOf(row.action_options, "action_options") }),
+      ...(attacks === undefined ? {} : { attacks }),
+      ...(row.options === undefined ? {} : { options: recordOf(row.options, "options") }),
+      ...(damage === undefined ? {} : { damage }),
+      ...(spellcasting === undefined ? {} : { spellcasting }),
+      // A feature that offers choices has no one area: each choice has its own.
+      ...(choices === undefined ? geometryOf(desc) : { choices }),
+      ...(multiattackOptions === undefined ? {} : { multiattackOptions }),
+      ...(legendaryCost === undefined ? {} : { legendaryCost }),
+      ...(performs.length === 0 ? {} : { performs }),
+      ...(bonusAction === undefined ? {} : { bonusAction }),
+    };
+  };
 
 const scoreBy = {
   STR: "strength",
@@ -357,7 +423,7 @@ const abilitiesOf = (
     };
   });
 
-const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
+export const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
   const proficiencies = recordsOf(row, "proficiencies");
   const speed = recordOf(row.speed, "speed");
   const armor = recordsOf(row, "armor_class");
@@ -371,10 +437,15 @@ const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
   const hp = rawNumber(row, "hit_points");
   const hitDice = rawText(row, "hit_dice");
   const hitPointsRoll = rawText(row, "hit_points_roll");
-  const specialAbilities = recordsOf(row, "special_abilities").map(featureOf);
-  const actions = recordsOf(row, "actions").map(featureOf);
-  const reactions = recordsOf(row, "reactions").map(featureOf);
-  const legendaryActions = recordsOf(row, "legendary_actions").map(featureOf);
+  const actionNames = recordsOf(row, "actions").map((action) => rawText(action, "name"));
+  const specialAbilities = recordsOf(row, "special_abilities").map(
+    featureOf("special_abilities", actionNames),
+  );
+  const actions = recordsOf(row, "actions").map(featureOf("actions", actionNames));
+  const reactions = recordsOf(row, "reactions").map(featureOf("reactions", actionNames));
+  const legendaryActions = recordsOf(row, "legendary_actions").map(
+    featureOf("legendary_actions", actionNames),
+  );
   const conditionImmunities = refsOf(row, "condition_immunities");
   const damageVulnerabilities = rawTexts(row, "damage_vulnerabilities");
   const damageResistances = rawTexts(row, "damage_resistances");
@@ -419,6 +490,9 @@ const transformedMonster = (row: Record<string, unknown>): SourceCreature => {
       actions,
       reactions,
       legendaryActions,
+      // The SRD gives every legendary creature three; the source dropped the
+      // sentence that says so (`StatBlock.legendaryActionsPerRound`).
+      ...(legendaryActions.length === 0 ? {} : { legendaryActionsPerRound: 3 }),
       forms: refsOf(row, "forms"),
       image: optionalText(row, "image"),
     }),
