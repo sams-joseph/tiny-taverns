@@ -372,6 +372,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
+        { migration_id: 92, name: "action_geometry" },
       ]);
     }),
   );
@@ -473,6 +474,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 89, name: "roll_attack_log" },
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
+        { migration_id: 92, name: "action_geometry" },
       ]);
     }),
   );
@@ -2181,7 +2183,14 @@ describeLayer(
           });
           yield* sql`
             insert into creature ${sql.insert([
-              creature({ account_id: account, name: "Library Goblin" }),
+              // Every row names every column: `sql.insert` takes its column
+              // list from the first row.
+              creature({
+                campaign_id: null,
+                account_id: account,
+                origin: "authored",
+                name: "Library Goblin",
+              }),
               creature({
                 campaign_id: null,
                 account_id: null,
