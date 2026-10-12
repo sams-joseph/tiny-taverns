@@ -71,17 +71,6 @@ export const labelsInOrder = (
 };
 
 /**
- * The feet at the front of a speed as a sheet or a stat block writes it —
- * `"30 ft."`, `"30 ft., climb 30 ft."` — which is the walking speed. Anything
- * that does not start with a number (blank, `"varies"`) is no speed at all,
- * and the board draws no range rather than a guessed one.
- */
-export const leadingFeet = (speed: string | undefined): number | undefined => {
-  const match = /^\s*(\d+)/.exec(speed ?? "");
-  return match === null ? undefined : Number(match[1]);
-};
-
-/**
  * The board's line about the DM's last move: `"Goblin Boss moved 30 ft"`, and
  * `", past their 30 ft speed"` when it went further than that — said, not
  * refused, because the DM moves a miniature wherever the table agrees it went.

@@ -2,7 +2,7 @@ import { Combatant } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { brannoc, goblinBoss } from "../campaign/campaign.fixtures";
-import { labelsInOrder, leadingFeet, moveLine, nameShown, tokenLabels, tokenState } from "./tokens";
+import { labelsInOrder, moveLine, nameShown, tokenLabels, tokenState } from "./tokens";
 
 const decode = Schema.decodeUnknownSync(Combatant);
 const row = (id: string, displayName: string, createdAt: string) =>
@@ -39,16 +39,6 @@ describe("a token's label", () => {
       "GA2",
       "MH",
     ]);
-  });
-});
-
-describe("a speed", () => {
-  it("is the number it starts with, or none", () => {
-    expect(leadingFeet("30 ft., climb 30 ft.")).toBe(30);
-    expect(leadingFeet(" 25 ft.")).toBe(25);
-    expect(leadingFeet("varies")).toBeUndefined();
-    expect(leadingFeet("")).toBeUndefined();
-    expect(leadingFeet(undefined)).toBeUndefined();
   });
 });
 

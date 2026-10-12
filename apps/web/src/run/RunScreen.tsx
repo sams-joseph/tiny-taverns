@@ -12,6 +12,7 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
+import { walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -82,7 +83,7 @@ import { dockLines } from "./rollsLog";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
-import { leadingFeet, tokenLabels } from "./tokens";
+import { tokenLabels } from "./tokens";
 import { feetLeft, isUp, useTurnTicks } from "./turn";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -1265,7 +1266,7 @@ export function RunScreen() {
   });
   const speedOf = (combatant: Combatant): number | undefined => {
     const { statBlock, sheet } = sourceOf(combatant);
-    return leadingFeet(statBlock?.speed ?? sheet?.identity?.speed);
+    return walkingFeet(statBlock?.speed ?? sheet?.identity?.speed);
   };
   /** What is left of that this turn, for the board's range (`feetLeft`). */
   const feetLeftOf = (combatant: Combatant): number | undefined =>
