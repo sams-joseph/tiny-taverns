@@ -373,6 +373,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
         { migration_id: 92, name: "action_geometry" },
+        { migration_id: 93, name: "combatant_resources" },
       ]);
     }),
   );
@@ -475,6 +476,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 90, name: "run_board_area" },
         { migration_id: 91, name: "image_uploads" },
         { migration_id: 92, name: "action_geometry" },
+        { migration_id: 93, name: "combatant_resources" },
       ]);
     }),
   );

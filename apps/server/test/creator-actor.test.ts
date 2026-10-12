@@ -282,7 +282,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([10, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([11, 10, 3, 4, 2, 4, 4]);
     });
   });
 
@@ -578,7 +578,10 @@ describeLayer("creator-actor", shared, (it) => {
       // player sees only its squares, on `PlayerLiveBoard`.
       // A hundred and thirty-seven is `BattleMaps.setArea`: the area template
       // pinned on that board, which a player sees only while the board is shown.
-      expect(gated).toBe(137);
+      // A hundred and thirty-eight is `Combatants.resources`: a monster's
+      // spending over the fight, the creator's like the turn's, and no player
+      // read selects it.
+      expect(gated).toBe(138);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
