@@ -7,13 +7,12 @@ import type {
   EncounterRunScene,
   EncounterRunSceneUpdate,
 } from "@taverns/api";
-import { SCENE_STAGES_MAX } from "@taverns/api";
+import { type DiceRoll, SCENE_STAGES_MAX, signed } from "@taverns/api";
 import { Badge, Button, cn, Icon, Input, SectionHeading } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { signed, type LocalRoll } from "../characters/rolls";
 import { SaveFailure } from "../ui/form";
 import { Conditions } from "./CombatantPanel";
 import type { RunPath } from "./load";
@@ -97,7 +96,7 @@ function Length({
   readonly confirm: string;
   readonly busy: boolean;
   readonly disabled: boolean;
-  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
+  readonly onRoll: ((label: string, notation: string) => DiceRoll | undefined) | undefined;
   readonly onSet: (stages: number) => void;
   readonly onCancel: (() => void) | undefined;
 }) {
@@ -323,7 +322,7 @@ export function SceneHazard({
   readonly disabled: boolean;
   readonly conditionsBusy: boolean;
   readonly onConditions: (combatant: Combatant, next: ReadonlyArray<string>) => void;
-  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
+  readonly onRoll: ((label: string, notation: string) => DiceRoll | undefined) | undefined;
   /** The runner's own *End*: a hazard's last stage over is the scene over. */
   readonly onEnd: () => void;
 }) {

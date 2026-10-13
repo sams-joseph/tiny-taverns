@@ -1,10 +1,10 @@
+import { rollDiceExpression, type DiceRoll } from "@taverns/api";
 import type { CampaignId, Roll, RollCreate, SessionId } from "@taverns/api";
 import { toast } from "@taverns/ui";
 import { DateTime, Result } from "effect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { rollDiceExpression, type LocalRoll } from "../characters/rolls";
 import { DOCK_KEPT } from "./rollsLog";
 import { newRequestId } from "./state";
 
@@ -124,11 +124,11 @@ const fromPending = ({ payload, at }: Pending): DmRoll => ({
 });
 
 /** A d20 kept at 20 or 1, as the server reads a roll's `critical`. */
-export const criticalOf = (roll: LocalRoll): DmThrow["critical"] =>
+export const criticalOf = (roll: DiceRoll): DmThrow["critical"] =>
   roll.natural === 20 ? "hit" : roll.natural === 1 ? "miss" : null;
 
 /** A rolled expression as the throw that files it. */
-export const throwOf = (roll: LocalRoll, about: Partial<DmThrow> = {}): DmThrow => ({
+export const throwOf = (roll: DiceRoll, about: Partial<DmThrow> = {}): DmThrow => ({
   label: roll.label,
   notation: roll.notation,
   dice: roll.dice,
@@ -152,7 +152,7 @@ export interface DmDice {
    * server files a roll under the campaign's current night and its active run,
    * so anywhere else a throw would land in the wrong record.
    */
-  readonly roll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
+  readonly roll: ((label: string, notation: string) => DiceRoll | undefined) | undefined;
   /** File the throws of one act rolled elsewhere — an attack, an action off its turn, a save — as one line. */
   readonly file: ((throws: ReadonlyArray<DmThrow>) => void) | undefined;
 }
@@ -228,7 +228,7 @@ export function useDmDice(
 
   const roll = useCallback(
     (label: string, notation: string) => {
-      const rolled = rollDiceExpression(label, notation);
+      const rolled = rollDiceExpression(label, notation, "normal", Math.random);
       if (rolled === undefined) return undefined;
       file([throwOf(rolled)]);
       return rolled;

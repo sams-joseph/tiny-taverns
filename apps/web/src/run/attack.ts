@@ -1,75 +1,52 @@
-import { concentrationDc, type CombatantId } from "@taverns/api";
 import {
-  parseDiceExpression,
-  rollDiceExpression,
-  rollFace,
-  signed,
+  type AttackRoll,
+  type AttackVerdict,
+  type CombatantId,
+  type DamageRoll,
   type Random,
   type RollMode,
-} from "../characters/rolls";
+  attackLands,
+  concentrationDc,
+  parseDiceExpression,
+  rollAttack,
+  rollDamages,
+  rollDiceExpression,
+  signed,
+} from "@taverns/api";
 import type { ActionLine } from "./actions";
 import { throwOf, type DmThrow } from "./dice";
 
 /**
- * An attack from the creature panel's *Actions* (`Encounter Runner.dc.html`):
- * d20 plus the line's to-hit against the target's AC, a natural 20 a critical
- * that hits with its damage dice doubled, a natural 1 a miss whatever it
- * totals. Rolled here, and filed with the DM's other dice as the DM's own
- * rolls (`dice.ts`): the to-hit with who swung, at whom, the AC and the
- * outcome, then the damage. What changes the target is the damage the DM then
- * applies, through the same delta a typed number takes.
+ * An attack from the creature panel's *Actions* (`Encounter Runner.dc.html`),
+ * resolved by the shared rule (`rollAttack`, `packages/api`): d20 plus the
+ * line's to-hit against the target's AC, a natural 20 a critical that hits
+ * with its damage dice doubled, a natural 1 a miss whatever it totals, and a
+ * target at long range attacked at disadvantage. Rolled here, and filed with
+ * the DM's other dice as the DM's own rolls (`dice.ts`): the to-hit with who
+ * swung, at whom, the AC and the outcome, then the damage. What changes the
+ * target is the damage the DM then applies, through the same delta a typed
+ * number takes.
  *
- * Pure, and `random` is the one source of every face, d20 first and then the
+ * `random` is the one source of every face, the d20s first and then the
  * damage dice in the line's order, so a test can seed the whole attack.
  */
 
-/** One damage roll of the line, as rolled. */
-export interface DamageRoll {
-  /** The dice thrown: `2d8+4`, or `4d8+4` on a critical. */
-  readonly notation: string;
-  readonly faces: ReadonlyArray<number>;
-  readonly modifier: number;
-  /** The faces plus the modifier, never below zero. */
-  readonly total: number;
-  readonly type: string | undefined;
-}
-
-/**
- * The result card's word. `no-ac` is a target with no armour class written (a
- * row the DM typed in mid-fight): there is nothing to beat, so the total is the
- * DM's to judge and the damage is rolled for them to apply or not.
- */
-export type Verdict = "critical" | "hit" | "natural-1" | "miss" | "no-ac";
-
-export interface AttackOutcome {
+export interface AttackOutcome extends AttackRoll {
   /** `Longsword → Goblin Boss`. */
   readonly title: string;
   readonly attacker: string;
   readonly target: string;
-  readonly d20: number;
-  readonly toHit: number;
-  readonly total: number;
-  readonly ac: number | null;
-  readonly verdict: Verdict;
-  /** Empty on a miss and a natural 1. */
-  readonly damage: ReadonlyArray<DamageRoll>;
-  /** Every damage roll together: what *Apply* sends. */
-  readonly amount: number;
   /** The target held Concentrating when it was picked. */
   readonly concentrating: boolean;
 }
 
-export const VERDICT: Record<Verdict, string> = {
+export const VERDICT: Record<AttackVerdict, string> = {
   critical: "Critical hit",
   hit: "Hit",
   "natural-1": "Natural 1",
   miss: "Miss",
   "no-ac": "No AC to beat",
 };
-
-/** Whether the verdict carries damage. */
-export const lands = (verdict: Verdict): boolean =>
-  verdict === "critical" || verdict === "hit" || verdict === "no-ac";
 
 /** A line the panel offers *Attack* for: one that rolls to hit. */
 export const attacks = (line: ActionLine): boolean => line.toHit !== undefined;
@@ -79,36 +56,11 @@ export const rolls = (line: ActionLine): boolean =>
   line.toHit !== undefined ||
   line.damage.some(({ dice }) => parseDiceExpression(dice) !== undefined);
 
-/** One damage notation, doubled on a critical. A notation that does not parse rolls nothing. */
-const rollDamage = (
-  { dice, type }: ActionLine["damage"][number],
-  critical: boolean,
-  random: Random,
-): DamageRoll | undefined => {
-  const parsed = parseDiceExpression(dice);
-  if (parsed === undefined) return undefined;
-  const count = critical ? parsed.count * 2 : parsed.count;
-  const faces = Array.from({ length: count }, () => rollFace(parsed.faces, random));
-  const sum = faces.reduce((total, face) => total + face, 0) + parsed.modifier;
-  return {
-    notation: `${String(count)}d${String(parsed.faces)}${parsed.modifier === 0 ? "" : signed(parsed.modifier)}`,
-    faces,
-    modifier: parsed.modifier,
-    total: Math.max(0, sum),
-    type,
-  };
-};
-
-const damageOf = (line: ActionLine, critical: boolean, random: Random): ReadonlyArray<DamageRoll> =>
-  line.damage.flatMap((entry) => rollDamage(entry, critical, random) ?? []);
-
-const sum = (damage: ReadonlyArray<DamageRoll>): number =>
-  damage.reduce((total, roll) => total + roll.total, 0);
-
 export const resolveAttack = ({
   attacker,
   line,
   target,
+  mode = "normal",
   random = Math.random,
 }: {
   readonly attacker: string;
@@ -118,37 +70,16 @@ export const resolveAttack = ({
     readonly ac: number | null;
     readonly conditions: ReadonlyArray<string>;
   };
+  /** Disadvantage when the target stands at long range (`attackModeAt`). */
+  readonly mode?: RollMode;
   readonly random?: Random;
-}): AttackOutcome => {
-  const d20 = rollFace(20, random);
-  const toHit = line.toHit ?? 0;
-  const total = d20 + toHit;
-  const verdict: Verdict =
-    d20 === 20
-      ? "critical"
-      : d20 === 1
-        ? "natural-1"
-        : target.ac === null
-          ? "no-ac"
-          : total >= target.ac
-            ? "hit"
-            : "miss";
-  const damage = lands(verdict) ? damageOf(line, verdict === "critical", random) : [];
-  const amount = sum(damage);
-  return {
-    title: `${line.name} → ${target.name}`,
-    attacker,
-    target: target.name,
-    d20,
-    toHit,
-    total,
-    ac: target.ac,
-    verdict,
-    damage,
-    amount,
-    concentrating: target.conditions.includes("Concentrating"),
-  };
-};
+}): AttackOutcome => ({
+  ...rollAttack({ toHit: line.toHit ?? 0, damage: line.damage, ac: target.ac, mode, random }),
+  title: `${line.name} → ${target.name}`,
+  attacker,
+  target: target.name,
+  concentrating: target.conditions.includes("Concentrating"),
+});
 
 /**
  * The save a concentrating target owes for `amount` taken from `hpBefore`, as
@@ -159,13 +90,15 @@ export const concentrationSave = (
   amount: number,
   hpBefore: number,
 ): number | undefined =>
-  lands(outcome.verdict) && outcome.concentrating && amount > 0 && hpBefore - amount > 0
+  attackLands(outcome.verdict) && outcome.concentrating && amount > 0 && hpBefore - amount > 0
     ? concentrationDc(amount)
     : undefined;
 
-/** `d20 19 +7 = 26 vs AC 17`. */
+/** `d20 19 +7 = 26 vs AC 17`; `d20 4, 19 (disadvantage) +7 = 11 vs AC 17`. */
 export const hitLine = (outcome: AttackOutcome): string =>
-  `d20 ${String(outcome.d20)} ${signed(outcome.toHit)} = ${String(outcome.total)} vs ${
+  `d20 ${
+    outcome.d20s.length === 1 ? String(outcome.d20) : `${outcome.d20s.join(", ")} (${outcome.mode})`
+  } ${signed(outcome.toHit)} = ${String(outcome.total)} vs ${
     outcome.ac === null ? "no AC" : `AC ${String(outcome.ac)}`
   }`;
 
@@ -181,7 +114,7 @@ export const damageLine = (damage: ReadonlyArray<DamageRoll>): string =>
     .join(" · ");
 
 /** The server's word for a verdict; a total with no AC to beat has none. */
-const OUTCOME: Record<Verdict, DmThrow["outcome"]> = {
+const OUTCOME: Record<AttackVerdict, DmThrow["outcome"]> = {
   critical: "crit",
   hit: "hit",
   "natural-1": "fumble",
@@ -223,11 +156,11 @@ export const attackThrows = (
     {
       label,
       notation: `1d20${signed(outcome.toHit)}`,
-      dice: [outcome.d20],
+      dice: outcome.d20s,
       kept: [outcome.d20],
       modifier: outcome.toHit,
       total: outcome.total,
-      mode: "normal",
+      mode: outcome.mode,
       critical: naturalOf(outcome.d20),
       kind: "attack",
       ...about,
@@ -266,7 +199,7 @@ export const rollActionThrows = ({
     line.toHit === undefined
       ? undefined
       : rollDiceExpression(label, `1d20${signed(line.toHit)}`, mode, random);
-  const damage = damageOf(line, false, random);
+  const damage = rollDamages(line.damage, false, random);
   return [
     ...(toHit === undefined
       ? []

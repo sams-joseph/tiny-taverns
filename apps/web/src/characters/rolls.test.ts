@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  notationForD20,
-  parseDiceExpression,
-  rollAbilityCheck,
-  rollDetail,
-  rollDiceExpression,
-} from "./rolls";
+import { notationForD20, rollAbilityCheck, rollDetail } from "./rolls";
 
 const dice = (...faces: ReadonlyArray<number>) => {
   let index = 0;
@@ -16,45 +10,7 @@ const dice = (...faces: ReadonlyArray<number>) => {
   };
 };
 
-const d10 = (...faces: ReadonlyArray<number>) => {
-  let index = 0;
-  return () => {
-    const face = faces[index] ?? faces[faces.length - 1] ?? 1;
-    index += 1;
-    return (face - 1) / 10;
-  };
-};
-
 describe("local character rolls", () => {
-  it("parses the sheet's dice notation and refuses non-dice text", () => {
-    expect(parseDiceExpression("1d10+4")).toEqual({
-      count: 1,
-      faces: 10,
-      modifier: 4,
-      notation: "1d10+4",
-    });
-    expect(parseDiceExpression("2d8 - 1")).toEqual({
-      count: 2,
-      faces: 8,
-      modifier: -1,
-      notation: "2d8-1",
-    });
-    expect(parseDiceExpression("—")).toBeUndefined();
-    expect(parseDiceExpression("forty goblins")).toBeUndefined();
-  });
-
-  it("rolls ordinary action dice with the modifier in the expression", () => {
-    expect(rollDiceExpression("Halberd", "1d10+4", "normal", d10(6))).toEqual({
-      label: "Halberd",
-      notation: "1d10+4",
-      dice: [6],
-      kept: [6],
-      modifier: 4,
-      mode: "normal",
-      total: 10,
-    });
-  });
-
   it("keeps the high d20 at advantage and the low one at disadvantage", () => {
     expect(rollAbilityCheck("STR check", "+4", "advantage", dice(2, 18))).toMatchObject({
       notation: "1d20+4",

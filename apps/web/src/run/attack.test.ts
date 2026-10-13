@@ -112,6 +112,25 @@ describe("an attack", () => {
     ]);
   });
 
+  it("rolls at disadvantage when told, keeps the lower d20, and files both", () => {
+    // d20 19 and 6: the 6 counts, 13 against 17.
+    const outcome = resolveAttack({
+      attacker: "Brannoc",
+      line: longsword,
+      target: goblinBoss,
+      mode: "disadvantage",
+      random: seeded(0.9, 0.25),
+    });
+    expect(outcome.verdict).toBe("miss");
+    expect(hitLine(outcome)).toBe("d20 19, 6 (disadvantage) +7 = 13 vs AC 17");
+    expect(attackThrows(outcome, who)).toMatchObject([
+      { dice: [19, 6], kept: [6], mode: "disadvantage", total: 13, outcome: "miss" },
+    ]);
+    expect(printed(attackThrows(outcome, who))).toMatchObject([
+      { detail: "d20 6 (disadvantage) +7 = 13 vs AC 17", total: "Miss" },
+    ]);
+  });
+
   it("misses under the AC and rolls no damage", () => {
     // d20 9: 16 against 17.
     const outcome = resolveAttack({

@@ -1,13 +1,13 @@
+import { type DiceRoll } from "@taverns/api";
 import type { CampaignId, CharacterId, Roll, RollKind } from "@taverns/api";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import type { LocalRoll } from "../characters/rolls";
 import type { DmThrow } from "../run/dice";
 
 /** A roll as a player files it: what was rolled, and what it was for. */
-export interface TableRoll extends LocalRoll {
+export interface TableRoll extends DiceRoll {
   readonly kind?: RollKind;
 }
 

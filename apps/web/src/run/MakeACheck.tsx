@@ -1,11 +1,10 @@
 import type { CharacterSheet, Combatant, CombatantId, EncounterRunScene } from "@taverns/api";
-import { challengeTally, checkOutcome, CHECK_SKILL_MAX } from "@taverns/api";
+import { type DiceRoll, challengeTally, CHECK_SKILL_MAX, checkOutcome, signed } from "@taverns/api";
 import { Button, Icon, Input, Label, SectionHeading, Toggle } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { signed, type LocalRoll } from "../characters/rolls";
 import { SaveFailure } from "../ui/form";
 import type { RunPath } from "./load";
 import { lastDc, skillModifier } from "./scene";
@@ -60,7 +59,7 @@ export function MakeACheck({
   readonly sheetOf: (combatant: Combatant) => CharacterSheet | undefined;
   readonly disabled: boolean;
   /** Absent while the DM's dice are put away (`DmDice.roll`). */
-  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
+  readonly onRoll: ((label: string, notation: string) => DiceRoll | undefined) | undefined;
 }) {
   const challenge = scene.challenge?.kind === "challenge" ? scene.challenge : undefined;
   const settled =

@@ -1,3 +1,9 @@
+import {
+  parseDiceExpression,
+  rollDiceExpression,
+  type DiceRoll,
+  type RollMode,
+} from "@taverns/api";
 import type {
   Ability,
   CampaignId,
@@ -19,15 +25,7 @@ import { DetailFacts } from "../ui/detail";
 import { SaveFailure } from "../ui/form";
 import { compactGearLine, gearFacts, gearWeight } from "./gearFacts";
 import { type LogEntry, logEntries } from "./levelUp";
-import {
-  notationForD20,
-  parseDiceExpression,
-  rollAbilityCheck,
-  rollDetail,
-  rollDiceExpression,
-  type LocalRoll,
-  type RollMode,
-} from "./rolls";
+import { notationForD20, rollAbilityCheck, rollDetail } from "./rolls";
 import {
   actionRows,
   coins,
@@ -42,7 +40,7 @@ import { AbilityCell, KeyVal, Mark, SheetSection } from "./SheetParts";
 import { ownCharacterWrites, spendResource } from "./write";
 
 type LoggedRollState = "local" | "sending" | "sent" | "failed";
-interface LoggedRoll extends LocalRoll {
+interface LoggedRoll extends DiceRoll {
   readonly localId: string;
   readonly state: LoggedRollState;
   readonly message: string;
@@ -51,7 +49,7 @@ interface LoggedRoll extends LocalRoll {
 const newRollRequestId = (): string =>
   globalThis.crypto?.randomUUID?.() ?? `roll-${String(Date.now())}-${String(Math.random())}`;
 
-const criticalFrom = (roll: LocalRoll): "hit" | "miss" | undefined =>
+const criticalFrom = (roll: DiceRoll): "hit" | "miss" | undefined =>
   roll.natural === 20 ? "hit" : roll.natural === 1 ? "miss" : undefined;
 
 /**
@@ -623,7 +621,7 @@ export function SheetDocument({
     );
     return resource === undefined ? undefined : adjusted(resource);
   };
-  const recordRoll = (roll: LocalRoll | undefined) => {
+  const recordRoll = (roll: DiceRoll | undefined) => {
     if (roll === undefined) return;
     const requestId = newRollRequestId();
     const target = play?.rollCampaignId;
@@ -694,7 +692,7 @@ export function SheetDocument({
     });
   };
   const rollNotation = (label: string, notation: string, mode: RollMode | undefined = rollMode) => {
-    recordRoll(rollDiceExpression(label, notation, mode));
+    recordRoll(rollDiceExpression(label, notation, mode, Math.random));
   };
   const rollAbility = (ability: Ability) => {
     recordRoll(rollAbilityCheck(`${ability.label} check`, ability.modifier, rollMode));

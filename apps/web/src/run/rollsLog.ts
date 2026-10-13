@@ -1,14 +1,14 @@
 import {
-  CombatantDamagedPayload,
-  CombatantUpdatedPayload,
-  DeathSavePayload,
   type Combatant,
   type CombatantId,
   type Roll,
   type SessionEvent,
+  CombatantDamagedPayload,
+  CombatantUpdatedPayload,
+  DeathSavePayload,
+  signed,
 } from "@taverns/api";
 import { DateTime, Option, Schema } from "effect";
-import { signed } from "../characters/rolls";
 import type { DmLine, DmRoll, Tone } from "./dice";
 import { SENTENCE } from "./logSentence";
 
@@ -209,9 +209,13 @@ const trayLine = (roll: Roll): DockLine => ({
   tone: roll.critical === "hit" ? "success" : roll.critical === "miss" ? "danger" : "accent",
 });
 
-/** `d20 19 +7 = 26`, and `vs AC 17` (or `vs no AC`) when it was swung at someone. */
+/**
+ * `d20 19 +7 = 26`, the mode when it took one (`d20 6 (disadvantage) +7 = 13`),
+ * and `vs AC 17` (or `vs no AC`) when it was swung at someone.
+ */
 const hitDetail = (roll: DmRoll): string => {
-  const thrown = `d20 ${String(roll.kept[0] ?? roll.total - roll.modifier)} ${signed(roll.modifier)} = ${String(roll.total)}`;
+  const mode = roll.mode === "normal" ? "" : ` (${roll.mode})`;
+  const thrown = `d20 ${String(roll.kept[0] ?? roll.total - roll.modifier)}${mode} ${signed(roll.modifier)} = ${String(roll.total)}`;
   if (roll.targetCombatantId === null) return thrown;
   return `${thrown} vs ${roll.targetAc === null ? "no AC" : `AC ${String(roll.targetAc)}`}`;
 };
