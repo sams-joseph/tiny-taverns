@@ -656,7 +656,7 @@ describeLayer("hob-fight-turn", shared, (it) => {
           yield* refusal(table.dm.token, (client) => client.hob.accept({ params, payload: {} })),
         ).toEqual({
           tag: "Conflict",
-          message: "that is a monster's turn — it is not kept through Hob's panel",
+          message: "that is a monster's turn — keep it from the fight's runner",
         });
         yield* as(table.dm.token, (client) => client.hob.discard({ params, payload: {} }));
 

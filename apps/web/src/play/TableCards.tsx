@@ -4,6 +4,7 @@ import {
   type EncounterRunId,
   type NpcId,
   type PlayerLiveCombatantYou,
+  type PlayerLiveNarration,
   type PlayerNote,
   type PlayerNpc,
   type RollMode,
@@ -314,5 +315,38 @@ export function ReadAloud({ notes }: { readonly notes: ReadonlyArray<PlayerNote>
         </Card>
       ))}
     </div>
+  );
+}
+
+/**
+ * **What the table heard**: the narration of the monster turns Hob proposed
+ * and the DM kept, newest first, when a player could have seen the creature
+ * act (`PlayerLiveFight.narration`, decided by the server). Drawn only when
+ * there is a line.
+ */
+export function TableHeard({ lines }: { readonly lines: ReadonlyArray<PlayerLiveNarration> }) {
+  if (lines.length === 0) return null;
+  return (
+    <Card role="region" aria-label="What the table heard">
+      <CardHeader>
+        <span className="text-caption font-medium tracking-caps uppercase text-faint">
+          At the table
+        </span>
+      </CardHeader>
+      <CardContent>
+        <ol className="mb-0 flex flex-col gap-3">
+          {lines.map((line) => (
+            <li key={line.id} className="flex flex-col gap-1">
+              <span className="text-caption text-muted-foreground">
+                {line.combatantName} · round {String(line.round)}
+              </span>
+              <p className="mb-0 max-w-measure font-serif text-body-s leading-body italic text-foreground">
+                {line.text}
+              </p>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
   );
 }

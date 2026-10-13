@@ -11,6 +11,7 @@ import {
   CombatantId,
   EncounterId,
   EncounterRunId,
+  SessionEventId,
   SessionId,
 } from "./Ids.js";
 
@@ -184,6 +185,21 @@ export const PlayerLiveBoard = Schema.Struct({
 });
 export type PlayerLiveBoard = typeof PlayerLiveBoard.Type;
 
+/**
+ * A line the table heard: the narration of a monster's turn Hob proposed and
+ * the DM kept, when a player could have seen the creature act — it and the
+ * fight shown, and it not under fog where the turn left it. Decided when the
+ * turn was kept, so a creature hidden since does not unsay it; a turn the DM
+ * undid takes its line with it.
+ */
+export const PlayerLiveNarration = Schema.Struct({
+  id: SessionEventId,
+  combatantName: Schema.String,
+  text: Schema.String,
+  round: Schema.Int,
+});
+export type PlayerLiveNarration = typeof PlayerLiveNarration.Type;
+
 export const PlayerLiveFight = Schema.Struct({
   id: EncounterRunId,
   /** `null` unless this player may read the encounter (Shared and Ready). */
@@ -214,6 +230,8 @@ export const PlayerLiveFight = Schema.Struct({
   order: Schema.Array(PlayerLiveCombatant),
   /** The board, or `null` unless the DM has turned on *Share map* and the fight has one. */
   board: Schema.NullOr(PlayerLiveBoard),
+  /** The last few lines the table heard of this fight, newest first. */
+  narration: Schema.Array(PlayerLiveNarration),
 });
 export type PlayerLiveFight = typeof PlayerLiveFight.Type;
 

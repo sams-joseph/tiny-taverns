@@ -6,6 +6,7 @@ import {
   brannoc,
   brannocPlaced,
   campaignId,
+  goblin,
   goblinBoss,
   installRunServer,
   liveRun,
@@ -16,8 +17,9 @@ import {
  * The runner's *Ask Hob* card, against the stub server: it asks for the
  * selected monster's turn at a moment it has, shows the steps and the line
  * the table will hear, turns an offer down or asks again, finds an open offer
- * again after a reload, and draws nothing with no model behind Hob. It has no
- * keep: nothing carries a turn out yet.
+ * again after a reload, and draws nothing with no model behind Hob. *Keep* has
+ * the server carry it out and the card shows what came of it, the saves left
+ * to the DM, and *Undo*; a kept turn is found again after a reload too.
  */
 const server = installRunServer();
 
@@ -104,7 +106,7 @@ const sent = (route: string) =>
     .map((call) => JSON.parse(call.body === "" ? "{}" : call.body) as Record<string, unknown>);
 
 describe("Hob's card in the runner", () => {
-  it("asks for the monster's turn and shows what it does, with nothing to keep", async () => {
+  it("asks for the monster's turn and shows what it does, to keep or not", async () => {
     server.routes.set(turnRoute, { status: 200, sse: offered(turnId, STEPPED) });
     await renderRunner();
     const ask = await waitFor(() => card().getByRole("button", { name: "Ask Hob for its turn" }));
@@ -120,10 +122,7 @@ describe("Hob's card in the runner", () => {
     expect(steps.getAllByText("Scimitar → Brannoc")).toHaveLength(2);
     expect(card().getByText(STEPPED)).toBeInTheDocument();
     expect(sent(turnRoute)).toEqual([{ moment: "turn", instruction: "Go for the fighter" }]);
-    // No keep in this phase: absent, not a button that cannot carry it out.
-    for (const name of [/keep/i, /accept/i, /save/i, /apply/i]) {
-      expect(card().queryByRole("button", { name })).toBeNull();
-    }
+    expect(card().getByRole("button", { name: "Keep" })).toBeInTheDocument();
   });
 
   it("turns an offer down, and Try again asks afresh with what was typed", async () => {
@@ -207,5 +206,240 @@ describe("Hob's card in the runner", () => {
       expect(screen.getByRole("region", { name: "Selected combatant" })).toBeInTheDocument(),
     );
     expect(screen.queryByRole("region", { name: "Hob for Brannoc" })).toBeNull();
+  });
+
+  describe("a kept turn", () => {
+    const keepRoute = `POST ${runBase}/hob/turns/${turnId}/keep`;
+    const undoRoute = `POST ${runBase}/hob/turns/${turnId}/undo`;
+    const saveId = "2b1f2a1e-0000-4000-8000-00000000f0a1";
+    const resolveRoute = `POST ${runBase}/hob/saves/${saveId}/resolve`;
+
+    const outcome = {
+      turnId,
+      sessionId: liveRun.sessionId,
+      runId: liveRun.id,
+      combatantId: goblinBoss.id,
+      combatantName: goblinBoss.displayName,
+      moment: "turn",
+      round: liveRun.round,
+      narration: STEPPED,
+      steps: [
+        { kind: "move", to: { column: 6, row: 4 }, feet: 5 },
+        {
+          kind: "option",
+          optionId: "actions/Multiattack",
+          name: "Multiattack",
+          slot: "action",
+          attacks: [
+            {
+              optionId: "actions/Scimitar",
+              name: "Scimitar",
+              target: { combatantId: brannoc.id, name: "Brannoc" },
+              d20s: [17],
+              d20: 17,
+              mode: "normal",
+              toHit: 4,
+              total: 21,
+              ac: 16,
+              verdict: "hit",
+              damage: [{ notation: "1d6+2", faces: [4], modifier: 2, total: 6, type: "Slashing" }],
+              hit: { amount: 6, hpBefore: 6, hpAfter: 0, dropped: true },
+            },
+            {
+              optionId: "actions/Scimitar",
+              name: "Scimitar",
+              target: { combatantId: brannoc.id, name: "Brannoc" },
+              d20s: [1],
+              d20: 1,
+              mode: "normal",
+              toHit: 4,
+              total: 5,
+              ac: 16,
+              verdict: "natural-1",
+              damage: [],
+            },
+          ],
+          notes: ["Brannoc was unconscious: an attack on it has advantage."],
+        },
+      ],
+    };
+    const breath = {
+      ...outcome,
+      steps: [
+        {
+          kind: "option",
+          optionId: "actions/Fire Breath",
+          name: "Fire Breath",
+          slot: "action",
+          attacks: [],
+          save: {
+            dc: 13,
+            ability: "DEX",
+            onSuccess: "half",
+            damage: [{ notation: "3d6", faces: [4, 4, 4], modifier: 0, total: 12, type: "Fire" }],
+            targets: [
+              {
+                target: { combatantId: brannoc.id, name: "Brannoc" },
+                roll: null,
+                succeeded: null,
+                pendingSaveId: saveId,
+              },
+            ],
+          },
+          notes: [],
+        },
+      ],
+    };
+    const pending = {
+      id: saveId,
+      turnId,
+      combatantId: brannoc.id,
+      targetName: "Brannoc",
+      optionName: "Fire Breath",
+      ability: "DEX",
+      dc: 13,
+      onSuccess: "half",
+      amount: 12,
+      damageTypes: ["Fire"],
+      state: "pending",
+      total: null,
+      succeeded: null,
+    };
+    const result = () =>
+      within(card().getByRole("region", { name: `What came of ${goblinBoss.displayName}'s turn` }));
+    const combatantReads = () =>
+      server.calls.filter(
+        (call) => call.method === "GET" && call.pathname === `${runBase}/combatants`,
+      ).length;
+
+    const offeredThenKept = async (kept: unknown) => {
+      server.routes.set(turnRoute, { status: 200, sse: offered(turnId, STEPPED) });
+      server.routes.set(keepRoute, { status: 200, body: kept });
+      await renderRunner();
+      await userEvent.click(
+        await waitFor(() => card().getByRole("button", { name: "Ask Hob for its turn" })),
+      );
+      await waitFor(() => expect(card().getByText(STEPPED)).toBeInTheDocument());
+      const before = combatantReads();
+      await userEvent.click(card().getByRole("button", { name: "Keep" }));
+      await waitFor(() => expect(result().getByText("Kept: its turn")).toBeInTheDocument());
+      return before;
+    };
+
+    it("keeps the offer, shows each roll and who dropped, re-reads the fight, and undoes it", async () => {
+      server.routes.set(`GET ${runBase}/hob/saves`, { status: 200, body: [] });
+      const before = await offeredThenKept(outcome);
+      expect(sent(keepRoute)).toEqual([{}]);
+      const happened = within(result().getByRole("list", { name: "What happened" }));
+      expect(happened.getByText("Moved 5 ft to (6,4)")).toBeInTheDocument();
+      expect(
+        happened.getByText("d20 17 +4 = 21 vs AC 16 · 1d6+2 [4] = 6 slashing"),
+      ).toBeInTheDocument();
+      expect(happened.getByText("Brannoc took 6 damage: 6 → 0, down")).toBeInTheDocument();
+      expect(happened.getByText("Natural 1")).toBeInTheDocument();
+      expect(happened.getByText(/Brannoc was unconscious/)).toBeInTheDocument();
+      await waitFor(() => expect(combatantReads()).toBeGreaterThan(before));
+
+      server.routes.set(undoRoute, {
+        status: 200,
+        body: { turnId, restored: [{ combatantId: brannoc.id, name: "Brannoc" }] },
+      });
+      await userEvent.click(result().getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(result().getByText("Undone")).toBeInTheDocument());
+      expect(sent(undoRoute)).toEqual([{}]);
+      expect(result().queryByRole("button", { name: "Undo" })).toBeNull();
+    });
+
+    it("waits on a party member's save, and applies the total the DM enters", async () => {
+      server.routes.set(`GET ${runBase}/hob/saves`, { status: 200, body: [pending] });
+      await offeredThenKept(breath);
+      const total = await waitFor(() => result().getByLabelText("Brannoc's DEX save total"));
+      expect(result().getByText("Brannoc: waiting on a DEX save, DC 13")).toBeInTheDocument();
+      server.routes.set(resolveRoute, {
+        status: 200,
+        body: {
+          save: { ...pending, state: "resolved", total: 15, succeeded: true },
+          hit: { amount: 6, hpBefore: 6, hpAfter: 0, dropped: true },
+          judged: false,
+        },
+      });
+      await userEvent.type(total, "15");
+      await userEvent.click(result().getByRole("button", { name: "Apply save" }));
+      await waitFor(() =>
+        expect(result().getByText("Brannoc: 15, saved · took 6 damage")).toBeInTheDocument(),
+      );
+      expect(sent(resolveRoute)).toEqual([{ total: 15 }]);
+    });
+
+    it("says why a keep was refused, and keeps the offer", async () => {
+      server.routes.set(turnRoute, { status: 200, sse: offered(turnId, STEPPED) });
+      server.routes.set(keepRoute, {
+        status: 409,
+        body: {
+          _tag: "Conflict",
+          message: "The fight has changed since Hob proposed that turn. Ask Hob again.",
+        },
+      });
+      await renderRunner();
+      await userEvent.click(
+        await waitFor(() => card().getByRole("button", { name: "Ask Hob for its turn" })),
+      );
+      await waitFor(() => expect(card().getByText(STEPPED)).toBeInTheDocument());
+      await userEvent.click(card().getByRole("button", { name: "Keep" }));
+      await waitFor(() =>
+        expect(
+          card().getByText("The fight has changed since Hob proposed that turn. Ask Hob again."),
+        ).toBeInTheDocument(),
+      );
+      expect(card().getByRole("button", { name: "Keep" })).toBeInTheDocument();
+    });
+
+    it("finds this creature's kept turn again after a reload", async () => {
+      server.routes.set(`GET ${runBase}/hob/kept`, {
+        status: 200,
+        body: [{ outcome, undoneAt: null }],
+      });
+      server.routes.set(`GET ${runBase}/hob/saves`, { status: 200, body: [] });
+      await renderRunner();
+      await waitFor(() => expect(result().getByText("Kept: its turn")).toBeInTheDocument());
+      expect(result().getByRole("button", { name: "Undo" })).toBeInTheDocument();
+      await userEvent.click(result().getByRole("button", { name: "Done" }));
+      expect(card().queryByRole("region", { name: /^What came of/ })).toBeNull();
+    });
+  });
+
+  it("says a recharge is waiting before Hob is asked", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          actions: [
+            {
+              name: "Fire Breath",
+              desc: "The boss exhales fire in a 15-foot cone.",
+              usage: { type: "recharge on roll", dice: "1d6", minValue: 5 },
+              area: { shape: "cone", feet: 15, origin: "self" },
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${runBase}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, position: { column: 7, row: 4 }, rechargeSpent: ["actions/Fire Breath"] },
+      ],
+    });
+    await renderRunner();
+    await waitFor(() =>
+      expect(
+        card().getByText(
+          "Fire Breath is recharging: roll it in Resources first if this turn brings it back.",
+        ),
+      ).toBeInTheDocument(),
+    );
   });
 });

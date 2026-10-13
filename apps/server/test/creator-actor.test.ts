@@ -197,6 +197,16 @@ describeLayer("creator-actor", shared, (it) => {
         resources: true,
         setInitiative: true,
         remove: true,
+        // A group of methods rather than one: checked method by method below.
+        inTurn: false,
+      };
+      // The runner's own writes for a kept Hob turn take the proof too.
+      const inTurn: GatedOn<(typeof Combatants)["Service"]["inTurn"]> = {
+        damage: true,
+        move: true,
+        turn: true,
+        resources: true,
+        restore: true,
       };
       const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
         list: true,
@@ -276,13 +286,14 @@ describeLayer("creator-actor", shared, (it) => {
 
       expect([
         Object.keys(combatants).length,
+        Object.keys(inTurn).length,
         Object.keys(runs).length,
         Object.keys(events).length,
         Object.keys(recap).length,
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([11, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([12, 5, 10, 3, 4, 2, 4, 4]);
     });
   });
 
@@ -589,7 +600,17 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and forty-three and forty-four are `HobThreads.forFight` and
       // `ofFight`: a fight's own Hob conversation, the campaign's, found or
       // started beneath the proof that reads its run.
-      expect(gated).toBe(144);
+      // A hundred and forty-five to forty-eight are `Combatants.inTurn`'s
+      // `damage`, `move`, `turn` and `resources`: the runner's own writes for a
+      // kept Hob turn, gated like the DM's. A hundred and forty-nine and fifty
+      // are `NpcTurns.keep` and the transaction inside it, which carries the
+      // turn out on the creator's fight. A hundred and fifty-one to fifty-four
+      // are `NpcTurns.saves`, `resolveSave`, the transaction inside it and the
+      // run check they share: the saves a kept turn left to the DM. A hundred
+      // and fifty-five to fifty-eight are `NpcTurns.kept`, `undo` and the
+      // transaction inside it, and `Combatants.inTurn.restore`: a kept turn
+      // read back, and taken back.
+      expect(gated).toBe(158);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

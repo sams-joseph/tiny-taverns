@@ -7,6 +7,7 @@ import type {
   EncounterRunScene,
 } from "@taverns/api";
 import {
+  abilityCell,
   challengeTally,
   NEUTRAL_RUN_NAMES,
   parseDiceExpression,
@@ -175,9 +176,6 @@ const signedNumber = (text: string | undefined): number | undefined => {
   return trimmed !== undefined && /^-?\d+$/.test(trimmed) ? Number(trimmed) : undefined;
 };
 
-const abilityCell = (sheet: Pick<CharacterSheet, "abilities">, ability: string) =>
-  sheet.abilities.find((cell) => cell.label.trim().toUpperCase() === ability.toUpperCase());
-
 /**
  * What a character adds to a check with this skill, off their sheet: the
  * bonus written on its row, else the modifier of the ability it keys off (the
@@ -197,17 +195,4 @@ export const skillModifier = (sheet: CharacterSheet, skill: string): number | un
     (name.length === 3 ? name : undefined);
   if (keyed === undefined) return undefined;
   return signedNumber(abilityCell(sheet, keyed)?.modifier);
-};
-
-/**
- * A saving throw with this ability: the save written on the sheet, else the
- * modifier. A stat block's ability cells are the sheet's shape (`Ability`), so
- * a creature's is read the same way.
- */
-export const saveModifier = (
-  sheet: Pick<CharacterSheet, "abilities">,
-  ability: AbilityKey,
-): number | undefined => {
-  const cell = abilityCell(sheet, ability);
-  return signedNumber(cell?.save) ?? signedNumber(cell?.modifier);
 };

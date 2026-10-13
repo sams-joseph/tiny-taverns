@@ -21,7 +21,7 @@ const OLDER = 12;
 function Line({ line, latest }: { readonly line: DockLine; readonly latest: boolean }) {
   return (
     <>
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", line.undone === true && "line-through opacity-60")}>
         <p
           className={cn(
             "mb-0 truncate leading-snug font-medium text-heading",

@@ -43,7 +43,13 @@ import { PlayerStrip } from "./PlayerStrip";
 import { SceneOnTheTable } from "./SceneOnTheTable";
 import { tableLabels } from "./tableRows";
 import { usePlayerTableStream } from "./tableStream";
-import { ReadAloud, SessionNpcCard, TurnBannerCard, YourInitiative } from "./TableCards";
+import {
+  ReadAloud,
+  SessionNpcCard,
+  TableHeard,
+  TurnBannerCard,
+  YourInitiative,
+} from "./TableCards";
 import { TableDice } from "./TableDice";
 import { tableRollOf, useTableRolls } from "./tableRolls";
 import { turnBanner } from "./turnBanner";
@@ -282,6 +288,7 @@ export function PlayerTableScreen() {
   const panel = (
     <>
       {banner !== undefined && <TurnBannerCard banner={banner} />}
+      {fight !== null && <TableHeard lines={fight.narration} />}
       {failure !== undefined && (
         <Card className="border-danger">
           <CardContent className="pt-card">

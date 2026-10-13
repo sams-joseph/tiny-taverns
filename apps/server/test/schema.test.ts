@@ -108,6 +108,14 @@ const NOT_CONTENT = [
   // Audit of Hob moving an existing resource counter. The character remains the
   // content row; this is a log/inverse tied to a live run and an assistant turn.
   "hob_direct_resource_update",
+  // The record of a kept Hob monster turn and the rows it touched, before and
+  // after: an audit and an undo's inverse, tied to a live run and the turn
+  // that proposed it, never content. See 0095_hob_npc_turns.ts.
+  "hob_npc_turn",
+  "hob_npc_turn_row",
+  // A save a kept turn could not roll, waiting on the DM: the turn's own
+  // working state, never content. See 0097_hob_pending_saves.ts.
+  "hob_pending_save",
   // The daily image budget's ledger: a spend per draw started, billed to an
   // account and never read by anybody but the cap. See 0055_image_spend.ts.
   "image_spend",

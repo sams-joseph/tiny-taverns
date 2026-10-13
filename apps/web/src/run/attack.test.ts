@@ -50,6 +50,7 @@ const printed = (throws: ReadonlyArray<DmThrow>) =>
       outcome: part.outcome ?? null,
       requestId: `act:${String(index)}`,
       at: 0,
+      undone: false,
     })),
   ).map(({ label, detail, total, tone }) => ({ label, detail, total, tone }));
 

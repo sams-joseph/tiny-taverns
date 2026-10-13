@@ -104,6 +104,7 @@ const roll = {
   visibility: "shared",
   origin: "authored",
   assistantTurnId: null,
+  undoneAt: null,
   createdAt: "2026-08-04T19:04:00.000Z",
   updatedAt: "2026-08-04T19:04:00.000Z",
 };
@@ -381,6 +382,41 @@ describe("PlayerTableScreen", () => {
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
     expect(map.getByRole("button", { name: /^Brannoc Duskharrow/ })).toBeInTheDocument();
     expect(map.queryByRole("img", { name: /^Pinned/ })).toBeNull();
+  });
+
+  it("draws what the table heard of Hob-run turns, newest first", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder,
+        narration: [
+          {
+            id: "2b1f2a1e-0000-4000-8000-00000000e002",
+            combatantName: "Marsh Hag",
+            text: "The hag cackles and rakes at Brannoc.",
+            round: 3,
+          },
+          {
+            id: "2b1f2a1e-0000-4000-8000-00000000e001",
+            combatantName: "Marsh Hag",
+            text: "The hag slips into the reeds.",
+            round: 2,
+          },
+        ],
+      }),
+    );
+    await renderTable();
+    const heard = within(await screen.findByRole("region", { name: "What the table heard" }));
+    expect(heard.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "Marsh Hag · round 3The hag cackles and rakes at Brannoc.",
+      "Marsh Hag · round 2The hag slips into the reeds.",
+    ]);
+  });
+
+  it("draws no narration card when the table has heard nothing", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder }));
+    await renderTable();
+    await screen.findAllByText("Brannoc Duskharrow");
+    expect(screen.queryByRole("region", { name: "What the table heard" })).toBeNull();
   });
 
   it("lays an ally's portrait on its row, and draws none where there is none", async () => {

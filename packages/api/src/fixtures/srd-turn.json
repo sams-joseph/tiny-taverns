@@ -1067,7 +1067,7 @@
               "name": "DEX"
             },
             "dcValue": 21,
-            "successType": "none"
+            "successType": "half"
           },
           "usage": {
             "type": "recharge on roll",
@@ -3104,7 +3104,7 @@
               "name": "CON"
             },
             "dcValue": 18,
-            "successType": "none"
+            "successType": "half"
           },
           "damage": [
             {

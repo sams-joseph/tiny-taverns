@@ -1165,6 +1165,7 @@ describeLayer(
                 "encounterId",
                 "id",
                 "mode",
+                "narration",
                 "order",
                 "phase",
                 "round",

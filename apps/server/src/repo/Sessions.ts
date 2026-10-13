@@ -15,7 +15,7 @@ import {
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { clearArea, RUN } from "./liveTables.js";
+import { clearArea, lapseSaves, RUN } from "./liveTables.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -227,6 +227,8 @@ export class Sessions extends Context.Service<
               // A pinned template is the night's, not the fight's: the
               // resumed fight starts with nothing pinned.
               yield* clearArea(sql, run.id);
+              // A save left pending goes with the fight, as at its end.
+              yield* lapseSaves(sql, run.id);
               yield* appendEvent(sql, {
                 sessionId: session.id,
                 kind: "run-carried",

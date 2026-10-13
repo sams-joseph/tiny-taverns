@@ -56,6 +56,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
 import { HobDirectWrites } from "./repo/HobDirectWrites.js";
+import { NpcTurns } from "./repo/NpcTurns.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { GroupHistory } from "./repo/GroupHistory.js";
 import { LibraryShares } from "./repo/LibraryShares.js";
@@ -92,6 +93,7 @@ import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 import { Spells } from "./repo/Spells.js";
 import { TableFight } from "./repo/TableFight.js";
+import { Dice } from "./live/Dice.js";
 import * as FileSystemStorage from "./storage/FileSystemStorage.js";
 import { ObjectStorage, type StorageError } from "./storage/ObjectStorage.js";
 
@@ -475,6 +477,8 @@ export const servicesOver = <E>(
     ImageRecords | ObjectStorage | ImageUrls
   > = hobImagesFromConfig,
   uploadUrls: Layer.Layer<UploadUrls, E | Config.ConfigError, ObjectStorage> = uploadUrlsFromConfig,
+  // The dice a kept Hob turn rolls with; a test scripts them (`Dice.fixed`).
+  dice: Layer.Layer<Dice> = Dice.layer,
 ): Layer.Layer<
   | Accounts
   | Advancement
@@ -502,6 +506,7 @@ export const servicesOver = <E>(
   | HobDirectWrites
   | HobThreads
   | Invites
+  | NpcTurns
   | LiveEvents
   | MagicItems
   | Memberships
@@ -626,6 +631,18 @@ export const servicesOver = <E>(
     // Hob's direct resource writes are ordinary repository writes behind a
     // per-fight switch, not SQL inside the assistant loop.
     HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // A monster's turn Hob proposed, kept and carried out: the runner's own
+    // statements over the bare live repositories (it answers no picture), the
+    // fight read Hob reads, and the server's dice.
+    NpcTurns.layer.pipe(
+      Layer.provide([
+        Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
+        TableFight.unsigned,
+        HobThreads.layer,
+        LiveEvents.layer,
+        dice,
+      ]),
+    ),
     // Invitations, and the membership they grant. `Invites` writes no
     // `campaign_member` SQL of its own — it calls `repo/Memberships.ts`, which
     // with `repo/visibility.ts` is still the only pair of modules in `src` that
@@ -888,6 +905,7 @@ export const applicationOver = <E>(
     | HobDirectWrites
     | HobThreads
     | Invites
+    | NpcTurns
     | LiveEvents
     | MagicItems
     | Memberships

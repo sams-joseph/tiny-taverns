@@ -83,6 +83,20 @@ export const SessionEventKind = Schema.Literals([
   /** The DM undid one of Hob's direct resource spends. */
   "hob-resource-undone",
   /**
+   * The DM kept a monster's turn Hob proposed, and the server carried it out
+   * (`HobTurnKeptPayload`). The line carries the turn's narration, and is
+   * written at the acting creature's visibility: `shared` only when a player
+   * could see it act — the creature and the fight shown, and the creature not
+   * under fog where the turn left it.
+   */
+  "hob-turn-kept",
+  /**
+   * The DM undid a kept monster turn: its rows put back as the turn found
+   * them. Written at the visibility its `hob-turn-kept` line had, so a table
+   * that heard the turn hears it taken back.
+   */
+  "hob-turn-undone",
+  /**
    * The DM jotted a line about what just happened — see `Beat`.
    *
    * The only kind here that is not combat, and the only one whose *content*

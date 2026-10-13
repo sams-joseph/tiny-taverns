@@ -12,7 +12,7 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
-import { attackModeAt, rollFace, walkingFeet } from "@taverns/api";
+import { attackModeAt, rollFace, saveModifier, walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -62,7 +62,7 @@ import type { RunBoardProps } from "./runBoard";
 import { RunLayout } from "./RunLayout";
 import { RunBoardStage, RunStage } from "./RunStage";
 import { useStage } from "./stage";
-import { runSceneAtom, saveModifier, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
+import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
 import {
   boardFogWrites,
@@ -1611,6 +1611,7 @@ export function RunScreen() {
           round={state.run.round}
           options={selectedOptions}
           disabled={frozen}
+          onChanged={refresh}
         />
       )}
     </>

@@ -171,6 +171,7 @@ export const savedDmRoll = {
   visibility: "dm",
   origin: "authored",
   assistantTurnId: null,
+  undoneAt: null,
   ...stamps,
 };
 
@@ -485,6 +486,7 @@ export const installRunServer = (): RunStubServer => {
       visibility: "dm",
       origin: "authored",
       assistantTurnId: null,
+      undoneAt: null,
       createdAt: at,
       updatedAt: at,
     };

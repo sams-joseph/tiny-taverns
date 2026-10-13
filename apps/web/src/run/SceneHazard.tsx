@@ -7,7 +7,7 @@ import type {
   EncounterRunScene,
   EncounterRunSceneUpdate,
 } from "@taverns/api";
-import { type DiceRoll, SCENE_STAGES_MAX, signed } from "@taverns/api";
+import { type DiceRoll, SCENE_STAGES_MAX, saveModifier, signed } from "@taverns/api";
 import { Badge, Button, cn, Icon, Input, SectionHeading } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
@@ -21,7 +21,6 @@ import {
   exhaustionOf,
   leadingDice,
   saveLabel,
-  saveModifier,
   savesThisStage,
   withExhaustion,
 } from "./scene";

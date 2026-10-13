@@ -140,6 +140,14 @@ import {
 import { SharedWorldLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
 import { SharedWorldHobStatus } from "./Hob.js";
 import {
+  HobKeptTurn,
+  HobPendingSave,
+  HobSaveResolve,
+  HobSaveResolved,
+  HobTurnUndone,
+  NpcTurnOutcome,
+} from "./NpcTurnOutcome.js";
+import {
   SharedWorldHistoryEntry,
   SharedWorldHistoryEntryCreate,
   SharedWorldHistoryFromRecap,
@@ -166,6 +174,7 @@ import {
   SharedWorldId,
   CampaignInviteId,
   HobDirectResourceUpdateId,
+  HobPendingSaveId,
   MagicItemId,
   NpcId,
   NpcKnowledgeFactId,
@@ -2619,6 +2628,24 @@ class HobGroup extends HttpApiGroup.make("hob")
  *   one per run, the campaign's (so `hob.turns` reads it and `hob.discard`
  *   turns a proposal down), and kept out of the panel's list. `NotFound`
  *   until Hob has been asked for a turn in this fight.
+ * - `keep` carries out one of those proposals: the turn is built from the
+ *   stored proposal alone (the payload is empty), checked again against the
+ *   fight as it stands, and written through the runner's own statements in
+ *   one transaction, with dice the server rolls. A proposal offered against a
+ *   fight that has moved since, one already kept or discarded, and a turn the
+ *   check now refuses are `Conflict`, and the DM asks again. A player is
+ *   `NotFound`, as for every runner endpoint.
+ * - `kept` reads the run's kept turns back, newest first, each with what came
+ *   of it; `undo` takes the latest one back, putting every row it touched as
+ *   it found them. An earlier turn, one already undone, a fight that is over
+ *   and a row that has changed since (named in the message) are `Conflict`.
+ *   The turn's rolls stay, marked undone; the saves it left pending lapse.
+ * - `saves` lists the run's saves a kept turn could not roll (a party
+ *   member's, which Hob never rolls), pending, resolved and lapsed;
+ *   `resolveSave` takes the target's total and applies the damage the turn
+ *   rolled, all, half or none, through the runner's damage statement. A save
+ *   already resolved or lapsed, a fight that is over and a target that left
+ *   it are `Conflict`.
  */
 class HobFightGroup extends HttpApiGroup.make("hobFight")
   .add(
@@ -2637,6 +2664,49 @@ class HobFightGroup extends HttpApiGroup.make("hobFight")
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       success: HobThread,
       error: NotFound,
+    }),
+    HttpApiEndpoint.post("keep", "/hob/turns/:turnId/keep", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: NpcTurnOutcome,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("kept", "/hob/kept", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(HobKeptTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("undo", "/hob/turns/:turnId/undo", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HobTurnUndone,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("saves", "/hob/saves", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(HobPendingSave),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("resolveSave", "/hob/saves/:saveId/resolve", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        saveId: HobPendingSaveId,
+      },
+      payload: HobSaveResolve,
+      success: HobSaveResolved,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/sessions/:sessionId/runs/:runId")

@@ -51,6 +51,8 @@ export interface DmLine {
   /** The big number or word at the end: `14`, `Hit`, `DC 10`. Absent for a line with none. */
   readonly total?: string;
   readonly tone: Tone;
+  /** Rolled by a kept Hob turn the DM since undid: still in the log, struck through. */
+  readonly undone?: true;
 }
 
 /** What the runner files for one throw: everything but who it is for, which is always the DM. */
@@ -79,6 +81,8 @@ export interface DmRoll extends Pick<
   readonly requestId: string | null;
   /** Epoch milliseconds, to sit among the night's lines. */
   readonly at: number;
+  /** A kept Hob turn rolled it, and the DM undid that turn. */
+  readonly undone: boolean;
 }
 
 /** A roll with no character is the DM's; the server keeps it to them (`Roll`). */
@@ -99,6 +103,7 @@ const fromServer = (roll: Roll): DmRoll => ({
   outcome: roll.outcome,
   requestId: roll.requestId,
   at: DateTime.toEpochMillis(roll.createdAt),
+  undone: roll.undoneAt !== null,
 });
 
 interface Pending {
@@ -121,6 +126,7 @@ const fromPending = ({ payload, at }: Pending): DmRoll => ({
   outcome: payload.outcome ?? null,
   requestId: payload.requestId,
   at,
+  undone: false,
 });
 
 /** A d20 kept at 20 or 1, as the server reads a roll's `critical`. */
