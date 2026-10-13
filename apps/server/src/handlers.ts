@@ -1288,6 +1288,16 @@ const HobFightLive = HttpApiBuilder.group(
           npcTurns.keep(dm, params.sessionId, params.runId, params.turnId),
         ),
       )
+      .handle("kept", ({ params }) =>
+        Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
+          npcTurns.kept(dm, params.sessionId, params.runId),
+        ),
+      )
+      .handle("undo", ({ params }) =>
+        Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
+          npcTurns.undo(dm, params.sessionId, params.runId, params.turnId),
+        ),
+      )
       .handle("saves", ({ params }) =>
         Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
           npcTurns.saves(dm, params.sessionId, params.runId),

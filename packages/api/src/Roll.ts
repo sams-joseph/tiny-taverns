@@ -87,6 +87,12 @@ export class Roll extends Schema.Class<Roll>("Roll")({
   requestId: Schema.NullOr(Schema.NonEmptyString),
   visibility: Visibility,
   ...provenanceFields,
+  /**
+   * When the kept Hob turn that rolled it was undone: the roll stays (a roll
+   * goes only with its night) and the log strikes it through. Null on every
+   * other roll.
+   */
+  undoneAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}

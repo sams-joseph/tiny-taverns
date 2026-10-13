@@ -72,6 +72,42 @@ import {
 } from "./visibility.js";
 
 /**
+ * The columns of a row a kept Hob turn can move, as it snapshots them before
+ * and after (`hob_npc_turn_row`) and an undo puts them back.
+ */
+export type CombatantSnapshot = Pick<
+  Combatant,
+  | "hpCurrent"
+  | "conditions"
+  | "deathSaves"
+  | "position"
+  | "feetMoved"
+  | "actionUsed"
+  | "bonusUsed"
+  | "reactionUsed"
+  | "legendarySpent"
+  | "rechargeSpent"
+  | "usesSpent"
+  | "slotsSpent"
+>;
+
+/** A row's snapshot, in one fixed shape: a key order that does not depend on the row. */
+export const snapshotOf = (row: CombatantSnapshot): CombatantSnapshot => ({
+  hpCurrent: row.hpCurrent,
+  conditions: row.conditions,
+  deathSaves: row.deathSaves,
+  position: row.position,
+  feetMoved: row.feetMoved,
+  actionUsed: row.actionUsed,
+  bonusUsed: row.bonusUsed,
+  reactionUsed: row.reactionUsed,
+  legendarySpent: row.legendarySpent,
+  rechargeSpent: row.rechargeSpent,
+  usesSpent: row.usesSpent,
+  slotsSpent: row.slotsSpent,
+});
+
+/**
  * The combatant's own columns, its square as one value (`position`, null while
  * the token is off the board — `0064_combatant_positions.ts`), its death saves
  * as one value (`death_saves`, null for an NPC, which makes none —
@@ -257,6 +293,20 @@ export class Combatants extends Context.Service<
         spent: Omit<CombatantResources, "requestId">,
         from: AssistantOrigin,
       ) => Effect.Effect<Combatant | undefined, NotFound>;
+      /**
+       * A row put back as a kept turn found it (the undo, the DM's own act,
+       * so not stamped as Hob's): every column a turn can move, set outright,
+       * written through to its character as a hit is, and logged
+       * `combatant-updated` at the row's visibility, so a table that saw the
+       * turn re-reads.
+       */
+      readonly restore: (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        snapshot: CombatantSnapshot,
+      ) => Effect.Effect<Combatant, NotFound>;
     };
   }
 >()("Combatants") {
@@ -716,6 +766,61 @@ export class Combatants extends Context.Service<
             payload: { ...ticks },
             visibility: "dm",
             ...stamped(stamp),
+          });
+          return combatant;
+        });
+
+      /** `inTurn.restore`'s write, its log line and its write-through, in the caller's transaction. */
+      const putBack = (
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        snapshot: CombatantSnapshot,
+        stamp: Stamp,
+      ) =>
+        Effect.gen(function* () {
+          const combatant = yield* edit({
+            campaignId,
+            actor,
+            runId,
+            id,
+            columns: {
+              hp_current: snapshot.hpCurrent,
+              conditions: textArray(snapshot.conditions),
+              ...(snapshot.deathSaves === null
+                ? {}
+                : {
+                    death_save_successes: snapshot.deathSaves.successes,
+                    death_save_failures: snapshot.deathSaves.failures,
+                  }),
+              board_column: snapshot.position?.column ?? null,
+              board_row: snapshot.position?.row ?? null,
+              feet_moved: snapshot.feetMoved,
+              action_used: snapshot.actionUsed,
+              bonus_used: snapshot.bonusUsed,
+              reaction_used: snapshot.reactionUsed,
+              legendary_spent: snapshot.legendarySpent,
+              recharge_spent: textArray(snapshot.rechargeSpent),
+              uses_spent: JSON.stringify(snapshot.usesSpent),
+              slots_spent: JSON.stringify(snapshot.slotsSpent),
+            },
+          }).pipe(orNotFound("combatant", id));
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "combatant-updated",
+            encounterRunId: runId,
+            combatantId: id,
+            characterId: combatant.characterId ?? undefined,
+            payload: { restored: true, hpCurrent: combatant.hpCurrent },
+            visibility: combatant.visibility,
+            ...stamped(stamp),
+          });
+          yield* writeThrough(campaignId, actor, combatant, {
+            hpCurrent: combatant.hpCurrent,
+            conditions: combatant.conditions,
+            deathSaves: combatant.deathSaves ?? undefined,
           });
           return combatant;
         });
@@ -1379,6 +1484,8 @@ export class Combatants extends Context.Service<
             dieOnSqlError(tick(campaignId, actor, sessionId, runId, id, ticks, { from })),
           resources: ({ actor, campaign: campaignId }, sessionId, runId, id, spent, from) =>
             dieOnSqlError(spend(campaignId, actor, sessionId, runId, id, spent, { from })),
+          restore: ({ actor, campaign: campaignId }, sessionId, runId, id, snapshot) =>
+            dieOnSqlError(putBack(campaignId, actor, sessionId, runId, id, snapshot, {})),
         },
       };
     }),

@@ -381,6 +381,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 95, name: "hob_npc_turns" },
         { migration_id: 96, name: "save_success_from_prose" },
         { migration_id: 97, name: "hob_pending_saves" },
+        { migration_id: 98, name: "hob_turn_undo" },
       ]);
     }),
   );
@@ -488,6 +489,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 95, name: "hob_npc_turns" },
         { migration_id: 96, name: "save_success_from_prose" },
         { migration_id: 97, name: "hob_pending_saves" },
+        { migration_id: 98, name: "hob_turn_undo" },
       ]);
     }),
   );

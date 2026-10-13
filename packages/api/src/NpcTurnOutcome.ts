@@ -155,3 +155,17 @@ export const HobSaveResolved = Schema.Struct({
   judged: Schema.Boolean,
 });
 export type HobSaveResolved = typeof HobSaveResolved.Type;
+
+/** A kept turn as the runner reads it back: what came of it, and whether it was undone. */
+export const HobKeptTurn = Schema.Struct({
+  outcome: NpcTurnOutcome,
+  undoneAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+});
+export type HobKeptTurn = typeof HobKeptTurn.Type;
+
+/** An undone turn: the rows put back as the turn found them. */
+export const HobTurnUndone = Schema.Struct({
+  turnId: AssistantTurnId,
+  restored: Schema.Array(Named),
+});
+export type HobTurnUndone = typeof HobTurnUndone.Type;

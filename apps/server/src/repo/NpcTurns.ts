@@ -11,8 +11,11 @@ import {
   type DamageRoll,
   damageAfterSave,
   damageTotal,
-  type EncounterRunId,
+  EncounterRunId,
   type HobKept,
+  type HobKeptTurn,
+  type HobTurnUndone,
+  NpcTurnOutcome as NpcTurnOutcomeSchema,
   type HobPendingSave,
   type HobPendingSaveId,
   type HobSaveResolved,
@@ -39,17 +42,17 @@ import {
   signed,
   type StatBlock,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Dice } from "../live/Dice.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { Combatants } from "./Combatants.js";
+import { Combatants, type CombatantSnapshot, snapshotOf } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { discardedConflict, HobThreads, lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { underFog } from "./liveTables.js";
 import { fileRoll } from "./Rolls.js";
 import type { AssistantOrigin } from "./rows.js";
-import { dieOnSqlError, textArray } from "./rows.js";
+import { dieOnSqlError, fromColumns, textArray } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { TableFight, turnFightOf } from "./TableFight.js";
 
@@ -96,6 +99,32 @@ export class NpcTurns extends Context.Service<
       runId: EncounterRunId,
       turnId: AssistantTurnId,
     ) => Effect.Effect<NpcTurnOutcome, NotFound | Conflict>;
+    /** The run's kept turns, newest first: what came of each, and whether it was undone. */
+    readonly kept: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+    ) => Effect.Effect<ReadonlyArray<HobKeptTurn>, NotFound>;
+    /**
+     * **The latest kept turn, taken back.** In one transaction, the run and
+     * its rows held as the keep holds them: each row the turn touched is put
+     * back as the turn found it (`hob_npc_turn_row.before`), but only when it
+     * still stands as the turn left it (`after`, which a resolved save moves),
+     * so nothing a person did since is lost; a row that has moved is a
+     * `Conflict` naming it, and the DM puts it right by hand. Restoring the
+     * snapshot rather than playing the writes backwards is what keeps a
+     * dropped concentration, a crossing of zero and a death save failure
+     * honest. The turn's rolls stay (they go only with their night), marked
+     * undone; the saves it left pending lapse; `hob-turn-undone` is logged at
+     * the visibility its narration had. An earlier turn, one already undone
+     * and a fight that is over are `Conflict`.
+     */
+    readonly undo: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      turnId: AssistantTurnId,
+    ) => Effect.Effect<HobTurnUndone, NotFound | Conflict>;
     /** The run's saves its kept turns could not roll, oldest first, in every state. */
     readonly saves: (
       dm: CampaignCreatorActor,
@@ -691,6 +720,128 @@ export class NpcTurns extends Context.Service<
           ${saveId === undefined ? sql`` : sql`for update of hob_pending_save`}
         `.pipe(dieOnSqlError);
 
+      const keptOf = SqlSchema.findAll({
+        Request: Schema.toType(EncounterRunId),
+        Result: KeptRow,
+        execute: (runId) => sql`
+          select hob_npc_turn.outcome, hob_npc_turn.undone_at from hob_npc_turn
+          where hob_npc_turn.encounter_run_id = ${runId}
+          order by hob_npc_turn.created_at desc, hob_npc_turn.id desc
+        `,
+      });
+
+      const undoIn = (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      ) =>
+        Effect.gen(function* () {
+          const run = yield* ensureRun(dm, sessionId, runId);
+          yield* sql`select encounter_run.id from encounter_run where encounter_run.id = ${runId} for update`.pipe(
+            dieOnSqlError,
+          );
+          yield* sql`
+            select combatant.id from combatant
+            where combatant.encounter_run_id = ${runId}
+            order by combatant.id
+            for update
+          `.pipe(dieOnSqlError);
+          const records = yield* sql<{
+            readonly id: string;
+            readonly assistant_turn_id: AssistantTurnId;
+            readonly combatant_id: CombatantId | null;
+            readonly undone: boolean;
+          }>`
+            select hob_npc_turn.id, hob_npc_turn.assistant_turn_id, hob_npc_turn.combatant_id,
+                   hob_npc_turn.undone_at is not null as undone
+            from hob_npc_turn
+            where hob_npc_turn.encounter_run_id = ${runId}
+            order by hob_npc_turn.created_at desc, hob_npc_turn.id desc
+            for update
+          `.pipe(dieOnSqlError);
+          const record = records.find((row) => row.assistant_turn_id === turnId);
+          if (record === undefined)
+            return yield* new NotFound({ resource: "hob_npc_turn", id: turnId });
+          if (record.undone)
+            return yield* new Conflict({ message: "That turn was already undone." });
+          if (run.ended) return yield* new Conflict({ message: "That fight is over." });
+          if (records.find((row) => !row.undone)?.id !== record.id) {
+            return yield* new Conflict({ message: "Only the latest Hob turn can be undone." });
+          }
+
+          const snapshots = yield* sql<{
+            readonly combatant_id: CombatantId | null;
+            readonly combatant_name: string;
+            readonly before: unknown;
+            readonly after: unknown;
+          }>`
+            select combatant_id, combatant_name, before, after from hob_npc_turn_row
+            where hob_npc_turn_row.hob_npc_turn_id = ${record.id}
+            order by combatant_name, id
+          `.pipe(dieOnSqlError);
+          const now = new Map(
+            (yield* combatants.list(dm, sessionId, runId)).map((row) => [row.id, row] as const),
+          );
+          const moved: Array<string> = [];
+          for (const row of snapshots) {
+            const current = row.combatant_id === null ? undefined : now.get(row.combatant_id);
+            if (current === undefined) {
+              moved.push(`${row.combatant_name} has left the fight`);
+              continue;
+            }
+            const changed = changedSince(parsed(row.after), snapshotOf(current));
+            if (changed.length > 0) moved.push(`${row.combatant_name}'s ${changed.join(", ")}`);
+          }
+          if (moved.length > 0) {
+            return yield* new Conflict({
+              message: `That turn can't be undone, because something has moved since: ${moved.join(
+                "; ",
+              )}. Put it right by hand.`,
+            });
+          }
+
+          const restored: Array<{ combatantId: CombatantId; name: string }> = [];
+          for (const row of snapshots) {
+            yield* combatants.inTurn.restore(
+              dm,
+              sessionId,
+              runId,
+              row.combatant_id!,
+              parsed(row.before),
+            );
+            restored.push({ combatantId: row.combatant_id!, name: row.combatant_name });
+          }
+          yield* sql`
+            update character_roll set undone_at = now(), updated_at = now()
+            where character_roll.assistant_turn_id = ${turnId}
+          `.pipe(dieOnSqlError);
+          yield* sql`
+            update hob_pending_save set lapsed_at = now(), updated_at = now()
+            where hob_pending_save.hob_npc_turn_id = ${record.id}
+              and hob_pending_save.resolved_at is null and hob_pending_save.lapsed_at is null
+          `.pipe(dieOnSqlError);
+          yield* sql`
+            update hob_npc_turn
+            set undone_at = now(), undone_by_account_id = ${dm.actor.accountId}, updated_at = now()
+            where hob_npc_turn.id = ${record.id}
+          `.pipe(dieOnSqlError);
+          const heard = yield* sql<{ readonly visibility: "dm" | "shared" }>`
+            select session_event.visibility from session_event
+            where session_event.assistant_turn_id = ${turnId}
+              and session_event.kind = 'hob-turn-kept'
+          `.pipe(dieOnSqlError);
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "hob-turn-undone",
+            encounterRunId: runId,
+            combatantId: record.combatant_id ?? undefined,
+            payload: { turnId },
+            visibility: heard[0]?.visibility ?? "dm",
+          });
+          return { turnId, restored } satisfies HobTurnUndone;
+        });
+
       const resolveIn = (
         dm: CampaignCreatorActor,
         sessionId: SessionId,
@@ -765,6 +916,15 @@ export class NpcTurns extends Context.Service<
           dieOnSqlError(sql.withTransaction(keepIn(dm, sessionId, runId, turnId))).pipe(
             Effect.tap(() => live.touched(sessionId)),
           ),
+        kept: (dm, sessionId, runId) =>
+          Effect.gen(function* () {
+            yield* ensureRun(dm, sessionId, runId);
+            return yield* keptOf(runId).pipe(dieOnSqlError);
+          }),
+        undo: (dm, sessionId, runId, turnId) =>
+          dieOnSqlError(sql.withTransaction(undoIn(dm, sessionId, runId, turnId))).pipe(
+            Effect.tap(() => live.touched(sessionId)),
+          ),
         saves: (dm, sessionId, runId) =>
           Effect.gen(function* () {
             yield* ensureRun(dm, sessionId, runId);
@@ -778,6 +938,48 @@ export class NpcTurns extends Context.Service<
     }),
   );
 }
+
+const KeptRow = fromColumns(
+  Schema.Struct({
+    outcome: NpcTurnOutcomeSchema,
+    undoneAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  }),
+);
+
+/** A jsonb column as the driver hands it back: parsed already, or text. */
+const parsed = (value: unknown): CombatantSnapshot =>
+  (typeof value === "string" ? JSON.parse(value) : value) as CombatantSnapshot;
+
+/** A value in one spelling: sets sorted, keys sorted, so order is no change. */
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_, inner: unknown) =>
+    Array.isArray(inner) && inner.every((item) => typeof item === "string")
+      ? [...inner].sort()
+      : inner !== null && typeof inner === "object" && !Array.isArray(inner)
+        ? Object.fromEntries(Object.entries(inner).sort(([a], [b]) => a.localeCompare(b)))
+        : inner,
+  );
+
+const SNAPSHOT_WORDS: Record<keyof CombatantSnapshot, string> = {
+  hpCurrent: "hit points",
+  conditions: "conditions",
+  deathSaves: "death saves",
+  position: "square",
+  feetMoved: "feet moved",
+  actionUsed: "action",
+  bonusUsed: "bonus action",
+  reactionUsed: "reaction",
+  legendarySpent: "legendary actions",
+  rechargeSpent: "recharges",
+  usesSpent: "uses",
+  slotsSpent: "spell slots",
+};
+
+/** What differs between a row as a turn left it and as it stands, in words. */
+const changedSince = (left: CombatantSnapshot, now: CombatantSnapshot): ReadonlyArray<string> =>
+  (Object.keys(SNAPSHOT_WORDS) as Array<keyof CombatantSnapshot>)
+    .filter((key) => canonical(left[key] ?? null) !== canonical(now[key] ?? null))
+    .map((key) => SNAPSHOT_WORDS[key]);
 
 interface PendingSaveRow {
   readonly id: HobPendingSaveId;
@@ -925,19 +1127,3 @@ const spentAfter = (
   if (legendary > 0) out.legendarySpent = row.legendarySpent + legendary;
   return any ? out : undefined;
 };
-
-/** The columns a turn can move on a row, as an undo compares and restores them. */
-const snapshotOf = (row: Combatant) => ({
-  hpCurrent: row.hpCurrent,
-  conditions: row.conditions,
-  deathSaves: row.deathSaves,
-  position: row.position,
-  feetMoved: row.feetMoved,
-  actionUsed: row.actionUsed,
-  bonusUsed: row.bonusUsed,
-  reactionUsed: row.reactionUsed,
-  legendarySpent: row.legendarySpent,
-  rechargeSpent: row.rechargeSpent,
-  usesSpent: row.usesSpent,
-  slotsSpent: row.slotsSpent,
-});

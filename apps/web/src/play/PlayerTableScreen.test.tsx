@@ -104,6 +104,7 @@ const roll = {
   visibility: "shared",
   origin: "authored",
   assistantTurnId: null,
+  undoneAt: null,
   createdAt: "2026-08-04T19:04:00.000Z",
   updatedAt: "2026-08-04T19:04:00.000Z",
 };

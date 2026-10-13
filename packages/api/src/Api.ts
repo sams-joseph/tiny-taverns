@@ -140,9 +140,11 @@ import {
 import { SharedWorldLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
 import { SharedWorldHobStatus } from "./Hob.js";
 import {
+  HobKeptTurn,
   HobPendingSave,
   HobSaveResolve,
   HobSaveResolved,
+  HobTurnUndone,
   NpcTurnOutcome,
 } from "./NpcTurnOutcome.js";
 import {
@@ -2633,6 +2635,11 @@ class HobGroup extends HttpApiGroup.make("hob")
  *   fight that has moved since, one already kept or discarded, and a turn the
  *   check now refuses are `Conflict`, and the DM asks again. A player is
  *   `NotFound`, as for every runner endpoint.
+ * - `kept` reads the run's kept turns back, newest first, each with what came
+ *   of it; `undo` takes the latest one back, putting every row it touched as
+ *   it found them. An earlier turn, one already undone, a fight that is over
+ *   and a row that has changed since (named in the message) are `Conflict`.
+ *   The turn's rolls stay, marked undone; the saves it left pending lapse.
  * - `saves` lists the run's saves a kept turn could not roll (a party
  *   member's, which Hob never rolls), pending, resolved and lapsed;
  *   `resolveSave` takes the target's total and applies the damage the turn
@@ -2667,6 +2674,22 @@ class HobFightGroup extends HttpApiGroup.make("hobFight")
       },
       payload: Schema.Struct({}),
       success: NpcTurnOutcome,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("kept", "/hob/kept", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(HobKeptTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("undo", "/hob/turns/:turnId/undo", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HobTurnUndone,
       error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.get("saves", "/hob/saves", {

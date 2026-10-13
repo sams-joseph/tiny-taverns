@@ -226,6 +226,7 @@ describe("the dock's one list", () => {
     visibility: "shared",
     origin: "authored",
     assistantTurnId: null,
+    undoneAt: null,
     createdAt: "2026-08-04T19:02:30.000Z",
     updatedAt: "2026-08-04T19:02:30.000Z",
   });

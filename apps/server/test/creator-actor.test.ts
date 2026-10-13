@@ -206,6 +206,7 @@ describeLayer("creator-actor", shared, (it) => {
         move: true,
         turn: true,
         resources: true,
+        restore: true,
       };
       const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
         list: true,
@@ -292,7 +293,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([12, 4, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([12, 5, 10, 3, 4, 2, 4, 4]);
     });
   });
 
@@ -605,8 +606,11 @@ describeLayer("creator-actor", shared, (it) => {
       // are `NpcTurns.keep` and the transaction inside it, which carries the
       // turn out on the creator's fight. A hundred and fifty-one to fifty-four
       // are `NpcTurns.saves`, `resolveSave`, the transaction inside it and the
-      // run check they share: the saves a kept turn left to the DM.
-      expect(gated).toBe(154);
+      // run check they share: the saves a kept turn left to the DM. A hundred
+      // and fifty-five to fifty-eight are `NpcTurns.kept`, `undo` and the
+      // transaction inside it, and `Combatants.inTurn.restore`: a kept turn
+      // read back, and taken back.
+      expect(gated).toBe(158);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

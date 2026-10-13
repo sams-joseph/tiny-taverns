@@ -287,6 +287,7 @@ export class Rolls extends Context.Service<
           then character_roll.target_ac end as target_ac,
         character_roll.outcome, character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
+        character_roll.undone_at,
         character_roll.created_at, character_roll.updated_at,
         account.name as account_name, character.name as character_name
         from character_roll

@@ -91,6 +91,12 @@ export const SessionEventKind = Schema.Literals([
    */
   "hob-turn-kept",
   /**
+   * The DM undid a kept monster turn: its rows put back as the turn found
+   * them. Written at the visibility its `hob-turn-kept` line had, so a table
+   * that heard the turn hears it taken back.
+   */
+  "hob-turn-undone",
+  /**
    * The DM jotted a line about what just happened — see `Beat`.
    *
    * The only kind here that is not combat, and the only one whose *content*

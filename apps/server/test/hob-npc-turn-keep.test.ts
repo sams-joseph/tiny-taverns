@@ -683,6 +683,182 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
     );
   });
 
+  describe("undo", () => {
+    const undo = (who: Person, fight: Fight, turnId: AssistantTurnId) =>
+      refusal(who.token, (client) =>
+        client.hobFight.undo({ params: { ...fight.params, turnId }, payload: {} }),
+      );
+    /** The goblin's scimitar at Brannoc, kept: a 17 on the d20 and 4 slashing. */
+    const goblinSwings = (table: Table, fight: Fight) =>
+      Effect.gen(function* () {
+        const turnId = yield* proposed(table, fight, fight.goblin, { moment: "turn" }, [
+          { option: "actions/Scimitar", targets: [fight.place(fight.hero)] },
+        ]);
+        faces.length = 0;
+        roll(20, 17);
+        roll(6, 2);
+        yield* kept(table, fight, turnId);
+        return turnId;
+      });
+
+    it.effect("puts back every row as the turn found it, and keeps its rolls, marked", () =>
+      Effect.gen(function* () {
+        const table = yield* Fixture;
+        const fight = yield* aFight(table, { first: "dragon" });
+        const before = yield* rowsOf(table, fight);
+        const turnId = yield* proposed(table, fight, fight.dragon, { moment: "turn" }, [
+          { option: "move", square: { column: 6, row: 6 } },
+          { option: "actions/Multiattack", targets: [fight.place(fight.hero)] },
+        ]);
+        faces.length = 0;
+        roll(20, 15);
+        roll(10, 10, 10);
+        roll(6, 1, 1);
+        roll(20, 1);
+        roll(20, 18);
+        roll(6, 3, 3);
+        yield* kept(table, fight, turnId);
+        expect((yield* undo(table.player, fight, turnId)).tag).toBe("NotFound");
+
+        const undone = yield* as(table.dm.token, (client) =>
+          client.hobFight.undo({ params: { ...fight.params, turnId }, payload: {} }),
+        );
+        expect(undone.restored.map((row) => row.name)).toEqual(["Brannoc", "Cinder"]);
+        const after = yield* rowsOf(table, fight);
+        const pick = (row: Combatant) => [
+          row.hpCurrent,
+          [...row.conditions],
+          row.deathSaves,
+          row.position,
+          row.feetMoved,
+          row.actionUsed,
+        ];
+        for (const id of [fight.hero.id, fight.dragon.id]) {
+          expect(pick(rowOf(after, id))).toEqual(pick(rowOf(before, id)));
+        }
+        const party = yield* as(table.dm.token, (client) =>
+          client.party.list({ params: { campaignId: table.campaignId } }),
+        );
+        expect(JSON.stringify(party)).toContain('"hpCurrent":30');
+
+        // The rolls stay, marked; the undo is the DM's own line.
+        const sql = yield* SqlClient.SqlClient;
+        const rolls = yield* sql<{ readonly undone: boolean }>`
+          select undone_at is not null as undone from character_roll
+          where assistant_turn_id = ${turnId}
+        `.pipe(Effect.orDie);
+        expect(rolls.length).toBe(6);
+        expect(rolls.every((row) => row.undone)).toBe(true);
+        const lines = yield* sql<{ readonly kind: string; readonly origin: string }>`
+          select kind, origin from session_event
+          where encounter_run_id = ${fight.params.runId} and kind = 'hob-turn-undone'
+        `.pipe(Effect.orDie);
+        expect(lines).toEqual([{ kind: "hob-turn-undone", origin: "authored" }]);
+        const keptTurns = yield* as(table.dm.token, (client) =>
+          client.hobFight.kept({ params: fight.params }),
+        );
+        expect(keptTurns.map((turn) => [turn.outcome.turnId, turn.undoneAt !== null])).toEqual([
+          [turnId, true],
+        ]);
+        expect(yield* undo(table.dm, fight, turnId)).toEqual({
+          tag: "Conflict",
+          message: "That turn was already undone.",
+        });
+      }),
+    );
+
+    it.effect("refuses a row that has moved since, naming it, and writes nothing", () =>
+      Effect.gen(function* () {
+        const table = yield* Fixture;
+        const fight = yield* aFight(table);
+        const turnId = yield* goblinSwings(table, fight);
+        yield* as(table.dm.token, (client) =>
+          client.combatants.damage({
+            params: { ...fight.params, combatantId: fight.hero.id },
+            payload: { amount: 1 },
+          }),
+        );
+        const before = yield* writesIn(fight);
+        expect(yield* undo(table.dm, fight, turnId)).toEqual({
+          tag: "Conflict",
+          message:
+            "That turn can't be undone, because something has moved since: Brannoc's hit points. " +
+            "Put it right by hand.",
+        });
+        expect(yield* writesIn(fight)).toEqual(before);
+        expect(rowOf(yield* rowsOf(table, fight), fight.hero.id).hpCurrent).toBe(25);
+      }),
+    );
+
+    it.effect("takes back only the latest kept turn", () =>
+      Effect.gen(function* () {
+        const table = yield* Fixture;
+        const fight = yield* aFight(table);
+        const swing = yield* goblinSwings(table, fight);
+        const lash = yield* proposed(table, fight, fight.dragon, { moment: "legendary" }, [
+          { option: "legendaryActions/Tail Attack>Tail", targets: [fight.place(fight.hero)] },
+        ]);
+        faces.length = 0;
+        roll(20, 1);
+        yield* kept(table, fight, lash);
+        expect(yield* undo(table.dm, fight, swing)).toEqual({
+          tag: "Conflict",
+          message: "Only the latest Hob turn can be undone.",
+        });
+        expect((yield* undo(table.dm, fight, lash)).tag).toBe("succeeded");
+        expect((yield* undo(table.dm, fight, swing)).tag).toBe("succeeded");
+        expect(rowOf(yield* rowsOf(table, fight), fight.hero.id).hpCurrent).toBe(30);
+      }),
+    );
+
+    it.effect("undoes a resolved save with its turn, and lapses one still pending", () =>
+      Effect.gen(function* () {
+        const table = yield* Fixture;
+        const fight = yield* aFight(table, { first: "dragon" });
+        const turnId = yield* proposed(table, fight, fight.dragon, { moment: "turn" }, [
+          { option: "actions/Fire Breath", square: { column: 5, row: 5 } },
+        ]);
+        faces.length = 0;
+        roll(6, ...Array.from({ length: 18 }, () => 1));
+        roll(20, 1);
+        const outcome = yield* kept(table, fight, turnId);
+        const pending = optionStep(outcome, 0).save!.targets.find(
+          (target) => target.target.name === "Brannoc",
+        )!.pendingSaveId!;
+        yield* as(table.dm.token, (client) =>
+          client.hobFight.resolveSave({
+            params: { ...fight.params, saveId: pending },
+            payload: { total: 3 },
+          }),
+        );
+        expect(rowOf(yield* rowsOf(table, fight), fight.hero.id).hpCurrent).toBe(12);
+        // The resolved save moved the snapshot, so the undo still stands.
+        expect((yield* undo(table.dm, fight, turnId)).tag).toBe("succeeded");
+        const rows = yield* rowsOf(table, fight);
+        expect(rowOf(rows, fight.hero.id).hpCurrent).toBe(30);
+        expect(rowOf(rows, fight.goblin.id).hpCurrent).toBe(20);
+        expect(rowOf(rows, fight.dragon.id).rechargeSpent).toEqual([]);
+
+        // A save still pending when its turn is undone lapses.
+        const again = yield* aFight(table, { first: "dragon" });
+        const second = yield* proposed(table, again, again.dragon, { moment: "turn" }, [
+          { option: "actions/Fire Breath", square: { column: 5, row: 5 } },
+        ]);
+        faces.length = 0;
+        roll(6, ...Array.from({ length: 18 }, () => 1));
+        roll(20, 1);
+        yield* kept(table, again, second);
+        yield* as(table.dm.token, (client) =>
+          client.hobFight.undo({ params: { ...again.params, turnId: second }, payload: {} }),
+        );
+        const saves = yield* as(table.dm.token, (client) =>
+          client.hobFight.saves({ params: again.params }),
+        );
+        expect(saves.map((save) => save.state)).toEqual(["lapsed"]);
+      }),
+    );
+  });
+
   describe("the narration", () => {
     const narrated = (options: FightOptions) =>
       Effect.gen(function* () {
