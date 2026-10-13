@@ -38,7 +38,17 @@ import {
   EncounterKind,
   encounterKindLabel,
   leftOf,
+  type Combatant,
+  type CombatantId,
+  type EncounterRunId,
+  NPC_MOMENT_SLOTS,
+  npcTurnCheck,
+  type NpcTurnMoment,
   type NpcTurnOption,
+  type NpcTurnOptions,
+  npcTurnOptions,
+  type NpcTurnProposalStep,
+  type NpcTurnStep,
   npcLimits,
   type StatBlock,
   gearLinesNamed,
@@ -116,7 +126,7 @@ import type { SessionEvents } from "../repo/SessionEvents.js";
 import type { Sessions } from "../repo/Sessions.js";
 import type { EquipmentRepo } from "../repo/Equipment.js";
 import type { Spells } from "../repo/Spells.js";
-import type { TableFight, TableFightRead } from "../repo/TableFight.js";
+import { type TableFight, type TableFightRead, turnFightOf } from "../repo/TableFight.js";
 
 /**
  * What Hob can reach, and the only way it reaches anything.
@@ -667,6 +677,51 @@ export const ReadFight = Tool.make("readFight", {
     "their place in the order (#1, #2…); options by their ids (actions/Bite).",
   success: Schema.Struct({ fight: Schema.String }),
   failure: NotFound,
+  failureMode: "return",
+});
+
+/** How long the line the table hears may be. */
+export const NPC_TURN_NARRATION_MAX = 280;
+
+/**
+ * A monster's turn, offered to the DM — the fight toolkit's one proposal.
+ * Steps name options by the ids `readFight` lists and creatures by their place
+ * in the order; the handler checks every step with `npcTurnCheck` on the fight
+ * as the steps before it leave it, and refuses in words naming the step.
+ */
+export const ProposeNpcTurn = Tool.make("proposeNpcTurn", {
+  description:
+    "Offer the DM what the creature does now, as steps in order, and one or two sentences " +
+    "the players hear. A step is a move (option 'move' and the square it ends on) or one of " +
+    "the options readFight lists, by its id (actions/Bite, standard/Dash): give an attack one " +
+    "target, a multiattack one target for all its strikes or one per strike in order, and an " +
+    "area the square from its best placements (for a cone or line from itself the square it " +
+    "points toward, otherwise the square it is centred on) and no targets. Targets are places " +
+    "in the order: 2 for #2. Moving changes who is in reach, so move before the attack that " +
+    "needs it. No dice: say what it tries, not what happens. Nothing happens unless the DM " +
+    "carries it out, and nothing is offered unless this tool says it offered it.",
+  parameters: Schema.Struct({
+    steps: Schema.Array(
+      Schema.Struct({
+        option: Schema.String.check(Schema.isBetweenLength(1, 160)),
+        targets: optional(
+          Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 999 }))).check(
+            Schema.isMaxLength(12),
+          ),
+        ),
+        square: optional(
+          Schema.Struct({
+            column: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 199 })),
+            row: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 199 })),
+          }),
+        ),
+      }),
+    ).check(Schema.isBetweenLength(1, 8)),
+    narration: Schema.String.check(Schema.isBetweenLength(1, NPC_TURN_NARRATION_MAX)),
+  }),
+  success: Schema.String,
+  // `proposalFailure`, which is declared below this.
+  failure: toolFailure,
   failureMode: "return",
 });
 
@@ -1223,11 +1278,11 @@ interface ChallengeParameters {
  * nothing reached the DM. A model told only what was wrong went on to tell the
  * DM a social encounter was ready to view, over a card that never came.
  */
-const notOffered = (why: string) =>
+const notOffered = (why: string, tool = "proposeEncounter", what = "an encounter") =>
   new Conflict({
     message:
-      `${why}. Nothing was offered to the DM — call proposeEncounter again with that ` +
-      "fixed, and do not say an encounter is ready until it says it offered one.",
+      `${why}. Nothing was offered to the DM — call ${tool} again with that ` +
+      `fixed, and do not say ${what} is ready until it says it offered one.`,
   });
 
 /**
@@ -1955,6 +2010,15 @@ export const HobToolkit = Toolkit.make(
   // The fight on the table, read: the creator's alone, as every runner read is.
   ReadFight,
 );
+
+/**
+ * The **fight** toolkit: the runner's Hob, choosing one monster's turn
+ * (`hobFight.turn`). The fight, the creature and the moment are the path's
+ * and the payload's, closed over by {@link fightHandlersFor}; the model reads
+ * that fight and offers a turn, and nothing else. No other toolkit has
+ * `proposeNpcTurn`.
+ */
+export const FightToolkit = Toolkit.make(ReadFight, ProposeNpcTurn);
 
 /**
  * What **group** Hob is offered: the canonical record and one proposal.
@@ -3173,6 +3237,166 @@ export const dmHandlersFor = (
 };
 
 /**
+ * What the fight toolkit is closed over: the creator's proof, the fight and
+ * the creature from the path, and the moment and the DM's steer from the
+ * payload. None of it is a parameter the model could name.
+ */
+export interface HobFightContext {
+  readonly dm: CampaignCreatorActor;
+  readonly sessionId: SessionId;
+  readonly runId: EncounterRunId;
+  readonly combatantId: CombatantId;
+  readonly moment: NpcTurnMoment;
+  readonly instruction: string | undefined;
+}
+
+/**
+ * The fight read out around the creature at its moment — what `readFight`
+ * answers in the fight toolkit, and what `Hob.askFight` binds into the
+ * prompt, so the two cannot disagree.
+ */
+export const fightFocusText = (read: TableFightRead, context: HobFightContext): string =>
+  fightText(read, {
+    combatantId: context.combatantId,
+    moment: context.moment,
+    options: npcTurnOptions(turnFightOf(read), context.combatantId),
+  });
+
+/** A creature as the fight's reads name it: its place in the order and its name. */
+const orderHandle =
+  (combatants: ReadonlyArray<Combatant>) =>
+  (id: CombatantId): string => {
+    const index = combatants.findIndex((row) => row.id === id);
+    return index === -1
+      ? "someone gone"
+      : `#${String(index + 1)} ${quoted(combatants[index]!.displayName)}`;
+  };
+
+/**
+ * The fight toolkit's handlers. Both read *this* run through the creator's
+ * own `TableFight.read`, never `onTable`, so no other fight reaches the
+ * model. `proposeNpcTurn` reads it again rather than trusting the prompt's
+ * copy: the stamp it records is the state its steps were checked against.
+ */
+export const fightHandlersFor = (
+  tableFight: (typeof TableFight)["Service"],
+  context: HobFightContext,
+  proposal: ProposalSlot,
+) => {
+  const { offer } = bind(context.dm.actor, proposal);
+  const refuse = (why: string) => notOffered(why, "proposeNpcTurn", "the turn");
+  return FightToolkit.of({
+    readFight: () =>
+      Effect.map(tableFight.read(context.dm, context.sessionId, context.runId), (read) => ({
+        fight: fightFocusText(read, context),
+      })),
+    proposeNpcTurn: ({ steps, narration }) =>
+      Effect.gen(function* () {
+        const read = yield* tableFight
+          .read(context.dm, context.sessionId, context.runId)
+          .pipe(Effect.catchTag("NotFound", () => Effect.fail(refuse("The fight is gone"))));
+        const line = blank(narration);
+        if (line === undefined) return yield* refuse("The narration is empty");
+        const handle = orderHandle(read.combatants);
+        const named: Array<NpcTurnStep> = [];
+        for (const [index, step] of steps.entries()) {
+          const targets: Array<CombatantId> = [];
+          for (const place of step.targets ?? []) {
+            const row = read.combatants[place - 1];
+            if (row === undefined) {
+              return yield* refuse(
+                `Step ${String(index + 1)}: there is no #${String(place)} in the order, which ` +
+                  `runs #1 to #${String(read.combatants.length)}`,
+              );
+            }
+            targets.push(row.id);
+          }
+          named.push({
+            option: step.option.trim(),
+            ...(targets.length === 0 ? {} : { targets }),
+            ...(step.square === undefined || step.square === null ? {} : { square: step.square }),
+          });
+        }
+        const checked = npcTurnCheck(
+          turnFightOf(read),
+          context.combatantId,
+          context.moment,
+          named,
+          handle,
+        );
+        if (!checked.ok) {
+          return yield* refuse(
+            checked.step === undefined
+              ? `It cannot act now: ${checked.reason}`
+              : `Step ${String(checked.step + 1)}: ${checked.reason}`,
+          );
+        }
+        const nameOf = (id: CombatantId) =>
+          read.combatants.find((row) => row.id === id)?.displayName ?? "";
+        const target = (id: CombatantId) => ({ combatantId: id, name: nameOf(id) });
+        const proposed = checked.steps.map((step): NpcTurnProposalStep =>
+          step.kind === "move"
+            ? step
+            : {
+                kind: "option",
+                optionId: step.optionId,
+                name: step.name,
+                slot: step.slot,
+                targets: step.targets.map(target),
+                ...(step.placement === undefined
+                  ? {}
+                  : {
+                      placement: { origin: step.placement.origin, toward: step.placement.toward },
+                    }),
+                ...(step.strikes === undefined
+                  ? {}
+                  : {
+                      strikes: step.strikes.map((strike) => ({
+                        optionId: strike.optionId,
+                        name: strike.name,
+                        target: target(strike.target),
+                      })),
+                    }),
+              },
+        );
+        return yield* offer(
+          {
+            target: "npcTurn",
+            sessionId: context.sessionId,
+            runId: context.runId,
+            combatantId: context.combatantId,
+            combatantName: nameOf(context.combatantId),
+            moment: context.moment,
+            round: read.run.round,
+            stamp: read.stamp,
+            steps: proposed,
+            narration: line,
+            instruction: context.instruction ?? null,
+          },
+          `Offered the DM ${handle(context.combatantId)}'s ${
+            context.moment === "turn"
+              ? "turn"
+              : context.moment === "legendary"
+                ? "legendary action"
+                : "reaction"
+          }. Stop here: the card is already on their screen.`,
+        );
+      }),
+  });
+};
+
+/** The fight toolkit, bound: {@link fightHandlersFor}, provided. */
+export const fightBind = (
+  tableFight: (typeof TableFight)["Service"],
+  context: HobFightContext,
+  proposal: ProposalSlot,
+) =>
+  Effect.flatMap(
+    FightToolkit.toHandlers(fightHandlersFor(tableFight, context, proposal)),
+    (bound) => Effect.provideContext(FightToolkit, bound),
+  );
+
+/**
  * Bind the DM toolkit plus the direct spend tool for the one live fight that
  * enabled it.
  *
@@ -4225,7 +4449,7 @@ const statBlockInFull = (statBlock: StatBlock): ReadonlyArray<string> => {
  * id, and options by their own ids: both are short, and both are what a
  * proposal will name. No picture, no portrait, no URL.
  */
-const fightText = (read: TableFightRead): string => {
+const fightText = (read: TableFightRead, focus?: FightFocus): string => {
   const { run, board, scene, combatants } = read;
   const handles = new Map(combatants.map((row, index) => [row.id, index]));
   const handle = (id: string): string => {
@@ -4286,7 +4510,7 @@ const fightText = (read: TableFightRead): string => {
 
   const creatureRows = new Map<string, Array<number>>();
   combatants.forEach((row, index) => {
-    if (row.kind === "pc" || row.id === up?.id) return;
+    if (row.kind === "pc" || row.id === (focus?.combatantId ?? up?.id)) return;
     const key = row.creatureId ?? `row:${row.id}`;
     creatureRows.set(key, [...(creatureRows.get(key) ?? []), index]);
   });
@@ -4325,40 +4549,99 @@ const fightText = (read: TableFightRead): string => {
     "Order:",
     ...combatants.map(rowLine),
     ...(others.length === 0 ? [] : ["Other creatures:", ...others]),
-    ...(up === undefined || up.kind === "pc"
-      ? up === undefined
-        ? []
-        : ["It is a player character's turn: its player chooses."]
-      : [
-          `Up, in full — ${handle(up.id)}:`,
-          ...(upBlock === undefined ? ["No stat block."] : statBlockInFull(upBlock)),
-          ...(options === undefined
-            ? []
-            : [
-                ...(options.options.length === 0 ? [] : ["Options now:"]),
-                ...options.options
-                  .filter((option) => option.kind !== "standard")
-                  .flatMap((option) => optionText(option, handle)),
-                // Dash, Dodge and the rest every creature has: one line, not eight.
-                ...(() => {
-                  const standard = options.options.filter((option) => option.kind === "standard");
-                  return standard.length === 0
+    ...(focus !== undefined
+      ? focusText(
+          focus,
+          (() => {
+            const row = combatants.find((candidate) => candidate.id === focus.combatantId);
+            return row === undefined ? undefined : statBlockOf(row);
+          })(),
+          handle,
+        )
+      : up === undefined || up.kind === "pc"
+        ? up === undefined
+          ? []
+          : ["It is a player character's turn: its player chooses."]
+        : [
+            `Up, in full — ${handle(up.id)}:`,
+            ...(upBlock === undefined ? ["No stat block."] : statBlockInFull(upBlock)),
+            ...(options === undefined
+              ? []
+              : [
+                  ...(options.options.length === 0 ? [] : ["Options now:"]),
+                  ...options.options
+                    .filter((option) => option.kind !== "standard")
+                    .flatMap((option) => optionText(option, handle)),
+                  // Dash, Dodge and the rest every creature has: one line, not eight.
+                  ...(() => {
+                    const standard = options.options.filter((option) => option.kind === "standard");
+                    return standard.length === 0
+                      ? []
+                      : [
+                          `- Standard actions, each its action: ${standard.map((option) => option.id).join(", ")}.`,
+                        ];
+                  })(),
+                  ...(options.movement === undefined
                     ? []
-                    : [
-                        `- Standard actions, each its action: ${standard.map((option) => option.id).join(", ")}.`,
-                      ];
-                })(),
-                ...(options.movement === undefined
-                  ? []
-                  : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
-                ...options.omitted.map((omission) =>
-                  omission.id === "*"
-                    ? `It can do nothing now: ${omission.reason}.`
-                    : `Left out: ${omission.id} (${omission.reason}).`,
-                ),
-              ]),
-        ]),
+                    : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+                  ...options.omitted.map((omission) =>
+                    omission.id === "*"
+                      ? `It can do nothing now: ${omission.reason}.`
+                      : `Left out: ${omission.id} (${omission.reason}).`,
+                  ),
+                ]),
+          ]),
   ].join("\n");
+};
+
+/**
+ * The creature the fight's Hob is choosing for, and when: `readFight` read
+ * out around it rather than around whoever is up, so a legendary action or a
+ * reaction between turns has its options in front of the model too.
+ */
+export interface FightFocus {
+  readonly combatantId: CombatantId;
+  readonly moment: NpcTurnMoment;
+  readonly options: NpcTurnOptions;
+}
+
+const MOMENT_HEADINGS: Record<NpcTurnMoment, string> = {
+  turn: "Its turn",
+  legendary: "A legendary action, at the end of another creature's turn",
+  reaction: "A reaction",
+};
+
+/** The focused creature in full, and its options at the moment: only the slots the moment takes. */
+const focusText = (
+  focus: FightFocus,
+  self: StatBlock | undefined,
+  handle: (id: string) => string,
+): ReadonlyArray<string> => {
+  const { options, moment } = focus;
+  const row = options.combatantId;
+  const taken = options.options.filter((option) => NPC_MOMENT_SLOTS[moment].includes(option.slot));
+  const standard = moment === "turn" ? taken.filter((option) => option.kind === "standard") : [];
+  return [
+    `${MOMENT_HEADINGS[moment]} — ${handle(row)}, in full:`,
+    ...(self === undefined ? ["No stat block."] : statBlockInFull(self)),
+    ...(taken.length === 0 ? [] : ["Options now:"]),
+    ...taken
+      .filter((option) => option.kind !== "standard")
+      .flatMap((option) => optionText(option, handle)),
+    ...(standard.length === 0
+      ? []
+      : [
+          `- Standard actions, each its action: ${standard.map((option) => option.id).join(", ")}.`,
+        ]),
+    ...(moment !== "turn" || options.movement === undefined
+      ? []
+      : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+    ...options.omitted.map((omission) =>
+      omission.id === "*"
+        ? `It can do nothing now: ${omission.reason}.`
+        : `Left out: ${omission.id} (${omission.reason}).`,
+    ),
+  ];
 };
 
 /** Why an option is not available yet, in the prerequisites' own terms. */

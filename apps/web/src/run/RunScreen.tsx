@@ -51,6 +51,7 @@ import {
 import { TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
+import { HobTurnCard } from "./HobTurnCard";
 import { isDmRoll, useDmDice } from "./dice";
 import { EndRunDialog } from "./EndRunDialog";
 import { useEscapeAway } from "./escape";
@@ -1485,114 +1486,134 @@ export function RunScreen() {
     })(),
   };
   const card = state !== undefined && view !== undefined && (
-    <CombatantPanel
-      combatant={selected}
-      hp={selected === undefined ? 0 : controller.hpOf(selected)}
-      label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
-      speed={selected === undefined ? undefined : speedOf(selected)}
-      actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
-      multiattacks={selected === undefined ? [] : multiattacksOf(selectedOptions)}
-      onMultiattack={
-        file === undefined
-          ? undefined
-          : (run) => {
-              const [first] = run.strikes;
-              if (selected === undefined || first === undefined) return;
-              setAttack(undefined);
-              setSequence({ attackerId: selected.id, run, next: 1 });
-              setTargeting({ attackerId: selected.id, line: first });
-            }
-      }
-      creatures={view.creatures}
-      active={selected !== undefined && selected.id === state.run.activeCombatantId}
-      turn={
-        selected !== undefined && !over && isUp(selected, state.run)
-          ? {
-              busy: turnTicks.busy,
-              onTick: (ticks) => void turnTicks.tick(selected, ticks),
-            }
-          : undefined
-      }
-      resources={
-        selected === undefined || over
-          ? undefined
-          : {
-              busy: resources.busy,
-              onSet: (patch) => void resources.set(selected, patch),
-              // The DM's own d6, in the dock like every roll on this screen;
-              // on the face the stat block names it is ready again.
-              onRecharge:
-                dice.roll === undefined
-                  ? undefined
-                  : (row) => {
-                      const rolled = dice.roll?.(
-                        `${selected.displayName} · ${row.label} recharge`,
-                        "1d6",
-                      );
-                      if (rolled !== undefined && rolled.total >= row.on) {
-                        void resources.set(selected, patchFor(selected, row, false));
-                      }
-                    },
-            }
-      }
-      following={selectedId === undefined}
-      disabled={frozen || share.busy}
-      conditionsBusy={conditions.busy}
-      deathSavesBusy={saves.busy}
-      hiding={hiding.busy}
-      rolling={rolling}
-      onTheirTurn={() => selected !== undefined && void setActive(selected)}
-      onEdit={() => setEditing(selected)}
-      onFollow={() => setSelectedId(undefined)}
-      onTakeOff={
-        // Only a token standing on a board the DM can play on: below `@3xl`
-        // the board is read-only, so its tokens stay where they stand.
-        selected !== undefined && selected.position !== null && stage.wide === true && boardReady
-          ? () => void move(selected, null)
-          : undefined
-      }
-      onRemove={() => setRemoving(selected)}
-      onDamage={(amount) => selected !== undefined && void damage(selected, amount, false)}
-      onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
-      onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
-      onRoll={dice.roll}
-      onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
-      onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
-      targeting={
-        picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
-      }
-      result={
-        attack !== undefined &&
-        attack.attackerId === selected?.id &&
-        attack.attackerId === active?.id
-          ? result
-          : undefined
-      }
-      onAttack={
-        file === undefined
-          ? undefined
-          : (line) => {
-              if (selected === undefined) return;
-              setAttack(undefined);
-              setSequence(undefined);
-              setTargeting({ attackerId: selected.id, line });
-            }
-      }
-      onRollAction={
-        file === undefined
-          ? undefined
-          : (line) =>
-              selected !== undefined &&
-              file(
-                rollActionThrows({ attacker: selected.displayName, attackerId: selected.id, line }),
-              )
-      }
-      onApplyResult={(amount) => void applyAttack(amount)}
-      onDismissResult={() => {
-        setAttack(undefined);
-        setSequence(undefined);
-      }}
-    />
+    <>
+      <CombatantPanel
+        combatant={selected}
+        hp={selected === undefined ? 0 : controller.hpOf(selected)}
+        label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
+        speed={selected === undefined ? undefined : speedOf(selected)}
+        actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
+        multiattacks={selected === undefined ? [] : multiattacksOf(selectedOptions)}
+        onMultiattack={
+          file === undefined
+            ? undefined
+            : (run) => {
+                const [first] = run.strikes;
+                if (selected === undefined || first === undefined) return;
+                setAttack(undefined);
+                setSequence({ attackerId: selected.id, run, next: 1 });
+                setTargeting({ attackerId: selected.id, line: first });
+              }
+        }
+        creatures={view.creatures}
+        active={selected !== undefined && selected.id === state.run.activeCombatantId}
+        turn={
+          selected !== undefined && !over && isUp(selected, state.run)
+            ? {
+                busy: turnTicks.busy,
+                onTick: (ticks) => void turnTicks.tick(selected, ticks),
+              }
+            : undefined
+        }
+        resources={
+          selected === undefined || over
+            ? undefined
+            : {
+                busy: resources.busy,
+                onSet: (patch) => void resources.set(selected, patch),
+                // The DM's own d6, in the dock like every roll on this screen;
+                // on the face the stat block names it is ready again.
+                onRecharge:
+                  dice.roll === undefined
+                    ? undefined
+                    : (row) => {
+                        const rolled = dice.roll?.(
+                          `${selected.displayName} · ${row.label} recharge`,
+                          "1d6",
+                        );
+                        if (rolled !== undefined && rolled.total >= row.on) {
+                          void resources.set(selected, patchFor(selected, row, false));
+                        }
+                      },
+              }
+        }
+        following={selectedId === undefined}
+        disabled={frozen || share.busy}
+        conditionsBusy={conditions.busy}
+        deathSavesBusy={saves.busy}
+        hiding={hiding.busy}
+        rolling={rolling}
+        onTheirTurn={() => selected !== undefined && void setActive(selected)}
+        onEdit={() => setEditing(selected)}
+        onFollow={() => setSelectedId(undefined)}
+        onTakeOff={
+          // Only a token standing on a board the DM can play on: below `@3xl`
+          // the board is read-only, so its tokens stay where they stand.
+          selected !== undefined && selected.position !== null && stage.wide === true && boardReady
+            ? () => void move(selected, null)
+            : undefined
+        }
+        onRemove={() => setRemoving(selected)}
+        onDamage={(amount) => selected !== undefined && void damage(selected, amount, false)}
+        onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
+        onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
+        onRoll={dice.roll}
+        onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
+        onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
+        targeting={
+          picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
+        }
+        result={
+          attack !== undefined &&
+          attack.attackerId === selected?.id &&
+          attack.attackerId === active?.id
+            ? result
+            : undefined
+        }
+        onAttack={
+          file === undefined
+            ? undefined
+            : (line) => {
+                if (selected === undefined) return;
+                setAttack(undefined);
+                setSequence(undefined);
+                setTargeting({ attackerId: selected.id, line });
+              }
+        }
+        onRollAction={
+          file === undefined
+            ? undefined
+            : (line) =>
+                selected !== undefined &&
+                file(
+                  rollActionThrows({
+                    attacker: selected.displayName,
+                    attackerId: selected.id,
+                    line,
+                  }),
+                )
+        }
+        onApplyResult={(amount) => void applyAttack(amount)}
+        onDismissResult={() => {
+          setAttack(undefined);
+          setSequence(undefined);
+        }}
+      />
+      {/* Hob choosing what the selected monster does: keyed by the creature,
+        so a card never carries one creature's offer onto another. */}
+      {selected !== undefined && selectedOptions !== undefined && !over && (
+        <HobTurnCard
+          key={selected.id}
+          campaignId={campaignId}
+          sessionId={sessionId}
+          runId={runId}
+          combatant={selected}
+          round={state.run.round}
+          options={selectedOptions}
+          disabled={frozen}
+        />
+      )}
+    </>
   );
   const banner =
     picking === undefined ? undefined : (

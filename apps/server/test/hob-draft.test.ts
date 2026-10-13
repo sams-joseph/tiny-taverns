@@ -9,6 +9,7 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Redacted, Stream } from "effect";
+import { TableFight } from "../src/repo/TableFight.js";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
@@ -540,7 +541,7 @@ describeLayer(
             const asked = yield* Effect.flip(hob.askDraft({ text: DESCRIBED }));
             return { status, asked: asked._tag };
           }).pipe(
-            Effect.provide(Hob.unavailable),
+            Effect.provide(Hob.unavailable.pipe(Layer.provide(TableFight.unsigned))),
             Effect.provideService(CurrentActor, fresh.actor),
           );
           expect(off).toEqual({

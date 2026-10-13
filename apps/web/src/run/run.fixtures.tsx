@@ -627,6 +627,13 @@ export const installRunServer = (): RunStubServer => {
         status: 404,
         body: { _tag: "NotFound", resource: "encounter_run", id: runIdRaw },
       };
+      // A streamed answer (Hob choosing a turn) is served as the frames given.
+      if (found.sse !== undefined) {
+        return new Response(found.sse, {
+          status: found.status,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }
       const body = typeof found.body === "function" ? found.body() : found.body;
       return new Response(found.status === 204 ? null : JSON.stringify(body), {
         status: found.status,

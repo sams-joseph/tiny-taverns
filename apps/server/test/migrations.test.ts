@@ -374,6 +374,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 91, name: "image_uploads" },
         { migration_id: 92, name: "action_geometry" },
         { migration_id: 93, name: "combatant_resources" },
+        { migration_id: 94, name: "fight_threads" },
       ]);
     }),
   );
@@ -477,6 +478,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 91, name: "image_uploads" },
         { migration_id: 92, name: "action_geometry" },
         { migration_id: 93, name: "combatant_resources" },
+        { migration_id: 94, name: "fight_threads" },
       ]);
     }),
   );

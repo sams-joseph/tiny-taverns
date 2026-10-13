@@ -329,6 +329,9 @@ describe("the API declaration", () => {
       "encounters",
       "health",
       "hob",
+      // Hob choosing a monster's turn in a live fight, and that fight's own
+      // conversation: the creator's, as every runner endpoint is.
+      "hobFight",
       // Hob-drawn image bytes behind a signed URL, not a credential: see above.
       "images",
       "invitePreview",

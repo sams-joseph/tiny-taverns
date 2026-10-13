@@ -100,6 +100,7 @@ import {
   HobDraftAsk,
   HobDraftStatus,
   HobEvent,
+  HobFightAsk,
   HobStatus,
   HobThread,
   HobTurn,
@@ -2604,6 +2605,44 @@ class HobGroup extends HttpApiGroup.make("hob")
   .middleware(Authorization) {}
 
 /**
+ * Hob in a live fight: a monster's turn, asked for from the runner — the
+ * creator's alone, as every runner endpoint is.
+ *
+ * - `turn` streams Hob choosing what the combatant does at one `moment`, as
+ *   `hob.ask` streams an answer, ending in an `npcTurn` proposal. It writes
+ *   nothing to the fight. Everything is decided before the stream exists: a
+ *   player, or a run of another campaign, is `NotFound`; no model is
+ *   `HobUnavailable`; a combatant that is not a monster, a run that is not a
+ *   fight taking turns, and a moment the creature does not have now are
+ *   `Conflict`.
+ * - `thread` is the fight's own conversation, where those turns are saved:
+ *   one per run, the campaign's (so `hob.turns` reads it and `hob.discard`
+ *   turns a proposal down), and kept out of the panel's list. `NotFound`
+ *   until Hob has been asked for a turn in this fight.
+ */
+class HobFightGroup extends HttpApiGroup.make("hobFight")
+  .add(
+    HttpApiEndpoint.post("turn", "/combatants/:combatantId/hob/turn", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: HobFightAsk,
+      success: HttpApiSchema.StreamSse({ events: HobEvent }),
+      error: [NotFound, Conflict, HobUnavailable],
+    }),
+    HttpApiEndpoint.get("thread", "/hob/thread", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: HobThread,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/sessions/:sessionId/runs/:runId")
+  .middleware(Authorization) {}
+
+/**
  * Hob with **no campaign** — the account's own conversation: the panel on
  * every screen outside a campaign or Shared World, and the character create
  * screen's drafting composer.
@@ -3553,6 +3592,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SearchGroup)
   .add(HobGroup)
   .add(MeHobGroup)
+  .add(HobFightGroup)
   .add(NpcsGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)

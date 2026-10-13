@@ -12,11 +12,13 @@ import {
   type EncounterRunScene,
   type NotFound,
   type NpcSpell,
+  type NpcTurnFight,
   type NpcTurnOptions,
   npcTurnOptions,
   SessionId,
   spellcastingOf,
 } from "@taverns/api";
+import { createHash } from "node:crypto";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
@@ -64,7 +66,64 @@ export interface TableFightRead {
   readonly scene: EncounterRunScene;
   /** What whoever is up may do, when it is a monster's turn; absent otherwise. */
   readonly options: NpcTurnOptions | undefined;
+  /** A fingerprint of everything `npcTurnOptions` reads ({@link fightStamp}). */
+  readonly stamp: string;
 }
+
+/** The read as `npcTurnOptions` and `npcTurnCheck` take a fight. */
+export const turnFightOf = (
+  read: Pick<TableFightRead, "run" | "combatants" | "board" | "diagonals" | "creatures" | "spells">,
+): NpcTurnFight => ({
+  run: read.run,
+  combatants: read.combatants,
+  board: read.board ?? undefined,
+  diagonals: read.diagonals,
+  statBlocks: new Map(
+    [...read.creatures.values()].map((creature) => [creature.id, creature.statBlock]),
+  ),
+  spells: read.spells,
+});
+
+/**
+ * **The state a monster's options were read from**, as one hash: the run's
+ * phase, round and marker, the board's measure, and every row's place, hit
+ * points, conditions and spending — what `npcTurnOptions` reads, and nothing
+ * it does not, so a name or a note edited mid-fight does not stale a turn. A
+ * proposed turn records it; carrying the turn out reads the fight again and
+ * refuses one whose stamp no longer matches. Not `updated_at`: the live
+ * writes set that by hand, and not all of them do.
+ */
+export const fightStamp = (fight: NpcTurnFight, round: number): string =>
+  createHash("sha256")
+    .update(
+      JSON.stringify([
+        fight.run.phase,
+        fight.run.activeCombatantId,
+        fight.run.endedAt === null,
+        round,
+        fight.board === undefined
+          ? null
+          : [fight.board.columns, fight.board.rows, fight.board.feetPerCell],
+        fight.diagonals,
+        fight.combatants.map((row) => [
+          row.id,
+          row.creatureId,
+          row.kind,
+          row.hpCurrent,
+          [...row.conditions].sort(),
+          row.position === null ? null : [row.position.column, row.position.row],
+          row.actionUsed,
+          row.bonusUsed,
+          row.reactionUsed,
+          row.feetMoved,
+          row.legendarySpent,
+          [...row.rechargeSpent].sort(),
+          Object.entries(row.usesSpent).sort(),
+          Object.entries(row.slotsSpent).sort(),
+        ]),
+      ]),
+    )
+    .digest("hex");
 
 const FoggedRow = fromColumns(Schema.Struct({ id: CombatantId }));
 const OnTableRow = fromColumns(Schema.Struct({ sessionId: SessionId, runId: EncounterRunId }));
@@ -164,24 +223,17 @@ export class TableFight extends Context.Service<
             ]),
           );
 
-          const statBlocks = new Map(
-            [...byId.values()].map((creature) => [creature.id, creature.statBlock]),
-          );
+          const fight = turnFightOf({
+            run,
+            combatants: rows,
+            board,
+            diagonals: campaign.diagonalRule,
+            creatures: byId,
+            spells: spellMap,
+          });
           const up = rows.find((row) => row.id === run.activeCombatantId);
           const options =
-            up === undefined || up.kind === "pc"
-              ? undefined
-              : npcTurnOptions(
-                  {
-                    run,
-                    combatants: rows,
-                    board: board ?? undefined,
-                    diagonals: campaign.diagonalRule,
-                    statBlocks,
-                    spells: spellMap,
-                  },
-                  up.id,
-                );
+            up === undefined || up.kind === "pc" ? undefined : npcTurnOptions(fight, up.id);
 
           return {
             sessionId,
@@ -194,6 +246,7 @@ export class TableFight extends Context.Service<
             spells: spellMap,
             scene,
             options,
+            stamp: fightStamp(fight, run.round),
           } satisfies TableFightRead;
         });
 

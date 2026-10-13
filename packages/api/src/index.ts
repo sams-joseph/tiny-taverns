@@ -42,6 +42,7 @@ export * from "./Membership.js";
 export * from "./Note.js";
 export * from "./Npc.js";
 export * from "./NpcResources.js";
+export * from "./NpcTurnCheck.js";
 export * from "./NpcTurnOptions.js";
 export * from "./NpcImage.js";
 export * from "./Page.js";
