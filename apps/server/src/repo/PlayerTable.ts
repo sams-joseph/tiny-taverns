@@ -18,6 +18,7 @@ import {
   PlayerLiveTable,
   PlayerLiveBoard,
   type PlayerLiveCombatant,
+  PlayerLiveNarration,
   type PlayerLiveSeat,
   type PlayerLiveToken,
   type PlayerLiveTurn,
@@ -68,6 +69,12 @@ import {
 const ActiveSeatRow = fromColumns(
   Schema.Struct({ id: CampaignCharacterId, characterId: CharacterId }),
 );
+
+/** A line the table heard, as `narrationOf` selects it. */
+const NarrationRow = fromColumns(PlayerLiveNarration);
+
+/** How many of a fight's heard lines the table carries. */
+const NARRATION_KEPT = 5;
 
 /** Where a row's token stands on the player's board, or `null` when it is not on it. */
 const token = { token: Schema.NullOr(CombatantPosition) } as const;
@@ -327,6 +334,34 @@ export class PlayerTable extends Context.Service<
 
       // The picture is joined through the board's pointer only to a map in
       // this campaign, so the pointer grants nothing outside it.
+      /**
+       * What the table heard of this fight (`hob-turn-kept`, `0095`): only
+       * the lines written `shared`, which the keep decides from the acting
+       * creature's visibility and fog, and none whose turn was undone. The run
+       * is already one this reader may read (`liveRun`).
+       */
+      const narrationOf = SqlSchema.findAll({
+        Request: Schema.toType(EncounterRunId),
+        Result: NarrationRow,
+        execute: (runId) => sql`
+          select session_event.id,
+                 session_event.payload ->> 'combatantName' as combatant_name,
+                 session_event.payload ->> 'narration' as text,
+                 (session_event.payload ->> 'round')::int as round
+          from session_event
+          where session_event.encounter_run_id = ${runId}
+            and session_event.kind = 'hob-turn-kept'
+            and session_event.visibility = 'shared'
+            and not exists (
+              select 1 from hob_npc_turn
+              where hob_npc_turn.assistant_turn_id = session_event.assistant_turn_id
+                and hob_npc_turn.undone_at is not null
+            )
+          order by session_event.seq desc
+          limit ${NARRATION_KEPT}
+        `,
+      });
+
       const boardOf = SqlSchema.findOneOption({
         Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId })),
         Result: PlayerBoardRow,
@@ -469,6 +504,7 @@ export class PlayerTable extends Context.Service<
               const run = found.value;
 
               const board = yield* boardOf({ campaignId, runId: run.id });
+              const narration = yield* narrationOf(run.id);
 
               const rows = yield* liveOrder({ campaignId, runId: run.id, mode: run.mode });
               const tokens: ReadonlyArray<PlayerLiveToken> = rows.flatMap((row) =>
@@ -521,6 +557,7 @@ export class PlayerTable extends Context.Service<
                     onNone: () => null,
                     onSome: (row) => ({ ...row, tokens }),
                   }),
+                  narration,
                 },
               });
             }),

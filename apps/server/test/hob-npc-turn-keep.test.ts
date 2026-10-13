@@ -363,6 +363,15 @@ const snapshotHp = (turnId: AssistantTurnId, combatantId: string) =>
     return rows[0]?.hp;
   }).pipe(Effect.orDie);
 
+/** A response body as the wire carries it, for asserting on what is absent. */
+const rawBody = (token: string, path: string) =>
+  Effect.gen(function* () {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(path).pipe(HttpClientRequest.bearerToken(token)),
+    );
+    return { status: response.status, text: yield* response.text };
+  }).pipe(Effect.orDie);
+
 /** Every roll and log line in the run, so a refused keep can be shown to have written none. */
 const writesIn = (fight: Fight) =>
   Effect.gen(function* () {
@@ -873,12 +882,32 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
         );
         yield* kept(table, fight, turnId);
         const written = yield* writtenBy(turnId);
-        return written.events.find((row) => row.kind === "hob-turn-kept");
+        // What the seated player's table carries, byte for byte.
+        const heard = yield* rawBody(table.player.token, `/campaigns/${table.campaignId}/table`);
+        expect(heard.status).toBe(200);
+        return {
+          line: written.events.find((row) => row.kind === "hob-turn-kept"),
+          heard: heard.text,
+          table,
+          fight,
+          turnId,
+        };
       });
+    const NARRATED = "The goblin ducks behind its shield.";
 
-    it.effect("is shared when a player could see the creature act", () =>
+    it.effect("is shared when a player could see the creature act, and on their table", () =>
       Effect.gen(function* () {
-        const line = yield* narrated({ shown: ["goblin"] });
+        const { line, heard, table, fight, turnId } = yield* narrated({ shown: ["goblin"] });
+        const fightRead = (JSON.parse(heard) as { fight: { narration: unknown } }).fight;
+        expect(fightRead.narration).toEqual([
+          { id: expect.any(String), combatantName: "Ash Goblin", text: NARRATED, round: 1 },
+        ]);
+        // Undone, the line leaves the table with the turn.
+        yield* as(table.dm.token, (client) =>
+          client.hobFight.undo({ params: { ...fight.params, turnId }, payload: {} }),
+        );
+        const after = yield* rawBody(table.player.token, `/campaigns/${table.campaignId}/table`);
+        expect(after.text).not.toContain(NARRATED);
         expect(line).toMatchObject({
           visibility: "shared",
           origin: "assistant",
@@ -893,8 +922,12 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
 
     it.effect("stays the DM's for a hidden creature, and for one under fog", () =>
       Effect.gen(function* () {
-        expect((yield* narrated({}))?.visibility).toBe("dm");
-        expect((yield* narrated({ shown: ["goblin"], fog: [[5, 5]] }))?.visibility).toBe("dm");
+        const hidden = yield* narrated({});
+        expect(hidden.line?.visibility).toBe("dm");
+        expect(hidden.heard).not.toContain(NARRATED);
+        const fogged = yield* narrated({ shown: ["goblin"], fog: [[5, 5]] });
+        expect(fogged.line?.visibility).toBe("dm");
+        expect(fogged.heard).not.toContain(NARRATED);
       }),
     );
   });
