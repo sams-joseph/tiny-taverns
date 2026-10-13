@@ -4274,6 +4274,46 @@ describe("a monster's multiattack, and its reach", () => {
     expect(rowFor("Brannoc")).not.toHaveAttribute("data-range");
   });
 
+  it("rolls at disadvantage against a target at long range, and says so", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          traits: [],
+          actions: [
+            {
+              name: "Shortbow",
+              desc: "Ranged Weapon Attack: +4 to hit, range 5/20 ft., one target.",
+              attackBonus: 4,
+              range: { normal: 5, long: 20 },
+              damage: [
+                { damageType: { index: "piercing", name: "Piercing" }, damageDice: "1d6+2" },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await renderRunner();
+    await waitFor(() =>
+      expect(actions().getByRole("button", { name: "Attack with Shortbow" })).toBeInTheDocument(),
+    );
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Shortbow" }));
+    await userEvent.click(rowFor("Brannoc"));
+    const card = within(panel().getByRole("region", { name: "Attack result, Shortbow → Brannoc" }));
+    expect(
+      card.getByText("Brannoc was at long range: the attack was rolled at disadvantage."),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(filed().length).toBeGreaterThan(0));
+    const toHit = filed().find((roll) => roll["kind"] === "attack");
+    expect(toHit).toMatchObject({
+      mode: "disadvantage",
+      dice: [expect.any(Number), expect.any(Number)],
+    });
+  });
+
   it("puts the rest of a multiattack away with the pick", async () => {
     await open();
     await userEvent.click(actions().getByRole("button", { name: "Multiattack: Scimitar ×2" }));

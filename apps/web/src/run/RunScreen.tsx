@@ -12,7 +12,7 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
-import { walkingFeet } from "@taverns/api";
+import { attackModeAt, rollFace, walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -38,7 +38,6 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
-import { rollFace } from "../characters/rolls";
 import { actionsOf, type ActionLine } from "./actions";
 import {
   attackThrows,
@@ -1070,6 +1069,7 @@ export function RunScreen() {
       attacker: attacker.displayName,
       line: picking.line,
       target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
+      mode: attackModeAt(marks?.long.has(combatant.id) === true ? "long" : undefined),
     });
     dice.file(attackThrows(outcome, { attackerId: attacker.id, targetId: combatant.id }));
     setTargeting(undefined);

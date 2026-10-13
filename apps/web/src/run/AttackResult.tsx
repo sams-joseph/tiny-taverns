@@ -1,5 +1,6 @@
 import { Button, Icon, cn } from "@taverns/ui";
-import { damageLine, hitLine, lands, VERDICT, type AttackOutcome } from "./attack";
+import { attackLands } from "@taverns/api";
+import { damageLine, hitLine, VERDICT, type AttackOutcome } from "./attack";
 
 /**
  * The attack's two pieces of screen (`Encounter Runner.dc.html`): the banner
@@ -70,7 +71,7 @@ export function AttackResultCard({
   /** The next strike of a multiattack, while one is being run. */
   readonly next?: { readonly label: string; readonly onNext: () => void } | undefined;
 }) {
-  const landed = lands(outcome.verdict);
+  const landed = attackLands(outcome.verdict);
   return (
     <section
       aria-label={`Attack result, ${outcome.title}`}
@@ -106,7 +107,7 @@ export function AttackResultCard({
         <p data-slot="attack-range" className="mb-0 text-caption leading-snug text-danger-ink">
           {range === "out"
             ? `${outcome.target} was beyond its reach and range.`
-            : `${outcome.target} was at long range: the attack has disadvantage, which this roll did not take.`}
+            : `${outcome.target} was at long range: the attack was rolled at disadvantage.`}
         </p>
       )}
       {concentrationDc !== undefined && (

@@ -1,6 +1,7 @@
+import { parseDiceExpression, signed } from "@taverns/api";
 import { Button, SectionHeading } from "@taverns/ui";
 import type { Ability, Creature, CreatureFeature, CreatureProficiency, Trait } from "@taverns/api";
-import { notationForD20, parseDiceExpression, signed } from "../characters/rolls";
+import { notationForD20 } from "../characters/rolls";
 
 /**
  * A creature's stat block, written once and read by two screens.

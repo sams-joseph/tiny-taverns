@@ -7,6 +7,7 @@ import {
   type PlayerLiveCombatantYou,
   type RollMode,
   deathSaveRolled,
+  rollDiceExpression,
   walkingFeet,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
@@ -27,7 +28,6 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { deathSaveWrites, setOwnDeathSaves } from "../characters/write";
-import { rollDiceExpression } from "../characters/rolls";
 import { actionsOf } from "../run/actions";
 import { rollActionThrows } from "../run/attack";
 import { RunLayout } from "../run/RunLayout";
@@ -174,7 +174,12 @@ export function PlayerTableScreen() {
    */
   const rollDeathSave = () => {
     if (you === undefined) return;
-    const rolled = rollDiceExpression(`${you.displayName} · Death save`, "1d20");
+    const rolled = rollDiceExpression(
+      `${you.displayName} · Death save`,
+      "1d20",
+      "normal",
+      Math.random,
+    );
     if (rolled === undefined) return;
     dice.file({ ...rolled, kind: "death-save" });
     const face = rolled.kept[0] ?? rolled.total;

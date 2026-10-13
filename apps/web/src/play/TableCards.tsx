@@ -1,6 +1,6 @@
 import {
-  initiativeFrom,
   type CampaignId,
+  type DiceRoll,
   type EncounterRunId,
   type NpcId,
   type PlayerLiveCombatantYou,
@@ -8,6 +8,8 @@ import {
   type PlayerNpc,
   type RollMode,
   type SessionId,
+  initiativeFrom,
+  signed,
 } from "@taverns/api";
 import {
   Badge,
@@ -30,7 +32,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { useNpcSessionChat } from "../cast/playerChat";
 import { RehearsalPanel } from "../cast/RehearsalPanel";
-import { type LocalRoll, rollAbilityCheck, signed } from "../characters/rolls";
+import { rollAbilityCheck } from "../characters/rolls";
 import { SaveFailure } from "../ui/form";
 import type { TurnBanner } from "./turnBanner";
 
@@ -95,7 +97,7 @@ export function YourInitiative({
   readonly runId: EncounterRunId;
   readonly you: PlayerLiveCombatantYou;
   readonly rollMode: RollMode;
-  readonly onRolled: (roll: LocalRoll) => void;
+  readonly onRolled: (roll: DiceRoll) => void;
 }) {
   const { busy, failure, submit } = useMutation();
   const [draft, setDraft] = useState("");
