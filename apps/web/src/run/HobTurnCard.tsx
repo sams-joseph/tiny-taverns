@@ -14,6 +14,7 @@ import {
   type NpcTurnProposalStep,
   type NpcTurnSave,
   type SessionId,
+  damageAfterSave,
   signed,
 } from "@taverns/api";
 import { Button, Card, CardContent, Input, SectionHeading } from "@taverns/ui";
@@ -321,9 +322,11 @@ function SaveLine({
   if (pending === undefined)
     return <li className="text-body-s leading-body">{name}: not rolled</li>;
   if (pending.state === "resolved") {
+    const took = damageAfterSave(pending.amount, pending.succeeded === true, pending.onSuccess);
     return (
       <li className="text-body-s leading-body">
         {name}: {String(pending.total)}, {pending.succeeded === true ? "saved" : "failed"}
+        {took.amount === 0 ? ", no damage" : ` · took ${String(took.amount)} damage`}
       </li>
     );
   }

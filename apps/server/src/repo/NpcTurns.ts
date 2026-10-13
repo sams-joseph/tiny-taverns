@@ -451,11 +451,8 @@ export class NpcTurns extends Context.Service<
                   continue;
                 }
                 if (target.kind === "pc") {
-                  // Hob never rolls for a player.
-                  notes.push(
-                    `${target.displayName}'s ${save.ability} save (DC ${String(save.dc)}) is the ` +
-                      `player's to roll; ${String(amount)} damage waits on it.`,
-                  );
+                  // Hob never rolls for a player. The pending save says it
+                  // waits, for as long as it does; a note would outlive that.
                   const pendingSaveId = yield* pend(target);
                   results.push({ target: named, roll: null, succeeded: null, pendingSaveId });
                   continue;
@@ -467,8 +464,8 @@ export class NpcTurns extends Context.Service<
                     : saveModifier(block, ability);
                 if (modifier === undefined) {
                   notes.push(
-                    `${target.displayName} has no ${save.ability} save written: it was not rolled; ` +
-                      `${String(amount)} damage waits on the total the DM enters.`,
+                    `${target.displayName} has no ${save.ability} save written, so the server did ` +
+                      "not roll it.",
                   );
                   const pendingSaveId = yield* pend(target);
                   results.push({ target: named, roll: null, succeeded: null, pendingSaveId });

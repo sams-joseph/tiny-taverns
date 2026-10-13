@@ -560,9 +560,8 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
             succeeded: null,
           });
           const pendingSaveId = byName["Brannoc"]!.pendingSaveId!;
-          expect(breath.notes.join("\n")).toMatch(
-            /Brannoc's DEX save \(DC 21\) is the player's to roll/,
-          );
+          // The pending save says it waits; no note that would outlive it.
+          expect(breath.notes.join("\n")).not.toMatch(/Brannoc/);
 
           const rows = yield* rowsOf(table, fight);
           expect(rowOf(rows, fight.hero.id).hpCurrent).toBe(30);

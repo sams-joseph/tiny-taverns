@@ -365,7 +365,9 @@ describe("Hob's card in the runner", () => {
       });
       await userEvent.type(total, "15");
       await userEvent.click(result().getByRole("button", { name: "Apply save" }));
-      await waitFor(() => expect(result().getByText("Brannoc: 15, saved")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(result().getByText("Brannoc: 15, saved · took 6 damage")).toBeInTheDocument(),
+      );
       expect(sent(resolveRoute)).toEqual([{ total: 15 }]);
     });
 
