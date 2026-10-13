@@ -232,6 +232,7 @@ describeLayer("migrations", database, (it) => {
         "hob_direct_resource_update",
         "hob_npc_turn",
         "hob_npc_turn_row",
+        "hob_pending_save",
         "image_spend",
         "image_upload",
         "language",
@@ -379,6 +380,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 94, name: "fight_threads" },
         { migration_id: 95, name: "hob_npc_turns" },
         { migration_id: 96, name: "save_success_from_prose" },
+        { migration_id: 97, name: "hob_pending_saves" },
       ]);
     }),
   );
@@ -485,6 +487,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 94, name: "fight_threads" },
         { migration_id: 95, name: "hob_npc_turns" },
         { migration_id: 96, name: "save_success_from_prose" },
+        { migration_id: 97, name: "hob_pending_saves" },
       ]);
     }),
   );

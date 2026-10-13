@@ -1,6 +1,12 @@
 import { Schema } from "effect";
 import { CombatantPosition } from "./Combatant.js";
-import { AssistantTurnId, CombatantId, EncounterRunId, SessionId } from "./Ids.js";
+import {
+  AssistantTurnId,
+  CombatantId,
+  EncounterRunId,
+  HobPendingSaveId,
+  SessionId,
+} from "./Ids.js";
 import { NpcTurnMoment } from "./NpcTurnCheck.js";
 import { RollMode } from "./Roll.js";
 
@@ -67,6 +73,8 @@ export const NpcTurnSave = Schema.Struct({
   roll: Schema.NullOr(Schema.Struct({ d20: Schema.Int, modifier: Schema.Int, total: Schema.Int })),
   succeeded: Schema.NullOr(Schema.Boolean),
   hit: Schema.optional(NpcTurnHit),
+  /** The save left to the DM when the server could not roll it (`HobPendingSave`). */
+  pendingSaveId: Schema.optional(HobPendingSaveId),
 });
 export type NpcTurnSave = typeof NpcTurnSave.Type;
 
@@ -106,3 +114,44 @@ export const NpcTurnOutcome = Schema.Struct({
   narration: Schema.String,
 });
 export type NpcTurnOutcome = typeof NpcTurnOutcome.Type;
+
+/**
+ * **A save a kept turn could not roll**, waiting on the DM: a party member's
+ * (Hob never rolls for a player), or a monster's whose stat block writes no
+ * save. The damage was rolled once with the turn; the DM enters the target's
+ * total (`hobFight.resolveSave`) and the server applies all, half or none of
+ * it by `onSuccess`. `lapsed` is a save that will never be resolved: the fight
+ * ended with it outstanding, or its turn was undone, and no damage was applied.
+ */
+export const HobPendingSave = Schema.Struct({
+  id: HobPendingSaveId,
+  turnId: AssistantTurnId,
+  /** Null once the target has left the fight; then it cannot be resolved. */
+  combatantId: Schema.NullOr(CombatantId),
+  targetName: Schema.String,
+  optionName: Schema.String,
+  ability: Schema.String,
+  dc: Schema.Int,
+  onSuccess: Schema.String,
+  amount: Schema.Int,
+  damageTypes: Schema.Array(Schema.String),
+  state: Schema.Literals(["pending", "resolved", "lapsed"]),
+  total: Schema.NullOr(Schema.Int),
+  succeeded: Schema.NullOr(Schema.Boolean),
+});
+export type HobPendingSave = typeof HobPendingSave.Type;
+
+/** What the DM enters for a pending save: the target's total. */
+export const HobSaveResolve = Schema.Struct({
+  total: Schema.Int.check(Schema.isBetween({ minimum: -10, maximum: 60 })),
+});
+export type HobSaveResolve = typeof HobSaveResolve.Type;
+
+/** A pending save, resolved: the row, and what the target lost. */
+export const HobSaveResolved = Schema.Struct({
+  save: HobPendingSave,
+  hit: Schema.NullOr(NpcTurnHit),
+  /** Set when the source's success word is one the rule does not know: the damage went in full. */
+  judged: Schema.Boolean,
+});
+export type HobSaveResolved = typeof HobSaveResolved.Type;

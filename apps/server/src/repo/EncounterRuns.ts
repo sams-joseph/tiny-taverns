@@ -41,6 +41,7 @@ import {
   COMBATANT,
   freshTurn,
   initiativeOrder,
+  lapseSaves,
   ROSTER,
   RUN,
   RUNS,
@@ -1429,6 +1430,7 @@ export class EncounterRuns extends Context.Service<
                   // A pinned template goes with the fight; `run-ended` rings
                   // the doorbell that tells the players.
                   yield* clearArea(sql, id);
+                  yield* lapseSaves(sql, id);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-ended",

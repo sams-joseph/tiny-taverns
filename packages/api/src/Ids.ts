@@ -217,6 +217,10 @@ export type AssistantTurnId = typeof AssistantTurnId.Type;
 export const HobDirectResourceUpdateId = id("HobDirectResourceUpdateId");
 export type HobDirectResourceUpdateId = typeof HobDirectResourceUpdateId.Type;
 
+/** A save a kept Hob turn could not roll, waiting on the DM (`HobPendingSave`). */
+export const HobPendingSaveId = id("HobPendingSaveId");
+export type HobPendingSaveId = typeof HobPendingSaveId.Type;
+
 /**
  * An encounter's battle map: the board a fight on that encounter is played on,
  * and the picture Hob drew of it. Its own id rather than the encounter's,

@@ -1069,6 +1069,7 @@ describeLayer("membership", shared, (it) => {
               -- undo beneath the creator proof, never by a stranger's read.
               'hob_npc_turn',
               'hob_npc_turn_row',
+              'hob_pending_save',
               -- The daily image budget's ledger: read only by the cap.
               'image_spend',
               -- An upload ticket is read only by its own account's apply; a

@@ -603,8 +603,10 @@ describeLayer("creator-actor", shared, (it) => {
       // `damage`, `move`, `turn` and `resources`: the runner's own writes for a
       // kept Hob turn, gated like the DM's. A hundred and forty-nine and fifty
       // are `NpcTurns.keep` and the transaction inside it, which carries the
-      // turn out on the creator's fight.
-      expect(gated).toBe(150);
+      // turn out on the creator's fight. A hundred and fifty-one to fifty-four
+      // are `NpcTurns.saves`, `resolveSave`, the transaction inside it and the
+      // run check they share: the saves a kept turn left to the DM.
+      expect(gated).toBe(154);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

@@ -139,7 +139,12 @@ import {
 } from "./SharedWorld.js";
 import { SharedWorldLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
 import { SharedWorldHobStatus } from "./Hob.js";
-import { NpcTurnOutcome } from "./NpcTurnOutcome.js";
+import {
+  HobPendingSave,
+  HobSaveResolve,
+  HobSaveResolved,
+  NpcTurnOutcome,
+} from "./NpcTurnOutcome.js";
 import {
   SharedWorldHistoryEntry,
   SharedWorldHistoryEntryCreate,
@@ -167,6 +172,7 @@ import {
   SharedWorldId,
   CampaignInviteId,
   HobDirectResourceUpdateId,
+  HobPendingSaveId,
   MagicItemId,
   NpcId,
   NpcKnowledgeFactId,
@@ -2627,6 +2633,12 @@ class HobGroup extends HttpApiGroup.make("hob")
  *   fight that has moved since, one already kept or discarded, and a turn the
  *   check now refuses are `Conflict`, and the DM asks again. A player is
  *   `NotFound`, as for every runner endpoint.
+ * - `saves` lists the run's saves a kept turn could not roll (a party
+ *   member's, which Hob never rolls), pending, resolved and lapsed;
+ *   `resolveSave` takes the target's total and applies the damage the turn
+ *   rolled, all, half or none, through the runner's damage statement. A save
+ *   already resolved or lapsed, a fight that is over and a target that left
+ *   it are `Conflict`.
  */
 class HobFightGroup extends HttpApiGroup.make("hobFight")
   .add(
@@ -2655,6 +2667,22 @@ class HobFightGroup extends HttpApiGroup.make("hobFight")
       },
       payload: Schema.Struct({}),
       success: NpcTurnOutcome,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("saves", "/hob/saves", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.Array(HobPendingSave),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("resolveSave", "/hob/saves/:saveId/resolve", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        saveId: HobPendingSaveId,
+      },
+      payload: HobSaveResolve,
+      success: HobSaveResolved,
       error: [NotFound, Conflict],
     }),
   )

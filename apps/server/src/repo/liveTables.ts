@@ -211,6 +211,21 @@ export const freshTurn = (sql: SqlClient.SqlClient, runId: string, combatantId: 
   `;
 
 /**
+ * Lapse the saves a fight's kept Hob turns left waiting on the DM
+ * (`0097_hob_pending_saves.ts`): each way a fight ends runs this, as it runs
+ * `clearArea`, because a save resolved after the fight would apply damage to
+ * a fight that is over. A lapsed save applied none, and says so.
+ *
+ * Beneath the caller's gate, which has already proved the run writable.
+ */
+export const lapseSaves = (sql: SqlClient.SqlClient, runId: string) =>
+  sql`
+    update hob_pending_save set lapsed_at = now(), updated_at = now()
+    where hob_pending_save.encounter_run_id = ${runId}
+      and hob_pending_save.resolved_at is null and hob_pending_save.lapsed_at is null
+  `;
+
+/**
  * Take the area template off a fight's board (`0090_run_board_area.ts`),
  * answering the board's run id when there was one to take off and no row when
  * nothing was pinned. The DM's clear runs it, and so does each way a fight

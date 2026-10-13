@@ -13,6 +13,9 @@ import {
   damageTotal,
   type EncounterRunId,
   type HobKept,
+  type HobPendingSave,
+  type HobPendingSaveId,
+  type HobSaveResolved,
   type HobTurnKeptPayload,
   NotFound,
   type NpcTarget,
@@ -46,7 +49,7 @@ import { discardedConflict, HobThreads, lockTurnForAccept, markAccepted } from "
 import { underFog } from "./liveTables.js";
 import { fileRoll } from "./Rolls.js";
 import type { AssistantOrigin } from "./rows.js";
-import { dieOnSqlError } from "./rows.js";
+import { dieOnSqlError, textArray } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { TableFight, turnFightOf } from "./TableFight.js";
 
@@ -93,6 +96,27 @@ export class NpcTurns extends Context.Service<
       runId: EncounterRunId,
       turnId: AssistantTurnId,
     ) => Effect.Effect<NpcTurnOutcome, NotFound | Conflict>;
+    /** The run's saves its kept turns could not roll, oldest first, in every state. */
+    readonly saves: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+    ) => Effect.Effect<ReadonlyArray<HobPendingSave>, NotFound>;
+    /**
+     * A pending save resolved from the total the DM entered: the damage its
+     * turn rolled, all, half or none of it by the source's word, through the
+     * runner's damage statement and stamped with that turn. The target's
+     * snapshot on the turn moves with it, so an undo compares against the
+     * state the save left. Resolved, lapsed, a fight that is over and a target
+     * that left it are `Conflict`.
+     */
+    readonly resolveSave: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      saveId: HobPendingSaveId,
+      total: number,
+    ) => Effect.Effect<HobSaveResolved, NotFound | Conflict>;
   }
 >()("NpcTurns") {
   static readonly layer = Layer.effect(this)(
@@ -162,6 +186,19 @@ export class NpcTurns extends Context.Service<
           }
 
           const from: AssistantOrigin = { assistantTurnId: turnId };
+          // The record first, so a save left pending can name it; the outcome
+          // is written once the steps have made it.
+          const recorded = yield* sql<{ readonly id: string }>`
+            insert into hob_npc_turn ${sql.insert({
+              session_id: sessionId,
+              encounter_run_id: runId,
+              assistant_turn_id: turnId,
+              combatant_id: selfId,
+              outcome: "{}",
+            })}
+            returning hob_npc_turn.id
+          `.pipe(dieOnSqlError);
+          const recordId = recorded[0]!.id;
           const rows = new Map(read.combatants.map((row) => [row.id, row] as const));
           const rowOf = (id: CombatantId) => rows.get(id);
           const selfName = nameOf(selfId);
@@ -337,6 +374,28 @@ export class NpcTurns extends Context.Service<
               }
               const ability = abilityKeyOf(save.ability);
               const results: Array<NpcTurnSave> = [];
+              /** A save the server will not roll, left to the DM with the damage it rolled. */
+              const pend = (target: Combatant) =>
+                sql<{ readonly id: HobPendingSaveId }>`
+                  insert into hob_pending_save ${sql.insert({
+                    hob_npc_turn_id: recordId,
+                    encounter_run_id: runId,
+                    combatant_id: target.id,
+                    target_name: target.displayName,
+                    option_name: option.name,
+                    ability: save.ability,
+                    dc: save.dc,
+                    on_success: save.onSuccess,
+                    amount,
+                    damage_types: textArray(
+                      damage.flatMap((rolled) => (rolled.type === undefined ? [] : [rolled.type])),
+                    ),
+                  })}
+                  returning hob_pending_save.id
+                `.pipe(
+                  dieOnSqlError,
+                  Effect.map((inserted) => inserted[0]!.id),
+                );
               for (const targetId of targets) {
                 const target = rowOf(targetId);
                 if (target === undefined) continue;
@@ -352,7 +411,8 @@ export class NpcTurns extends Context.Service<
                     `${target.displayName}'s ${save.ability} save (DC ${String(save.dc)}) is the ` +
                       `player's to roll; ${String(amount)} damage waits on it.`,
                   );
-                  results.push({ target: named, roll: null, succeeded: null });
+                  const pendingSaveId = yield* pend(target);
+                  results.push({ target: named, roll: null, succeeded: null, pendingSaveId });
                   continue;
                 }
                 const block = statBlockOf(target);
@@ -362,10 +422,11 @@ export class NpcTurns extends Context.Service<
                     : saveModifier(block, ability);
                 if (modifier === undefined) {
                   notes.push(
-                    `${target.displayName} has no ${save.ability} save written: it was not rolled, ` +
-                      "and no damage was applied.",
+                    `${target.displayName} has no ${save.ability} save written: it was not rolled; ` +
+                      `${String(amount)} damage waits on the total the DM enters.`,
                   );
-                  results.push({ target: named, roll: null, succeeded: null });
+                  const pendingSaveId = yield* pend(target);
+                  results.push({ target: named, roll: null, succeeded: null, pendingSaveId });
                   continue;
                 }
                 const thrown = rollDiceExpression(
@@ -538,15 +599,9 @@ export class NpcTurns extends Context.Service<
           const after = new Map(
             (yield* combatants.list(dm, sessionId, runId)).map((row) => [row.id, row] as const),
           );
-          const recorded = yield* sql<{ readonly id: string }>`
-            insert into hob_npc_turn ${sql.insert({
-              session_id: sessionId,
-              encounter_run_id: runId,
-              assistant_turn_id: turnId,
-              combatant_id: selfId,
-              outcome: JSON.stringify(outcome),
-            })}
-            returning hob_npc_turn.id
+          yield* sql`
+            update hob_npc_turn set outcome = ${JSON.stringify(outcome)}
+            where hob_npc_turn.id = ${recordId}
           `.pipe(dieOnSqlError);
           for (const id of touched) {
             const before = read.combatants.find((row) => row.id === id);
@@ -554,7 +609,7 @@ export class NpcTurns extends Context.Service<
             if (before === undefined || now === undefined) continue;
             yield* sql`
               insert into hob_npc_turn_row ${sql.insert({
-                hob_npc_turn_id: recorded[0]!.id,
+                hob_npc_turn_id: recordId,
                 combatant_id: id,
                 combatant_name: before.displayName,
                 before: JSON.stringify(snapshotOf(before)),
@@ -599,15 +654,164 @@ export class NpcTurns extends Context.Service<
           return outcome;
         });
 
+      /** This run, in the proof's campaign and the named night; `NotFound` otherwise. */
+      const ensureRun = (dm: CampaignCreatorActor, sessionId: SessionId, runId: EncounterRunId) =>
+        sql<{ readonly ended: boolean }>`
+          select encounter_run.ended_at is not null as ended
+          from encounter_run
+          join session on session.id = encounter_run.session_id
+          where encounter_run.id = ${runId}
+            and encounter_run.session_id = ${sessionId}
+            and session.campaign_id = ${dm.campaign}
+        `.pipe(
+          dieOnSqlError,
+          Effect.flatMap((found) =>
+            found[0] === undefined
+              ? Effect.fail(new NotFound({ resource: "encounter_run", id: runId }))
+              : Effect.succeed(found[0]),
+          ),
+        );
+
+      const savesOf = (runId: EncounterRunId, saveId: HobPendingSaveId | undefined) =>
+        sql<PendingSaveRow>`
+          select hob_pending_save.id, hob_npc_turn.assistant_turn_id as turn_id,
+                 hob_pending_save.combatant_id, hob_pending_save.target_name,
+                 hob_pending_save.option_name, hob_pending_save.ability, hob_pending_save.dc,
+                 hob_pending_save.on_success, hob_pending_save.amount,
+                 hob_pending_save.damage_types, hob_pending_save.total,
+                 hob_pending_save.succeeded,
+                 hob_pending_save.resolved_at is not null as resolved,
+                 hob_pending_save.lapsed_at is not null as lapsed,
+                 hob_pending_save.hob_npc_turn_id as record_id
+          from hob_pending_save
+          join hob_npc_turn on hob_npc_turn.id = hob_pending_save.hob_npc_turn_id
+          where hob_pending_save.encounter_run_id = ${runId}
+            ${saveId === undefined ? sql`` : sql`and hob_pending_save.id = ${saveId}`}
+          order by hob_pending_save.created_at, hob_pending_save.id
+          ${saveId === undefined ? sql`` : sql`for update of hob_pending_save`}
+        `.pipe(dieOnSqlError);
+
+      const resolveIn = (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        saveId: HobPendingSaveId,
+        total: number,
+      ) =>
+        Effect.gen(function* () {
+          const run = yield* ensureRun(dm, sessionId, runId);
+          // The run before the rows, as every live write takes them.
+          yield* sql`select encounter_run.id from encounter_run where encounter_run.id = ${runId} for update`.pipe(
+            dieOnSqlError,
+          );
+          const row = (yield* savesOf(runId, saveId))[0];
+          if (row === undefined)
+            return yield* new NotFound({ resource: "hob_pending_save", id: saveId });
+          if (row.resolved)
+            return yield* new Conflict({ message: "That save was already resolved." });
+          if (row.lapsed) {
+            return yield* new Conflict({
+              message: "That save lapsed: its damage was never applied.",
+            });
+          }
+          if (run.ended) return yield* new Conflict({ message: "That fight is over." });
+          if (row.combatant_id === null) {
+            return yield* new Conflict({ message: `${row.target_name} has left the fight.` });
+          }
+
+          const succeeded = total >= row.dc;
+          const through = damageAfterSave(row.amount, succeeded, row.on_success);
+          let hit: NpcTurnHit | null = null;
+          if (through.amount > 0) {
+            const hurt = yield* combatants.inTurn.damage(
+              dm,
+              sessionId,
+              runId,
+              row.combatant_id,
+              { amount: through.amount, critical: false },
+              { assistantTurnId: row.turn_id },
+            );
+            hit = {
+              amount: through.amount,
+              hpBefore: hurt.hpBefore,
+              hpAfter: hurt.combatant.hpCurrent,
+              dropped: hurt.hpBefore > 0 && hurt.combatant.hpCurrent === 0,
+              ...(hurt.concentrationDc === undefined
+                ? {}
+                : { concentrationDc: hurt.concentrationDc }),
+            };
+            // An undo of the turn compares against the state this save left.
+            yield* sql`
+              update hob_npc_turn_row set after = ${JSON.stringify(snapshotOf(hurt.combatant))}
+              where hob_npc_turn_row.hob_npc_turn_id = ${row.record_id}
+                and hob_npc_turn_row.combatant_id = ${row.combatant_id}
+            `.pipe(dieOnSqlError);
+          }
+          yield* sql`
+            update hob_pending_save
+            set total = ${total}, succeeded = ${succeeded}, resolved_at = now(),
+                resolved_by_account_id = ${dm.actor.accountId}, updated_at = now()
+            where hob_pending_save.id = ${saveId}
+          `.pipe(dieOnSqlError);
+          return {
+            save: pendingSaveOf({ ...row, total, succeeded, resolved: true }),
+            hit,
+            judged: through.judged,
+          } satisfies HobSaveResolved;
+        });
+
       return {
         keep: (dm, sessionId, runId, turnId) =>
           dieOnSqlError(sql.withTransaction(keepIn(dm, sessionId, runId, turnId))).pipe(
+            Effect.tap(() => live.touched(sessionId)),
+          ),
+        saves: (dm, sessionId, runId) =>
+          Effect.gen(function* () {
+            yield* ensureRun(dm, sessionId, runId);
+            return (yield* savesOf(runId, undefined)).map(pendingSaveOf);
+          }),
+        resolveSave: (dm, sessionId, runId, saveId, total) =>
+          dieOnSqlError(sql.withTransaction(resolveIn(dm, sessionId, runId, saveId, total))).pipe(
             Effect.tap(() => live.touched(sessionId)),
           ),
       };
     }),
   );
 }
+
+interface PendingSaveRow {
+  readonly id: HobPendingSaveId;
+  readonly turn_id: AssistantTurnId;
+  readonly combatant_id: CombatantId | null;
+  readonly target_name: string;
+  readonly option_name: string;
+  readonly ability: string;
+  readonly dc: number;
+  readonly on_success: string;
+  readonly amount: number;
+  readonly damage_types: ReadonlyArray<string>;
+  readonly total: number | null;
+  readonly succeeded: boolean | null;
+  readonly resolved: boolean;
+  readonly lapsed: boolean;
+  readonly record_id: string;
+}
+
+const pendingSaveOf = (row: PendingSaveRow): HobPendingSave => ({
+  id: row.id,
+  turnId: row.turn_id,
+  combatantId: row.combatant_id,
+  targetName: row.target_name,
+  optionName: row.option_name,
+  ability: row.ability,
+  dc: row.dc,
+  onSuccess: row.on_success,
+  amount: row.amount,
+  damageTypes: row.damage_types,
+  state: row.resolved ? "resolved" : row.lapsed ? "lapsed" : "pending",
+  total: row.total,
+  succeeded: row.succeeded,
+});
 
 const alreadyKept = new Conflict({ message: "That turn was already kept." });
 const stale = new Conflict({

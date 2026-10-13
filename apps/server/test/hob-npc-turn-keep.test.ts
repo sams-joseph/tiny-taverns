@@ -350,6 +350,19 @@ const writtenBy = (turnId: AssistantTurnId) =>
     return { rolls, events, snapshotted: turnRows.map((row) => row.combatant_name) };
   }).pipe(Effect.orDie);
 
+/** The hit points a kept turn's snapshot says it left a combatant on. */
+const snapshotHp = (turnId: AssistantTurnId, combatantId: string) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ readonly hp: number }>`
+      select (hob_npc_turn_row.after ->> 'hpCurrent')::int as hp from hob_npc_turn_row
+      join hob_npc_turn on hob_npc_turn.id = hob_npc_turn_row.hob_npc_turn_id
+      where hob_npc_turn.assistant_turn_id = ${turnId}
+        and hob_npc_turn_row.combatant_id = ${combatantId}
+    `;
+    return rows[0]?.hp;
+  }).pipe(Effect.orDie);
+
 /** Every roll and log line in the run, so a refused keep can be shown to have written none. */
 const writesIn = (fight: Fight) =>
   Effect.gen(function* () {
@@ -540,12 +553,13 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
             succeeded: true,
             hit: { amount: 9, hpBefore: 20, hpAfter: 11, dropped: false },
           });
-          // Hob never rolls for a player.
-          expect(byName["Brannoc"]).toEqual({
+          // Hob never rolls for a player: the save waits on the DM.
+          expect(byName["Brannoc"]).toMatchObject({
             target: { combatantId: fight.hero.id, name: "Brannoc" },
             roll: null,
             succeeded: null,
           });
+          const pendingSaveId = byName["Brannoc"]!.pendingSaveId!;
           expect(breath.notes.join("\n")).toMatch(
             /Brannoc's DEX save \(DC 21\) is the player's to roll/,
           );
@@ -555,7 +569,92 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
           expect(rowOf(rows, fight.dragon.id).rechargeSpent).toEqual(["actions/Fire Breath"]);
           const written = yield* writtenBy(turnId);
           expect(written.rolls.map((row) => row.kind)).toEqual(["damage", "save"]);
+
+          // The DM reads the save and enters Brannoc's total: 22 against DC 21,
+          // so half of the 18.
+          const saves = yield* as(table.dm.token, (client) =>
+            client.hobFight.saves({ params: fight.params }),
+          );
+          expect(saves).toEqual([
+            {
+              id: pendingSaveId,
+              turnId,
+              combatantId: fight.hero.id,
+              targetName: "Brannoc",
+              optionName: "Fire Breath",
+              ability: "DEX",
+              dc: 21,
+              onSuccess: "half",
+              amount: 18,
+              damageTypes: ["Fire"],
+              state: "pending",
+              total: null,
+              succeeded: null,
+            },
+          ]);
+          const resolve = (who: Person, total: number) =>
+            refusal(who.token, (client) =>
+              client.hobFight.resolveSave({
+                params: { ...fight.params, saveId: pendingSaveId },
+                payload: { total },
+              }),
+            );
+          expect((yield* resolve(table.player, 22)).tag).toBe("NotFound");
+          const resolved = yield* as(table.dm.token, (client) =>
+            client.hobFight.resolveSave({
+              params: { ...fight.params, saveId: pendingSaveId },
+              payload: { total: 22 },
+            }),
+          );
+          expect(resolved).toMatchObject({
+            save: { state: "resolved", total: 22, succeeded: true },
+            hit: { amount: 9, hpBefore: 30, hpAfter: 21, dropped: false },
+            judged: false,
+          });
+          expect(rowOf(yield* rowsOf(table, fight), fight.hero.id).hpCurrent).toBe(21);
+          // Stamped with the turn the save belongs to, and the turn's snapshot
+          // of Brannoc moved with it.
+          const after = yield* writtenBy(turnId);
+          expect(after.events.filter((row) => row.kind === "combatant-damaged")).toHaveLength(2);
+          expect(yield* snapshotHp(turnId, fight.hero.id)).toBe(21);
+          expect(yield* resolve(table.dm, 22)).toEqual({
+            tag: "Conflict",
+            message: "That save was already resolved.",
+          });
         }),
+    );
+
+    it.effect("lapses a save still pending when the fight ends, and applies nothing", () =>
+      Effect.gen(function* () {
+        const table = yield* Fixture;
+        const fight = yield* aFight(table, { first: "dragon" });
+        const turnId = yield* proposed(table, fight, fight.dragon, { moment: "turn" }, [
+          { option: "actions/Fire Breath", square: { column: 5, row: 5 } },
+        ]);
+        faces.length = 0;
+        roll(6, ...Array.from({ length: 18 }, () => 2));
+        roll(20, 2);
+        const outcome = yield* kept(table, fight, turnId);
+        const pending = optionStep(outcome, 0).save!.targets.find(
+          (target) => target.target.name === "Brannoc",
+        )!.pendingSaveId!;
+        yield* as(table.dm.token, (client) =>
+          client.runs.end({ params: fight.params, payload: {} }),
+        );
+        const saves = yield* as(table.dm.token, (client) =>
+          client.hobFight.saves({ params: fight.params }),
+        );
+        expect(saves.map((save) => save.state)).toEqual(["lapsed"]);
+        expect(
+          yield* refusal(table.dm.token, (client) =>
+            client.hobFight.resolveSave({
+              params: { ...fight.params, saveId: pending },
+              payload: { total: 1 },
+            }),
+          ),
+        ).toEqual({ tag: "Conflict", message: "That save lapsed: its damage was never applied." });
+        expect(rowOf(yield* rowsOf(table, fight), fight.hero.id).hpCurrent).toBe(30);
+      }),
     );
 
     it.effect("casts a spell with a slot, at its range", () =>
