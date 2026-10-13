@@ -246,15 +246,23 @@ export class NpcTurns extends Context.Service<
             from,
           };
 
+          // Each act's dice share a request stem (`<stem>:<n>`), as the
+          // runner files the DM's, so the log prints an attack and its damage
+          // as one line.
+          let acts = 0;
+          const stem = () => `hob-${turnId}-${String(acts++)}`;
           const damageRolls = (
             label: string,
             damage: ReadonlyArray<DamageRoll>,
             about: { readonly combatantId: CombatantId; readonly targetCombatantId?: CombatantId },
+            act: string,
+            first: number,
           ) =>
-            Effect.forEach(damage, (roll) =>
+            Effect.forEach(damage, (roll, index) =>
               file({
                 ...rollBase,
                 ...about,
+                requestId: `${act}:${String(first + index)}`,
                 label: rollLabel(label),
                 notation: roll.notation,
                 dice: roll.faces,
@@ -340,9 +348,11 @@ export class NpcTurns extends Context.Service<
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
               const about = { combatantId: selfId, targetCombatantId: targetId };
               const outcome = OUTCOME[rolled.verdict];
+              const act = stem();
               yield* file({
                 ...rollBase,
                 ...about,
+                requestId: `${act}:0`,
                 label: rollLabel(label),
                 notation: `1d20${signed(rolled.toHit)}`,
                 dice: rolled.d20s,
@@ -356,7 +366,7 @@ export class NpcTurns extends Context.Service<
                 ...(rolled.ac === null ? {} : { targetAc: rolled.ac }),
                 ...(outcome === undefined ? {} : { outcome }),
               });
-              yield* damageRolls(label, rolled.damage, about);
+              yield* damageRolls(label, rolled.damage, about, act, 1);
 
               if (target.conditions.some((condition) => /^unconscious$/i.test(condition))) {
                 notes.push(
@@ -392,7 +402,13 @@ export class NpcTurns extends Context.Service<
               const save = option.save!;
               const damage = rollDamages(save.damage, false, dice.random);
               const amount = damageTotal(damage);
-              yield* damageRolls(`${selfName} · ${option.name}`, damage, { combatantId: selfId });
+              yield* damageRolls(
+                `${selfName} · ${option.name}`,
+                damage,
+                { combatantId: selfId },
+                stem(),
+                0,
+              );
               if (save.damage.length > 0 && damage.length === 0) {
                 notes.push(`${option.name}'s damage is not dice this can roll: none was applied.`);
               }
@@ -467,6 +483,7 @@ export class NpcTurns extends Context.Service<
                 yield* file({
                   ...rollBase,
                   combatantId: targetId,
+                  requestId: `${stem()}:0`,
                   label: thrown.label,
                   notation: thrown.notation,
                   dice: thrown.dice,

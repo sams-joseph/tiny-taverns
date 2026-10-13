@@ -3,7 +3,7 @@ import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import type { DmRoll } from "./dice";
 import { brannoc, goblinBoss, sessionEvent } from "./run.fixtures";
-import { DOCK_KEPT, dockLines } from "./rollsLog";
+import { DOCK_KEPT, dmLines, dockLines } from "./rollsLog";
 
 const combatants = [brannoc, goblinBoss].map((row) => Schema.decodeUnknownSync(Combatant)(row));
 const goblinBossId = combatants[1]!.id;
@@ -247,6 +247,7 @@ describe("the dock's one list", () => {
     outcome: null,
     requestId: `roll-${String(id)}`,
     at: at(minute),
+    undone: false,
     ...over,
   });
   const dmOnly = (rolls: ReadonlyArray<DmRoll>) =>
@@ -381,6 +382,18 @@ describe("the dock's one list", () => {
       ["Goblin Boss · Concentration save, DC 10", "1d20+1 [13]", "14", "magic"],
       ["Goblin Boss · Scimitar", "1d6+2 = 6", "6", "accent"],
       ["Goblin Boss · Bow", "d20 11 +4 = 15 · 1d6+2 = 3", "15", "accent"],
+    ]);
+  });
+
+  it("strikes through an act a kept Hob turn rolled and the DM undid", () => {
+    const lines = dmLines([
+      dm(1, 1, { kind: "attack", requestId: "hob-t-0:0", undone: true, outcome: "hit" }),
+      dm(2, 1, { kind: "damage", requestId: "hob-t-0:1", undone: true }),
+      dm(3, 2, { requestId: "roll-3" }),
+    ]);
+    expect(lines.map((line) => [line.label, line.undone ?? false])).toEqual([
+      ["d20 #1", true],
+      ["d20 #3", false],
     ]);
   });
 

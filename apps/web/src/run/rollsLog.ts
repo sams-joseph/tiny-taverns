@@ -289,14 +289,18 @@ const dmLine = (key: string, act: ReadonlyArray<DmRoll>): DockLine | undefined =
   };
 };
 
-/** The DM's rolls as lines, each act's throws together. */
+/** The DM's rolls as lines, each act's throws together; an undone Hob turn's struck through. */
 export const dmLines = (rolls: ReadonlyArray<DmRoll>): ReadonlyArray<DockLine> => {
   const acts = new Map<string, Array<DmRoll>>();
   rolls.forEach((roll, index) => {
     const key = roll.requestId === null ? `dm:#${String(index)}` : `dm:${stemOf(roll.requestId)}`;
     acts.set(key, [...(acts.get(key) ?? []), roll]);
   });
-  return [...acts].flatMap(([key, act]) => dmLine(key, act) ?? []);
+  return [...acts].flatMap(([key, act]) => {
+    const line = dmLine(key, act);
+    if (line === undefined) return [];
+    return act.every((roll) => roll.undone) ? [{ ...line, undone: true as const }] : [line];
+  });
 };
 
 export const dockLines = ({

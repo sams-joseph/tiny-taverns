@@ -1611,6 +1611,7 @@ export function RunScreen() {
           round={state.run.round}
           options={selectedOptions}
           disabled={frozen}
+          onChanged={refresh}
         />
       )}
     </>
