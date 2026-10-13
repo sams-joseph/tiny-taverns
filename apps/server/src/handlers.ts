@@ -46,6 +46,7 @@ import { Feats } from "./repo/Feats.js";
 import { HobDirectWrites } from "./repo/HobDirectWrites.js";
 import { RunScenes } from "./repo/RunScenes.js";
 import { HobThreads } from "./repo/HobThreads.js";
+import { NpcTurns } from "./repo/NpcTurns.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
@@ -1265,6 +1266,7 @@ const HobFightLive = HttpApiBuilder.group(
     const hob = yield* Hob;
     const threads = yield* HobThreads;
     const dmActors = yield* CampaignCreatorActors;
+    const npcTurns = yield* NpcTurns;
 
     return handlers
       .handle("turn", ({ params, payload }) =>
@@ -1279,6 +1281,11 @@ const HobFightLive = HttpApiBuilder.group(
       .handle("thread", ({ params }) =>
         Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
           threads.ofFight(dm, params.sessionId, params.runId),
+        ),
+      )
+      .handle("keep", ({ params }) =>
+        Effect.flatMap(dmActors.of(params.campaignId), (dm) =>
+          npcTurns.keep(dm, params.sessionId, params.runId, params.turnId),
         ),
       );
   }),

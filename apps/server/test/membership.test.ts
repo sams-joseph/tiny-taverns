@@ -1065,6 +1065,10 @@ describeLayer("membership", shared, (it) => {
               'group_invite',
               'group_member',
               'hob_direct_resource_update',
+              -- A kept Hob turn's record and snapshots: read by its keep and
+              -- undo beneath the creator proof, never by a stranger's read.
+              'hob_npc_turn',
+              'hob_npc_turn_row',
               -- The daily image budget's ledger: read only by the cap.
               'image_spend',
               -- An upload ticket is read only by its own account's apply; a

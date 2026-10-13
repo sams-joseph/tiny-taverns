@@ -42,6 +42,7 @@ export const SENTENCE: Record<SessionEventKind, (who: string | undefined, noun: 
     "character-updated": (who) => `${who ?? "Someone in the party"} changed`,
     "hob-resource-spent": (who) => `Hob spent ${who ?? "someone's"} resource`,
     "hob-resource-undone": (who) => `Hob's resource spend for ${who ?? "someone"} was undone`,
+    "hob-turn-kept": (who) => `Hob took ${who ?? "a monster"}'s turn`,
     // The prose is a `beat` row, not this event's payload — see `Beat`. The log
     // says only that one was jotted, and at what point in the fight.
     "beat-added": () => "A beat was jotted down",

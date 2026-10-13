@@ -476,12 +476,12 @@ export class Proposals extends Context.Service<
             );
 
           case "npcTurn":
-            // A monster's turn is carried out in its fight, from the runner,
-            // and nothing carries one out yet: keeping it here would write a
-            // turn nobody rolled for.
+            // A monster's turn is carried out in its fight, from the runner
+            // (`NpcTurns.keep`), which rolls its dice and checks it against the
+            // fight as it stands; this accept has neither.
             return Effect.fail(
               new Conflict({
-                message: "that is a monster's turn — it is not kept through Hob's panel",
+                message: "that is a monster's turn — keep it from the fight's runner",
               }),
             );
 

@@ -222,12 +222,26 @@ const usageOf = (row: Record<string, unknown> | undefined): Record<string, unkno
   };
 };
 
-const dcOf = (row: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
+/**
+ * A save's DC as the source writes it. One correction, read off the prose as
+ * the geometry is: a handful of SRD rows (the Adult Red Dragon's Fire Breath,
+ * the Winter Wolf's Cold Breath, …) mark `success_type` `none` while their own
+ * text says half as much damage on a success, and a Hob-run turn halves or
+ * not by this word (`damageAfterSave`), so the prose wins.
+ */
+const dcOf = (
+  row: Record<string, unknown> | undefined,
+  prose: string | undefined,
+): Record<string, unknown> | undefined => {
   if (row === undefined) return undefined;
+  const written = rawText(row, "success_type");
   return {
     dcType: refOf(row.dc_type, "dc_type"),
     dcValue: rawNumber(row, "dc_value"),
-    successType: rawText(row, "success_type"),
+    successType:
+      written === "none" && prose !== undefined && /half as much damage/i.test(prose)
+        ? "half"
+        : written,
     ...(typeof row.desc === "string" ? { desc: row.desc } : {}),
   };
 };
@@ -271,7 +285,7 @@ const actionItemsOf = (
       const attack = recordOf(item, key);
       return {
         name: rawText(attack, "name"),
-        dc: dcOf(recordOf(attack.dc, "dc")),
+        dc: dcOf(recordOf(attack.dc, "dc"), undefined),
         ...(damagesOf(attack) === undefined ? {} : { damage: damagesOf(attack) }),
       };
     });
@@ -337,7 +351,7 @@ const choicesOf = (
     const start = starts[index] ?? -1;
     const next = Math.min(...starts.filter((at) => at > start), desc.length);
     const clause = start < 0 ? "" : desc.slice(start, next);
-    const dc = dcOf(optionalRecord(option, "dc"));
+    const dc = dcOf(optionalRecord(option, "dc"), clause);
     const damage = damagesOf(option);
     return {
       name: names[index],
@@ -355,13 +369,13 @@ const featureOf =
   ) =>
   (row: Record<string, unknown>): Record<string, unknown> => {
     const usage = usageOf(optionalRecord(row, "usage"));
-    const dc = dcOf(optionalRecord(row, "dc"));
+    const desc = rawText(row, "desc");
+    const dc = dcOf(optionalRecord(row, "dc"), desc);
     const damage = damagesOf(row);
     const spellcasting = spellcastingOf(optionalRecord(row, "spellcasting"));
     const actions = actionItemsOf(row, "actions");
     const attacks = actionItemsOf(row, "attacks");
     const name = rawText(row, "name");
-    const desc = rawText(row, "desc");
     const choices = choicesOf(row, desc);
     const multiattackOptions = multiattackOptionsOf(row);
     const legendary = section === "legendary_actions";

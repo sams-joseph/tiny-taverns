@@ -47,6 +47,7 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
+import type { AssistantOrigin } from "./rows.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
@@ -204,6 +205,59 @@ export class Combatants extends Context.Service<
       runId: EncounterRunId,
       id: CombatantId,
     ) => Effect.Effect<void, NotFound>;
+    /**
+     * **The runner's own writes, for a kept Hob turn** (`repo/NpcTurns.ts`):
+     * `damage`, `move`, `turn` and `resources` — the same statements, log
+     * lines and write-through — for a caller already inside a transaction of
+     * its own that has proved the run writable. Each log line names the turn
+     * that proposed it (`origin = 'assistant'`). There is no request id and no
+     * doorbell: the caller's lock on the turn is its idempotency, and it rings
+     * once its own transaction has committed.
+     */
+    readonly inTurn: {
+      readonly damage: (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        hit: { readonly amount: number; readonly critical: boolean },
+        from: AssistantOrigin,
+      ) => Effect.Effect<
+        {
+          readonly combatant: Combatant;
+          readonly hpBefore: number;
+          readonly concentrationDc: number | undefined;
+        },
+        NotFound
+      >;
+      readonly move: (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        to: CombatantPosition,
+        from: AssistantOrigin,
+      ) => Effect.Effect<
+        { readonly combatant: Combatant; readonly feet: number },
+        NotFound | Conflict
+      >;
+      readonly turn: (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        ticks: Omit<CombatantTurn, "requestId">,
+        from: AssistantOrigin,
+      ) => Effect.Effect<Combatant, NotFound>;
+      readonly resources: (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        spent: Omit<CombatantResources, "requestId">,
+        from: AssistantOrigin,
+      ) => Effect.Effect<Combatant | undefined, NotFound>;
+    };
   }
 >()("Combatants") {
   static readonly layer = Layer.effect(this)(
@@ -498,6 +552,219 @@ export class Combatants extends Context.Service<
           return written;
         });
 
+      /**
+       * Who a log line says made the write, and which request it answers: the
+       * DM's own writes carry their `requestId`; a kept Hob turn's carry the
+       * turn that proposed them (`origin = 'assistant'`) and no request id —
+       * the turn's lock is its idempotency.
+       */
+      interface Stamp {
+        readonly requestId?: string | undefined;
+        readonly from?: AssistantOrigin | undefined;
+      }
+      const stamped = (stamp: Stamp) => ({
+        requestId: stamp.requestId,
+        ...(stamp.from === undefined
+          ? {}
+          : { origin: "assistant" as const, assistantTurnId: stamp.from.assistantTurnId }),
+      });
+
+      /**
+       * `damage`'s statement, its log line and its write-through, in the
+       * caller's transaction. Answers the row, the hit points it held before,
+       * and the Constitution save's DC when one is owed.
+       */
+      const hurt = (
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        args: Stamp & { readonly amount: number; readonly critical: boolean },
+      ) =>
+        Effect.gen(function* () {
+          const { amount, critical } = args;
+          const { hpBefore, wasConcentrating, conditionsBefore, ...rest } = yield* hit({
+            campaignId,
+            actor,
+            runId,
+            id,
+            amount,
+            critical,
+          }).pipe(orNotFound("combatant", id));
+          const combatant = new Combatant(rest, { disableChecks: true });
+          // The save is owed only by a creature that was holding a spell,
+          // took damage, and is still up to make it.
+          const owesSave = wasConcentrating && amount > 0 && combatant.hpCurrent > 0;
+          const crossed = conditionsChange(conditionsBefore, combatant.conditions);
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "combatant-damaged",
+            encounterRunId: runId,
+            combatantId: id,
+            characterId: combatant.characterId ?? undefined,
+            payload: {
+              amount,
+              hpBefore,
+              hpCurrent: combatant.hpCurrent,
+              hpMax: combatant.hpMax,
+              ...(owesSave ? { concentrationDc: concentrationDc(amount) } : {}),
+              ...(critical ? { critical } : {}),
+              ...(combatant.deathSaves === null ? {} : { deathSaves: combatant.deathSaves }),
+              ...crossed,
+            } satisfies typeof CombatantDamagedPayload.Encoded,
+            visibility: combatant.visibility,
+            ...stamped(args),
+          });
+          yield* writeThrough(campaignId, actor, combatant, {
+            hpCurrent: combatant.hpCurrent,
+            conditions: conditionsMoved(crossed) ? combatant.conditions : undefined,
+            deathSaves: combatant.deathSaves ?? undefined,
+          });
+          return {
+            combatant,
+            hpBefore,
+            concentrationDc: owesSave ? concentrationDc(amount) : undefined,
+          };
+        });
+
+      /** `move`'s statement and its log line, in the caller's transaction; answers the feet walked too. */
+      const walk = (
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        args: Stamp & { readonly to: CombatantPosition | null },
+      ) =>
+        Effect.gen(function* () {
+          const { to } = args;
+          const fight = yield* fightForMove(sql, runId);
+          if (to !== null) yield* ensureOnBoard(fight, to);
+
+          // Where it stood, locked for the rest of this transaction, so the
+          // log's `from` is the square this move actually left.
+          const before = yield* sql<{
+            readonly board_column: number | null;
+            readonly board_row: number | null;
+          }>`
+            select combatant.board_column, combatant.board_row from combatant
+            where combatant.id = ${id}
+              and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+            for update
+          `;
+          const from = before[0];
+          if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
+
+          const feet = feetWalked(fight, id, from, to);
+
+          const { tokenShown: shown, ...moved } = yield* place({
+            campaignId,
+            actor,
+            runId,
+            id,
+            to,
+            feet,
+          }).pipe(orNotFound("combatant", id));
+          const combatant = new Combatant(moved, { disableChecks: true });
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "combatant-moved",
+            encounterRunId: runId,
+            combatantId: id,
+            payload: {
+              from:
+                from.board_column === null || from.board_row === null
+                  ? null
+                  : { column: from.board_column, row: from.board_row },
+              to,
+            },
+            visibility: combatant.visibility === "shared" && shown ? "shared" : "dm",
+            ...stamped(args),
+          });
+          return { combatant, feet };
+        });
+
+      /** `turn`'s ticks and their log line, in the caller's transaction. */
+      const tick = (
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        ticks: Omit<CombatantTurn, "requestId">,
+        stamp: Stamp,
+      ) =>
+        Effect.gen(function* () {
+          const columns = defined({
+            action_used: ticks.actionUsed,
+            bonus_used: ticks.bonusUsed,
+            reaction_used: ticks.reactionUsed,
+          });
+          if (Object.keys(columns).length === 0) {
+            return yield* readCombatant(campaignId, runId, id, actor);
+          }
+          const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
+            orNotFound("combatant", id),
+          );
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "combatant-updated",
+            encounterRunId: runId,
+            combatantId: id,
+            characterId: combatant.characterId ?? undefined,
+            payload: { ...ticks },
+            visibility: "dm",
+            ...stamped(stamp),
+          });
+          return combatant;
+        });
+
+      /**
+       * `resources`' write and its log line, in the caller's transaction:
+       * `undefined` when the payload names nothing to write.
+       */
+      const spend = (
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        spent: Omit<CombatantResources, "requestId">,
+        stamp: Stamp,
+      ) =>
+        Effect.gen(function* () {
+          const counted = (map: Readonly<Record<string, number>> | undefined) =>
+            map === undefined
+              ? undefined
+              : JSON.stringify(
+                  Object.fromEntries(Object.entries(map).filter(([, count]) => count > 0)),
+                );
+          const columns = defined({
+            legendary_spent: spent.legendarySpent,
+            recharge_spent:
+              spent.rechargeSpent === undefined
+                ? undefined
+                : textArray([...new Set(spent.rechargeSpent)]),
+            uses_spent: counted(spent.usesSpent),
+            slots_spent: counted(spent.slotsSpent),
+          });
+          if (Object.keys(columns).length === 0) return undefined;
+          const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
+            orNotFound("combatant", id),
+          );
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "combatant-updated",
+            encounterRunId: runId,
+            combatantId: id,
+            payload: { ...spent },
+            visibility: "dm",
+            ...stamped(stamp),
+          });
+          return combatant;
+        });
+
       return {
         list: ({ actor, campaign: campaignId }, sessionId, runId) =>
           dieOnSqlError(
@@ -788,46 +1055,10 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
-                  const critical = payload.critical === true;
-                  const { hpBefore, wasConcentrating, conditionsBefore, ...hurt } = yield* hit({
-                    campaignId,
-                    actor,
-                    runId,
-                    id,
+                  const { combatant } = yield* hurt(campaignId, actor, sessionId, runId, id, {
                     amount: payload.amount,
-                    critical,
-                  }).pipe(orNotFound("combatant", id));
-                  const combatant = new Combatant(hurt, { disableChecks: true });
-                  // The save is owed only by a creature that was holding a
-                  // spell, took damage, and is still up to make it.
-                  const owesSave =
-                    wasConcentrating && payload.amount > 0 && combatant.hpCurrent > 0;
-                  const crossed = conditionsChange(conditionsBefore, combatant.conditions);
-                  yield* appendEvent(sql, {
-                    sessionId,
-                    kind: "combatant-damaged",
-                    encounterRunId: runId,
-                    combatantId: id,
-                    characterId: combatant.characterId ?? undefined,
-                    payload: {
-                      amount: payload.amount,
-                      hpBefore,
-                      hpCurrent: combatant.hpCurrent,
-                      hpMax: combatant.hpMax,
-                      ...(owesSave ? { concentrationDc: concentrationDc(payload.amount) } : {}),
-                      ...(critical ? { critical } : {}),
-                      ...(combatant.deathSaves === null
-                        ? {}
-                        : { deathSaves: combatant.deathSaves }),
-                      ...crossed,
-                    } satisfies typeof CombatantDamagedPayload.Encoded,
+                    critical: payload.critical === true,
                     requestId: payload.requestId,
-                    visibility: combatant.visibility,
-                  });
-                  yield* writeThrough(campaignId, actor, combatant, {
-                    hpCurrent: combatant.hpCurrent,
-                    conditions: conditionsMoved(crossed) ? combatant.conditions : undefined,
-                    deathSaves: combatant.deathSaves ?? undefined,
                   });
                   return combatant;
                 }),
@@ -977,49 +1208,9 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
-                  const fight = yield* fightForMove(sql, runId);
-                  const to = payload.position;
-                  if (to !== null) yield* ensureOnBoard(fight, to);
-
-                  // Where it stood, locked for the rest of this transaction, so
-                  // the log's `from` is the square this move actually left.
-                  const before = yield* sql<{
-                    readonly board_column: number | null;
-                    readonly board_row: number | null;
-                  }>`
-                    select combatant.board_column, combatant.board_row from combatant
-                    where combatant.id = ${id}
-                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    for update
-                  `;
-                  const from = before[0];
-                  if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
-
-                  const feet = feetWalked(fight, id, from, to);
-
-                  const { tokenShown: shown, ...moved } = yield* place({
-                    campaignId,
-                    actor,
-                    runId,
-                    id,
-                    to,
-                    feet,
-                  }).pipe(orNotFound("combatant", id));
-                  const combatant = new Combatant(moved, { disableChecks: true });
-                  yield* appendEvent(sql, {
-                    sessionId,
-                    kind: "combatant-moved",
-                    encounterRunId: runId,
-                    combatantId: id,
-                    payload: {
-                      from:
-                        from.board_column === null || from.board_row === null
-                          ? null
-                          : { column: from.board_column, row: from.board_row },
-                      to,
-                    },
+                  const { combatant } = yield* walk(campaignId, actor, sessionId, runId, id, {
+                    to: payload.position,
                     requestId: payload.requestId,
-                    visibility: combatant.visibility === "shared" && shown ? "shared" : "dm",
                   });
                   return combatant;
                 }),
@@ -1057,28 +1248,7 @@ export class Combatants extends Context.Service<
                   }
 
                   const { requestId, ...ticks } = payload;
-                  const columns = defined({
-                    action_used: ticks.actionUsed,
-                    bonus_used: ticks.bonusUsed,
-                    reaction_used: ticks.reactionUsed,
-                  });
-                  if (Object.keys(columns).length === 0) {
-                    return yield* readCombatant(campaignId, runId, id, actor);
-                  }
-                  const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
-                    orNotFound("combatant", id),
-                  );
-                  yield* appendEvent(sql, {
-                    sessionId,
-                    kind: "combatant-updated",
-                    encounterRunId: runId,
-                    combatantId: id,
-                    characterId: combatant.characterId ?? undefined,
-                    payload: { ...ticks },
-                    requestId,
-                    visibility: "dm",
-                  });
-                  return combatant;
+                  return yield* tick(campaignId, actor, sessionId, runId, id, ticks, { requestId });
                 }),
               )
               .pipe(
@@ -1115,35 +1285,10 @@ export class Combatants extends Context.Service<
                   }
 
                   const { requestId, ...spent } = payload;
-                  const counted = (map: Readonly<Record<string, number>> | undefined) =>
-                    map === undefined
-                      ? undefined
-                      : JSON.stringify(
-                          Object.fromEntries(Object.entries(map).filter(([, count]) => count > 0)),
-                        );
-                  const columns = defined({
-                    legendary_spent: spent.legendarySpent,
-                    recharge_spent:
-                      spent.rechargeSpent === undefined
-                        ? undefined
-                        : textArray([...new Set(spent.rechargeSpent)]),
-                    uses_spent: counted(spent.usesSpent),
-                    slots_spent: counted(spent.slotsSpent),
-                  });
-                  if (Object.keys(columns).length === 0) return current;
-                  const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
-                    orNotFound("combatant", id),
+                  return (
+                    (yield* spend(campaignId, actor, sessionId, runId, id, spent, { requestId })) ??
+                    current
                   );
-                  yield* appendEvent(sql, {
-                    sessionId,
-                    kind: "combatant-updated",
-                    encounterRunId: runId,
-                    combatantId: id,
-                    payload: { ...spent },
-                    requestId,
-                    visibility: "dm",
-                  });
-                  return combatant;
                 }),
               )
               .pipe(
@@ -1224,6 +1369,17 @@ export class Combatants extends Context.Service<
               )
               .pipe(Effect.tap(() => live.touched(sessionId))),
           ),
+
+        inTurn: {
+          damage: ({ actor, campaign: campaignId }, sessionId, runId, id, hit, from) =>
+            dieOnSqlError(hurt(campaignId, actor, sessionId, runId, id, { ...hit, from })),
+          move: ({ actor, campaign: campaignId }, sessionId, runId, id, to, from) =>
+            dieOnSqlError(walk(campaignId, actor, sessionId, runId, id, { to, from })),
+          turn: ({ actor, campaign: campaignId }, sessionId, runId, id, ticks, from) =>
+            dieOnSqlError(tick(campaignId, actor, sessionId, runId, id, ticks, { from })),
+          resources: ({ actor, campaign: campaignId }, sessionId, runId, id, spent, from) =>
+            dieOnSqlError(spend(campaignId, actor, sessionId, runId, id, spent, { from })),
+        },
       };
     }),
   );

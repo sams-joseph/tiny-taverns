@@ -69,6 +69,8 @@ describe("npcTurnCheck", () => {
           name: "Scimitar",
           slot: "action",
           targets: [tamsin],
+          // Measured from where the move left it.
+          bands: { [tamsin]: "reach" },
         },
       ],
     });

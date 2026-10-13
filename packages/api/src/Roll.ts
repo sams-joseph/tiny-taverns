@@ -21,12 +21,15 @@ export type RollCritical = typeof RollCritical.Type;
 /**
  * What a roll was for. `plain` is a die or a check with nothing more to say,
  * and the default; the others are the runner's log lines: an attack's to-hit,
- * its damage, a death save, and a concentration save (a fight logs no
- * `encounter_run_check`, so a save made in one is a roll of this kind).
+ * its damage, a monster's saving throw against a Hob-run turn's save-for-damage
+ * (rolled by the server, `repo/NpcTurns.ts`), a death save, and a
+ * concentration save (a fight logs no `encounter_run_check`, so a save made in
+ * one is a roll of this kind).
  */
 export const RollKind = Schema.Literals([
   "attack",
   "damage",
+  "save",
   "death-save",
   "concentration",
   "plain",

@@ -139,6 +139,7 @@ import {
 } from "./SharedWorld.js";
 import { SharedWorldLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
 import { SharedWorldHobStatus } from "./Hob.js";
+import { NpcTurnOutcome } from "./NpcTurnOutcome.js";
 import {
   SharedWorldHistoryEntry,
   SharedWorldHistoryEntryCreate,
@@ -2619,6 +2620,13 @@ class HobGroup extends HttpApiGroup.make("hob")
  *   one per run, the campaign's (so `hob.turns` reads it and `hob.discard`
  *   turns a proposal down), and kept out of the panel's list. `NotFound`
  *   until Hob has been asked for a turn in this fight.
+ * - `keep` carries out one of those proposals: the turn is built from the
+ *   stored proposal alone (the payload is empty), checked again against the
+ *   fight as it stands, and written through the runner's own statements in
+ *   one transaction, with dice the server rolls. A proposal offered against a
+ *   fight that has moved since, one already kept or discarded, and a turn the
+ *   check now refuses are `Conflict`, and the DM asks again. A player is
+ *   `NotFound`, as for every runner endpoint.
  */
 class HobFightGroup extends HttpApiGroup.make("hobFight")
   .add(
@@ -2637,6 +2645,17 @@ class HobFightGroup extends HttpApiGroup.make("hobFight")
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       success: HobThread,
       error: NotFound,
+    }),
+    HttpApiEndpoint.post("keep", "/hob/turns/:turnId/keep", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: NpcTurnOutcome,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/sessions/:sessionId/runs/:runId")

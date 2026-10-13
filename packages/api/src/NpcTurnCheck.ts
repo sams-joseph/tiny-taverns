@@ -5,6 +5,7 @@ import type { CombatantId } from "./Ids.js";
 import {
   type NpcSlot,
   type NpcSpend,
+  type NpcTarget,
   type NpcTurnFight,
   type NpcTurnOption,
   type NpcTurnOptions,
@@ -78,6 +79,12 @@ export type NpcTurnResolvedStep =
       readonly name: string;
       readonly slot: NpcSlot;
       readonly targets: ReadonlyArray<CombatantId>;
+      /**
+       * How far each aimed target stood when the step was taken, after the
+       * moves before it: a long-range one is attacked at disadvantage. Absent
+       * for a target nothing measured (no board, or an area's catch).
+       */
+      readonly bands?: Readonly<Record<CombatantId, NpcTarget["band"]>>;
       readonly placement?: {
         readonly origin: BoardSquare;
         readonly toward: BoardSquare;
@@ -88,6 +95,7 @@ export type NpcTurnResolvedStep =
         readonly optionId: string;
         readonly name: string;
         readonly target: CombatantId;
+        readonly band?: NpcTarget["band"];
       }>;
     };
 
@@ -208,6 +216,8 @@ export const npcTurnCheck = (
       ? `${name(target)} is ${String(measured.feet)} ft away, out of ${option.name}'s reach and range`
       : undefined;
   };
+  const bandOf = (option: NpcTurnOption, target: CombatantId): NpcTarget["band"] | undefined =>
+    option.targets?.find((entry) => entry.combatantId === target)?.band;
 
   for (const [index, step] of steps.entries()) {
     const options = npcTurnOptions(state, combatantId);
@@ -275,6 +285,7 @@ export const npcTurnCheck = (
     let placement: Extract<NpcTurnResolvedStep, { kind: "option" }>["placement"];
     let strikes: Extract<NpcTurnResolvedStep, { kind: "option" }>["strikes"];
     let aimed: ReadonlyArray<CombatantId> = targets;
+    const bands: Record<CombatantId, NpcTarget["band"]> = {};
 
     if (option.kind === "multiattack") {
       const swings = (option.strikes ?? []).flatMap((strike) =>
@@ -287,12 +298,23 @@ export const npcTurnCheck = (
             `or ${String(swings.length)} in order (${swings.map((swing) => swing.name).join(", ")})`,
         );
       }
-      const list: Array<{ optionId: string; name: string; target: CombatantId }> = [];
+      const list: Array<{
+        optionId: string;
+        name: string;
+        target: CombatantId;
+        band?: NpcTarget["band"];
+      }> = [];
       for (const [swingIndex, swing] of swings.entries()) {
         const target = targets.length === 1 ? targets[0]! : targets[swingIndex]!;
         const refused = aimRefusal(swing, target);
         if (refused !== undefined) return refuse(index, `${swing.name}: ${refused}`);
-        list.push({ optionId: swing.id, name: swing.name, target });
+        const band = bandOf(swing, target);
+        list.push({
+          optionId: swing.id,
+          name: swing.name,
+          target,
+          ...(band === undefined ? {} : { band }),
+        });
       }
       strikes = list;
       aimed = [...new Set(list.map((strike) => strike.target))];
@@ -336,6 +358,8 @@ export const npcTurnCheck = (
       for (const target of targets) {
         const refused = aimRefusal(option, target);
         if (refused !== undefined) return refuse(index, refused);
+        const band = bandOf(option, target);
+        if (band !== undefined) bands[target] = band;
       }
     }
 
@@ -355,6 +379,7 @@ export const npcTurnCheck = (
       name: option.name,
       slot: option.slot,
       targets: aimed,
+      ...(Object.keys(bands).length === 0 ? {} : { bands }),
       ...(placement === undefined ? {} : { placement }),
       ...(strikes === undefined ? {} : { strikes }),
     });

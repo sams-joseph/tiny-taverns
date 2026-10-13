@@ -562,6 +562,13 @@ describe("spellcasting", () => {
       "spell/Spellcasting/Magic Missile",
     );
     expect(upcast.spends).toEqual({ slot: "slot/Spellcasting/2" });
+    // Cast from a higher slot, it rolls that slot's dice.
+    expect(
+      option(
+        lich({ slotsSpent: { "slot/Spellcasting/3": 3 } }).optionsOf("Lich").options,
+        "spell/Spellcasting/Fireball",
+      ).save?.damage,
+    ).toEqual([{ dice: "9d6", type: "Fire" }]);
   });
 
   it("leaves a spell out when no slot can cast it", () => {
@@ -583,7 +590,7 @@ describe("spellcasting", () => {
     expect(ray).toMatchObject({
       level: 0,
       spends: {},
-      attack: { toHit: 12, range: { normal: 60 } },
+      attack: { toHit: 12, range: { normal: 60 }, damage: [{ dice: "4d8", type: "Cold" }] },
     });
     expect(bands(ray, byName)).toEqual({ Ilse: "normal", Tamsin: "normal" });
   });
@@ -592,7 +599,7 @@ describe("spellcasting", () => {
     const fireball = option(lich().optionsOf("Lich").options, "spell/Spellcasting/Fireball");
     expect(fireball).toMatchObject({
       area: { shape: "sphere", feet: 20, origin: "point" },
-      save: { dc: 20, ability: "DEX" },
+      save: { dc: 20, ability: "DEX", damage: [{ dice: "8d6", type: "Fire" }] },
     });
     expect(fireball.placements).toHaveLength(1);
   });

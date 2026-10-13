@@ -600,7 +600,8 @@ export const HobProposal = Schema.Union([
    * `narration` is the line the table hears once the turn is carried out;
    * `instruction` is what the DM asked for, when they asked for something.
    *
-   * Nothing keeps one yet: every accept refuses it.
+   * Kept only from its fight (`hobFight.keep`), which carries it out with
+   * server-rolled dice; every other accept refuses it.
    */
   Schema.Struct({
     target: Schema.Literal("npcTurn"),
@@ -678,6 +679,13 @@ export const HobKept = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("campaign"), id: CampaignId }),
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), id: SharedWorldId }),
   Schema.Struct({ accepted: Schema.Literal("levelUp"), characterId: CharacterId }),
+  /** A monster's turn, carried out in its fight (`hobFight.keep`). */
+  Schema.Struct({
+    accepted: Schema.Literal("npcTurn"),
+    sessionId: SessionId,
+    runId: EncounterRunId,
+    combatantId: CombatantId,
+  }),
 ]);
 export type HobKept = typeof HobKept.Type;
 

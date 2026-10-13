@@ -1,0 +1,739 @@
+import {
+  type AssistantTurnId,
+  attackLands,
+  attackModeAt,
+  type AttackRoll,
+  abilityKeyOf,
+  type Combatant,
+  type CombatantId,
+  Conflict,
+  CurrentActor,
+  type DamageRoll,
+  damageAfterSave,
+  damageTotal,
+  type EncounterRunId,
+  type HobKept,
+  type HobTurnKeptPayload,
+  NotFound,
+  type NpcTarget,
+  type NpcTurnAttack,
+  type NpcTurnDamageRoll,
+  type NpcTurnHit,
+  type NpcTurnOption,
+  type NpcTurnOutcome,
+  type NpcTurnOutcomeStep,
+  type NpcTurnProposalStep,
+  type NpcTurnSave,
+  type NpcTurnStep,
+  npcTurnCheck,
+  npcTurnOptions,
+  type RollOutcome,
+  rollAttack,
+  rollDamages,
+  rollDiceExpression,
+  saveModifier,
+  type SessionId,
+  signed,
+  type StatBlock,
+} from "@taverns/api";
+import { Context, Effect, Layer } from "effect";
+import { SqlClient } from "effect/sql";
+import { Dice } from "../live/Dice.js";
+import { LiveEvents } from "../live/LiveEvents.js";
+import { Combatants } from "./Combatants.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { discardedConflict, HobThreads, lockTurnForAccept, markAccepted } from "./HobThreads.js";
+import { underFog } from "./liveTables.js";
+import { fileRoll } from "./Rolls.js";
+import type { AssistantOrigin } from "./rows.js";
+import { dieOnSqlError } from "./rows.js";
+import { appendEvent } from "./SessionEvents.js";
+import { TableFight, turnFightOf } from "./TableFight.js";
+
+/**
+ * **A monster's turn Hob proposed, carried out** — the runner's *Keep*
+ * (`hobFight.keep`). Rule 2 holds: the turn is built from the proposal the
+ * server stored, never from the request, and the only writes are the runner's
+ * own statements (`Combatants.inTurn`, `fileRoll`), each stamped with the turn
+ * that proposed it.
+ *
+ * In one transaction: the turn is locked (so a second *Keep* waits, then finds
+ * it kept), then the run and every row of the fight, in that order — the order
+ * the DM's own writes take them. The fight is read again and its `fightStamp`
+ * compared with the one the proposal was checked against: a fight that has
+ * moved since is refused, and the DM asks again. The steps are checked again
+ * with `npcTurnCheck`, the one legality rule; nothing here re-decides what is
+ * legal. Then each step is carried out in order, with dice the server rolls
+ * (`Dice`): a move through the move statement, which counts the feet; the
+ * slot ticked and anything spent (a recharge, a use, a slot, legendary
+ * actions) through the resources statement; an attack resolved by the shared
+ * rule (`rollAttack`) and filed as the DM's roll, its damage through the
+ * damage statement, so dropping to zero, a concentration save and a death
+ * save failure land as they do for the DM; a save-for-damage rolled once, a
+ * monster target's save rolled from its stat block and the damage halved or
+ * not by the source's word.
+ *
+ * What the data cannot carry out is left alone and said, in the outcome's
+ * `notes`: a party member's save is the player's to roll; damage resistance,
+ * immunity and vulnerability, a rider save on a hit, a condition named only in
+ * prose, an attack on an unconscious creature, and anything with nothing to
+ * roll are the DM's to judge.
+ *
+ * Every row the turn touched is snapshotted before and after
+ * (`hob_npc_turn_row`), the outcome is stored (`hob_npc_turn`), the turn's
+ * narration is logged at the acting creature's visibility (`hob-turn-kept`),
+ * and the turn is marked kept. The doorbell rings once that has committed.
+ */
+export class NpcTurns extends Context.Service<
+  NpcTurns,
+  {
+    readonly keep: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      turnId: AssistantTurnId,
+    ) => Effect.Effect<NpcTurnOutcome, NotFound | Conflict>;
+  }
+>()("NpcTurns") {
+  static readonly layer = Layer.effect(this)(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
+      const dice = yield* Dice;
+      const combatants = yield* Combatants;
+      const tableFight = yield* TableFight;
+      const threads = yield* HobThreads;
+
+      const keepIn = (
+        dm: CampaignCreatorActor,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        turnId: AssistantTurnId,
+      ) =>
+        Effect.gen(function* () {
+          const thread = yield* threads.ofFight(dm, sessionId, runId);
+          const turn = yield* lockTurnForAccept(sql, "dm", dm.campaign, thread.id, turnId).pipe(
+            Effect.provideService(CurrentActor, dm.actor),
+          );
+          const proposal = turn.proposal;
+          if (proposal === null || proposal.target !== "npcTurn" || proposal.runId !== runId) {
+            return yield* new NotFound({ resource: "proposal", id: turnId });
+          }
+          if (turn.acceptedAt !== null) return yield* alreadyKept;
+          if (turn.discardedAt !== null) return yield* discardedConflict;
+
+          // The fight, held still: the run, then every row of it in a fixed
+          // order, before it is read, so nothing moves between the stamp and
+          // the last write.
+          yield* sql`select encounter_run.id from encounter_run where encounter_run.id = ${runId} for update`;
+          yield* sql`
+            select combatant.id from combatant
+            where combatant.encounter_run_id = ${runId}
+            order by combatant.id
+            for update
+          `;
+          const read = yield* tableFight.read(dm, sessionId, runId);
+          if (read.stamp !== proposal.stamp) return yield* stale;
+
+          const fight = turnFightOf(read);
+          const selfId = proposal.combatantId;
+          const nameOf = (id: CombatantId) =>
+            read.combatants.find((row) => row.id === id)?.displayName ?? "someone";
+          const checked = npcTurnCheck(
+            fight,
+            selfId,
+            proposal.moment,
+            proposal.steps.map(checkStepOf),
+            nameOf,
+          );
+          if (!checked.ok) {
+            return yield* new Conflict({
+              message: `That turn no longer stands (${checked.reason}). Ask Hob again.`,
+            });
+          }
+
+          // Every option the creature had as the turn began, its strikes too:
+          // what each step's numbers are read from. The check has already said
+          // each was legal when its step came.
+          const byId = new Map<string, NpcTurnOption>();
+          for (const option of npcTurnOptions(fight, selfId).options) {
+            byId.set(option.id, option);
+            for (const strike of option.strikes ?? []) byId.set(strike.option.id, strike.option);
+          }
+
+          const from: AssistantOrigin = { assistantTurnId: turnId };
+          const rows = new Map(read.combatants.map((row) => [row.id, row] as const));
+          const rowOf = (id: CombatantId) => rows.get(id);
+          const selfName = nameOf(selfId);
+          const statBlockOf = (row: Combatant): StatBlock | undefined =>
+            row.creatureId === null ? undefined : fight.statBlocks.get(row.creatureId);
+          const touched = new Set<CombatantId>([selfId]);
+
+          const file = (roll: Parameters<typeof fileRoll>[1]) =>
+            fileRoll(sql, roll).pipe(dieOnSqlError);
+          const rollBase = {
+            campaignId: dm.campaign,
+            sessionId,
+            runId,
+            accountId: dm.actor.accountId,
+            visibility: "dm" as const,
+            from,
+          };
+
+          const damageRolls = (
+            label: string,
+            damage: ReadonlyArray<DamageRoll>,
+            about: { readonly combatantId: CombatantId; readonly targetCombatantId?: CombatantId },
+          ) =>
+            Effect.forEach(damage, (roll) =>
+              file({
+                ...rollBase,
+                ...about,
+                label: rollLabel(label),
+                notation: roll.notation,
+                dice: roll.faces,
+                kept: roll.faces,
+                modifier: roll.modifier,
+                total: roll.total,
+                mode: "normal",
+                kind: "damage",
+              }),
+            );
+
+          /** Damage through the runner's statement; what the target lost, and who dropped. */
+          const hurt = (target: CombatantId, amount: number, critical: boolean) =>
+            Effect.gen(function* () {
+              const hit = yield* combatants.inTurn.damage(
+                dm,
+                sessionId,
+                runId,
+                target,
+                { amount, critical },
+                from,
+              );
+              rows.set(target, hit.combatant);
+              return {
+                amount,
+                hpBefore: hit.hpBefore,
+                hpAfter: hit.combatant.hpCurrent,
+                dropped: hit.hpBefore > 0 && hit.combatant.hpCurrent === 0,
+                ...(hit.concentrationDc === undefined
+                  ? {}
+                  : { concentrationDc: hit.concentrationDc }),
+              } satisfies NpcTurnHit;
+            });
+
+          /** What a target's stat block says about damage of these types, for the DM to judge. */
+          const resistanceNote = (row: Combatant, damage: ReadonlyArray<DamageRoll>) => {
+            const types = damage.flatMap((roll) => (roll.type === undefined ? [] : [roll.type]));
+            const block = statBlockOf(row);
+            if (block === undefined || types.length === 0) return [];
+            const lists = [
+              ["resistances", block.damageResistances],
+              ["immunities", block.damageImmunities],
+              ["vulnerabilities", block.damageVulnerabilities],
+            ] as const;
+            const listed = lists.flatMap(([word, entries]) =>
+              entries === undefined || entries.length === 0
+                ? []
+                : [`${word}: ${entries.join("; ")}`],
+            );
+            return listed.length === 0
+              ? []
+              : [
+                  `${row.displayName} lists damage ${listed.join(" — ")}. The ${types.join(
+                    " and ",
+                  )} damage went in full; adjust it by hand if one applies.`,
+                ];
+          };
+
+          const attack = (
+            option: NpcTurnOption,
+            targetId: CombatantId,
+            band: NpcTarget["band"] | undefined,
+            notes: Array<string>,
+          ) =>
+            Effect.gen(function* () {
+              const target = rowOf(targetId);
+              const numbers = option.attack;
+              if (target === undefined || numbers === undefined) return undefined;
+              touched.add(targetId);
+              if (target.kind === "npc" && target.hpCurrent <= 0) {
+                notes.push(
+                  `${target.displayName} was already down: ${option.name} was not rolled.`,
+                );
+                return undefined;
+              }
+              const rolled = rollAttack({
+                toHit: numbers.toHit,
+                damage: numbers.damage,
+                ac: target.ac,
+                mode: attackModeAt(band),
+                random: dice.random,
+              });
+              const label = `${selfName} · ${option.name} → ${target.displayName}`;
+              const about = { combatantId: selfId, targetCombatantId: targetId };
+              const outcome = OUTCOME[rolled.verdict];
+              yield* file({
+                ...rollBase,
+                ...about,
+                label: rollLabel(label),
+                notation: `1d20${signed(rolled.toHit)}`,
+                dice: rolled.d20s,
+                kept: [rolled.d20],
+                modifier: rolled.toHit,
+                total: rolled.total,
+                mode: rolled.mode,
+                ...(rolled.d20 === 20 ? { critical: "hit" as const } : {}),
+                ...(rolled.d20 === 1 ? { critical: "miss" as const } : {}),
+                kind: "attack",
+                ...(rolled.ac === null ? {} : { targetAc: rolled.ac }),
+                ...(outcome === undefined ? {} : { outcome }),
+              });
+              yield* damageRolls(label, rolled.damage, about);
+
+              if (target.conditions.some((condition) => /^unconscious$/i.test(condition))) {
+                notes.push(
+                  `${target.displayName} was unconscious: an attack on it has advantage, and a ` +
+                    "melee hit within 5 feet is a critical. Neither was applied.",
+                );
+              }
+              if (option.save !== undefined && attackLands(rolled.verdict)) {
+                notes.push(
+                  `${option.name} on a hit: a DC ${String(option.save.dc)} ${option.save.ability} ` +
+                    `save for ${target.displayName}. Its text says what that does.`,
+                );
+              }
+              let hit: NpcTurnHit | undefined;
+              if (rolled.verdict === "no-ac") {
+                notes.push(
+                  `${target.displayName} has no AC written: ${String(rolled.total)} to hit, and ` +
+                    `${String(rolled.amount)} damage rolled but not applied.`,
+                );
+              } else if (attackLands(rolled.verdict) && rolled.amount > 0) {
+                hit = yield* hurt(targetId, rolled.amount, rolled.verdict === "critical");
+                notes.push(...resistanceNote(target, rolled.damage));
+              }
+              return attackOutcome(option, target, rolled, hit);
+            });
+
+          const saveFor = (
+            option: NpcTurnOption,
+            targets: ReadonlyArray<CombatantId>,
+            notes: Array<string>,
+          ) =>
+            Effect.gen(function* () {
+              const save = option.save!;
+              const damage = rollDamages(save.damage, false, dice.random);
+              const amount = damageTotal(damage);
+              yield* damageRolls(`${selfName} · ${option.name}`, damage, { combatantId: selfId });
+              if (save.damage.length > 0 && damage.length === 0) {
+                notes.push(`${option.name}'s damage is not dice this can roll: none was applied.`);
+              }
+              if (save.damage.length === 0) {
+                notes.push(
+                  `${option.name}: what a failed save does is in its text; no condition was applied.`,
+                );
+              }
+              const ability = abilityKeyOf(save.ability);
+              const results: Array<NpcTurnSave> = [];
+              for (const targetId of targets) {
+                const target = rowOf(targetId);
+                if (target === undefined) continue;
+                touched.add(targetId);
+                const named = { combatantId: targetId, name: target.displayName };
+                if (target.kind === "npc" && target.hpCurrent <= 0) {
+                  notes.push(`${target.displayName} was already down: it made no save.`);
+                  continue;
+                }
+                if (target.kind === "pc") {
+                  // Hob never rolls for a player.
+                  notes.push(
+                    `${target.displayName}'s ${save.ability} save (DC ${String(save.dc)}) is the ` +
+                      `player's to roll; ${String(amount)} damage waits on it.`,
+                  );
+                  results.push({ target: named, roll: null, succeeded: null });
+                  continue;
+                }
+                const block = statBlockOf(target);
+                const modifier =
+                  block === undefined || ability === undefined
+                    ? undefined
+                    : saveModifier(block, ability);
+                if (modifier === undefined) {
+                  notes.push(
+                    `${target.displayName} has no ${save.ability} save written: it was not rolled, ` +
+                      "and no damage was applied.",
+                  );
+                  results.push({ target: named, roll: null, succeeded: null });
+                  continue;
+                }
+                const thrown = rollDiceExpression(
+                  rollLabel(`${target.displayName} · ${save.ability} save, DC ${String(save.dc)}`),
+                  `1d20${signed(modifier)}`,
+                  "normal",
+                  dice.random,
+                )!;
+                yield* file({
+                  ...rollBase,
+                  combatantId: targetId,
+                  label: thrown.label,
+                  notation: thrown.notation,
+                  dice: thrown.dice,
+                  kept: thrown.kept,
+                  modifier: thrown.modifier,
+                  total: thrown.total,
+                  mode: "normal",
+                  ...(thrown.natural === 20 ? { critical: "hit" as const } : {}),
+                  ...(thrown.natural === 1 ? { critical: "miss" as const } : {}),
+                  kind: "save",
+                });
+                const succeeded = thrown.total >= save.dc;
+                const through = damageAfterSave(amount, succeeded, save.onSuccess);
+                if (through.judged) {
+                  notes.push(
+                    `${option.name} says "${save.onSuccess}" on a success: ${target.displayName} ` +
+                      "took it in full; the DM rules.",
+                  );
+                }
+                const hit =
+                  through.amount > 0 ? yield* hurt(targetId, through.amount, false) : undefined;
+                if (hit !== undefined) notes.push(...resistanceNote(target, damage));
+                results.push({
+                  target: named,
+                  roll: { d20: thrown.kept[0]!, modifier, total: thrown.total },
+                  succeeded,
+                  ...(hit === undefined ? {} : { hit }),
+                });
+              }
+              return {
+                dc: save.dc,
+                ability: save.ability,
+                onSuccess: save.onSuccess,
+                damage: damage.map(damageOutcome),
+                targets: results,
+              };
+            });
+
+          const outcomes: Array<NpcTurnOutcomeStep> = [];
+          for (const step of checked.steps) {
+            if (step.kind === "move") {
+              const moved = yield* combatants.inTurn.move(
+                dm,
+                sessionId,
+                runId,
+                selfId,
+                step.to,
+                from,
+              );
+              rows.set(selfId, moved.combatant);
+              outcomes.push({ kind: "move", to: step.to, feet: moved.feet });
+              continue;
+            }
+
+            const option = byId.get(step.optionId);
+            if (option === undefined) return yield* stale;
+            const notes: Array<string> = [];
+
+            // The slot, then what it spends.
+            if (step.slot !== "legendary") {
+              const ticked = yield* combatants.inTurn.turn(
+                dm,
+                sessionId,
+                runId,
+                selfId,
+                step.slot === "action"
+                  ? { actionUsed: true }
+                  : step.slot === "bonus"
+                    ? { bonusUsed: true }
+                    : { reactionUsed: true },
+                from,
+              );
+              rows.set(selfId, ticked);
+            }
+            const spends = [
+              option.spends,
+              ...(option.strikes ?? []).flatMap((strike) =>
+                Array.from({ length: strike.count }, () => strike.option.spends),
+              ),
+            ];
+            const spent = spentAfter(rowOf(selfId)!, spends);
+            if (spent !== undefined) {
+              const after = yield* combatants.inTurn.resources(
+                dm,
+                sessionId,
+                runId,
+                selfId,
+                spent,
+                from,
+              );
+              if (after !== undefined) rows.set(selfId, after);
+            }
+
+            const attacks: Array<NpcTurnAttack> = [];
+            let save: Extract<NpcTurnOutcomeStep, { kind: "option" }>["save"];
+            if (step.strikes !== undefined) {
+              for (const strike of step.strikes) {
+                const swing = byId.get(strike.optionId);
+                if (swing === undefined) continue;
+                if (swing.attack === undefined) {
+                  // A strike that rolls nothing to hit (a dragon's Frightful
+                  // Presence): its save and what it does are in its text.
+                  notes.push(
+                    `${swing.name} is part of ${option.name} with no attack roll: what its text ` +
+                      "says is the DM's to apply.",
+                  );
+                  continue;
+                }
+                const made = yield* attack(swing, strike.target, strike.band, notes);
+                if (made !== undefined) attacks.push(made);
+              }
+            } else if (option.attack !== undefined) {
+              for (const target of step.targets) {
+                const made = yield* attack(option, target, step.bands?.[target], notes);
+                if (made !== undefined) attacks.push(made);
+              }
+              if (option.attack.damage.length === 0) {
+                notes.push(`${option.name} has no damage dice in the data: none was applied.`);
+              }
+            } else if (option.save !== undefined) {
+              save = yield* saveFor(option, step.targets, notes);
+            } else {
+              for (const target of step.targets) touched.add(target);
+              notes.push(
+                option.kind === "standard"
+                  ? `${selfName} took the ${option.name} action.`
+                  : `${option.name} has nothing to roll: what its text says is the DM's to apply.`,
+              );
+            }
+            if (option.id === "standard/Dash") {
+              notes.push(`${selfName} dashed: its feet moved can run past its speed this turn.`);
+            }
+
+            outcomes.push({
+              kind: "option",
+              optionId: option.id,
+              name: option.name,
+              slot: step.slot,
+              attacks,
+              ...(save === undefined ? {} : { save }),
+              notes,
+            });
+          }
+
+          const outcome: NpcTurnOutcome = {
+            turnId,
+            sessionId,
+            runId,
+            combatantId: selfId,
+            combatantName: selfName,
+            moment: proposal.moment,
+            round: read.run.round,
+            steps: outcomes,
+            narration: proposal.narration,
+          };
+
+          // The record: the outcome, and every touched row as it stood before
+          // the turn and as it left it.
+          const after = new Map(
+            (yield* combatants.list(dm, sessionId, runId)).map((row) => [row.id, row] as const),
+          );
+          const recorded = yield* sql<{ readonly id: string }>`
+            insert into hob_npc_turn ${sql.insert({
+              session_id: sessionId,
+              encounter_run_id: runId,
+              assistant_turn_id: turnId,
+              combatant_id: selfId,
+              outcome: JSON.stringify(outcome),
+            })}
+            returning hob_npc_turn.id
+          `.pipe(dieOnSqlError);
+          for (const id of touched) {
+            const before = read.combatants.find((row) => row.id === id);
+            const now = after.get(id);
+            if (before === undefined || now === undefined) continue;
+            yield* sql`
+              insert into hob_npc_turn_row ${sql.insert({
+                hob_npc_turn_id: recorded[0]!.id,
+                combatant_id: id,
+                combatant_name: before.displayName,
+                before: JSON.stringify(snapshotOf(before)),
+                after: JSON.stringify(snapshotOf(now)),
+              })}
+            `.pipe(dieOnSqlError);
+          }
+
+          // The narration, heard by the table only when a player could see the
+          // creature act: it and its fight shown, and it not under fog where
+          // the turn left it.
+          const heard = yield* sql<{ readonly shared: boolean }>`
+            select (combatant.visibility = 'shared'
+                    and encounter_run.visibility = 'shared'
+                    and not ${underFog(sql)}) as shared
+            from combatant
+            join encounter_run on encounter_run.id = combatant.encounter_run_id
+            where combatant.id = ${selfId} and combatant.encounter_run_id = ${runId}
+          `.pipe(dieOnSqlError);
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "hob-turn-kept",
+            encounterRunId: runId,
+            combatantId: selfId,
+            payload: {
+              narration: proposal.narration,
+              combatantName: selfName,
+              moment: proposal.moment,
+              round: read.run.round,
+            } satisfies typeof HobTurnKeptPayload.Encoded,
+            visibility: heard[0]?.shared === true ? "shared" : "dm",
+            origin: "assistant",
+            assistantTurnId: turnId,
+          });
+
+          yield* markAccepted(sql, turnId, {
+            accepted: "npcTurn",
+            sessionId,
+            runId,
+            combatantId: selfId,
+          } satisfies HobKept).pipe(dieOnSqlError);
+          return outcome;
+        });
+
+      return {
+        keep: (dm, sessionId, runId, turnId) =>
+          dieOnSqlError(sql.withTransaction(keepIn(dm, sessionId, runId, turnId))).pipe(
+            Effect.tap(() => live.touched(sessionId)),
+          ),
+      };
+    }),
+  );
+}
+
+const alreadyKept = new Conflict({ message: "That turn was already kept." });
+const stale = new Conflict({
+  message: "The fight has changed since Hob proposed that turn. Ask Hob again.",
+});
+
+/** A stored step as `npcTurnCheck` takes one: the option and its aim, by id. */
+const checkStepOf = (step: NpcTurnProposalStep): NpcTurnStep =>
+  step.kind === "move"
+    ? { option: "move", square: step.to }
+    : {
+        option: step.optionId,
+        // A multiattack is aimed strike by strike; an area by where it goes.
+        ...(step.strikes !== undefined
+          ? { targets: step.strikes.map((strike) => strike.target.combatantId) }
+          : step.placement !== undefined
+            ? {}
+            : { targets: step.targets.map((target) => target.combatantId) }),
+        // A placement's `toward` is the square either kind of area is named by:
+        // a cone's or a line's aim, and a point area's own centre.
+        ...(step.placement === undefined ? {} : { square: step.placement.toward }),
+      };
+
+/** `character_roll.label` holds 80 characters. */
+const rollLabel = (text: string): string => (text.length <= 80 ? text : `${text.slice(0, 79)}…`);
+
+/** The server's word for a verdict; a total with no AC to beat has none. */
+const OUTCOME: Record<AttackRoll["verdict"], RollOutcome | undefined> = {
+  critical: "crit",
+  hit: "hit",
+  "natural-1": "fumble",
+  miss: "miss",
+  "no-ac": undefined,
+};
+
+const damageOutcome = (roll: DamageRoll): NpcTurnDamageRoll => ({
+  notation: roll.notation,
+  faces: roll.faces,
+  modifier: roll.modifier,
+  total: roll.total,
+  type: roll.type ?? null,
+});
+
+const attackOutcome = (
+  option: NpcTurnOption,
+  target: Combatant,
+  rolled: AttackRoll,
+  hit: NpcTurnHit | undefined,
+): NpcTurnAttack => ({
+  optionId: option.id,
+  name: option.name,
+  target: { combatantId: target.id, name: target.displayName },
+  d20s: rolled.d20s,
+  d20: rolled.d20,
+  mode: rolled.mode,
+  toHit: rolled.toHit,
+  total: rolled.total,
+  ac: rolled.ac,
+  verdict: rolled.verdict,
+  damage: rolled.damage.map(damageOutcome),
+  ...(hit === undefined ? {} : { hit }),
+});
+
+/**
+ * The resources write a step's spending asks, as the absolute values the
+ * statement takes, or `undefined` when it spends nothing beyond its slot.
+ */
+const spentAfter = (
+  row: Combatant,
+  spends: ReadonlyArray<NpcTurnOption["spends"]>,
+):
+  | {
+      legendarySpent?: number;
+      rechargeSpent?: ReadonlyArray<string>;
+      usesSpent?: Readonly<Record<string, number>>;
+      slotsSpent?: Readonly<Record<string, number>>;
+    }
+  | undefined => {
+  let legendary = 0;
+  const recharge = new Set(row.rechargeSpent);
+  const uses: Record<string, number> = { ...row.usesSpent };
+  const slots: Record<string, number> = { ...row.slotsSpent };
+  let any = false;
+  const out: {
+    legendarySpent?: number;
+    rechargeSpent?: ReadonlyArray<string>;
+    usesSpent?: Readonly<Record<string, number>>;
+    slotsSpent?: Readonly<Record<string, number>>;
+  } = {};
+  for (const spend of spends) {
+    if (spend.legendary !== undefined) {
+      legendary += spend.legendary;
+      any = true;
+    }
+    if (spend.recharge !== undefined) {
+      recharge.add(spend.recharge);
+      out.rechargeSpent = [...recharge];
+      any = true;
+    }
+    if (spend.uses !== undefined) {
+      uses[spend.uses] = (uses[spend.uses] ?? 0) + 1;
+      out.usesSpent = uses;
+      any = true;
+    }
+    if (spend.slot !== undefined) {
+      slots[spend.slot] = (slots[spend.slot] ?? 0) + 1;
+      out.slotsSpent = slots;
+      any = true;
+    }
+  }
+  if (legendary > 0) out.legendarySpent = row.legendarySpent + legendary;
+  return any ? out : undefined;
+};
+
+/** The columns a turn can move on a row, as an undo compares and restores them. */
+const snapshotOf = (row: Combatant) => ({
+  hpCurrent: row.hpCurrent,
+  conditions: row.conditions,
+  deathSaves: row.deathSaves,
+  position: row.position,
+  feetMoved: row.feetMoved,
+  actionUsed: row.actionUsed,
+  bonusUsed: row.bonusUsed,
+  reactionUsed: row.reactionUsed,
+  legendarySpent: row.legendarySpent,
+  rechargeSpent: row.rechargeSpent,
+  usesSpent: row.usesSpent,
+  slotsSpent: row.slotsSpent,
+});

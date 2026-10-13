@@ -15,10 +15,12 @@ import {
   Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
+  type AssistantOrigin,
+  assistantColumns,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -73,6 +75,77 @@ const rollReadable = (
       sql`character_roll.account_id = ${actor.accountId}`,
     ]),
   ]);
+
+/**
+ * **One roll filed**, and its `roll-made` line, in the caller's transaction:
+ * the insert `rolls.create` makes for a browser's roll, and the one a kept
+ * Hob turn makes for each die the server rolled (`repo/NpcTurns.ts`), which
+ * names the turn (`origin = 'assistant'`). Who may file it, under which night
+ * and fight, is the caller's to have proved. Answers the new row's id, or
+ * `undefined` when a repeated `requestId` wrote nothing.
+ */
+export const fileRoll = (
+  sql: SqlClient.SqlClient,
+  roll: Omit<RollCreate, "visibility" | "characterId"> & {
+    readonly campaignId: CampaignId;
+    readonly sessionId: SessionId;
+    readonly runId: EncounterRunId | null;
+    readonly accountId: Actor["accountId"];
+    readonly characterId?: CharacterId | undefined;
+    readonly visibility: Visibility;
+    readonly from?: AssistantOrigin | undefined;
+  },
+): Effect.Effect<RollId | undefined, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<{ readonly id: RollId }>`
+      insert into character_roll ${sql.insert(
+        defined({
+          campaign_id: roll.campaignId,
+          session_id: roll.sessionId,
+          encounter_run_id: roll.runId,
+          account_id: roll.accountId,
+          character_id: roll.characterId,
+          label: roll.label,
+          notation: roll.notation,
+          dice: intArray(roll.dice),
+          kept: intArray(roll.kept),
+          modifier: roll.modifier,
+          total: roll.total,
+          mode: roll.mode,
+          critical: roll.critical ?? null,
+          kind: roll.kind,
+          combatant_id: roll.combatantId,
+          target_combatant_id: roll.targetCombatantId,
+          target_ac: roll.targetAc,
+          outcome: roll.outcome,
+          request_id: roll.requestId,
+          visibility: roll.visibility,
+          ...assistantColumns(roll.from),
+        }),
+      )}
+      on conflict do nothing
+      returning character_roll.id
+    `;
+    const id = rows[0]?.id;
+    if (id === undefined) return undefined;
+    if (roll.from !== undefined) {
+      // A kept turn files all its dice in one transaction, where `now()` is
+      // one instant; the clock keeps them in the order they were thrown.
+      yield* sql`update character_roll set created_at = clock_timestamp() where id = ${id}`;
+    }
+    yield* appendEvent(sql, {
+      sessionId: roll.sessionId,
+      kind: "roll-made",
+      encounterRunId: roll.runId ?? undefined,
+      characterId: roll.characterId,
+      payload: { rollId: id, total: roll.total },
+      visibility: roll.visibility,
+      ...(roll.from === undefined
+        ? {}
+        : { origin: "assistant" as const, assistantTurnId: roll.from.assistantTurnId }),
+    });
+    return id;
+  });
 
 export class Rolls extends Context.Service<
   Rolls,
@@ -356,49 +429,25 @@ export class Rolls extends Context.Service<
                     }
                   }
 
-                  const rows = yield* sql<{ readonly id: RollId }>`
-                    insert into character_roll ${sql.insert(
-                      defined({
-                        campaign_id: campaignId,
-                        session_id: night.sessionId,
-                        encounter_run_id: night.runId,
-                        account_id: actor.accountId,
-                        character_id: payload.characterId,
-                        label: payload.label,
-                        notation: payload.notation,
-                        dice: intArray(payload.dice),
-                        kept: intArray(payload.kept),
-                        modifier: payload.modifier,
-                        total: payload.total,
-                        mode: payload.mode,
-                        critical: payload.critical ?? null,
-                        kind: payload.kind,
-                        combatant_id: payload.combatantId,
-                        target_combatant_id: payload.targetCombatantId,
-                        target_ac: payload.targetAc,
-                        outcome: payload.outcome,
-                        request_id: payload.requestId,
-                        visibility: dmOnly ? "dm" : night.sessionVisibility,
-                      }),
-                    )}
-                    on conflict do nothing
-                    returning character_roll.id
-                  `;
-                  if (rows.length === 0 && payload.requestId !== undefined) {
-                    const seen = yield* existing(campaignId, night.sessionId, payload.requestId);
+                  const id = yield* fileRoll(sql, {
+                    ...payload,
+                    campaignId,
+                    sessionId: night.sessionId,
+                    runId: night.runId,
+                    accountId: actor.accountId,
+                    visibility: dmOnly ? "dm" : night.sessionVisibility,
+                  });
+                  if (id === undefined) {
+                    const seen =
+                      payload.requestId === undefined
+                        ? undefined
+                        : yield* existing(campaignId, night.sessionId, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
+                    return yield* Effect.die(new Error("a roll insert wrote nothing"));
                   }
-                  const roll = yield* made({ campaignId, id: rows[0]!.id }).pipe(
+                  const roll = yield* made({ campaignId, id }).pipe(
                     Effect.catchTag("NoSuchElementError", Effect.die),
                   );
-                  yield* appendEvent(sql, {
-                    sessionId: night.sessionId,
-                    kind: "roll-made",
-                    encounterRunId: night.runId ?? undefined,
-                    characterId: payload.characterId,
-                    payload: { rollId: roll.id, total: roll.total },
-                    visibility: roll.visibility,
-                  });
                   return { roll, inserted: true };
                 }),
               );

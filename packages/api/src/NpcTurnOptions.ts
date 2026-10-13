@@ -298,6 +298,31 @@ const spellAreaOf = (
     : { shape, feet: area.size, origin: self ? "self" : "point" };
 };
 
+/**
+ * A spell's damage as cast: the slot level's dice when a slot is spent (the
+ * spell's own level for a use or an at-will casting), and a cantrip's by the
+ * caster's level, the highest step it has reached. Nothing when the row
+ * writes no damage, or a cantrip's caster has no level written: then the
+ * dice are not in the data, and the option says none rather than a guess.
+ */
+const spellDamageOf = (
+  damage: NpcSpell["spell"]["damage"],
+  castLevel: number,
+  casterLevel: number | undefined,
+): ReadonlyArray<{ readonly dice: string; readonly type?: string }> => {
+  if (damage === undefined) return [];
+  const type = damage.damageType === undefined ? {} : { type: damage.damageType.name };
+  const bySlot = damage.damageAtSlotLevel?.[String(castLevel)];
+  if (bySlot !== undefined) return [{ dice: bySlot, ...type }];
+  if (damage.damageAtCharacterLevel === undefined || casterLevel === undefined) return [];
+  const step = Object.keys(damage.damageAtCharacterLevel)
+    .map(Number)
+    .filter((level) => Number.isInteger(level) && level <= casterLevel)
+    .sort((a, b) => b - a)[0];
+  const dice = step === undefined ? undefined : damage.damageAtCharacterLevel[String(step)];
+  return dice === undefined ? [] : [{ dice, ...type }];
+};
+
 export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): NpcTurnOptions => {
   const omitted: Array<{ id: string; name: string; reason: NpcOmission }> = [];
   const omit = (id: string, name: string, reason: NpcOmission) =>
@@ -659,6 +684,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
         continue;
       }
       let spends: NpcSpend = {};
+      let castLevel = entry.level;
       if (limits.uses[id] !== undefined) {
         if (leftOf(limits.uses[id], self.usesSpent[id]) === 0) {
           omit(id, entry.name, "no uses left");
@@ -680,7 +706,9 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
           continue;
         }
         spends = { slot: slotKey(caster, level) };
+        castLevel = level;
       }
+      const damage = spellDamageOf(spell.spell.damage, castLevel, spellcasting.level);
       const reach = spellRangeOf(spell.range);
       const area = spellAreaOf(spell.spell.areaOfEffect, reach === "self");
       const range = typeof reach === "number" ? { normal: reach } : undefined;
@@ -710,7 +738,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
           ? {
               attack: {
                 toHit: spellcasting.modifier,
-                damage: [],
+                damage,
                 ...(range === undefined ? {} : { range }),
               },
             }
@@ -721,7 +749,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
                 dc: spellcasting.dc,
                 ability: spell.spell.dc.dcType.name,
                 onSuccess: spell.spell.dc.dcSuccess,
-                damage: [],
+                damage,
               },
             }
           : {}),

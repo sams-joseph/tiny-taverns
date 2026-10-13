@@ -55,6 +55,15 @@ export const DeathSavePayload = Schema.Struct({
 });
 export type DeathSavePayload = typeof DeathSavePayload.Type;
 
+/** `hob-turn-kept`: the narration of a kept monster turn, and who took it. */
+export const HobTurnKeptPayload = Schema.Struct({
+  narration: Schema.String,
+  combatantName: Schema.String,
+  moment: Schema.Literals(["turn", "legendary", "reaction"]),
+  round: Schema.Int,
+});
+export type HobTurnKeptPayload = typeof HobTurnKeptPayload.Type;
+
 /**
  * `combatant-updated`, as far as a reader cares: the conditions that moved
  * because the hit points crossed zero. The rest of the line is the patch.

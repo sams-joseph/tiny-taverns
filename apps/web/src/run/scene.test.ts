@@ -6,7 +6,6 @@ import {
   exhaustionOf,
   lastDc,
   leadingDice,
-  saveModifier,
   sceneNoun,
   sceneUpLine,
   skillModifier,
@@ -45,12 +44,6 @@ describe("a character's modifiers, off their sheet", () => {
   it("is absent when the sheet does not say", () => {
     expect(skillModifier(sheet, "Survival")).toBeUndefined();
     expect(skillModifier(sheet, "Thieves' tools")).toBeUndefined();
-  });
-
-  it("takes a save as written, else the ability's modifier", () => {
-    expect(saveModifier(sheet, "STR")).toBe(7);
-    expect(saveModifier(sheet, "CON")).toBe(1);
-    expect(saveModifier(sheet, "WIS")).toBeUndefined();
   });
 });
 
