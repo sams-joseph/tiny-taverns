@@ -8,6 +8,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
+  cazril,
   drawnBattleMap,
   drawnMapPicture,
   encounter,
@@ -97,6 +98,32 @@ describe("writing a new encounter", () => {
       }),
     );
     expect(writes()).toHaveLength(1);
+  });
+
+  it("puts a member of the Cast on as itself, fighting as a creature picked for it", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Cazril holds the door"));
+    await userEvent.type(await openNew(), "Cazril holds the door");
+    await userEvent.click(screen.getByRole("button", { name: "Cast member" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a member of the Cast" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Who" }));
+    await userEvent.click(await screen.findByRole("option", { name: cazril.name }));
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: `${cazril.name} fights as Goblin Boss` }),
+    );
+    // One of them, on the party's side, with no count to step.
+    const line = await screen.findByRole("button", {
+      name: `${cazril.name} fights beside the party`,
+    });
+    expect(line).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByLabelText(`How many Goblin Boss`)).not.toBeInTheDocument();
+    expect(screen.getByText(/As Goblin Boss/)).toBeInTheDocument();
+
+    await save();
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        creatures: [{ creatureId: goblinId, npcId: cazril.id, count: 1, side: "party" }],
+      }),
+    );
   });
 
   it("lands on the list with what it saved selected", async () => {

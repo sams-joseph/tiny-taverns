@@ -146,6 +146,7 @@ const combatant = {
   encounterRunId: run11Id,
   characterId: null,
   creatureId: null,
+  npcId: null,
   displayName: "Brannoc",
   subtitle: "Half-orc paladin",
   playerName: "Ilse",

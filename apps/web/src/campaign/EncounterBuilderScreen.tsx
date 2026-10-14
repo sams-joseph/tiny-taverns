@@ -16,6 +16,7 @@ import {
 } from "@taverns/api";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
+  Badge,
   Button,
   Card,
   Dialog,
@@ -51,12 +52,15 @@ import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
 import { BuilderRail } from "./BuilderRail";
+import { CastLineDialog } from "./CastLineDialog";
 import {
   addCreature,
   createPayload,
   draftFrom,
   type EncounterDraft,
+  castLineFor,
   lineFor,
+  lineKey,
   NEW_ENCOUNTER,
   readAloudOf,
   type ReadAloudWrite,
@@ -334,6 +338,7 @@ function EncounterBuilder({
     (creature: Creature) => setRoster((roster) => addCreature(roster, lineFor(creature))),
     [setRoster],
   );
+  const [castOpen, setCastOpen] = useState(false);
 
   /**
    * Unsaved changes: anything that differs from what the page opened on. The
@@ -648,6 +653,15 @@ function EncounterBuilder({
                   <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
                     {total}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => setCastOpen(true)}
+                  >
+                    <Icon name="user-plus" size={14} />
+                    Cast member
+                  </Button>
                 </div>
                 {draft.roster.length === 0 ? (
                   <p className="mb-0 px-5 py-7 text-center text-body-s leading-body text-muted-foreground">
@@ -657,15 +671,13 @@ function EncounterBuilder({
                   <ul data-slot="encounter-roster" className="m-0 flex list-none flex-col p-0">
                     {draft.roster.map((line) => (
                       <RosterRow
-                        key={line.creatureId}
+                        key={lineKey(line)}
                         line={line}
-                        onStep={(by) =>
-                          setRoster((roster) => stepCount(roster, line.creatureId, by))
-                        }
+                        onStep={(by) => setRoster((roster) => stepCount(roster, lineKey(line), by))}
                         onSide={(side) =>
-                          setRoster((roster) => withSide(roster, line.creatureId, side))
+                          setRoster((roster) => withSide(roster, lineKey(line), side))
                         }
-                        onRemove={() => setRoster((roster) => removeLine(roster, line.creatureId))}
+                        onRemove={() => setRoster((roster) => removeLine(roster, lineKey(line)))}
                       />
                     ))}
                   </ul>
@@ -898,6 +910,20 @@ function EncounterBuilder({
         </div>
       </div>
 
+      {castOpen && (
+        <CastLineDialog
+          campaignId={campaignId}
+          taken={
+            new Set(draft.roster.flatMap((line) => (line.npc === undefined ? [] : [line.npc.id])))
+          }
+          onPick={(npc, creature) => {
+            setRoster((roster) => addCreature(roster, castLineFor(npc, creature)));
+            setCastOpen(false);
+          }}
+          onClose={() => setCastOpen(false)}
+        />
+      )}
+
       {blocker.status === "blocked" && (
         <Dialog open onOpenChange={(open) => !open && blocker.reset()}>
           <DialogContent aria-label="Leave without saving">
@@ -1092,6 +1118,8 @@ function RosterRow({
   readonly onRemove: () => void;
 }) {
   const ally = line.side === "party";
+  /** What the line is called: the NPC for a member of the Cast, else the creature. */
+  const who = line.npc?.name ?? line.name;
   return (
     <li
       data-slot="roster-line"
@@ -1104,7 +1132,7 @@ function RosterRow({
           variant="ghost"
           size="icon"
           aria-pressed={ally}
-          aria-label={`${line.name} fights beside the party`}
+          aria-label={`${who} fights beside the party`}
           title={ally ? "On the party's side" : "Against the party"}
           onClick={() => onSide(ally ? "foes" : "party")}
         >
@@ -1117,47 +1145,52 @@ function RosterRow({
         <div className="min-w-0 flex-1">
           <div
             data-slot="roster-name"
-            className="text-body-s leading-snug font-semibold [overflow-wrap:anywhere] text-heading"
+            className="flex flex-wrap items-center gap-x-2 text-body-s leading-snug font-semibold [overflow-wrap:anywhere] text-heading"
           >
-            {line.name}
+            {line.npc === undefined ? line.name : line.npc.name}
+            {line.npc?.archived === true && <Badge variant="secondary">Archived</Badge>}
           </div>
           <div
             data-slot="roster-meta"
             className="mt-0.5 font-mono text-caption leading-snug font-medium whitespace-nowrap text-muted-foreground"
           >
-            CR {line.cr} · AC {line.ac} · {line.hp} hp{ally ? " · on the party's side" : ""}
+            {line.npc === undefined ? "" : `As ${line.name} · `}CR {line.cr} · AC {line.ac} ·{" "}
+            {line.hp} hp{ally ? " · on the party's side" : ""}
           </div>
         </div>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-3">
-        <div className="flex items-center gap-0.5 rounded-control border border-strong bg-surface-sunken">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`One fewer ${line.name}`}
-            onClick={() => onStep(-1)}
-          >
-            <Icon name="minus" size={14} />
-          </Button>
-          <output
-            aria-label={`How many ${line.name}`}
-            className="min-w-6 text-center font-mono text-mono leading-none font-medium text-heading"
-          >
-            {line.count}
-          </output>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`One more ${line.name}`}
-            onClick={() => onStep(1)}
-          >
-            <Icon name="plus" size={14} />
-          </Button>
-        </div>
+        {/* A member of the Cast is one creature: no count to step. */}
+        {line.npc === undefined && (
+          <div className="flex items-center gap-0.5 rounded-control border border-strong bg-surface-sunken">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`One fewer ${line.name}`}
+              onClick={() => onStep(-1)}
+            >
+              <Icon name="minus" size={14} />
+            </Button>
+            <output
+              aria-label={`How many ${line.name}`}
+              className="min-w-6 text-center font-mono text-mono leading-none font-medium text-heading"
+            >
+              {line.count}
+            </output>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`One more ${line.name}`}
+              onClick={() => onStep(1)}
+            >
+              <Icon name="plus" size={14} />
+            </Button>
+          </div>
+        )}
         <span className="w-16 text-right font-mono text-mono leading-none font-medium whitespace-nowrap text-muted-foreground">
           {line.xp === null ? "No XP" : `${(line.xp * line.count).toLocaleString("en")} xp`}
         </span>
-        <Button variant="ghost" size="icon" aria-label={`Remove ${line.name}`} onClick={onRemove}>
+        <Button variant="ghost" size="icon" aria-label={`Remove ${who}`} onClick={onRemove}>
           <Icon name="x" size={14} />
         </Button>
       </div>

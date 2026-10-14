@@ -10,6 +10,7 @@ import {
   type EncounterCreatureUpdate,
   EncounterId,
   NotFound,
+  NpcId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
@@ -31,6 +32,7 @@ import {
   type NestedTable,
   nestedRowReadable,
   nestedRowWritable,
+  rowWritable,
 } from "./visibility.js";
 
 /**
@@ -83,10 +85,20 @@ const alreadyRostered = new Conflict({
   message: "that creature is already on this encounter's roster",
 });
 
+/** `encounter_creature_npc_unique`, as the 409 it means: a member of the Cast is in a fight once. */
+const npcAlreadyRostered = new Conflict({
+  message: "that member of the Cast is already on this encounter's roster",
+});
+
+/** `encounter_creature_npc_one`, as the 409 it means: checked before the write rather than caught after it. */
+const npcIsOne = new Conflict({ message: "a member of the Cast is one creature" });
+
 const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | Conflict, R> =>
   Effect.catch(effect, (error): Effect.Effect<A, E | Conflict> =>
     SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
-      ? Effect.fail(alreadyRostered)
+      ? Effect.fail(
+          error.reason.constraint.includes("npc_unique") ? npcAlreadyRostered : alreadyRostered,
+        )
       : Effect.fail(error),
   );
 
@@ -150,7 +162,7 @@ export class EncounterCreatures extends Context.Service<
       encounterId: EncounterId,
       id: EncounterCreatureId,
       patch: EncounterCreatureUpdate,
-    ) => Effect.Effect<EncounterCreature, NotFound, CurrentActor>;
+    ) => Effect.Effect<EncounterCreature, NotFound | Conflict, CurrentActor>;
     readonly remove: (
       campaignId: CampaignId,
       encounterId: EncounterId,
@@ -200,12 +212,74 @@ export class EncounterCreatures extends Context.Service<
       const rostered = SqlSchema.findAll({
         Request: Schema.toType(Schema.Struct({ encounterId: EncounterId, sourceId: CreatureId })),
         Result: fromColumns(Schema.Struct({ id: EncounterCreatureId })),
+        // A Cast member's line is not the creature it fights as.
         execute: ({ encounterId, sourceId }) => sql`
           select encounter_creature.id from encounter_creature
           join creature on creature.id = encounter_creature.creature_id
           where encounter_creature.encounter_id = ${encounterId}
+            and encounter_creature.npc_id is null
             and (creature.id = ${sourceId} or creature.derived_from = ${sourceId})
         `,
+      });
+
+      /**
+       * The instance this encounter already holds of an owned original, on any
+       * line: a Cast member fighting as a Library Veteran and a line of that
+       * Veteran share one copy, rather than the second add minting another.
+       */
+      const heldInstance = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ encounterId: EncounterId, sourceId: CreatureId })),
+        Result: fromColumns(Schema.Struct({ id: CreatureId })),
+        execute: ({ encounterId, sourceId }) => sql`
+          select creature.id from encounter_creature
+          join creature on creature.id = encounter_creature.creature_id
+          where encounter_creature.encounter_id = ${encounterId}
+            and creature.derived_from = ${sourceId}
+          order by encounter_creature.created_at asc
+          limit 1
+        `,
+      });
+
+      /**
+       * The member of the Cast a line names: one of this campaign's NPCs the
+       * actor may write, and not archived, or the `NotFound` that names it. A
+       * Library original, another table's NPC and an archived one are all
+       * not here, which is the answer `getNpc` gives too.
+       */
+      const castMember = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, npcId: NpcId })),
+        Result: fromColumns(Schema.Struct({ id: NpcId })),
+        execute: ({ campaignId, npcId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select npc.id from npc
+              where npc.id = ${npcId}
+                and npc.archived_at is null
+                and ${rowWritable(sql, "npc", campaignId, actor)}
+            `,
+          ),
+      });
+
+      /** Whether a line names a member of the Cast, read under the line's own writable predicate. */
+      const namesNpc = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            encounterId: EncounterId,
+            id: EncounterCreatureId,
+          }),
+        ),
+        Result: fromColumns(Schema.Struct({ npcId: Schema.NullOr(NpcId) })),
+        execute: ({ campaignId, encounterId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select encounter_creature.npc_id from encounter_creature
+              where encounter_creature.id = ${id}
+                and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
+            `,
+          ),
       });
       const ensureNotRostered = (encounterId: EncounterId, sourceId: CreatureId) =>
         Effect.gen(function* () {
@@ -252,14 +326,21 @@ export class EncounterCreatures extends Context.Service<
           Effect.catchTag("NoSuchElementError", Effect.die),
         );
 
-      /** The read half of a roster row: joined with its creature's name and numbers. */
+      /**
+       * The read half of a roster row: joined with its creature's name and
+       * numbers, and its NPC's name when it names one, oldest first: lines
+       * made with their encounter are stamped apart (`0101`).
+       */
       const rosterRows = (clause: ReturnType<typeof sql.and>) => sql`
         select encounter_creature.*, creature.name, creature.cr, creature.ac, creature.hp,
-               ${statBlockXp(sql)} as stat_block_xp
+               ${statBlockXp(sql)} as stat_block_xp,
+               (select json_build_object(
+                  'id', npc.id, 'name', npc.name, 'archived', npc.archived_at is not null
+                ) from npc where npc.id = encounter_creature.npc_id) as npc
         from encounter_creature
         join creature on creature.id = encounter_creature.creature_id
         where ${clause}
-        order by encounter_creature.created_at asc
+        order by encounter_creature.created_at asc, encounter_creature.id asc
       `;
       const roster = SqlSchema.findAll({
         Request: Schema.toType(Schema.Struct({ ...creatorFields, encounterId: EncounterId })),
@@ -343,21 +424,35 @@ export class EncounterCreatures extends Context.Service<
                 Effect.gen(function* () {
                   const actor = yield* CurrentActor;
                   yield* ensureNestedParentWritable(sql, ROSTER, encounterId, campaignId, actor);
+                  if (payload.npcId !== undefined) {
+                    if (payload.count !== undefined && payload.count !== 1) {
+                      return yield* Effect.fail(npcIsOne);
+                    }
+                    yield* castMember({ campaignId, npcId: payload.npcId }).pipe(
+                      orNotFound("npc", payload.npcId),
+                    );
+                  }
                   const source = yield* usableSource(campaignId, payload.creatureId);
-                  yield* ensureNotRostered(encounterId, source.id);
+                  if (payload.npcId === undefined) yield* ensureNotRostered(encounterId, source.id);
                   // An owned original never lands on a roster directly — the
                   // campaign gets its own internal instance, and the roster
-                  // points at that. The bundle and the campaign's own rows are
+                  // points at that, the one this encounter already holds when
+                  // it has one. The bundle and the campaign's own rows are
                   // referenced as they are.
+                  const held =
+                    source.campaignId === null && source.accountId !== null
+                      ? (yield* heldInstance({ encounterId, sourceId: source.id }))[0]?.id
+                      : undefined;
                   const creatureId =
                     source.campaignId === null && source.accountId !== null
-                      ? yield* instanceOf(campaignId, source.id)
+                      ? (held ?? (yield* instanceOf(campaignId, source.id)))
                       : source.id;
                   // An insert answers with its row; not getting one is a defect.
                   const written = yield* insert(
                     defined({
                       encounter_id: encounterId,
                       creature_id: creatureId,
+                      npc_id: payload.npcId,
                       count: payload.count,
                       side: payload.side,
                       visibility: payload.visibility,
@@ -373,6 +468,12 @@ export class EncounterCreatures extends Context.Service<
         update: (campaignId, encounterId, id, patch) =>
           dieOnSqlError(
             Effect.gen(function* () {
+              if (patch.count !== undefined && patch.count !== 1) {
+                const [row] = yield* namesNpc({ campaignId, encounterId, id });
+                if (row?.npcId !== null && row?.npcId !== undefined) {
+                  return yield* Effect.fail(npcIsOne);
+                }
+              }
               const columns = defined({
                 count: patch.count,
                 side: patch.side,

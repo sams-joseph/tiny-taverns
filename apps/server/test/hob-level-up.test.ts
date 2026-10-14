@@ -373,8 +373,9 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          // Moved when a roster line could name its side (`proposeEncounter`).
-          creator: "6edbcb3e2df76046db9ca765d41b9efbcdeb905522c41003946e573bc51682e5",
+          // Moved when a roster line could name its side and a member of the
+          // Cast (`proposeEncounter`).
+          creator: "d63b3cc3eedb43d1d5628802d82a44063142133a1fba256f9347fc23ab8353c7",
           sharedWorld: "605ead7fad5f09d1fde9b8173e608ca83ea65132b673aa65c8055af9cc1072fa",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",

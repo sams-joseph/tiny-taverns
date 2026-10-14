@@ -41,14 +41,14 @@ function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
       )}
       {artifact.roster.map((line) => (
         <div
-          key={line.name}
+          key={`${line.npcName ?? ""}${line.name}`}
           className="flex items-center gap-2.5 rounded-sm bg-surface-sunken px-2.5 py-1.5"
         >
           <span className="w-4.5 font-mono text-mono leading-snug font-medium text-accent-ink">
             &times;{line.count}
           </span>
           <span className="flex-1 text-body-s leading-snug font-medium text-heading">
-            {line.name}
+            {line.npcName === undefined ? line.name : `${line.npcName}, as ${line.name}`}
             {line.side === "party" && (
               <span className="font-normal text-muted-foreground">
                 {" "}

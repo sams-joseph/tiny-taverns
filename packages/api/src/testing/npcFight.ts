@@ -52,6 +52,7 @@ export const combatant = (row: Row, creatureIds: Map<string, CreatureId>): Comba
     encounterRunId: "00000000-0000-4000-8000-0000000000aa" as EncounterRunId,
     characterId: null,
     creatureId: row.creature === undefined ? null : (creatureIds.get(row.creature) ?? null),
+    npcId: null,
     displayName: row.name,
     subtitle: null,
     playerName: null,

@@ -384,6 +384,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 98, name: "hob_turn_undo" },
         { migration_id: 99, name: "hob_autopilot" },
         { migration_id: 100, name: "combatant_sides" },
+        { migration_id: 101, name: "cast_npc_combatants" },
       ]);
     }),
   );
@@ -494,6 +495,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 98, name: "hob_turn_undo" },
         { migration_id: 99, name: "hob_autopilot" },
         { migration_id: 100, name: "combatant_sides" },
+        { migration_id: 101, name: "cast_npc_combatants" },
       ]);
     }),
   );

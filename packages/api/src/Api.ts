@@ -2160,7 +2160,8 @@ class EncounterCreaturesGroup extends HttpApiGroup.make("encounterCreatures")
       },
       payload: EncounterCreatureUpdate,
       success: EncounterCreature,
-      error: NotFound,
+      // A count other than one on a Cast member's line.
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.delete("remove", "/:encounterCreatureId", {
       params: {

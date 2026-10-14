@@ -156,6 +156,11 @@ export const HobRosterLine = Schema.Struct({
   count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
   /** Absent for a foe, as on the form. */
   side: Schema.optional(CombatantSide),
+  /**
+   * A member of the Cast fighting as this creature, and its name as it stood
+   * when Hob proposed; `count` is one.
+   */
+  npc: Schema.optional(Schema.Struct({ id: NpcId, name: Schema.String })),
   name: Schema.String,
   /** As the DM says it — `"1/4"`. See the bestiary notes on `Creature.cr`. */
   cr: Schema.String,

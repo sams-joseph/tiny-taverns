@@ -72,6 +72,7 @@ import {
   modifierFor,
   NotFound,
   NpcId,
+  rosterLineKey,
   NpcPersona,
   NpcPrep,
   NpcPrivateMaterial,
@@ -1202,7 +1203,11 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "the hit — do not invent one, and do not propose a creature you have not " +
     "found. A creature fights the party unless you give it side 'party', for " +
     "one that fights beside them (a guard captain, a summoned ally); leave side " +
-    "out otherwise. Give a setting when you can: one line on what the place looks like " +
+    "out otherwise. To put a member of the campaign's cast in the fight as " +
+    "itself, give its npcId (a searchCampaign hit whose source is 'npc') with " +
+    "count 1 and, as creatureId, the creature whose stat block it fights with " +
+    "(a Veteran for a seasoned guard); give side 'party' when it is the party's " +
+    "ally. Give a setting when you can: one line on what the place looks like " +
     "from above, with no creatures in it; the encounter's battle map is drawn " +
     "from it. Give tactics — a few short lines on how to run it — and treasure " +
     "when there is any. Only a challenge and a hazard take numbers: a challenge " +
@@ -1229,6 +1234,7 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
       Schema.Array(
         Schema.Struct({
           creatureId: CreatureId,
+          npcId: optional(NpcId),
           count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
           side: optional(CombatantSide),
         }),
@@ -2784,35 +2790,54 @@ export const dmHandlersFor = (
    *
    * Duplicates are merged rather than refused: a model naming the same goblin
    * twice means six goblins, and `encounter_creature` is unique per creature.
+   * A member of the Cast (`npcId`) is read as `getNpc` reads one, archived
+   * being not found, and is one creature however many the model said; named
+   * twice, it keeps the creature it was first named fighting as.
    */
   const roster = (
     lines: ReadonlyArray<{
       readonly creatureId: CreatureId;
+      readonly npcId?: NpcId | null | undefined;
       readonly count: number;
       readonly side?: CombatantSide | null | undefined;
     }>,
   ): Effect.Effect<ReadonlyArray<HobRosterLine>, NotFound> =>
     Effect.gen(function* () {
-      // A creature named twice on two sides is one line, on the side it was
-      // first named on: the roster holds a creature once.
+      // A line named twice on two sides is one line, on the side it was first
+      // named on: the roster holds a creature, or a member of the Cast, once.
       const merged = new Map<
-        CreatureId,
-        { count: number; side: CombatantSide | null | undefined }
+        string,
+        {
+          creatureId: CreatureId;
+          npcId: NpcId | undefined;
+          count: number;
+          side: CombatantSide | null | undefined;
+        }
       >();
       for (const line of lines) {
-        const before = merged.get(line.creatureId);
-        merged.set(line.creatureId, {
-          count: (before?.count ?? 0) + line.count,
+        const npcId = line.npcId ?? undefined;
+        const key = rosterLineKey({ creatureId: line.creatureId, npcId });
+        const before = merged.get(key);
+        merged.set(key, {
+          creatureId: before?.creatureId ?? line.creatureId,
+          npcId,
+          count: npcId === undefined ? (before?.count ?? 0) + line.count : 1,
           side: before === undefined ? line.side : before.side,
         });
       }
       const resolved: Array<HobRosterLine> = [];
-      for (const [creatureId, { count, side }] of merged) {
+      for (const { creatureId, npcId, count, side } of merged.values()) {
         const creature = yield* as(repositories.creatures.findById(campaignId, creatureId));
+        const npc =
+          npcId === undefined ? undefined : yield* as(repositories.npcs.findById(dm, npcId));
+        if (npc !== undefined && npc.archivedAt !== null) {
+          return yield* new NotFound({ resource: "npc", id: npc.id });
+        }
         resolved.push({
           creatureId,
           count: Math.min(count, 99),
           ...(side === "party" ? { side } : {}),
+          ...(npc === undefined ? {} : { npc: { id: npc.id, name: npc.name } }),
           name: creature.name,
           cr: creature.cr,
           hp: creature.hp,

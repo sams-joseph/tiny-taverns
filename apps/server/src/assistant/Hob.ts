@@ -2535,7 +2535,7 @@ const offered = (turn: HobTurn): string | undefined => {
       const roster = proposal.roster
         .map(
           (line) =>
-            `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId}${
+            `${line.npc === undefined ? `${line.count} × ` : `${line.npc.name} (npcId ${line.npc.id}) as `}${line.name} (CR ${line.cr}, id ${line.creatureId}${
               line.side === "party" ? ", side party" : ""
             })`,
         )

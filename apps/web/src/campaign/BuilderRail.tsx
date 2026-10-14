@@ -40,7 +40,11 @@ export function BuilderRail({
 }) {
   if (takesChallenge) return <DcGuide />;
   const counts = new Map<CreatureId, number>(
-    roster.map((line) => [line.creatureId, line.count] as const),
+    // The ×N on a bestiary row is the creature's own line: a member of the Cast
+    // fighting as it is not one of them.
+    roster.flatMap((line) =>
+      line.npc === undefined ? [[line.creatureId, line.count] as const] : [],
+    ),
   );
   return (
     <>

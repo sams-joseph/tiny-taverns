@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { CharacterPortraitImages, DeathSaves } from "./Character.js";
-import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
+import { CharacterId, CombatantId, CreatureId, EncounterRunId, NpcId } from "./Ids.js";
 import {
   MAX_INITIATIVE,
   MAX_INITIATIVE_BONUS,
@@ -94,8 +94,19 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    * access path.
    */
   characterId: Schema.NullOr(CharacterId),
-  /** The bestiary entry this was seeded from, if any. Same rules as above. */
+  /**
+   * The bestiary entry this was seeded from, if any. Same rules as above. For
+   * a member of the Cast, the stat block it fights as.
+   */
   creatureId: Schema.NullOr(CreatureId),
+  /**
+   * The member of the Cast this is, seeded from a roster line that names one
+   * (`0101_cast_npc_combatants.ts`). Same rules again: `on delete set null`,
+   * every field below snapshotted, and nothing read through it on a player's
+   * behalf. The creator's own reads may look the NPC up under their own
+   * proof, as Hob's fight read does.
+   */
+  npcId: Schema.NullOr(NpcId),
   /**
    * `"Goblin Archer"`. Two instances of one creature carry the same name — the
    * fixture does not number them (`data.js:18-19`) and neither does this.

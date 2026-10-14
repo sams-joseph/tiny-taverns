@@ -31,7 +31,7 @@ A child inside a campaign references its container through a composite key that 
 
 The `on delete set null (encounter_id)` column list is Postgres 15+ and load-bearing: a bare `set null` would null the scope column too and hit its not-null. Detach rather than cascade where the child is the DM's prose.
 
-Where a composite key is impossible the containment moves into the repository, against the same predicate the read uses: `encounter_creature.creature_id` cannot name a campaign because bundled rows have none, and `encounter_run.continued_from` cannot because both ends are `encounter_run`.
+Where a composite key is impossible the containment moves into the repository, against the same predicate the read uses: `encounter_creature.creature_id` cannot name a campaign because bundled rows have none, and `encounter_run.continued_from` cannot because both ends are `encounter_run`. `encounter_creature.npc_id` and `combatant.npc_id` (`0101_cast_npc_combatants.ts`) cannot because neither table carries the campaign: the roster's create reads the NPC under the campaign's writable predicate, and `start` copies only what its roster read returns. Deleting the NPC deletes its roster lines (a Cast member fighting as a Veteran is not a Veteran without it) and empties `combatant.npc_id`, leaving the seeded snapshot; archiving touches neither.
 
 ## A generated boolean in the key makes a state unrepresentable
 

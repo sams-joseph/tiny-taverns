@@ -670,6 +670,7 @@ export class Encounters extends Context.Service<
                     id,
                     {
                       creatureId: line.creatureId,
+                      ...(line.npcId === undefined ? {} : { npcId: line.npcId }),
                       count: line.count,
                       ...(line.side === undefined ? {} : { side: line.side }),
                     },

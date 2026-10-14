@@ -4,6 +4,7 @@ import {
   type EncounterId,
   ENCOUNTER_SKILLS_MAX,
   type NoteId,
+  type NpcId,
   STANDARD_SKILLS,
 } from "@taverns/api";
 import { DateTime } from "effect";
@@ -21,6 +22,8 @@ import {
   NEW_ENCOUNTER,
   readAloudOf,
   readAloudWrite,
+  castLineFor,
+  lineKey,
   rosterDiff,
   withSide,
   type RosterLine,
@@ -59,6 +62,7 @@ const bossRow: SavedLine = {
   hp: 21,
   xp: 200,
   side: "foes",
+  npc: null,
 };
 
 const goblinRow: SavedLine = {
@@ -71,6 +75,7 @@ const goblinRow: SavedLine = {
   hp: 7,
   xp: 50,
   side: "foes",
+  npc: null,
 };
 
 const line = (creatureId: CreatureId, count: number, xp: number | null = 50): RosterLine => ({
@@ -392,8 +397,10 @@ describe("the roster", () => {
 
   it("removes a line stepped below one", () => {
     const roster = [line(goblinId, 1), line(bossId, 2)];
-    expect(stepCount(roster, goblinId, -1).map((l) => l.creatureId)).toEqual([bossId]);
-    expect(stepCount(roster, bossId, 1)).toMatchObject([{ count: 1 }, { count: 3 }]);
+    expect(stepCount(roster, `creature:${goblinId}`, -1).map((l) => l.creatureId)).toEqual([
+      bossId,
+    ]);
+    expect(stepCount(roster, `creature:${bossId}`, 1)).toMatchObject([{ count: 1 }, { count: 3 }]);
   });
 
   it("sends only what changed", () => {
@@ -406,17 +413,45 @@ describe("the roster", () => {
   });
 
   it("sends a side only when it is the party's or has turned", () => {
-    const roster = withSide([...draftFrom(savedAmbush).roster, line(hagId, 1)], hagId, "party");
-    expect(rosterDiff(savedAmbush.roster, withSide(roster, bossId, "party"))).toEqual({
-      remove: [],
-      create: [{ creatureId: hagId, count: 1, side: "party" }],
-      update: [{ id: bossRowId, patch: { side: "party" } }],
-    });
+    const roster = withSide(
+      [...draftFrom(savedAmbush).roster, line(hagId, 1)],
+      `creature:${hagId}`,
+      "party",
+    );
+    expect(rosterDiff(savedAmbush.roster, withSide(roster, `creature:${bossId}`, "party"))).toEqual(
+      {
+        remove: [],
+        create: [{ creatureId: hagId, count: 1, side: "party" }],
+        update: [{ id: bossRowId, patch: { side: "party" } }],
+      },
+    );
     expect(createPayload({ ...blank({ name: "Bridge" }), roster }).creatures).toEqual([
       { creatureId: bossId, count: 6 },
       { creatureId: goblinId, count: 2 },
       { creatureId: hagId, count: 1, side: "party" },
     ]);
+  });
+
+  it("puts a member of the Cast on as one line of one, beside a line of what it fights as", () => {
+    const sildar = { id: "0f000000-0000-4000-8000-000000000001" as NpcId, name: "Sildar" };
+    const boss = { id: bossId, name: "Goblin Boss", cr: "1", ac: 17, hp: 21, statBlock: {} };
+    const cast = castLineFor(sildar, boss as Parameters<typeof castLineFor>[1]);
+    expect(cast).toMatchObject({
+      creatureId: bossId,
+      count: 1,
+      side: "party",
+      npc: { id: sildar.id },
+    });
+    const roster = addCreature(draftFrom(savedAmbush).roster, cast);
+    // Its own line, not one more Goblin Boss; picked again, still one.
+    expect(roster).toHaveLength(3);
+    expect(addCreature(roster, cast)).toEqual(roster);
+    expect(stepCount(roster, lineKey(cast), 1)).toEqual(roster);
+    expect(rosterDiff(savedAmbush.roster, roster)).toEqual({
+      remove: [],
+      create: [{ creatureId: bossId, npcId: sildar.id, count: 1, side: "party" }],
+      update: [],
+    });
   });
 
   it("matches a creature removed and added back to the row it was", () => {

@@ -18,6 +18,7 @@ const row = (id: string, over: Partial<Combatant>): Combatant =>
   ({
     id: id as CombatantId,
     creatureId: null,
+    npcId: null,
     displayName: id,
     kind: "pc",
     side: "party",

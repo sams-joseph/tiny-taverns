@@ -82,6 +82,8 @@ export interface HobRosterLine {
   readonly hp: string;
   /** Present for a creature fighting beside the party; absent for a foe. */
   readonly side?: "party";
+  /** The member of the Cast the line puts in the fight, fighting as `name`. */
+  readonly npcName?: string;
 }
 
 export interface HobChecklistItem {
@@ -372,6 +374,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
           cr: `CR ${line.cr}`,
           hp: `${line.hp} hp`,
           ...(line.side === "party" ? { side: "party" as const } : {}),
+          ...(line.npc === undefined ? {} : { npcName: line.npc.name }),
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
         ...(challenge === undefined

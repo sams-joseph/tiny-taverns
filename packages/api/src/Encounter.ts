@@ -5,7 +5,7 @@ import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
-import { CampaignId, CreatureId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
+import { CampaignId, CreatureId, EncounterId, EncounterRunId, NpcId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { AbilityKey } from "./Ruleset.js";
 
@@ -213,11 +213,13 @@ const challengeMatchesKind = Schema.makeFilter(
 );
 
 /**
- * One line of the roster an encounter is made with: this creature, this many.
- * Any creature the campaign can use, as a roster line added on its own takes.
+ * One line of the roster an encounter is made with: this creature, this many,
+ * or a member of the Cast fighting as this creature. Any creature the campaign
+ * can use, as a roster line added on its own takes (`EncounterCreatureCreate`).
  */
 export const EncounterRosterLine = Schema.Struct({
   creatureId: CreatureId,
+  npcId: Schema.optional(NpcId),
   count: EncounterCreatureCount,
   /** Omit for a foe, the roster line's default. */
   side: Schema.optional(CombatantSide),
@@ -225,19 +227,34 @@ export const EncounterRosterLine = Schema.Struct({
 export type EncounterRosterLine = typeof EncounterRosterLine.Type;
 
 /**
- * One line per creature. A repeat is refused rather than merged, for the
- * reason a second add of the same creature is a `Conflict`
- * (`EncounterCreature`): merging would turn a mis-click into a doubled roster
- * with nothing said.
+ * One line per creature, and one per member of the Cast, who is one creature.
+ * A repeat is refused rather than merged, for the reason a second add of the
+ * same creature is a `Conflict` (`EncounterCreature`): merging would turn a
+ * mis-click into a doubled roster with nothing said.
  */
 const roster = Schema.Array(EncounterRosterLine).check(
   Schema.isMaxLength(ENCOUNTER_ROSTER_MAX),
   Schema.makeFilter((lines: ReadonlyArray<EncounterRosterLine>) =>
-    new Set(lines.map((line) => line.creatureId)).size === lines.length
+    new Set(lines.map(rosterLineKey)).size === lines.length
       ? undefined
       : "a creature is named once on a roster, with its count",
   ),
+  Schema.makeFilter((lines: ReadonlyArray<EncounterRosterLine>) =>
+    lines.every((line) => line.npcId === undefined || line.count === 1)
+      ? undefined
+      : "a member of the Cast is one creature",
+  ),
 );
+
+/**
+ * What makes a roster line one line: its NPC when it names one, else its
+ * creature. The roster's two uniques (`0101_cast_npc_combatants.ts`), as one
+ * key a client can match lines by.
+ */
+export const rosterLineKey = (line: {
+  readonly creatureId: CreatureId;
+  readonly npcId?: NpcId | undefined;
+}): string => (line.npcId === undefined ? `creature:${line.creatureId}` : `npc:${line.npcId}`);
 
 /**
  * `setting` is the one line the encounter's battle map is drawn from
