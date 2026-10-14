@@ -343,6 +343,11 @@ export function TableHeard({ lines }: { readonly lines: ReadonlyArray<PlayerLive
               <p className="mb-0 max-w-measure font-serif text-body-s leading-body italic text-foreground">
                 {line.text}
               </p>
+              {line.said !== null && (
+                <q className="max-w-measure font-serif text-body-s leading-body text-foreground">
+                  {line.said}
+                </q>
+              )}
             </li>
           ))}
         </ol>

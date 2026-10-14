@@ -1675,6 +1675,7 @@ export function RunScreen() {
   const card = state !== undefined && view !== undefined && (
     <>
       <CombatantPanel
+        campaignId={path.campaignId}
         combatant={selected}
         hp={selected === undefined ? 0 : controller.hpOf(selected)}
         label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}

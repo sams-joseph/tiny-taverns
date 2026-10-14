@@ -685,6 +685,9 @@ export const ReadFight = Tool.make("readFight", {
 /** How long the line the table hears may be. */
 export const NPC_TURN_NARRATION_MAX = 280;
 
+/** How long what a creature says aloud on its turn may be. */
+export const NPC_TURN_LINE_MAX = 160;
+
 /**
  * A monster's turn, offered to the DM — the fight toolkit's one proposal.
  * Steps name options by the ids `readFight` lists and creatures by their place
@@ -700,7 +703,9 @@ export const ProposeNpcTurn = Tool.make("proposeNpcTurn", {
     "area the square from its best placements (for a cone or line from itself the square it " +
     "points toward, otherwise the square it is centred on) and no targets. Targets are places " +
     "in the order: 2 for #2. Moving changes who is in reach, so move before the attack that " +
-    "needs it. No dice: say what it tries, not what happens. Nothing happens unless the DM " +
+    "needs it. No dice: say what it tries, not what happens. When the creature would speak, " +
+    "give line: a few words it says aloud, in its own voice, which the players hear too; " +
+    "leave it out otherwise. Nothing happens unless the DM " +
     "carries it out, and nothing is offered unless this tool says it offered it.",
   parameters: Schema.Struct({
     steps: Schema.Array(
@@ -720,6 +725,7 @@ export const ProposeNpcTurn = Tool.make("proposeNpcTurn", {
       }),
     ).check(Schema.isBetweenLength(1, 8)),
     narration: Schema.String.check(Schema.isBetweenLength(1, NPC_TURN_NARRATION_MAX)),
+    line: optionalText(NPC_TURN_LINE_MAX),
   }),
   success: Schema.String,
   // `proposalFailure`, which is declared below this.
@@ -3333,13 +3339,15 @@ export const fightHandlersFor = (
       Effect.map(tableFight.read(context.dm, context.sessionId, context.runId), (read) => ({
         fight: fightFocusText(read, context),
       })),
-    proposeNpcTurn: ({ steps, narration }) =>
+    proposeNpcTurn: ({ steps, narration, line: spoken }) =>
       Effect.gen(function* () {
         const read = yield* tableFight
           .read(context.dm, context.sessionId, context.runId)
           .pipe(Effect.catchTag("NotFound", () => Effect.fail(refuse("The fight is gone"))));
         const line = blank(narration);
         if (line === undefined) return yield* refuse("The narration is empty");
+        // "None" and "null" are no line: a creature that says nothing is absent.
+        const said = proseOf(spoken);
         const handle = orderHandle(read.combatants);
         const named: Array<NpcTurnStep> = [];
         for (const [index, step] of steps.entries()) {
@@ -3414,6 +3422,7 @@ export const fightHandlersFor = (
             stamp: read.stamp,
             steps: proposed,
             narration: line,
+            ...(said === undefined ? {} : { line: said }),
             instruction: context.instruction ?? null,
           },
           `Offered the DM ${handle(context.combatantId)}'s ${

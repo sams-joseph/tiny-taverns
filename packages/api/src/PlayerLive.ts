@@ -190,12 +190,14 @@ export type PlayerLiveBoard = typeof PlayerLiveBoard.Type;
  * the DM kept, when a player could have seen the creature act — it and the
  * fight shown, and it not under fog where the turn left it. Decided when the
  * turn was kept, so a creature hidden since does not unsay it; a turn the DM
- * undid takes its line with it.
+ * undid takes its line with it. `said` is what the creature said aloud, under
+ * the same rule, or `null` when it said nothing.
  */
 export const PlayerLiveNarration = Schema.Struct({
   id: SessionEventId,
   combatantName: Schema.String,
   text: Schema.String,
+  said: Schema.NullOr(Schema.String),
   round: Schema.Int,
 });
 export type PlayerLiveNarration = typeof PlayerLiveNarration.Type;

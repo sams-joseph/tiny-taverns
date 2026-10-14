@@ -278,6 +278,7 @@ function Offered({ proposal }: { readonly proposal: NpcTurnProposal }) {
       </ol>
       <blockquote className="mb-0 border-l-2 border-hairline pl-3 font-serif text-body-s leading-body italic">
         {proposal.narration}
+        {proposal.line !== undefined && <q className="mt-1 block not-italic">{proposal.line}</q>}
       </blockquote>
     </>
   );
@@ -490,6 +491,7 @@ function Kept({
           </ol>
           <blockquote className="mb-0 border-l-2 border-hairline pl-3 font-serif text-body-s leading-body italic">
             {outcome.narration}
+            {outcome.line !== undefined && <q className="mt-1 block not-italic">{outcome.line}</q>}
           </blockquote>
         </>
       )}

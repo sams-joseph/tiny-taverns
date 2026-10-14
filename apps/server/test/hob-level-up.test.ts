@@ -383,7 +383,8 @@ describeLayer(
           coreListing: "3b51f22a3bdeab5ffd5472160933fe6011ae8707b4469790f26e9f4d80212f73",
           account: "d232b6fa3fcef517229fcf319b13821192ee31c8cc712ccf5d0d1471790acc71",
           accountListing: "fa3a35cfad02f9cf449d98d3d44bb9e175c2a3c51eb85a141a18b883dad62e54",
-          fight: "83b03321fc9c18a73cd7958f501308582a50b6e147c61999fca9b5a2bbd94829",
+          // Moved when a turn could carry a line the creature says aloud.
+          fight: "9c6b5cb33f80e7187d85b2e2e529bb6c96d1fb27d64911b6ba09f23bb1fb98fa",
         });
       });
     });

@@ -112,6 +112,8 @@ export const NpcTurnOutcome = Schema.Struct({
   round: Schema.Int,
   steps: Schema.Array(NpcTurnOutcomeStep),
   narration: Schema.String,
+  /** What the creature said aloud, when the kept proposal gave it a line. */
+  line: Schema.optional(Schema.String),
 });
 export type NpcTurnOutcome = typeof NpcTurnOutcome.Type;
 

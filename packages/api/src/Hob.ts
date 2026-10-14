@@ -604,7 +604,9 @@ export const HobProposal = Schema.Union([
    * Names are snapshots for the card. `stamp` fingerprints the fight state
    * the steps were checked against (`TableFight`), so a turn offered against
    * a fight that has moved since can be refused rather than replayed.
-   * `narration` is the line the table hears once the turn is carried out;
+   * `narration` is the line the table hears once the turn is carried out, and
+   * `line` what the creature says aloud, when it says anything (a member of
+   * the Cast in its own voice, a monster's snarl), heard under the same rule;
    * `instruction` is what the DM asked for, when they asked for something.
    *
    * Kept only from its fight (`hobFight.keep`), which carries it out with
@@ -621,6 +623,7 @@ export const HobProposal = Schema.Union([
     stamp: Schema.String,
     steps: Schema.Array(NpcTurnProposalStep),
     narration: Schema.String,
+    line: Schema.optional(Schema.String),
     instruction: Schema.NullOr(Schema.String),
   }),
 ]);

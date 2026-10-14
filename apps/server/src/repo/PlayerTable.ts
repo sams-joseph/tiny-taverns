@@ -347,6 +347,7 @@ export class PlayerTable extends Context.Service<
           select session_event.id,
                  session_event.payload ->> 'combatantName' as combatant_name,
                  session_event.payload ->> 'narration' as text,
+                 session_event.payload ->> 'line' as said,
                  (session_event.payload ->> 'round')::int as round
           from session_event
           where session_event.encounter_run_id = ${runId}

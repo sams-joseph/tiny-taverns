@@ -31,7 +31,7 @@ const againId = "2b1f2a1e-0000-4000-8000-00000000f003";
 const discardRoute = (turn: string) =>
   `POST /campaigns/${campaignId}/hob/threads/${threadId}/turns/${turn}/discard`;
 
-const proposal = (narration: string) => ({
+const proposal = (narration: string, line?: string) => ({
   target: "npcTurn",
   sessionId: liveRun.sessionId,
   runId: liveRun.id,
@@ -63,14 +63,15 @@ const proposal = (narration: string) => ({
     },
   ],
   narration,
+  ...(line === undefined ? {} : { line }),
   instruction: null,
 });
 
-const offered = (turn: string, narration: string) =>
+const offered = (turn: string, narration: string, line?: string) =>
   sseFrames([
     { event: "began", data: { threadId, turnId: turn } },
     { event: "tool", data: { name: "proposeNpcTurn", phase: "called", detail: "" } },
-    { event: "proposal", data: { turnId: turn, proposal: proposal(narration) } },
+    { event: "proposal", data: { turnId: turn, proposal: proposal(narration, line) } },
     { event: "done", data: { reason: "tool-calls" } },
   ]);
 
@@ -123,6 +124,16 @@ describe("Hob's card in the runner", () => {
     expect(card().getByText(STEPPED)).toBeInTheDocument();
     expect(sent(turnRoute)).toEqual([{ moment: "turn", instruction: "Go for the fighter" }]);
     expect(card().getByRole("button", { name: "Keep" })).toBeInTheDocument();
+  });
+
+  it("shows what the creature says aloud under what it does", async () => {
+    server.routes.set(turnRoute, { status: 200, sse: offered(turnId, STEPPED, "Cut them down!") });
+    await renderRunner();
+    await userEvent.click(
+      await waitFor(() => card().getByRole("button", { name: "Ask Hob for its turn" })),
+    );
+    await waitFor(() => expect(card().getByText(STEPPED)).toBeInTheDocument());
+    expect(card().getByText("Cut them down!")).toBeInTheDocument();
   });
 
   it("turns an offer down, and Try again asks afresh with what was typed", async () => {
