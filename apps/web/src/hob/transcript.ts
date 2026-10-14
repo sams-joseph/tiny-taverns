@@ -80,6 +80,8 @@ export interface HobRosterLine {
   /** The rating as the DM says it — `"1/4"`, not a number. See the bestiary notes. */
   readonly cr: string;
   readonly hp: string;
+  /** Present for a creature fighting beside the party; absent for a foe. */
+  readonly side?: "party";
 }
 
 export interface HobChecklistItem {
@@ -369,6 +371,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
           name: line.name,
           cr: `CR ${line.cr}`,
           hp: `${line.hp} hp`,
+          ...(line.side === "party" ? { side: "party" as const } : {}),
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
         ...(challenge === undefined

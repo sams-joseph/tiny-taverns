@@ -373,6 +373,7 @@ export class Proposals extends Context.Service<
                   creatures: proposal.roster.map((line) => ({
                     creatureId: line.creatureId,
                     count: line.count,
+                    ...(line.side === undefined ? {} : { side: line.side }),
                   })),
                 },
                 from,

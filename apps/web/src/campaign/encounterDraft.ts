@@ -1,5 +1,6 @@
 import {
   type AbilityKey,
+  type CombatantSide,
   type Creature,
   creatureXp,
   type CreatureId,
@@ -7,7 +8,9 @@ import {
   type EncounterChallenge,
   type EncounterCreate,
   type EncounterCreature,
+  type EncounterCreatureCreate,
   type EncounterCreatureId,
+  type EncounterCreatureUpdate,
   type DifficultyParty,
   type DifficultyThresholds,
   type EncounterDifficulty,
@@ -71,7 +74,7 @@ export const NO_PREP: Prep = { ready: false, tactics: [], treasure: null, challe
 /** A saved roster row, as far as the draft reads it. */
 export type SavedLine = Pick<
   EncounterCreature,
-  "id" | "creatureId" | "name" | "count" | "cr" | "ac" | "hp" | "xp"
+  "id" | "creatureId" | "name" | "count" | "cr" | "ac" | "hp" | "xp" | "side"
 >;
 
 /** A read-aloud note, as far as the draft reads it. */
@@ -110,6 +113,8 @@ export interface RosterLine {
   /** XP for one of it, or `null` when it has none (`creatureXp`). */
   readonly xp: number | null;
   readonly count: number;
+  /** Which side its combatants start on; `foes`, the column default, unless the DM turns it. */
+  readonly side: CombatantSide;
 }
 
 /**
@@ -276,6 +281,7 @@ const lineFromRow = (row: SavedLine): RosterLine => ({
   hp: row.hp,
   xp: row.xp,
   count: row.count,
+  side: row.side,
 });
 
 export const draftFrom = (saved: SavedEncounter): EncounterDraft => ({
@@ -328,6 +334,7 @@ export const lineFor = (
   hp: creature.hp,
   xp: creatureXp({ cr: creature.cr, statBlockXp: creature.statBlock.xp ?? null }),
   count: 1,
+  side: "foes",
 });
 
 /** Adds the line, or one more of it when the creature is already on the roster. */
@@ -363,6 +370,14 @@ export const stepCount = (
     return count < MIN_COUNT ? [] : [{ ...line, count }];
   });
 
+/** The side a line's combatants start the fight on. */
+export const withSide = (
+  roster: ReadonlyArray<RosterLine>,
+  creatureId: CreatureId,
+  side: CombatantSide,
+): ReadonlyArray<RosterLine> =>
+  roster.map((line) => (line.creatureId === creatureId ? { ...line, side } : line));
+
 export const removeLine = (
   roster: ReadonlyArray<RosterLine>,
   creatureId: CreatureId,
@@ -370,14 +385,18 @@ export const removeLine = (
 
 export interface RosterDiff {
   readonly remove: ReadonlyArray<EncounterCreatureId>;
-  readonly create: ReadonlyArray<{ readonly creatureId: CreatureId; readonly count: number }>;
-  readonly update: ReadonlyArray<{ readonly id: EncounterCreatureId; readonly count: number }>;
+  readonly create: ReadonlyArray<EncounterCreatureCreate>;
+  readonly update: ReadonlyArray<{
+    readonly id: EncounterCreatureId;
+    readonly patch: EncounterCreatureUpdate;
+  }>;
 }
 
 /**
  * What the roster half of a save sends: a saved row no longer on the draft is
- * deleted, a new creature is created, a changed count is updated, and an
- * untouched line costs nothing.
+ * deleted, a new creature is created, a changed count or side is updated, and
+ * an untouched line costs nothing. A side is sent only when it is the party's
+ * or has changed, so the column default stands for every other.
  *
  * Matched by creature, not by line, so a line removed and the same creature
  * added back in one sitting is the row it always was — an update, not a
@@ -393,12 +412,19 @@ export const rosterDiff = (
     remove: saved.filter((row) => !drafted.has(row.creatureId)).map((row) => row.id),
     create: roster
       .filter((line) => !stored.has(line.creatureId))
-      .map((line) => ({ creatureId: line.creatureId, count: line.count })),
+      .map((line) => ({
+        creatureId: line.creatureId,
+        count: line.count,
+        ...(line.side === "foes" ? {} : { side: line.side }),
+      })),
     update: saved.flatMap((row) => {
       const line = drafted.get(row.creatureId);
-      return line === undefined || line.count === row.count
-        ? []
-        : [{ id: row.id, count: line.count }];
+      if (line === undefined) return [];
+      const patch = {
+        ...(line.count === row.count ? {} : { count: line.count }),
+        ...(line.side === row.side ? {} : { side: line.side }),
+      };
+      return Object.keys(patch).length === 0 ? [] : [{ id: row.id, patch }];
     }),
   };
 };
@@ -603,6 +629,7 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
           creatures: draft.roster.map((line) => ({
             creatureId: line.creatureId,
             count: line.count,
+            ...(line.side === "foes" ? {} : { side: line.side }),
           })),
         }),
   };
@@ -745,8 +772,11 @@ export const draftDifficulty = (
   roster: ReadonlyArray<RosterLine>,
   partyLevels: ReadonlyArray<number | null>,
 ): DraftDifficulty => {
+  // A line on the party's side is not one the party fights, as the server's `rosterXp` says.
   const difficulty = encounterDifficulty(
-    roster.map((line) => ({ count: line.count, xp: line.xp })),
+    roster
+      .filter((line) => line.side === "foes")
+      .map((line) => ({ count: line.count, xp: line.xp })),
     partyLevels,
   );
   if (difficulty._tag === "unrated") {

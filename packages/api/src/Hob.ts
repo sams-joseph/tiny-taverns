@@ -5,7 +5,7 @@ import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { CampaignAct } from "./CampaignAct.js";
 import { CampaignStory } from "./CampaignStory.js";
 import { Character, CharacterSheet, SheetBody } from "./Character.js";
-import { CombatantPosition } from "./Combatant.js";
+import { CombatantPosition, CombatantSide } from "./Combatant.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
 import { ChallengeRating } from "./EncounterDifficulty.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
@@ -154,6 +154,8 @@ const turnText = Schema.String.check(Schema.isBetweenLength(1, 4000));
 export const HobRosterLine = Schema.Struct({
   creatureId: CreatureId,
   count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+  /** Absent for a foe, as on the form. */
+  side: Schema.optional(CombatantSide),
   name: Schema.String,
   /** As the DM says it — `"1/4"`. See the bestiary notes on `Creature.cr`. */
   cr: Schema.String,

@@ -276,6 +276,29 @@ describeLayer("encounter-computed", shared, (it) => {
       }),
     );
 
+    it.effect("counts a line on the party's side as a creature, not as a foe", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const encounters = yield* Encounters;
+        const roster = yield* EncounterCreatures;
+        const as = withActor(fixture.dm);
+        const lines = yield* asCreator(fixture.campaign.id, (dm) =>
+          roster.list(dm, fixture.ambush.id),
+        );
+        const big = lines.find((line) => line.xp === 2000)!;
+        const turn = (side: "party" | "foes") =>
+          as(roster.update(fixture.campaign.id, fixture.ambush.id, big.id, { side }));
+        expect((yield* turn("party")).side).toBe("party");
+        const helped = yield* asCreator(fixture.campaign.id, (dm) =>
+          encounters.findById(dm, fixture.ambush.id),
+        );
+        yield* turn("foes");
+        // The four goblins alone: 200 XP, ×2 for four.
+        expect(helped.creatureCount).toBe(5);
+        expect(helped.difficulty).toMatchObject({ _tag: "rated", xp: 200, multiplier: 2 });
+      }),
+    );
+
     it.effect("moves with the roster, on the write's own answer", () =>
       Effect.gen(function* () {
         const fixture = yield* Fixture;

@@ -6,6 +6,7 @@ import {
   type CharacterSheet,
   type CombatantId,
   type CombatantKind,
+  type CombatantSide,
   Conflict,
   type CreatureId,
   EncounterRun,
@@ -189,6 +190,7 @@ interface CarriedCombatantRow {
   readonly hp_max: number;
   readonly ac: number | null;
   readonly kind: CombatantKind;
+  readonly side: CombatantSide;
   readonly conditions: ReadonlyArray<string>;
   readonly death_save_successes: number;
   readonly death_save_failures: number;
@@ -327,6 +329,7 @@ interface PartyRow {
 
 interface RosterRow {
   readonly count: number;
+  readonly side: CombatantSide;
   readonly creature_id: CreatureId;
   readonly name: string;
   readonly size: string | null;
@@ -755,7 +758,7 @@ export class EncounterRuns extends Context.Service<
                     // global `system` rows, and they are reachable only through
                     // a campaign this actor can read.
                     const roster = yield* sql<RosterRow>`
-                      select encounter_creature.count as count,
+                      select encounter_creature.count as count, encounter_creature.side,
                              creature.id as creature_id, creature.name, creature.size,
                              creature.type, creature.ac, creature.hp,
                              creature.body as stat_block
@@ -805,6 +808,7 @@ export class EncounterRuns extends Context.Service<
                         death_save_successes: member.death_save_successes,
                         death_save_failures: member.death_save_failures,
                         kind: "pc",
+                        side: "party",
                       });
                     }
                     for (const line of roster) {
@@ -834,11 +838,12 @@ export class EncounterRuns extends Context.Service<
                           death_save_successes: 0,
                           death_save_failures: 0,
                           kind: "npc",
+                          side: line.side,
                         });
                       }
                     }
-                    // Every token starts on the board, the party down the left
-                    // edge and the monsters down the right (`startingSquares`),
+                    // Every token starts on the board, the party's side down the
+                    // left edge and the foes down the right (`startingSquares`),
                     // so the DM drags them where they belong rather than
                     // putting each one down. Every row carries both keys, for
                     // `sql.insert`'s first-row column list; with no board they
@@ -855,7 +860,7 @@ export class EncounterRuns extends Context.Service<
                     for (const row of seeded) {
                       row.board_column = null;
                       row.board_row = null;
-                      sides[row.kind === "pc" ? "party" : "foes"].push(row);
+                      sides[row.side as CombatantSide].push(row);
                     }
                     if (grid !== undefined) {
                       const board = { columns: grid.board_columns, rows: grid.board_rows };
@@ -997,7 +1002,7 @@ export class EncounterRuns extends Context.Service<
                              combatant.display_name, combatant.subtitle, combatant.player_name,
                              combatant.initiative, combatant.initiative_bonus,
                              combatant.initiative_set_by, combatant.hp_current, combatant.hp_max,
-                             combatant.ac, combatant.kind, combatant.conditions,
+                             combatant.ac, combatant.kind, combatant.side, combatant.conditions,
                              combatant.death_save_successes, combatant.death_save_failures,
                              combatant.board_column, combatant.board_row,
                              combatant.action_used, combatant.bonus_used,
@@ -1030,6 +1035,7 @@ export class EncounterRuns extends Context.Service<
                         hp_max: row.hp_max,
                         ac: row.ac,
                         kind: row.kind,
+                        side: row.side,
                         conditions: textArray(row.conditions),
                         death_save_successes: row.death_save_successes,
                         death_save_failures: row.death_save_failures,

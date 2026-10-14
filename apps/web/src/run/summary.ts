@@ -15,7 +15,7 @@ const plural = (count: number, one: string, many: string): string =>
  * initiative in round 1 has had no turns, so it says so rather than "after 1
  * round".
  */
-export const fightSummary = <Row extends Pick<Combatant, "kind">>(
+export const fightSummary = <Row extends Pick<Combatant, "side">>(
   fight: {
     readonly run: Pick<EncounterRun, "round" | "phase">;
     readonly combatants: ReadonlyArray<Row>;
@@ -25,7 +25,7 @@ export const fightSummary = <Row extends Pick<Combatant, "kind">>(
   const { round, phase } = fight.run;
   const rounds = plural(round, "round", "rounds");
   const unplayed = phase === "initiative" && round === 1;
-  const enemies = fight.combatants.filter((row) => row.kind === "npc");
+  const enemies = fight.combatants.filter((row) => row.side === "foes");
   if (enemies.length === 0) {
     return unplayed
       ? "No enemies are in this fight."

@@ -917,7 +917,7 @@ export function CombatantPanel({
       <div className="flex items-start gap-3 border-b border-hairline p-panel">
         <Disc
           label={label}
-          party={combatant.kind === "pc"}
+          party={combatant.side === "party"}
           hidden={combatant.visibility === "dm"}
           portrait={
             combatant.kind === "pc" && combatant.portrait !== null
@@ -930,10 +930,10 @@ export function CombatantPanel({
             <SectionHeading as="h2" size="display" className="min-w-0 truncate font-semibold">
               {combatant.displayName}
             </SectionHeading>
-            {combatant.kind === "pc" ? (
-              <Badge variant="info">Party</Badge>
-            ) : (
+            {combatant.side === "foes" ? (
               <Badge variant="destructive">Hostile</Badge>
+            ) : (
+              <Badge variant="info">{combatant.kind === "pc" ? "Party" : "Ally"}</Badge>
             )}
           </div>
           {subtitle !== undefined && (

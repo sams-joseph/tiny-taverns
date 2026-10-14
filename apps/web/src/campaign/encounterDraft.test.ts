@@ -22,6 +22,7 @@ import {
   readAloudOf,
   readAloudWrite,
   rosterDiff,
+  withSide,
   type RosterLine,
   type SavedEncounter,
   type SavedLine,
@@ -57,6 +58,7 @@ const bossRow: SavedLine = {
   ac: 17,
   hp: 21,
   xp: 200,
+  side: "foes",
 };
 
 const goblinRow: SavedLine = {
@@ -68,6 +70,7 @@ const goblinRow: SavedLine = {
   ac: 15,
   hp: 7,
   xp: 50,
+  side: "foes",
 };
 
 const line = (creatureId: CreatureId, count: number, xp: number | null = 50): RosterLine => ({
@@ -78,6 +81,7 @@ const line = (creatureId: CreatureId, count: number, xp: number | null = 50): Ro
   hp: 7,
   xp,
   count,
+  side: "foes",
 });
 
 const savedAmbush: SavedEncounter = {
@@ -367,7 +371,16 @@ describe("the roster", () => {
     };
     const once = addCreature([], lineFor(creature));
     expect(once).toEqual([
-      { creatureId: goblinId, name: "Goblin", cr: "1/4", ac: 15, hp: 7, xp: 50, count: 1 },
+      {
+        creatureId: goblinId,
+        name: "Goblin",
+        cr: "1/4",
+        ac: 15,
+        hp: 7,
+        xp: 50,
+        count: 1,
+        side: "foes",
+      },
     ]);
     expect(addCreature(once, lineFor(creature))).toMatchObject([{ count: 2 }]);
   });
@@ -388,8 +401,22 @@ describe("the roster", () => {
     expect(rosterDiff(savedAmbush.roster, roster)).toEqual({
       remove: [goblinRowId],
       create: [{ creatureId: hagId, count: 1 }],
-      update: [{ id: bossRowId, count: 4 }],
+      update: [{ id: bossRowId, patch: { count: 4 } }],
     });
+  });
+
+  it("sends a side only when it is the party's or has turned", () => {
+    const roster = withSide([...draftFrom(savedAmbush).roster, line(hagId, 1)], hagId, "party");
+    expect(rosterDiff(savedAmbush.roster, withSide(roster, bossId, "party"))).toEqual({
+      remove: [],
+      create: [{ creatureId: hagId, count: 1, side: "party" }],
+      update: [{ id: bossRowId, patch: { side: "party" } }],
+    });
+    expect(createPayload({ ...blank({ name: "Bridge" }), roster }).creatures).toEqual([
+      { creatureId: bossId, count: 6 },
+      { creatureId: goblinId, count: 2 },
+      { creatureId: hagId, count: 1, side: "party" },
+    ]);
   });
 
   it("matches a creature removed and added back to the row it was", () => {
@@ -398,7 +425,7 @@ describe("the roster", () => {
     expect(rosterDiff(savedAmbush.roster, back)).toEqual({
       remove: [],
       create: [],
-      update: [{ id: bossRowId, count: 1 }],
+      update: [{ id: bossRowId, patch: { count: 1 } }],
     });
   });
 
@@ -544,6 +571,15 @@ describe("the difficulty", () => {
       fourAtFive,
     );
     expect(rated.difficulty).toEqual(fixtureEncounter.difficulty);
+  });
+
+  it("leaves a creature on the party's side out of the band", () => {
+    const alone = draftDifficulty([line(bossId, 6, 200)], fourAtFive);
+    const helped = draftDifficulty(
+      [line(bossId, 6, 200), { ...line(hagId, 1, 700), side: "party" }],
+      fourAtFive,
+    );
+    expect(helped.difficulty).toEqual(alone.difficulty);
   });
 
   it("says how much more tips it into the next band", () => {

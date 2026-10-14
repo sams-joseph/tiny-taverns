@@ -144,6 +144,7 @@ describe("a roster line, which moves a number the write never sent", () => {
         ac: 17,
         hp: 21,
         xp: 200,
+        side: "foes",
         visibility: "dm",
         origin: "authored",
         assistantTurnId: null,

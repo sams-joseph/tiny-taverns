@@ -1465,6 +1465,7 @@ export const brannoc = {
   hpMax: 52,
   ac: 18,
   kind: "pc",
+  side: "party",
   conditions: [],
   deathSaves: { successes: 0, failures: 0 },
   visibility: "dm",
@@ -1496,6 +1497,7 @@ export const goblinBoss = {
   hpMax: 21,
   ac: 17,
   kind: "npc",
+  side: "foes",
   conditions: ["Hostile"],
   deathSaves: null,
 };
@@ -1516,6 +1518,7 @@ export const rosterRow = {
   ac: 17,
   hp: 21,
   xp: 200,
+  side: "foes",
   visibility: "dm",
   ...provenance,
   ...stamps,

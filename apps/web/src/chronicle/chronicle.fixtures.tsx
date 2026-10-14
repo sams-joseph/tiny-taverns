@@ -156,6 +156,7 @@ const combatant = {
   hpMax: 52,
   ac: 18,
   kind: "pc",
+  side: "party",
   conditions: [],
   deathSaves: { successes: 0, failures: 0 },
   visibility: "dm",

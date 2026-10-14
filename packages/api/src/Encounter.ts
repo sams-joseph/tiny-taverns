@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { EncounterSetting } from "./BattleMap.js";
+import { CombatantSide } from "./Combatant.js";
 import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterKind } from "./EncounterKind.js";
@@ -218,6 +219,8 @@ const challengeMatchesKind = Schema.makeFilter(
 export const EncounterRosterLine = Schema.Struct({
   creatureId: CreatureId,
   count: EncounterCreatureCount,
+  /** Omit for a foe, the roster line's default. */
+  side: Schema.optional(CombatantSide),
 });
 export type EncounterRosterLine = typeof EncounterRosterLine.Type;
 

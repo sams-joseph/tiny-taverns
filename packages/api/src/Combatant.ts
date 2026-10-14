@@ -17,6 +17,21 @@ export const CombatantKind = Schema.Literals(["pc", "npc"]);
 export type CombatantKind = typeof CombatantKind.Type;
 
 /**
+ * Which side a combatant fights on: the party's, or against it. Not `kind`,
+ * which says what a row is (a `pc` makes death saves; an `npc` at zero is
+ * out): a guard captain fighting beside the party is an `npc` on the party's
+ * side (`0100_combatant_sides.ts`). It decides which edge a token starts on,
+ * the runner's badge, and who a monster's options call an ally. The
+ * creator's; no player projection carries it.
+ */
+export const CombatantSide = Schema.Literals(["party", "foes"]);
+export type CombatantSide = typeof CombatantSide.Type;
+
+/** The side a row with no other answer takes: a `pc` is the party's, anything else a foe. */
+export const sideOfKind = (kind: CombatantKind): CombatantSide =>
+  kind === "pc" ? "party" : "foes";
+
+/**
  * Who put a combatant's initiative number there: the DM (from the runner), or
  * the player whose character it is (from their Table, during the initiative
  * phase). `null` exactly when there is no number yet.
@@ -128,6 +143,7 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   hpMax: Schema.Int,
   ac: Schema.NullOr(Schema.Int),
   kind: CombatantKind,
+  side: CombatantSide,
   conditions: Schema.Array(Schema.String),
   /**
    * Death saves, for a player character — `null` for an NPC, which does not
@@ -211,6 +227,8 @@ export const CombatantCreate = Schema.Struct({
   subtitle: Schema.optional(Schema.String),
   playerName: Schema.optional(Schema.String),
   kind: Schema.optional(CombatantKind),
+  /** Omit and the kind decides (`sideOfKind`). */
+  side: Schema.optional(CombatantSide),
   initiative: Schema.optional(initiative),
   initiativeBonus: Schema.optional(initiativeBonus),
   hpMax: Schema.optional(hp),
@@ -225,6 +243,7 @@ export const CombatantUpdate = Schema.Struct({
   displayName: Schema.optional(Schema.NonEmptyString),
   subtitle: Schema.optional(Schema.NullOr(Schema.String)),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
+  side: Schema.optional(CombatantSide),
   initiative: Schema.optional(initiative),
   initiativeBonus: Schema.optional(Schema.NullOr(initiativeBonus)),
   hpCurrent: Schema.optional(hp),

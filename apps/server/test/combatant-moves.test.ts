@@ -283,6 +283,81 @@ describeLayer("combatant-moves", shared, (it) => {
     );
   });
 
+  describe("a side, not a kind, says which edge", () => {
+    it.effect("seeds a roster line on the party's side down the left, as a monster still", () =>
+      Effect.gen(function* () {
+        const { jo, table, archerId } = yield* Fixture;
+        const session = yield* night;
+        const captainId = (yield* as(jo.token, (client) =>
+          client.library.create({
+            payload: { name: "Guard Captain", type: "Humanoid", cr: "2", ac: 17, hp: 30 },
+          }),
+        )).id;
+        const encounterId = (yield* as(jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: table },
+            payload: {
+              name: "The captain holds the bridge",
+              visibility: "shared",
+              ready: true,
+              creatures: [
+                { creatureId: archerId, count: 1 },
+                { creatureId: captainId, count: 1, side: "party" },
+              ],
+            },
+          }),
+        )).id;
+        const roster = yield* as(jo.token, (client) =>
+          client.encounterCreatures.list({ params: { campaignId: table, encounterId } }),
+        );
+        expect(Object.fromEntries(roster.map((line) => [line.name, line.side]))).toEqual({
+          "Goblin Archer": "foes",
+          "Guard Captain": "party",
+        });
+        const fight = yield* as(jo.token, (client) =>
+          client.runs.start({
+            params: { campaignId: table, sessionId: session },
+            payload: { encounterId, visibility: "shared" },
+          }),
+        );
+        const params = { campaignId: table, sessionId: session, runId: fight.id };
+        const order = yield* as(jo.token, (client) => client.combatants.list({ params }));
+        const board = (yield* as(jo.token, (client) => client.runs.board({ params })))!;
+        const middle = Math.floor((board.rows - 1) / 2);
+        const byName = (name: string) => order.find((row) => row.displayName === name)!;
+        // The captain is a monster (no death saves, out at zero) on the party's side.
+        expect(byName("Guard Captain")).toMatchObject({
+          kind: "npc",
+          side: "party",
+          position: { column: 0, row: middle + 1 },
+        });
+        expect(byName("Tamsin")).toMatchObject({ kind: "pc", side: "party" });
+        expect(byName("Goblin Archer")).toMatchObject({
+          kind: "npc",
+          side: "foes",
+          position: { column: board.columns - 1, row: middle },
+        });
+
+        // An add by hand takes the side it names, else its kind's; the DM can turn one.
+        const hawk = yield* as(jo.token, (client) =>
+          client.combatants.create({
+            params,
+            payload: { displayName: "Hawk", kind: "npc", side: "party" },
+          }),
+        );
+        expect(hawk).toMatchObject({ side: "party", position: { column: 0 } });
+        const turned = yield* as(jo.token, (client) =>
+          client.combatants.update({
+            params: { ...params, combatantId: byName("Goblin Archer").id },
+            payload: { side: "party" },
+          }),
+        );
+        expect(turned.side).toBe("party");
+        yield* endNight(session);
+      }),
+    );
+  });
+
   describe("the DM moves a token", () => {
     it.effect("puts it down, moves it and takes it off, and the list reads each back", () =>
       Effect.gen(function* () {

@@ -1239,7 +1239,7 @@ export function RunScreen() {
     // and wrong when it is somebody's paladin.
     if (applied.success.hpCurrent === 0 && before > 0) {
       toast.add({
-        type: combatant.kind === "pc" ? "destructive" : "success",
+        type: combatant.side === "party" ? "destructive" : "success",
         title: `${combatant.displayName} downed`,
         description: "Still in initiative — remove them when you're ready.",
       });

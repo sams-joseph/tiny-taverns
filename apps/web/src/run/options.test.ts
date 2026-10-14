@@ -20,6 +20,7 @@ const row = (id: string, over: Partial<Combatant>): Combatant =>
     creatureId: null,
     displayName: id,
     kind: "pc",
+    side: "party",
     hpCurrent: 20,
     conditions: [],
     position: null,
@@ -34,7 +35,12 @@ const row = (id: string, over: Partial<Combatant>): Combatant =>
     ...over,
   }) as unknown as Combatant;
 
-const wyrm = row("wyrm", { kind: "npc", creatureId, position: { column: 5, row: 5 } });
+const wyrm = row("wyrm", {
+  kind: "npc",
+  side: "foes",
+  creatureId,
+  position: { column: 5, row: 5 },
+});
 const near = row("near", { position: { column: 7, row: 5 } });
 const far = row("far", { position: { column: 15, row: 5 } });
 const source = (combatants: ReadonlyArray<Combatant>) => ({

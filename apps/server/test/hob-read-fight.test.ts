@@ -333,6 +333,22 @@ describeLayer("hob-read-fight", shared, (it) => {
       }),
     );
 
+    it.effect("says whose side a creature is on, and which of its targets are allies", () =>
+      Effect.gen(function* () {
+        const { dm, ford } = yield* Fixture;
+        const proof = yield* asDm(dm, ford.campaign.id);
+        const combatants = yield* Combatants;
+        const turn = (side: "party" | "foes") =>
+          combatants.update(proof, ford.session.id, ford.run.id, ford.foe.id, { side });
+        yield* turn("party");
+        const { requests } = yield* ask(dm, ford.campaign.id, "What can the priest do?");
+        yield* turn("foes");
+        const said = fightSaid(requests);
+        expect(said).toMatch(/#1 ▶ "Ford Priest" \(creature on the party's side, initiative 20\)/);
+        expect(said).toMatch(/Targets: #2 "Brannoc", an ally, \d+ ft/);
+      }).pipe(Effect.orDie),
+    );
+
     it.effect("says plainly when no fight is on the table", () =>
       Effect.gen(function* () {
         const { dm, quiet } = yield* Fixture;

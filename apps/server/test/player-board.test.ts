@@ -521,6 +521,34 @@ describeLayer("player-board", shared, (it) => {
         }),
     );
 
+    it.effect(
+      "keeps a creature on the party's side on the board while hostile tokens are hidden",
+      () =>
+        Effect.gen(function* () {
+          const { params, pc, archer } = yield* Shown;
+          const { jo, ilse } = yield* Fixture;
+          const turn = (side: "party" | "foes") =>
+            as(jo.token, (client) =>
+              client.combatants.update({
+                params: { ...params, combatantId: archer.id },
+                payload: { side },
+              }),
+            );
+          yield* turn("party");
+          yield* set(params, { hostileTokensHidden: true });
+          const read = yield* tableOf(ilse);
+          expect(
+            tokensOf(read)
+              .map(([id]) => id)
+              .sort(),
+          ).toEqual([pc.id, archer.id].sort());
+          // The side itself is the creator's: the player's wire never spells it.
+          expect((yield* rawTableOf(ilse)).body).not.toContain('"side"');
+          yield* set(params, { hostileTokensHidden: false });
+          yield* turn("foes");
+        }),
+    );
+
     it.effect("logs each switch as a shared line while the fight is shared", () =>
       Effect.gen(function* () {
         const { fight, params } = yield* Shown;

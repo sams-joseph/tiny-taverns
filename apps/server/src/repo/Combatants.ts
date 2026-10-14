@@ -24,6 +24,7 @@ import {
   type InitiativeSet,
   NotFound,
   type SessionId,
+  sideOfKind,
   startingSquares,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
@@ -964,6 +965,7 @@ export class Combatants extends Context.Service<
                 Effect.gen(function* () {
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   const hpMax = payload.hpMax ?? 0;
+                  const side = payload.side ?? sideOfKind(payload.kind ?? "npc");
                   // On the board from the start, as a started fight's tokens
                   // are: the first free square on its side (`startingSquares`).
                   // Two adds racing may land on one square, which a square
@@ -989,7 +991,7 @@ export class Combatants extends Context.Service<
                       ? undefined
                       : startingSquares(
                           { columns: grid.board_columns, rows: grid.board_rows },
-                          payload.kind === "pc" ? "party" : "foes",
+                          side,
                           1,
                           taken,
                         )[0];
@@ -1004,6 +1006,7 @@ export class Combatants extends Context.Service<
                       subtitle: payload.subtitle,
                       player_name: payload.playerName,
                       kind: payload.kind,
+                      side,
                       initiative: payload.initiative,
                       initiative_set_by: payload.initiative === undefined ? undefined : "dm",
                       initiative_bonus: payload.initiativeBonus,
@@ -1069,6 +1072,7 @@ export class Combatants extends Context.Service<
                     display_name: patch.displayName,
                     subtitle: patch.subtitle,
                     player_name: patch.playerName,
+                    side: patch.side,
                     initiative: patch.initiative,
                     initiative_set_by: patch.initiative === undefined ? undefined : "dm",
                     initiative_bonus: patch.initiativeBonus,

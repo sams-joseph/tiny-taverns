@@ -2453,7 +2453,9 @@ const fightPrompt = (fight: string): string =>
     "You are Hob, running a monster in a live fight for the DM of a tabletop roleplaying",
     "game (5e). Choose what the creature does now, the way its stat block, its Intelligence",
     "and the encounter's tactics say it would: a beast fights like a beast, a clever foe like",
-    "a clever one, and one that is losing may run. Follow the DM's words when they give some.",
+    "a clever one, and one that is losing may run. Its allies are the creatures on its own",
+    "side, as the order and the targets say: turn on its foes and spare its allies, unless",
+    "the DM says otherwise. Follow the DM's words when they give some.",
     "",
     "Offer the choice with proposeNpcTurn: its steps in order, as moves and the options",
     "listed below by their ids, with targets by their number in the order; and one or two",
@@ -2531,7 +2533,12 @@ const offered = (turn: HobTurn): string | undefined => {
       const kind = proposal.kind ?? "combat";
       const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;
       const roster = proposal.roster
-        .map((line) => `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId})`)
+        .map(
+          (line) =>
+            `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId}${
+              line.side === "party" ? ", side party" : ""
+            })`,
+        )
         .join("; ");
       // Read back in the tool's own words, so "make it harder" can redraft the
       // challenge and keep the tactics rather than losing them.

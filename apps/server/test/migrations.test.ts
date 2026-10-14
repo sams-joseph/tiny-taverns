@@ -383,6 +383,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 97, name: "hob_pending_saves" },
         { migration_id: 98, name: "hob_turn_undo" },
         { migration_id: 99, name: "hob_autopilot" },
+        { migration_id: 100, name: "combatant_sides" },
       ]);
     }),
   );
@@ -492,6 +493,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 97, name: "hob_pending_saves" },
         { migration_id: 98, name: "hob_turn_undo" },
         { migration_id: 99, name: "hob_autopilot" },
+        { migration_id: 100, name: "combatant_sides" },
       ]);
     }),
   );

@@ -49,6 +49,12 @@ function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
           </span>
           <span className="flex-1 text-body-s leading-snug font-medium text-heading">
             {line.name}
+            {line.side === "party" && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                · on the party&rsquo;s side
+              </span>
+            )}
           </span>
           <span className="font-mono text-mono leading-snug font-medium text-muted-foreground">
             {line.cr}

@@ -82,6 +82,11 @@ export type NpcSlot = "action" | "bonus" | "reaction" | "legendary";
 export interface NpcTarget {
   readonly combatantId: CombatantId;
   readonly kind: Combatant["kind"];
+  /**
+   * On the creature's own side (`Combatant.side`). Said, never refused: who a
+   * creature turns on is the chooser's call, and a betrayal is a legal turn.
+   */
+  readonly ally: boolean;
   readonly feet: number;
   /**
    * `reach` within a melee reach; `normal` or `long` within a range (long at
@@ -97,6 +102,8 @@ export interface NpcPlacement {
   readonly toward: BoardSquare;
   readonly squares: ReadonlyArray<BoardSquare>;
   readonly catches: ReadonlyArray<CombatantId>;
+  /** The ones it catches on the creature's own side, so a chooser can see what it costs its friends. */
+  readonly allies: ReadonlyArray<CombatantId>;
 }
 
 /** What taking an option spends, beyond its slot. */
@@ -374,7 +381,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
               : range?.long !== undefined && feet <= range.long
                 ? "long"
                 : "out";
-        return { combatantId: row.id, kind: row.kind, feet, band };
+        return { combatantId: row.id, kind: row.kind, ally: row.side === self.side, feet, band };
       })
       .sort((a, b) => a.feet - b.feet);
   };
@@ -420,7 +427,10 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
       const key = [...catches].sort().join(",");
       if (catches.length === 0 || seen.has(key)) return;
       seen.add(key);
-      out.push({ origin, toward, squares, catches });
+      const allies = catches.filter(
+        (id) => fight.combatants.find((row) => row.id === id)?.side === self.side,
+      );
+      out.push({ origin, toward, squares, catches, allies });
     };
     if (area.origin === "self") {
       if (area.shape === "cone" || area.shape === "line") {

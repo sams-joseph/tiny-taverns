@@ -359,6 +359,7 @@ export class EncounterCreatures extends Context.Service<
                       encounter_id: encounterId,
                       creature_id: creatureId,
                       count: payload.count,
+                      side: payload.side,
                       visibility: payload.visibility,
                       ...assistantColumns(from),
                     }),
@@ -372,7 +373,11 @@ export class EncounterCreatures extends Context.Service<
         update: (campaignId, encounterId, id, patch) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const columns = defined({ count: patch.count, visibility: patch.visibility });
+              const columns = defined({
+                count: patch.count,
+                side: patch.side,
+                visibility: patch.visibility,
+              });
               yield* change({ campaignId, encounterId, id, columns }).pipe(
                 orNotFound("encounter_creature", id),
               );

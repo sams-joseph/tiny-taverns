@@ -2,6 +2,7 @@ import {
   ABILITY_KEYS,
   type AbilityKey,
   type CampaignId,
+  type CombatantSide,
   type Creature,
   type Encounter,
   type EncounterId,
@@ -66,6 +67,7 @@ import {
   type SavedEncounter,
   skillChips,
   stepCount,
+  withSide,
   toggleSkill,
   updatePayload,
   validate,
@@ -424,10 +426,10 @@ function EncounterBuilder({
                       payload,
                     }),
                   ),
-                  ...diff.update.map(({ id, count }) =>
+                  ...diff.update.map(({ id, patch }) =>
                     client.encounterCreatures.update({
                       params: { campaignId, encounterId, encounterCreatureId: id },
-                      payload: { count },
+                      payload: patch,
                     }),
                   ),
                 ],
@@ -659,6 +661,9 @@ function EncounterBuilder({
                         line={line}
                         onStep={(by) =>
                           setRoster((roster) => stepCount(roster, line.creatureId, by))
+                        }
+                        onSide={(side) =>
+                          setRoster((roster) => withSide(roster, line.creatureId, side))
                         }
                         onRemove={() => setRoster((roster) => removeLine(roster, line.creatureId))}
                       />
@@ -1078,19 +1083,37 @@ function BuilderCard({
 function RosterRow({
   line,
   onStep,
+  onSide,
   onRemove,
 }: {
   readonly line: RosterLine;
   readonly onStep: (by: -1 | 1) => void;
+  readonly onSide: (side: CombatantSide) => void;
   readonly onRemove: () => void;
 }) {
+  const ally = line.side === "party";
   return (
     <li
       data-slot="roster-line"
       className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-hairline py-2 pr-3 pl-5 first:border-t-0"
     >
       <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
-        <Icon name="skull" size={15} className="shrink-0 text-muted-foreground" />
+        {/* The line's side, pressed to turn: a skull fights the party, a
+            shield fights beside it and starts on the party's edge. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-pressed={ally}
+          aria-label={`${line.name} fights beside the party`}
+          title={ally ? "On the party's side" : "Against the party"}
+          onClick={() => onSide(ally ? "foes" : "party")}
+        >
+          <Icon
+            name={ally ? "shield" : "skull"}
+            size={15}
+            className={ally ? "text-info" : "text-muted-foreground"}
+          />
+        </Button>
         <div className="min-w-0 flex-1">
           <div
             data-slot="roster-name"
@@ -1102,7 +1125,7 @@ function RosterRow({
             data-slot="roster-meta"
             className="mt-0.5 font-mono text-caption leading-snug font-medium whitespace-nowrap text-muted-foreground"
           >
-            CR {line.cr} · AC {line.ac} · {line.hp} hp
+            CR {line.cr} · AC {line.ac} · {line.hp} hp{ally ? " · on the party's side" : ""}
           </div>
         </div>
       </div>

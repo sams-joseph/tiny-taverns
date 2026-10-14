@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CombatantSide } from "./Combatant.js";
 import { CreatureId, EncounterCreatureId, EncounterId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -67,6 +68,8 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
    * than guess one.
    */
   xp: Schema.NullOr(Schema.Int),
+  /** Which side its combatants start the fight on (`Combatant.side`); `foes` unless the DM said. */
+  side: CombatantSide,
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
@@ -77,6 +80,8 @@ export const EncounterCreatureCreate = Schema.Struct({
   creatureId: CreatureId,
   /** Omit and the column default — one — decides. */
   count: Schema.optional(EncounterCreatureCount),
+  /** Omit and the column default — `foes` — decides. */
+  side: Schema.optional(CombatantSide),
   visibility: Schema.optional(Visibility),
 });
 export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
@@ -89,6 +94,7 @@ export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
  */
 export const EncounterCreatureUpdate = Schema.Struct({
   count: Schema.optional(EncounterCreatureCount),
+  side: Schema.optional(CombatantSide),
   visibility: Schema.optional(Visibility),
 });
 export type EncounterCreatureUpdate = typeof EncounterCreatureUpdate.Type;
