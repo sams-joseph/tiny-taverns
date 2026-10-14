@@ -25,6 +25,7 @@ import {
   NEUTRAL_RUN_NAMES,
   NotFound,
   type Origin,
+  PlayerEncounterRun,
   type RerollInitiative,
   SessionId,
   type StatBlock,
@@ -84,6 +85,14 @@ export const EncounterRunRow = classFromColumns(EncounterRun, {
   endedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
 });
 
+/** A run as a player reads it, decoded off {@link playerRunColumns}. */
+export const PlayerEncounterRunRow = classFromColumns(PlayerEncounterRun, {
+  ...PlayerEncounterRun.fields,
+  ...timestampColumns,
+  startedAt: Schema.DateTimeUtcFromDate,
+  endedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+});
+
 /** What a read of one night's runs is asked with: the proof's campaign and actor, and the night. */
 const onNight = { campaignId: CampaignId, actor: Actor, sessionId: SessionId } as const;
 
@@ -123,6 +132,19 @@ export const runColumns = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
   actor: Actor,
+): Statement.Fragment =>
+  sql`${playerRunColumns(sql, campaignId, actor)},
+    encounter_run.allow_hob_direct_writes, encounter_run.hob_autopilot_driver`;
+
+/**
+ * {@link runColumns} without the DM's two Hob switches, for a player's reads
+ * (`PlayerEncounterRun`): how the DM ran a fight is not what happened in it,
+ * so those columns are not selected for a player at all.
+ */
+export const playerRunColumns = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
 ): Statement.Fragment => {
   const known = runEncounterReadable(sql, campaignId, actor);
   return sql`encounter_run.id, encounter_run.session_id,
@@ -131,7 +153,7 @@ export const runColumns = (
     encounter_run.mode, encounter_run.round, encounter_run.phase,
     encounter_run.active_combatant_id,
     encounter_run.started_at,
-    encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
+    encounter_run.ended_at, encounter_run.ended_reason,
     encounter_run.map_shown, encounter_run.hostile_tokens_hidden, encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
     encounter_run.assistant_turn_id, encounter_run.created_at, encounter_run.updated_at`;
 };
@@ -1135,11 +1157,20 @@ export class EncounterRuns extends Context.Service<
                       incoming = patch.activeCombatantId;
                     }
                   }
+                  // Autopilot is turned on, or taken over, only on a fight
+                  // still on the table; turning it off is never refused.
+                  if (patch.hobAutopilotDriver !== undefined && patch.hobAutopilotDriver !== null) {
+                    const current = yield* readRun(campaignId, sessionId, id, actor);
+                    if (current.endedAt !== null) {
+                      return yield* new Conflict({ message: "that fight is over" });
+                    }
+                  }
                   const columns = defined({
                     round: patch.round,
                     active_combatant_id: patch.activeCombatantId,
                     visibility: patch.visibility,
                     allow_hob_direct_writes: patch.allowHobDirectWrites,
+                    hob_autopilot_driver: patch.hobAutopilotDriver,
                     map_shown: patch.mapShown,
                     hostile_tokens_hidden: patch.hostileTokensHidden,
                   });
@@ -1147,13 +1178,28 @@ export class EncounterRuns extends Context.Service<
                     orNotFound("encounter_run", id),
                   );
                   if (incoming !== undefined) yield* freshTurn(sql, id, incoming);
-                  yield* appendEvent(sql, {
-                    sessionId,
-                    kind: "run-updated",
-                    encounterRunId: id,
-                    payload: { ...patch },
-                    visibility: run.visibility,
-                  });
+                  // The autopilot is the DM's own way of running the fight, so
+                  // its line is `dm` whatever the fight's Share says, and the
+                  // rest of the patch is logged as it always was.
+                  const { hobAutopilotDriver, ...rest } = patch;
+                  if (hobAutopilotDriver === undefined || Object.keys(rest).length > 0) {
+                    yield* appendEvent(sql, {
+                      sessionId,
+                      kind: "run-updated",
+                      encounterRunId: id,
+                      payload: { ...rest },
+                      visibility: run.visibility,
+                    });
+                  }
+                  if (hobAutopilotDriver !== undefined) {
+                    yield* appendEvent(sql, {
+                      sessionId,
+                      kind: "run-updated",
+                      encounterRunId: id,
+                      payload: { hobAutopilotDriver },
+                      visibility: "dm",
+                    });
+                  }
                   return run;
                 }),
               )
@@ -1200,6 +1246,14 @@ export class EncounterRuns extends Context.Service<
                   if (current.phase === "initiative") {
                     return yield* new Conflict({
                       message: "this fight is still rolling initiative; start round 1 first",
+                    });
+                  }
+                  if (
+                    payload.expectedActiveCombatantId !== undefined &&
+                    payload.expectedActiveCombatantId !== current.activeCombatantId
+                  ) {
+                    return yield* new Conflict({
+                      message: "the turn has already moved on; nothing was advanced",
                     });
                   }
                   const { activeCombatantId, wrapped } = yield* advance(

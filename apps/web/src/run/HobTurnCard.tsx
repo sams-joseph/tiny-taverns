@@ -4,7 +4,6 @@ import {
   type EncounterRunId,
   type HobPendingSave,
   type HobPendingSaveId,
-  npcMomentRefusal,
   type NpcTurnAttack,
   type NpcTurnDamageRoll,
   type NpcTurnHit,
@@ -20,8 +19,14 @@ import {
 import { Button, Card, CardContent, Input, SectionHeading } from "@taverns/ui";
 import { useState } from "react";
 import { HobAvatar } from "../hob/ChatParts";
-import { type FightKept, useFightTurn, type NpcTurnProposal } from "../hob/fightTurn";
+import {
+  type FightKept,
+  type FightTurn,
+  useFightTurn,
+  type NpcTurnProposal,
+} from "../hob/fightTurn";
 import { VERDICT } from "./attack";
+import { momentsOf } from "./options";
 
 /**
  * **Ask Hob what a monster does**, under the selected creature's panel: its
@@ -44,16 +49,7 @@ import { VERDICT } from "./attack";
  * Drawn only when a model is behind Hob, and only for a monster in a fight
  * taking turns.
  */
-export function HobTurnCard({
-  campaignId,
-  sessionId,
-  runId,
-  combatant,
-  round,
-  options,
-  disabled,
-  onChanged,
-}: {
+export function HobTurnCard(props: {
   readonly campaignId: CampaignId;
   readonly sessionId: SessionId;
   readonly runId: EncounterRunId;
@@ -65,16 +61,47 @@ export function HobTurnCard({
   /** A keep, an undo or a save moved the fight: re-read it. */
   readonly onChanged: () => void;
 }) {
-  const moments = MOMENTS.filter((moment) => npcMomentRefusal(options, moment) === undefined);
+  const moments = momentsOf(props.options);
   const turn = useFightTurn({
-    campaignId,
-    sessionId,
-    runId,
-    combatantId: combatant.id,
-    round,
+    campaignId: props.campaignId,
+    sessionId: props.sessionId,
+    runId: props.runId,
+    combatantId: props.combatant.id,
+    round: props.round,
     moments,
-    onChanged,
+    onChanged: props.onChanged,
   });
+  return (
+    <HobTurnCardView
+      combatant={props.combatant}
+      options={props.options}
+      turn={turn}
+      disabled={props.disabled}
+      driving={false}
+    />
+  );
+}
+
+/**
+ * The card over a `FightTurn` somebody else holds: the runner's own, while
+ * Hob's autopilot is driving it (`hob/autopilot.ts`). `driving` puts the ask
+ * away, since the autopilot asks and keeps; the saves it leaves and *Undo*
+ * stay the DM's.
+ */
+export function HobTurnCardView({
+  combatant,
+  options,
+  turn,
+  disabled,
+  driving,
+}: {
+  readonly combatant: Combatant;
+  readonly options: NpcTurnOptions;
+  readonly turn: FightTurn;
+  readonly disabled: boolean;
+  readonly driving: boolean;
+}) {
+  const moments = momentsOf(options);
   const [steer, setSteer] = useState("");
 
   if (
@@ -105,7 +132,7 @@ export function HobTurnCard({
             saves={turn.saves}
             disabled={disabled || turn.writing}
             onResolve={turn.resolve}
-            onUndo={turn.undo}
+            onUndo={() => void turn.undo()}
             onDismiss={turn.dismiss}
           />
         )}
@@ -117,62 +144,66 @@ export function HobTurnCard({
             turn brings it back.
           </p>
         )}
-        <Input
-          aria-label={offer === undefined ? "What Hob should have it do" : "What to change"}
-          placeholder={
-            offer !== undefined
-              ? "Something else? (optional)"
-              : reacting
-                ? "What triggered it? (optional)"
-                : "Anything it should do? (optional)"
-          }
-          value={steer}
-          disabled={disabled || turn.asking}
-          onChange={(event) => setSteer(event.target.value)}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          {offer === undefined ? (
-            moments.map((moment) => (
-              <Button
-                key={moment}
-                size="sm"
-                variant={moment === "turn" ? "default" : "secondary"}
-                disabled={disabled || turn.asking}
-                onClick={() => {
-                  turn.ask(moment, steer);
-                  setSteer("");
-                }}
-              >
-                {ASK_LABELS[moment]}
-              </Button>
-            ))
-          ) : (
-            <>
-              <Button size="sm" variant="ghost" disabled={turn.asking} onClick={turn.discard}>
-                Discard
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                disabled={disabled || turn.asking || turn.writing}
-                onClick={() => {
-                  turn.retry(steer);
-                  setSteer("");
-                }}
-              >
-                Try again
-              </Button>
-              <Button
-                size="sm"
-                disabled={disabled || turn.asking || turn.writing}
-                onClick={turn.keep}
-              >
-                Keep
-              </Button>
-            </>
-          )}
-        </div>
+        {!driving && (
+          <>
+            <Input
+              aria-label={offer === undefined ? "What Hob should have it do" : "What to change"}
+              placeholder={
+                offer !== undefined
+                  ? "Something else? (optional)"
+                  : reacting
+                    ? "What triggered it? (optional)"
+                    : "Anything it should do? (optional)"
+              }
+              value={steer}
+              disabled={disabled || turn.asking}
+              onChange={(event) => setSteer(event.target.value)}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              {offer === undefined ? (
+                moments.map((moment) => (
+                  <Button
+                    key={moment}
+                    size="sm"
+                    variant={moment === "turn" ? "default" : "secondary"}
+                    disabled={disabled || turn.asking}
+                    onClick={() => {
+                      void turn.ask(moment, steer);
+                      setSteer("");
+                    }}
+                  >
+                    {ASK_LABELS[moment]}
+                  </Button>
+                ))
+              ) : (
+                <>
+                  <Button size="sm" variant="ghost" disabled={turn.asking} onClick={turn.discard}>
+                    Discard
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto"
+                    disabled={disabled || turn.asking || turn.writing}
+                    onClick={() => {
+                      turn.retry(steer);
+                      setSteer("");
+                    }}
+                  >
+                    Try again
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={disabled || turn.asking || turn.writing}
+                    onClick={() => void turn.keep()}
+                  >
+                    Keep
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        )}
         {turn.activity !== undefined && (
           <p role="status" className="mb-0 text-caption leading-body text-muted-foreground">
             {turn.activity}
@@ -187,8 +218,6 @@ export function HobTurnCard({
     </Card>
   );
 }
-
-const MOMENTS: ReadonlyArray<NpcTurnMoment> = ["turn", "legendary", "reaction"];
 
 const ASK_LABELS: Record<NpcTurnMoment, string> = {
   turn: "Ask Hob for its turn",

@@ -40,7 +40,29 @@ export interface FightKept {
   readonly undone: boolean;
 }
 
+/** What came of an ask: the offer, or why there was none. */
+export type FightAsked =
+  | { readonly kind: "offered"; readonly offer: FightOffer }
+  | {
+      readonly kind: "none";
+      readonly sentence: string;
+      /** The failure, when the ask itself failed rather than ending with no offer. */
+      readonly failure: ApiFailure | undefined;
+    };
+
+/** What came of a keep. */
+export type FightKeep =
+  | {
+      readonly kind: "kept";
+      readonly outcome: NpcTurnOutcome;
+      /** How many of its saves wait on the DM. */
+      readonly pending: number;
+    }
+  | { readonly kind: "failed"; readonly failure: ApiFailure };
+
 export interface FightTurn {
+  /** The creature this is about, if any. */
+  readonly combatantId: CombatantId | undefined;
   /** Whether a model is behind Hob; `undefined` until the campaign's status is read. */
   readonly available: boolean | undefined;
   /** A turn is being chosen. */
@@ -57,19 +79,46 @@ export interface FightTurn {
   readonly saves: ReadonlyArray<HobPendingSave>;
   /** A keep, an undo or a save is being written. */
   readonly writing: boolean;
-  readonly ask: (moment: NpcTurnMoment, instruction?: string) => void;
+  readonly ask: (moment: NpcTurnMoment, instruction?: string) => Promise<FightAsked>;
   readonly discard: () => void;
   /** Discard the offer, then ask again for the same moment. */
   readonly retry: (instruction?: string) => void;
-  /** Carry the offer out: the server rolls its dice and writes it. */
-  readonly keep: () => void;
-  /** Take the kept turn back. */
-  readonly undo: () => void;
+  /** Carry the offer (or `offer`) out: the server rolls its dice and writes it. */
+  readonly keep: (offer?: FightOffer) => Promise<FightKeep>;
+  /** Take the kept turn back; true once the server has. */
+  readonly undo: () => Promise<boolean>;
   /** A pending save, from the total the DM entered. */
   readonly resolve: (saveId: HobPendingSaveId, total: number) => void;
   /** Put the kept turn's result away. */
   readonly dismiss: () => void;
 }
+
+/**
+ * Whether a model is behind Hob for this campaign: `undefined` until the
+ * status is read. The card draws nothing without one, and the runner offers
+ * no autopilot.
+ */
+export const useHobAvailable = (campaignId: CampaignId): boolean | undefined => {
+  const fetchCredential = useCredential();
+  const credentialRef = useRef(fetchCredential);
+  credentialRef.current = fetchCredential;
+  const [available, setAvailable] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const token = await credentialRef.current();
+      const status = await runApiResult(
+        (client) => client.hob.status({ params: { campaignId } }),
+        token,
+      );
+      if (live) setAvailable(Result.isSuccess(status) && status.success.available);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [campaignId]);
+  return available;
+};
 
 /** What a failed keep, undo or save says. A `Conflict` is the server's own sentence. */
 const writeFailureFor = (failure: ApiFailure): string =>
@@ -96,6 +145,11 @@ const writeFailureFor = (failure: ApiFailure): string =>
  * a reload, and so does its newest kept turn this round (`hobFight.kept`).
  * One whose moment no longer applies, or from an earlier round, is left on
  * the record and not drawn.
+ *
+ * Hob's autopilot (`hob/autopilot.ts`) drives the same hook the card draws,
+ * so what it asks, keeps and leaves to the DM is on the card as it happens:
+ * that is why `ask`, `keep` and `undo` answer what came of them. With no
+ * creature (`combatantId` absent) it reads and asks nothing.
  */
 export const useFightTurn = ({
   campaignId,
@@ -109,7 +163,7 @@ export const useFightTurn = ({
   readonly campaignId: CampaignId;
   readonly sessionId: SessionId;
   readonly runId: EncounterRunId;
-  readonly combatantId: CombatantId;
+  readonly combatantId: CombatantId | undefined;
   readonly round: number;
   /** The moments this creature has now; an offer for another is not drawn. */
   readonly moments: ReadonlyArray<NpcTurnMoment>;
@@ -119,7 +173,7 @@ export const useFightTurn = ({
   const fetchCredential = useCredential();
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
-  const [available, setAvailable] = useState<boolean | undefined>(undefined);
+  const available = useHobAvailable(campaignId);
   const [asking, setAsking] = useState(false);
   const [activity, setActivity] = useState<string | undefined>(undefined);
   const [offer, setOffer] = useState<FightOffer | undefined>(undefined);
@@ -134,26 +188,18 @@ export const useFightTurn = ({
   const lastMoment = useRef<NpcTurnMoment | undefined>(undefined);
   const momentsKey = moments.join(",");
 
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      const token = await credentialRef.current();
-      const status = await runApiResult(
-        (client) => client.hob.status({ params: { campaignId } }),
-        token,
-      );
-      if (live) setAvailable(Result.isSuccess(status) && status.success.available);
-    })();
-    return () => {
-      live = false;
-    };
-  }, [campaignId]);
+  // Which creature the hook is about now: an answer for another is not drawn.
+  const current = useRef(combatantId);
+  current.current = combatantId;
+  const askingRef = useRef(false);
+  const writingRef = useRef(false);
 
   // The offer this creature still has open, read back off the fight's thread.
   useEffect(() => {
     let live = true;
     setOffer(undefined);
     setNote(undefined);
+    if (combatantId === undefined) return;
     void (async () => {
       const token = await credentialRef.current();
       const result = await runApiResult(
@@ -203,9 +249,10 @@ export const useFightTurn = ({
         (client) => client.hobFight.saves({ params: { campaignId, sessionId, runId } }),
         token,
       );
-      if (Result.isSuccess(result)) {
-        setSaves(result.success.filter((save) => save.turnId === turnId));
-      }
+      if (Result.isFailure(result)) return [];
+      const mine = result.success.filter((save) => save.turnId === turnId);
+      setSaves(mine);
+      return mine;
     },
     [campaignId, sessionId, runId],
   );
@@ -215,6 +262,7 @@ export const useFightTurn = ({
     let live = true;
     setKept(undefined);
     setSaves([]);
+    if (combatantId === undefined) return;
     void (async () => {
       const token = await credentialRef.current();
       const result = await runApiResult(
@@ -252,13 +300,25 @@ export const useFightTurn = ({
   useEffect(
     () => () => {
       if (answering.current !== undefined) Effect.runFork(Fiber.interrupt(answering.current));
+      answering.current = undefined;
+      askingRef.current = false;
+      setAsking(false);
+      setActivity(undefined);
     },
     [combatantId],
   );
 
   const ask = useCallback(
-    (moment: NpcTurnMoment, instruction?: string) => {
-      if (asking) return;
+    (moment: NpcTurnMoment, instruction?: string): Promise<FightAsked> => {
+      const forId = combatantId;
+      if (askingRef.current || forId === undefined) {
+        return Promise.resolve({
+          kind: "none",
+          sentence: "Hob is already choosing.",
+          failure: undefined,
+        });
+      }
+      askingRef.current = true;
       lastMoment.current = moment;
       setAsking(true);
       setOffer(undefined);
@@ -266,6 +326,8 @@ export const useFightTurn = ({
       setActivity("Hob is choosing…");
       let threadId: AssistantThreadId | undefined;
       let words = "";
+      let offered: FightOffer | undefined;
+      let failed: string | undefined;
       const receive = (event: HobEvent) => {
         switch (event.event) {
           case "began":
@@ -276,14 +338,16 @@ export const useFightTurn = ({
             return;
           case "proposal":
             if (event.data.proposal.target === "npcTurn" && threadId !== undefined) {
-              setOffer({
+              offered = {
                 threadId,
                 turnId: event.data.turnId,
                 proposal: event.data.proposal,
-              });
+              };
+              setOffer(offered);
             }
             return;
           case "failed":
+            failed = event.data.message;
             setNote(event.data.message);
             return;
           default:
@@ -291,34 +355,55 @@ export const useFightTurn = ({
         }
       };
       const steer = instruction?.trim() ?? "";
-      const answer = Effect.gen(function* () {
-        const token = yield* Effect.promise(() => credentialRef.current());
-        const client = yield* makeClient(token);
-        const stream = yield* client.hobFight.turn({
-          params: { campaignId, sessionId, runId, combatantId },
-          // Omitted rather than sent empty: the schema refuses a blank steer.
-          payload: steer === "" ? { moment } : { moment, instruction: steer },
-        });
-        yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
-      }).pipe(
-        Effect.provide(FetchHttpClient.layer),
-        Effect.result,
-        Effect.map((outcome) => {
-          setAsking(false);
-          setActivity(undefined);
-          answering.current = undefined;
-          if (Result.isFailure(outcome)) {
-            setNote(sentenceFor(classifyFailure(outcome.failure)));
-          } else if (words.trim() !== "") {
+      return new Promise<FightAsked>((resolve) => {
+        const answer = Effect.gen(function* () {
+          const token = yield* Effect.promise(() => credentialRef.current());
+          const client = yield* makeClient(token);
+          const stream = yield* client.hobFight.turn({
+            params: { campaignId, sessionId, runId, combatantId: forId },
+            // Omitted rather than sent empty: the schema refuses a blank steer.
+            payload: steer === "" ? { moment } : { moment, instruction: steer },
+          });
+          yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
+        }).pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.result,
+          Effect.map((outcome) => {
+            askingRef.current = false;
+            setAsking(false);
+            setActivity(undefined);
+            answering.current = undefined;
+            if (Result.isFailure(outcome)) {
+              const failure = classifyFailure(outcome.failure);
+              const sentence = sentenceFor(failure);
+              setNote(sentence);
+              resolve({ kind: "none", sentence, failure });
+              return;
+            }
+            if (offered !== undefined) {
+              resolve({ kind: "offered", offer: offered });
+              return;
+            }
             // Words with no offer are the model talking past the tool; the
             // failure event, when there is one, already said so.
-            setNote((current) => current ?? words.trim());
-          }
-        }),
-      );
-      answering.current = Effect.runFork(answer);
+            const said = failed ?? (words.trim() === "" ? undefined : words.trim());
+            if (said !== undefined && failed === undefined) setNote((now) => now ?? said);
+            resolve({
+              kind: "none",
+              sentence: said ?? "Hob offered nothing.",
+              failure: undefined,
+            });
+          }),
+          Effect.onInterrupt(() =>
+            Effect.sync(() =>
+              resolve({ kind: "none", sentence: "The question was put away.", failure: undefined }),
+            ),
+          ),
+        );
+        answering.current = Effect.runFork(answer);
+      });
     },
-    [asking, campaignId, sessionId, runId, combatantId],
+    [campaignId, sessionId, runId, combatantId],
   );
 
   const discardOffer = useCallback(async (): Promise<boolean> => {
@@ -347,66 +432,90 @@ export const useFightTurn = ({
       const moment = offer?.proposal.moment ?? lastMoment.current;
       if (moment === undefined) return;
       void discardOffer().then((discarded) => {
-        if (discarded) ask(moment, instruction);
+        if (discarded) void ask(moment, instruction);
       });
     },
     [offer, discardOffer, ask],
   );
 
-  const keep = useCallback(() => {
-    if (offer === undefined || writing) return;
-    setWriting(true);
-    setNote(undefined);
-    void (async () => {
+  const keep = useCallback(
+    async (given?: FightOffer): Promise<FightKeep> => {
+      const keeping = given ?? offer;
+      const forId = combatantId;
+      if (keeping === undefined || writingRef.current) {
+        return {
+          kind: "failed",
+          failure: { kind: "conflict", message: "there is nothing to keep" },
+        };
+      }
+      writingRef.current = true;
+      setWriting(true);
+      setNote(undefined);
       const token = await credentialRef.current();
       const result = await runApiResult(
         (client) =>
           client.hobFight.keep({
-            params: { campaignId, sessionId, runId, turnId: offer.turnId },
+            params: { campaignId, sessionId, runId, turnId: keeping.turnId },
             payload: {},
           }),
         token,
       );
-      setWriting(false);
       if (Result.isFailure(result)) {
-        setNote(writeFailureFor(result.failure));
-        return;
+        writingRef.current = false;
+        setWriting(false);
+        if (current.current === forId) setNote(writeFailureFor(result.failure));
+        return { kind: "failed", failure: result.failure };
+      }
+      moved();
+      if (current.current !== forId) {
+        writingRef.current = false;
+        setWriting(false);
+        return { kind: "kept", outcome: result.success, pending: 0 };
       }
       setOffer(undefined);
       setKept({ outcome: result.success, latest: true, undone: false });
-      moved();
-      await readSaves(result.success.turnId);
-    })();
-  }, [offer, writing, campaignId, sessionId, runId, moved, readSaves]);
+      const left = await readSaves(result.success.turnId);
+      writingRef.current = false;
+      setWriting(false);
+      return {
+        kind: "kept",
+        outcome: result.success,
+        pending: left.filter((save) => save.state === "pending").length,
+      };
+    },
+    [offer, combatantId, campaignId, sessionId, runId, moved, readSaves],
+  );
 
-  const undo = useCallback(() => {
-    if (kept === undefined || writing) return;
+  const undo = useCallback(async (): Promise<boolean> => {
+    if (kept === undefined || writingRef.current) return false;
+    writingRef.current = true;
     setWriting(true);
     setNote(undefined);
-    void (async () => {
-      const token = await credentialRef.current();
-      const result = await runApiResult(
-        (client) =>
-          client.hobFight.undo({
-            params: { campaignId, sessionId, runId, turnId: kept.outcome.turnId },
-            payload: {},
-          }),
-        token,
-      );
-      setWriting(false);
-      if (Result.isFailure(result)) {
-        setNote(writeFailureFor(result.failure));
-        return;
-      }
-      setKept({ ...kept, latest: false, undone: true });
-      moved();
-      await readSaves(kept.outcome.turnId);
-    })();
-  }, [kept, writing, campaignId, sessionId, runId, moved, readSaves]);
+    const token = await credentialRef.current();
+    const result = await runApiResult(
+      (client) =>
+        client.hobFight.undo({
+          params: { campaignId, sessionId, runId, turnId: kept.outcome.turnId },
+          payload: {},
+        }),
+      token,
+    );
+    writingRef.current = false;
+    setWriting(false);
+    if (Result.isFailure(result)) {
+      setNote(writeFailureFor(result.failure));
+      return false;
+    }
+    setKept({ ...kept, latest: false, undone: true });
+    moved();
+    await readSaves(kept.outcome.turnId);
+    return true;
+  }, [kept, campaignId, sessionId, runId, moved, readSaves]);
 
   const resolve = useCallback(
     (saveId: HobPendingSaveId, total: number) => {
-      if (writing) return;
+      if (writingRef.current) return;
+      writingRef.current = true;
       setWriting(true);
       setNote(undefined);
       void (async () => {
@@ -419,6 +528,7 @@ export const useFightTurn = ({
             }),
           token,
         );
+        writingRef.current = false;
         setWriting(false);
         if (Result.isFailure(result)) {
           setNote(writeFailureFor(result.failure));
@@ -437,7 +547,7 @@ export const useFightTurn = ({
         moved();
       })();
     },
-    [writing, campaignId, sessionId, runId, moved],
+    [campaignId, sessionId, runId, moved],
   );
 
   const dismiss = useCallback(() => {
@@ -447,6 +557,7 @@ export const useFightTurn = ({
   }, []);
 
   return {
+    combatantId,
     available,
     asking,
     activity,

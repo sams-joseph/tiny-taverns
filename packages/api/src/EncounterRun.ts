@@ -1,6 +1,12 @@
-import { Schema } from "effect";
+import { Schema, Struct } from "effect";
 import { EncounterKind } from "./EncounterKind.js";
-import { CombatantId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
+import {
+  CombatantId,
+  EncounterId,
+  EncounterRunId,
+  HobAutopilotDriverId,
+  SessionId,
+} from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -121,6 +127,16 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    */
   allowHobDirectWrites: Schema.Boolean,
   /**
+   * Hob's autopilot for this fight, and the runner tab that drives it: `null`
+   * is off. While it is set, that tab takes each monster's turn on its own
+   * (the recharge dice, the ask, the keep and the next turn) through the
+   * endpoints a press uses; any other tab says it is driven elsewhere and
+   * offers to drive there instead. Not carried by `resume`
+   * (`0099_hob_autopilot.ts`), and not on a player's read
+   * (`PlayerEncounterRun`).
+   */
+  hobAutopilotDriver: Schema.NullOr(HobAutopilotDriverId),
+  /**
    * The runner's *Share map* switch: whether a player seated at the table sees
    * the fight's board (`PlayerLiveFight.board`). It narrows `visibility`
    * rather than replacing it, so the board is shown only while the fight is
@@ -163,6 +179,17 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
+
+/**
+ * A fight, to a player who was at it (`PlayerRecapFight.run`,
+ * `PlayerChronicleNight.runs`): `EncounterRun` without the DM's two Hob
+ * switches, which say how the DM ran the fight rather than what happened in
+ * it. The server selects it without those columns (`playerRunColumns`), so
+ * they never leave Postgres for a player.
+ */
+export class PlayerEncounterRun extends Schema.Class<PlayerEncounterRun>("PlayerEncounterRun")(
+  Struct.omit(EncounterRun.fields, ["allowHobDirectWrites", "hobAutopilotDriver"]),
+) {}
 
 /**
  * Start a fight: seed the initiative list and put it on the table.
@@ -216,6 +243,11 @@ export const EncounterRunUpdate = Schema.Struct({
   visibility: Schema.optional(Visibility),
   /** The per-fight direct-write switch for the DM's Hob. */
   allowHobDirectWrites: Schema.optional(Schema.Boolean),
+  /**
+   * Hob's autopilot: this tab's id turns it on, or takes the drive from
+   * another tab; `null` turns it off. Logged `dm` whatever the fight's Share.
+   */
+  hobAutopilotDriver: Schema.optional(Schema.NullOr(HobAutopilotDriverId)),
   /** The *Share map* switch. */
   mapShown: Schema.optional(Schema.Boolean),
   /** The map's *Hide from players*, over every NPC token at once. */
@@ -238,7 +270,16 @@ const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLe
  * roll-over. A monster at zero hit points is passed over; a character at zero
  * still gets a turn, for death saves.
  */
-export const NextTurn = Schema.Struct({ requestId });
+export const NextTurn = Schema.Struct({
+  requestId,
+  /**
+   * Who the caller saw up. When it is given and the marker is on somebody
+   * else, the advance is a `Conflict` rather than a second step: two tabs, or
+   * Hob's autopilot and a press, that both advanced from one creature's turn
+   * would otherwise skip the next creature's.
+   */
+  expectedActiveCombatantId: Schema.optional(CombatantId),
+});
 export type NextTurn = typeof NextTurn.Type;
 
 /**

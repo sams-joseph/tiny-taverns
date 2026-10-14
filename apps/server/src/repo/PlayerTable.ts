@@ -43,7 +43,7 @@ import {
   portraitSigner,
   seatedPortraitColumn,
 } from "./Characters.js";
-import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
+import { PlayerEncounterRunRow, playerRunColumns } from "./EncounterRuns.js";
 import {
   boardShown,
   COMBATANT,
@@ -300,18 +300,18 @@ export class PlayerTable extends Context.Service<
       const PlayerBoardRow = playerBoardRow(yield* imageSigner);
 
       /**
-       * The fight on this table tonight, if there is one. `runColumns`, so the
-       * fight names no encounter this player may not read — its id is how the
-       * screen finds the read-aloud.
+       * The fight on this table tonight, if there is one. `playerRunColumns`,
+       * so the fight names no encounter this player may not read (its id is
+       * how the screen finds the read-aloud) and carries neither Hob switch.
        */
       const liveRun = SqlSchema.findOneOption({
         Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, sessionId: SessionId })),
-        Result: EncounterRunRow,
+        Result: PlayerEncounterRunRow,
         execute: ({ campaignId, sessionId }) =>
           Effect.flatMap(
             Effect.service(CurrentActor),
             (actor) => sql`
-              select ${runColumns(sql, campaignId, actor)}
+              select ${playerRunColumns(sql, campaignId, actor)}
               from encounter_run
               where encounter_run.ended_at is null
                 and ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}

@@ -1,4 +1,4 @@
-import type { Beat, BeatId, CampaignId, EncounterRun, Visibility } from "@taverns/api";
+import type { Beat, BeatId, CampaignId, PlayerEncounterRun, Visibility } from "@taverns/api";
 import { Badge, Button, cn, Icon } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -190,7 +190,7 @@ export function EncounterChip({
   run,
   linkedIn,
 }: {
-  readonly run: EncounterRun;
+  readonly run: PlayerEncounterRun;
   readonly linkedIn: CampaignId | undefined;
 }) {
   const face = (

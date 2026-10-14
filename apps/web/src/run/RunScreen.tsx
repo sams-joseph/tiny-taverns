@@ -4,6 +4,7 @@ import type {
   Combatant,
   CombatantId,
   DeathSaves,
+  EncounterRun,
   EncounterRunUpdate,
   HobDirectResourceUpdate,
   Npc,
@@ -50,7 +51,11 @@ import {
 import { TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
-import { HobTurnCard } from "./HobTurnCard";
+import { autopilotDriverId, useAutopilot } from "../hob/autopilot";
+import { useHobAvailable } from "../hob/fightTurn";
+import { AutopilotBar } from "./AutopilotBar";
+import { isWorking, type PilotCreature, type PilotFight } from "./autopilotLoop";
+import { HobTurnCard, HobTurnCardView } from "./HobTurnCard";
 import { isDmRoll, useDmDice } from "./dice";
 import { EndRunDialog } from "./EndRunDialog";
 import { useEscapeAway } from "./escape";
@@ -86,6 +91,7 @@ import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
 import {
   longRangeFor,
+  momentsOf,
   multiattacksOf,
   type MultiattackRun,
   outOfRangeFor,
@@ -93,7 +99,7 @@ import {
   runOptionsFor,
   type RunOptionsSource,
 } from "./options";
-import { patchFor, useResources } from "./resources";
+import { patchFor, resourceRows, useResources } from "./resources";
 import { feetLeft, isUp, useTurnTicks } from "./turn";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -875,18 +881,22 @@ export function RunScreen() {
       : undefined;
 
   // The turn options (`run/options.ts`), over what the screen already holds.
-  const optionsSource: RunOptionsSource | undefined =
-    state === undefined || view === undefined
-      ? undefined
-      : {
-          run: state.run,
-          combatants: state.combatants,
-          board: boardResource.state === "ready" ? boardResource.value : undefined,
-          diagonals: view.campaign.diagonalRule,
-          statBlocks: new Map(
-            [...view.creatures].map(([id, creature]) => [id, creature.statBlock] as const),
-          ),
-        };
+  const boardRead = boardResource.state === "ready" ? boardResource.value : undefined;
+  const optionsSource = useMemo<RunOptionsSource | undefined>(
+    () =>
+      state === undefined || view === undefined
+        ? undefined
+        : {
+            run: state.run,
+            combatants: state.combatants,
+            board: boardRead,
+            diagonals: view.campaign.diagonalRule,
+            statBlocks: new Map(
+              [...view.creatures].map(([id, creature]) => [id, creature.statBlock] as const),
+            ),
+          },
+    [state, view, boardRead],
+  );
   const selectedOptions =
     optionsSource === undefined || selected === undefined
       ? undefined
@@ -924,6 +934,21 @@ export function RunScreen() {
   // Esc puts a pending target away.
   useEscapeAway(picking !== undefined, cancelPick);
 
+  /** The marker moved under this tab's own advance. */
+  const turnMoved = useCallback(
+    (run: EncounterRun) => {
+      controller.startTurn(run);
+      // Following the turn again: the DM asked for the next creature, so the
+      // panel should be showing it rather than whoever they last read about.
+      setSelectedId(undefined);
+      // And the last creature's attack is over with its turn.
+      setTargeting(undefined);
+      setSequence(undefined);
+      setAttack(undefined);
+    },
+    [controller],
+  );
+
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
     // Nothing outside this screen is a function of whose turn it is, so this
@@ -933,17 +958,179 @@ export function RunScreen() {
       (client) => client.runs.nextTurn({ params: path, payload: { requestId: newRequestId() } }),
       [],
     );
-    if (Result.isSuccess(moved)) {
-      controller.startTurn(moved.success);
-      // Following the turn again: the DM asked for the next creature, so the
-      // panel should be showing it rather than whoever they last read about.
-      setSelectedId(undefined);
-      // And the last creature's attack is over with its turn.
-      setTargeting(undefined);
-      setSequence(undefined);
-      setAttack(undefined);
+    if (Result.isSuccess(moved)) turnMoved(moved.success);
+  }, [state, turn, path, turnMoved]);
+
+  // Hob's autopilot (`hob/autopilot.ts`): on while the run names a driver,
+  // driven here while it names this tab.
+  const hobAvailable = useHobAvailable(campaignId);
+  const driverId = useMemo(autopilotDriverId, []);
+  const pilotSwitch = useMutation();
+  const pilotWrites = useMutation();
+  const pilotDriver = state?.run.hobAutopilotDriver ?? null;
+  const driving = pilotDriver === driverId && !over && scene === undefined;
+  const statBlockOf = useCallback(
+    (combatant: Combatant) =>
+      combatant.creatureId === null
+        ? undefined
+        : view?.creatures.get(combatant.creatureId)?.statBlock,
+    [view],
+  );
+  const pilotFight = useMemo<PilotFight | undefined>(() => {
+    if (state === undefined || optionsSource === undefined) return undefined;
+    const creatures = new Map<CombatantId, PilotCreature>();
+    for (const row of state.combatants) {
+      const options = runOptionsFor(optionsSource, row);
+      if (options === undefined) continue;
+      const moments = momentsOf(options);
+      const lines = resourceRows(row, statBlockOf(row));
+      creatures.set(row.id, {
+        canTakeTurn: moments.includes("turn"),
+        canActLegendary: moments.includes("legendary"),
+        legendaryLeft: lines.find((line) => line.kind === "legendary")?.left ?? 0,
+        recharging: lines.flatMap((line) =>
+          line.kind === "recharge" && line.spent ? [line.key] : [],
+        ),
+      });
     }
-  }, [state, turn, path, controller]);
+    return {
+      round: state.run.round,
+      activeId: state.run.activeCombatantId,
+      takingTurns:
+        state.run.mode === "combat" && state.run.phase === "turns" && state.run.endedAt === null,
+      order: state.combatants.map((row) => ({
+        id: row.id,
+        name: row.displayName,
+        kind: row.kind === "pc" ? "pc" : "npc",
+        out: row.kind !== "pc" && row.hpCurrent === 0,
+      })),
+      creatures,
+    };
+  }, [state, optionsSource, statBlockOf]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const rollRef = useRef(dice.roll);
+  rollRef.current = dice.roll;
+  /** The DM's own d6 for each spent recharge, as *Resources* rolls it, and one write for what came back. */
+  const rollRecharge = useCallback(
+    async (combatantId: CombatantId) => {
+      const row = stateRef.current?.combatants.find((candidate) => candidate.id === combatantId);
+      const roll = rollRef.current;
+      if (row === undefined || roll === undefined) return;
+      const back: string[] = [];
+      for (const line of resourceRows(row, statBlockOf(row))) {
+        if (line.kind !== "recharge" || !line.spent) continue;
+        const rolled = roll(`${row.displayName} · ${line.label} recharge`, "1d6");
+        if (rolled !== undefined && rolled.total >= line.on) back.push(line.key);
+      }
+      if (back.length === 0) return;
+      const written = await pilotWrites.submit(
+        (client) =>
+          client.combatants.resources({
+            params: { ...path, combatantId },
+            payload: {
+              rechargeSpent: row.rechargeSpent.filter((key) => !back.includes(key)),
+              requestId: newRequestId(),
+            },
+          }),
+        [],
+      );
+      if (Result.isSuccess(written)) controller.applyCombatant(written.success);
+    },
+    [statBlockOf, pilotWrites, path, controller],
+  );
+  /** `nextTurn` from whoever the loop saw up, so a second driver cannot skip a turn. */
+  const advanceFrom = useCallback(
+    async (expected: CombatantId): Promise<string | undefined> => {
+      const moved = await pilotWrites.submit(
+        (client) =>
+          client.runs.nextTurn({
+            params: path,
+            payload: { requestId: newRequestId(), expectedActiveCombatantId: expected },
+          }),
+        [],
+      );
+      if (Result.isSuccess(moved)) {
+        turnMoved(moved.success);
+        return undefined;
+      }
+      return moved.failure.kind === "conflict"
+        ? `${moved.failure.message}.`
+        : "the turn did not move: the server did not answer.";
+    },
+    [pilotWrites, path, turnMoved],
+  );
+  const optionsFor = useCallback(
+    (id: CombatantId) => {
+      const row = state?.combatants.find((candidate) => candidate.id === id);
+      return row === undefined || optionsSource === undefined
+        ? undefined
+        : runOptionsFor(optionsSource, row);
+    },
+    [state, optionsSource],
+  );
+  const momentsFor = useCallback(
+    (id: CombatantId) => {
+      const options = optionsFor(id);
+      return options === undefined ? [] : momentsOf(options);
+    },
+    [optionsFor],
+  );
+  const nameOf = useCallback(
+    (id: CombatantId) =>
+      state?.combatants.find((row) => row.id === id)?.displayName ?? "The creature",
+    [state],
+  );
+  // The runner's own writes, in flight: one mid-turn is the DM's hand.
+  const busyByHand =
+    turn.busy ||
+    share.busy ||
+    direct.busy ||
+    conditions.busy ||
+    hiding.busy ||
+    saves.busy ||
+    moves.busy ||
+    mapShare.busy ||
+    fogs.busy ||
+    areas.busy ||
+    resources.busy ||
+    turnTicks.busy ||
+    (state?.combatants.some((row) => controller.isPending(row.id)) ?? false);
+  const pilot = useAutopilot({
+    campaignId,
+    sessionId,
+    runId,
+    driving,
+    fight: pilotFight,
+    connection: connection.status,
+    busyByHand,
+    momentsFor,
+    rollRecharge,
+    advance: advanceFrom,
+    onChanged: refresh,
+    nameOf,
+  });
+  const piloted = pilot.turn.combatantId;
+  // The card follows whoever the loop acts for: a legendary creature as well
+  // as whoever is up.
+  useEffect(() => {
+    if (piloted !== undefined) setSelectedId(piloted === activeId ? undefined : piloted);
+    // Only when the loop turns to another creature, never on the DM's own pick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piloted]);
+
+  /** The switch, and *Drive here*: this tab's id on, `null` off. */
+  const setAutopilot = async (on: boolean) => {
+    const saved = await pilotSwitch.submit(
+      (client) =>
+        client.runs.update({
+          params: path,
+          payload: { hobAutopilotDriver: on ? driverId : null },
+        }),
+      [],
+    );
+    if (Result.isSuccess(saved)) controller.applyRun(saved.success);
+  };
 
   /** *Start round N*: out of the initiative phase, the marker on the first in the order. */
   const begin = async () => {
@@ -1601,19 +1788,35 @@ export function RunScreen() {
       />
       {/* Hob choosing what the selected monster does: keyed by the creature,
         so a card never carries one creature's offer onto another. */}
-      {selected !== undefined && selectedOptions !== undefined && !over && (
-        <HobTurnCard
-          key={selected.id}
-          campaignId={campaignId}
-          sessionId={sessionId}
-          runId={runId}
-          combatant={selected}
-          round={state.run.round}
-          options={selectedOptions}
-          disabled={frozen}
-          onChanged={refresh}
-        />
-      )}
+      {selected !== undefined &&
+        selectedOptions !== undefined &&
+        !over &&
+        pilot.turn.combatantId === selected.id && (
+          // The autopilot's own hook, so what it asks and keeps is drawn here.
+          <HobTurnCardView
+            combatant={selected}
+            options={selectedOptions}
+            turn={{ ...pilot.turn, undo: pilot.undo }}
+            disabled={frozen}
+            driving={isWorking(pilot.loop)}
+          />
+        )}
+      {selected !== undefined &&
+        selectedOptions !== undefined &&
+        !over &&
+        pilot.turn.combatantId !== selected.id && (
+          <HobTurnCard
+            key={selected.id}
+            campaignId={campaignId}
+            sessionId={sessionId}
+            runId={runId}
+            combatant={selected}
+            round={state.run.round}
+            options={selectedOptions}
+            disabled={frozen}
+            onChanged={refresh}
+          />
+        )}
     </>
   );
   const banner =
@@ -1745,12 +1948,36 @@ export function RunScreen() {
                   <Label htmlFor="run-share-map">Share map</Label>
                 </span>
               )}
+              {scene === undefined && (hobAvailable === true || pilotDriver !== null) && (
+                // Offered only with a model behind Hob; once on, it can always
+                // be turned off.
+                <span className="flex items-center gap-2">
+                  <Switch
+                    id="run-hob-autopilot"
+                    checked={pilotDriver !== null}
+                    disabled={pilotSwitch.busy}
+                    onCheckedChange={(next) => void setAutopilot(next)}
+                  />
+                  <Label htmlFor="run-hob-autopilot">Autopilot</Label>
+                </span>
+              )}
               {/* While rolling, the round's one start is the panel's *Start
                 round N*, so the bar carries no second peach button. */}
               {!rolling && scene === undefined && (
                 // No key advances the turn: the table's own call (D13), so a
                 // stray key press mid-fight never moves the marker.
-                <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
+                <Button
+                  size="sm"
+                  disabled={
+                    turn.busy ||
+                    (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")
+                  }
+                  onClick={() => {
+                    // Autopilot takes the legendary actions due first.
+                    if (driving && pilot.endTurn()) return;
+                    void advance();
+                  }}
+                >
                   {turn.busy ? "Advancing…" : "Next turn"}
                   <Icon name="chevron-right" size={14} />
                 </Button>
@@ -1784,6 +2011,19 @@ export function RunScreen() {
                   ? `This fight came off the table. The order and the hit points below are how it finished — they are saved to Session ${String(view.session.number)}.`
                   : `This ${sceneNoun(scene)} came off the table. Its checks below are how it finished — they are saved to Session ${String(view.session.number)}.`}
               </p>
+            )}
+            {!over && scene === undefined && pilotDriver !== null && (
+              <AutopilotBar
+                mine={driving}
+                loop={pilot.loop}
+                status={pilot.status}
+                countdown={pilot.countdown}
+                busy={pilotSwitch.busy}
+                onStop={pilot.stop}
+                onResume={pilot.resume}
+                onNextNow={pilot.nextNow}
+                onDriveHere={() => void setAutopilot(true)}
+              />
             )}
             {controller.staleness !== undefined && (
               <p

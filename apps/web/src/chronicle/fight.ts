@@ -1,4 +1,4 @@
-import type { EncounterRun, EncounterRunCheck, RecapRunLink, RecapScene } from "@taverns/api";
+import type { EncounterRunCheck, PlayerEncounterRun, RecapRunLink, RecapScene } from "@taverns/api";
 import { challengeTally } from "@taverns/api";
 import { saveLabel, sceneBadge } from "../run/scene";
 
@@ -56,7 +56,8 @@ import { saveLabel, sceneBadge } from "../run/scene";
  * creator's (the captain's decision of 2026-09-25).
  */
 export interface CarriedFight {
-  readonly run: EncounterRun;
+  /** Either projection's run: what a fight's story reads is on both. */
+  readonly run: PlayerEncounterRun;
   readonly continuedFrom: RecapRunLink | null;
   readonly continuedInto: RecapRunLink | null;
   /**
