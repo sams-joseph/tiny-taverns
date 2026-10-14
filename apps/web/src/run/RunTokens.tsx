@@ -359,7 +359,7 @@ export function RunTokens(props: TokenProps) {
     id: combatant.id,
     displayName: combatant.displayName,
     position: combatant.position,
-    party: combatant.kind === "pc",
+    party: combatant.side === "party",
     portrait:
       combatant.kind === "pc" && combatant.portrait !== null
         ? combatant.portrait.thumbUrl

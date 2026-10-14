@@ -327,6 +327,32 @@ describe("save-based and area actions", () => {
     expect(catches).toEqual([["Ilse", "Tamsin"], ["Brannoc"]]);
   });
 
+  it("says which targets and which catches are on the creature's own side", () => {
+    // The dragon's thrall stands beside the party's paladin, in the line of fire.
+    const { optionsOf, byName } = fightOf([
+      { name: "Adult Red Dragon", creature: "Adult Red Dragon", at: [5, 5] },
+      { name: "Ilse", at: [6, 5] },
+      { name: "Kobold", creature: "Goblin", at: [9, 5] },
+      { name: "Sildar", creature: "Bandit Captain", side: "party", at: [5, 6] },
+    ]);
+    const turn = optionsOf("Adult Red Dragon");
+    const bite = option(turn.options, "actions/Bite");
+    expect(
+      Object.fromEntries(
+        (bite.targets ?? []).map((target) => [
+          ["Ilse", "Kobold", "Sildar"].find((name) => byName(name).id === target.combatantId),
+          target.ally,
+        ]),
+      ),
+    ).toEqual({ Ilse: false, Kobold: true, Sildar: false });
+    const breath = option(turn.options, "actions/Fire Breath");
+    const east = (breath.placements ?? []).find((placement) =>
+      placement.catches.includes(byName("Ilse").id),
+    );
+    // Nothing is refused: the breath that burns its own kobold is still offered, and says so.
+    expect(east?.allies).toEqual([byName("Kobold").id]);
+  });
+
   it("leaves a breath that is recharging out, and the multiattack in", () => {
     const { optionsOf } = dragon({ rechargeSpent: ["actions/Fire Breath"] });
     const turn = optionsOf("Adult Red Dragon");

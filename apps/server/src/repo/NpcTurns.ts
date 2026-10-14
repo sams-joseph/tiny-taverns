@@ -635,6 +635,7 @@ export class NpcTurns extends Context.Service<
             round: read.run.round,
             steps: outcomes,
             narration: proposal.narration,
+            ...(proposal.line === undefined ? {} : { line: proposal.line }),
           };
 
           // The record: the outcome, and every touched row as it stood before
@@ -679,6 +680,7 @@ export class NpcTurns extends Context.Service<
             combatantId: selfId,
             payload: {
               narration: proposal.narration,
+              ...(proposal.line === undefined ? {} : { line: proposal.line }),
               combatantName: selfName,
               moment: proposal.moment,
               round: read.run.round,

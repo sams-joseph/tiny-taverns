@@ -1239,7 +1239,7 @@ export function RunScreen() {
     // and wrong when it is somebody's paladin.
     if (applied.success.hpCurrent === 0 && before > 0) {
       toast.add({
-        type: combatant.kind === "pc" ? "destructive" : "success",
+        type: combatant.side === "party" ? "destructive" : "success",
         title: `${combatant.displayName} downed`,
         description: "Still in initiative — remove them when you're ready.",
       });
@@ -1675,6 +1675,7 @@ export function RunScreen() {
   const card = state !== undefined && view !== undefined && (
     <>
       <CombatantPanel
+        campaignId={path.campaignId}
         combatant={selected}
         hp={selected === undefined ? 0 : controller.hpOf(selected)}
         label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}

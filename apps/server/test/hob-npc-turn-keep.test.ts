@@ -900,7 +900,14 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
         const { line, heard, table, fight, turnId } = yield* narrated({ shown: ["goblin"] });
         const fightRead = (JSON.parse(heard) as { fight: { narration: unknown } }).fight;
         expect(fightRead.narration).toEqual([
-          { id: expect.any(String), combatantName: "Ash Goblin", text: NARRATED, round: 1 },
+          {
+            id: expect.any(String),
+            combatantName: "Ash Goblin",
+            text: NARRATED,
+            // It said nothing aloud.
+            said: null,
+            round: 1,
+          },
         ]);
         // Undone, the line leaves the table with the turn.
         yield* as(table.dm.token, (client) =>

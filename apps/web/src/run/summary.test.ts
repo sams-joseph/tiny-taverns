@@ -1,11 +1,11 @@
-import type { CombatantKind, EncounterRunPhase } from "@taverns/api";
+import type { CombatantSide, EncounterRunPhase } from "@taverns/api";
 import { describe, expect, it } from "vitest";
 import { fightSummary } from "./summary";
 
 /** The end dialog's summary line, over every edge a fight can be ended at. */
 
 interface Row {
-  readonly kind: CombatantKind;
+  readonly side: CombatantSide;
   readonly hp: number;
 }
 
@@ -15,8 +15,8 @@ const summary = (
   phase: EncounterRunPhase = "turns",
 ): string => fightSummary({ run: { round, phase }, combatants }, (row) => row.hp);
 
-const pc = (hp: number): Row => ({ kind: "pc", hp });
-const npc = (hp: number): Row => ({ kind: "npc", hp });
+const pc = (hp: number): Row => ({ side: "party", hp });
+const npc = (hp: number): Row => ({ side: "foes", hp });
 
 describe("the end of a fight's summary line", () => {
   it("counts the enemies down and standing, and leaves the party out", () => {
@@ -42,6 +42,13 @@ describe("the end of a fight's summary line", () => {
     // A reroll later on keeps the round, and the rounds played are still played.
     expect(summary(3, [npc(0), npc(7)], "initiative")).toBe(
       "1 of 2 enemies are down after 3 rounds. 1 still standing.",
+    );
+  });
+
+  it("counts a creature on the party's side with the party, not the enemies", () => {
+    const ally = (hp: number): Row => ({ side: "party", hp });
+    expect(summary(2, [ally(0), npc(0), npc(4)])).toBe(
+      "1 of 2 enemies are down after 2 rounds. 1 still standing.",
     );
   });
 

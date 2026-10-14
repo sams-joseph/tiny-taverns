@@ -134,12 +134,14 @@ export const tokenState = (
   combatant: Combatant,
   { hp, hostileTokensHidden }: { readonly hp: number; readonly hostileTokensHidden: boolean },
 ): TokenState => {
-  const monster = combatant.kind !== "pc";
+  // What the player's table hides while hostile tokens are hidden: a PC and a
+  // creature on the party's side stay (`tokenShown`, `repo/liveTables.ts`).
+  const hostile = combatant.kind !== "pc" && combatant.side !== "party";
   const out = outOfTheFight(combatant, hp);
   return {
     out,
     struck: out,
-    hidden: combatant.visibility === "dm" || (monster && hostileTokensHidden),
+    hidden: combatant.visibility === "dm" || (hostile && hostileTokensHidden),
     health: combatant.hpMax > 0 ? Math.max(0, Math.min(1, hp / combatant.hpMax)) : 0,
   };
 };

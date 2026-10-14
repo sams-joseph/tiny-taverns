@@ -589,6 +589,57 @@ describeLayer(
       );
 
       it.effect(
+        "offers a member of the Cast fighting as a creature, and the accept puts it on the roster",
+        () =>
+          Effect.gen(function* () {
+            const { jo, table } = yield* Fixture;
+            const veteran = yield* run(
+              Effect.flatMap(Creatures, (creatures) =>
+                creatures.libraryCreate({
+                  name: "Veteran",
+                  type: "humanoid",
+                  cr: "3",
+                  ac: 17,
+                  hp: 58,
+                }),
+              ).pipe(Effect.provideService(CurrentActor, jo.actor)),
+            );
+            const sildar = yield* as(jo.token, (client) =>
+              client.npcs.create({ params: { campaignId: table }, payload: { name: "Sildar" } }),
+            );
+            const { began, proposal } = yield* offer(
+              "Sildar holds the bridge with the party.",
+              toolCallChunks("proposeEncounter", {
+                name: "The bridge at Triboar",
+                // One creature, whatever the model says; on the party's side.
+                creatures: [{ creatureId: veteran.id, npcId: sildar.id, count: 3, side: "party" }],
+              }),
+            );
+            expect(proposal).toMatchObject({
+              target: "encounter",
+              roster: [
+                {
+                  creatureId: veteran.id,
+                  count: 1,
+                  side: "party",
+                  npc: { id: sildar.id, name: "Sildar" },
+                  name: "Veteran",
+                },
+              ],
+            });
+            const encounter = yield* accept(began);
+            const lines = yield* as(jo.token, (client) =>
+              client.encounterCreatures.list({
+                params: { campaignId: table, encounterId: encounter.id },
+              }),
+            );
+            expect(lines).toMatchObject([
+              { npc: { id: sildar.id }, count: 1, side: "party", origin: "assistant" },
+            ]);
+          }),
+      );
+
+      it.effect(
         "offers a social encounter with its people and prep, and the accept writes it social",
         () =>
           Effect.gen(function* () {

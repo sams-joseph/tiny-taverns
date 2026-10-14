@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { CharacterPortraitImages, DeathSaves } from "./Character.js";
-import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
+import { CharacterId, CombatantId, CreatureId, EncounterRunId, NpcId } from "./Ids.js";
 import {
   MAX_INITIATIVE,
   MAX_INITIATIVE_BONUS,
@@ -15,6 +15,21 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  */
 export const CombatantKind = Schema.Literals(["pc", "npc"]);
 export type CombatantKind = typeof CombatantKind.Type;
+
+/**
+ * Which side a combatant fights on: the party's, or against it. Not `kind`,
+ * which says what a row is (a `pc` makes death saves; an `npc` at zero is
+ * out): a guard captain fighting beside the party is an `npc` on the party's
+ * side (`0100_combatant_sides.ts`). It decides which edge a token starts on,
+ * the runner's badge, and who a monster's options call an ally. The
+ * creator's; no player projection carries it.
+ */
+export const CombatantSide = Schema.Literals(["party", "foes"]);
+export type CombatantSide = typeof CombatantSide.Type;
+
+/** The side a row with no other answer takes: a `pc` is the party's, anything else a foe. */
+export const sideOfKind = (kind: CombatantKind): CombatantSide =>
+  kind === "pc" ? "party" : "foes";
 
 /**
  * Who put a combatant's initiative number there: the DM (from the runner), or
@@ -79,8 +94,19 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    * access path.
    */
   characterId: Schema.NullOr(CharacterId),
-  /** The bestiary entry this was seeded from, if any. Same rules as above. */
+  /**
+   * The bestiary entry this was seeded from, if any. Same rules as above. For
+   * a member of the Cast, the stat block it fights as.
+   */
   creatureId: Schema.NullOr(CreatureId),
+  /**
+   * The member of the Cast this is, seeded from a roster line that names one
+   * (`0101_cast_npc_combatants.ts`). Same rules again: `on delete set null`,
+   * every field below snapshotted, and nothing read through it on a player's
+   * behalf. The creator's own reads may look the NPC up under their own
+   * proof, as Hob's fight read does.
+   */
+  npcId: Schema.NullOr(NpcId),
   /**
    * `"Goblin Archer"`. Two instances of one creature carry the same name — the
    * fixture does not number them (`data.js:18-19`) and neither does this.
@@ -128,6 +154,7 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   hpMax: Schema.Int,
   ac: Schema.NullOr(Schema.Int),
   kind: CombatantKind,
+  side: CombatantSide,
   conditions: Schema.Array(Schema.String),
   /**
    * Death saves, for a player character — `null` for an NPC, which does not
@@ -211,6 +238,8 @@ export const CombatantCreate = Schema.Struct({
   subtitle: Schema.optional(Schema.String),
   playerName: Schema.optional(Schema.String),
   kind: Schema.optional(CombatantKind),
+  /** Omit and the kind decides (`sideOfKind`). */
+  side: Schema.optional(CombatantSide),
   initiative: Schema.optional(initiative),
   initiativeBonus: Schema.optional(initiativeBonus),
   hpMax: Schema.optional(hp),
@@ -225,6 +254,7 @@ export const CombatantUpdate = Schema.Struct({
   displayName: Schema.optional(Schema.NonEmptyString),
   subtitle: Schema.optional(Schema.NullOr(Schema.String)),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
+  side: Schema.optional(CombatantSide),
   initiative: Schema.optional(initiative),
   initiativeBonus: Schema.optional(Schema.NullOr(initiativeBonus)),
   hpCurrent: Schema.optional(hp),

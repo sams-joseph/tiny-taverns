@@ -372,7 +372,9 @@ export class Proposals extends Context.Service<
                   // accepted proposal is a draft until the DM says otherwise.
                   creatures: proposal.roster.map((line) => ({
                     creatureId: line.creatureId,
+                    ...(line.npc === undefined ? {} : { npcId: line.npc.id }),
                     count: line.count,
+                    ...(line.side === undefined ? {} : { side: line.side }),
                   })),
                 },
                 from,

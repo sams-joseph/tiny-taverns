@@ -373,7 +373,9 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          creator: "1e4bb3e8de7d942998fbf2c4194d28078d416cd4074facd86f20f2d5c37a65af",
+          // Moved when a roster line could name its side and a member of the
+          // Cast (`proposeEncounter`).
+          creator: "d63b3cc3eedb43d1d5628802d82a44063142133a1fba256f9347fc23ab8353c7",
           sharedWorld: "605ead7fad5f09d1fde9b8173e608ca83ea65132b673aa65c8055af9cc1072fa",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",
@@ -381,7 +383,8 @@ describeLayer(
           coreListing: "3b51f22a3bdeab5ffd5472160933fe6011ae8707b4469790f26e9f4d80212f73",
           account: "d232b6fa3fcef517229fcf319b13821192ee31c8cc712ccf5d0d1471790acc71",
           accountListing: "fa3a35cfad02f9cf449d98d3d44bb9e175c2a3c51eb85a141a18b883dad62e54",
-          fight: "83b03321fc9c18a73cd7958f501308582a50b6e147c61999fca9b5a2bbd94829",
+          // Moved when a turn could carry a line the creature says aloud.
+          fight: "9c6b5cb33f80e7187d85b2e2e529bb6c96d1fb27d64911b6ba09f23bb1fb98fa",
         });
       });
     });

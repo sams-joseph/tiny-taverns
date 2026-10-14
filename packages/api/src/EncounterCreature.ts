@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import { CreatureId, EncounterCreatureId, EncounterId } from "./Ids.js";
+import { CombatantSide } from "./Combatant.js";
+import { CreatureId, EncounterCreatureId, EncounterId, NpcId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /** How many of one creature a roster line holds. */
@@ -51,6 +52,13 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
    * the client — the corpus list no longer contains campaign instances.
    */
   name: Schema.String,
+  /**
+   * The member of the Cast this line puts in the fight as itself, fighting as
+   * `creatureId`'s stat block ("Sildar, as a Veteran"), with its name and
+   * whether it is archived, joined server-side as `name` is; `null` for a
+   * line of creatures. Its count is always one.
+   */
+  npc: Schema.NullOr(Schema.Struct({ id: NpcId, name: Schema.String, archived: Schema.Boolean })),
   count: Schema.Int,
   /**
    * The creature's own numbers, read through the same join as `name`, so the
@@ -67,6 +75,8 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
    * than guess one.
    */
   xp: Schema.NullOr(Schema.Int),
+  /** Which side its combatants start the fight on (`Combatant.side`); `foes` unless the DM said. */
+  side: CombatantSide,
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
@@ -74,11 +84,25 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
 }) {}
 
 export const EncounterCreatureCreate = Schema.Struct({
+  /** For a Cast member's line, the stat block it fights as. */
   creatureId: CreatureId,
+  /**
+   * A member of this campaign's Cast, put in the fight as itself. Its line is
+   * one creature, so a count other than one is refused.
+   */
+  npcId: Schema.optional(NpcId),
   /** Omit and the column default — one — decides. */
   count: Schema.optional(EncounterCreatureCount),
+  /** Omit and the column default — `foes` — decides. */
+  side: Schema.optional(CombatantSide),
   visibility: Schema.optional(Visibility),
-});
+}).check(
+  Schema.makeFilter((line: { readonly npcId?: NpcId; readonly count?: number }) =>
+    line.npcId === undefined || line.count === undefined || line.count === 1
+      ? undefined
+      : "a member of the Cast is one creature",
+  ),
+);
 export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
 
 /**
@@ -89,6 +113,7 @@ export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
  */
 export const EncounterCreatureUpdate = Schema.Struct({
   count: Schema.optional(EncounterCreatureCount),
+  side: Schema.optional(CombatantSide),
   visibility: Schema.optional(Visibility),
 });
 export type EncounterCreatureUpdate = typeof EncounterCreatureUpdate.Type;

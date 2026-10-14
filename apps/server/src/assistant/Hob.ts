@@ -27,6 +27,7 @@ import {
   type HobTurn,
   HobUnavailable,
   NotFound,
+  type NpcId,
   npcMomentRefusal,
   npcTurnOptions,
   type Session,
@@ -49,7 +50,7 @@ import { CampaignStories } from "../repo/CampaignStories.js";
 import { GroupHistory } from "../repo/GroupHistory.js";
 import { Groups } from "../repo/Groups.js";
 import { Creatures } from "../repo/Creatures.js";
-import { CampaignCreatorActors } from "../repo/CreatorActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { EquipmentRepo } from "../repo/Equipment.js";
 import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
 import { type ConversationScope, HobThreads, type TurnDraft } from "../repo/HobThreads.js";
@@ -58,6 +59,7 @@ import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import { NpcPreps } from "../repo/NpcPrep.js";
+import { fightPersonaText } from "./fightPersona.js";
 import { NpcSheets } from "../repo/NpcSheets.js";
 import { Npcs } from "../repo/Npcs.js";
 import { Options } from "../repo/Options.js";
@@ -372,6 +374,30 @@ export class Hob extends Context.Service<
           // group tools, and the whole record for group Hob's.
           history: yield* GroupHistory,
         };
+
+        /**
+         * The persona a member of the Cast is played with, or none: no NPC,
+         * one archived or gone. The public persona, the DM's attitude and the
+         * DM's instructions for play are all that is handed on
+         * (`fightPersona.ts`), so no secret can be.
+         */
+        const castPersonaOf = (dm: CampaignCreatorActor, npcId: NpcId | null) =>
+          npcId === null
+            ? Effect.succeed(undefined)
+            : Effect.gen(function* () {
+                const npc = yield* repositories.npcs.findById(dm, npcId);
+                if (npc.archivedAt !== null) return undefined;
+                const prep = yield* repositories.npcPreps
+                  .find(dm, npcId)
+                  .pipe(Effect.catchTag("NotFound", () => Effect.succeed(undefined)));
+                return fightPersonaText({
+                  name: npc.name,
+                  role: npc.role,
+                  persona: npc.persona,
+                  attitude: prep?.attitude ?? null,
+                  instructions: npc.privateMaterial.instructions,
+                });
+              }).pipe(Effect.catchTag("NotFound", () => Effect.succeed(undefined)));
 
         return {
           status: (campaignId) =>
@@ -1025,6 +1051,11 @@ export class Hob extends Context.Service<
                 instruction: blankText(ask.instruction),
               };
               const asked = { text: fightRequest(read, context) };
+              // A member of the Cast is played as itself: its persona, read
+              // under the creator's own proof as `getNpc` reads it. The
+              // pointer only says which NPC; an archived one, or one gone, is
+              // played as its stat block.
+              const persona = yield* castPersonaOf(dm, combatant.npcId);
               yield* threads.append("dm", campaignId, thread.id, {
                 id: yield* freshTurnId,
                 who: "user",
@@ -1042,7 +1073,7 @@ export class Hob extends Context.Service<
                 // ends as soon as a turn is offered: its narration is the reply.
                 answering: conversation(
                   fightBind(repositories.tableFight, context, proposal),
-                  fightPrompt(fightFocusText(read, context)),
+                  fightPrompt(fightFocusText(read, context), persona),
                   history,
                   asked,
                   finished,
@@ -2448,12 +2479,14 @@ const fightRequest = (read: TableFightRead, context: HobFightContext): string =>
  * options say is legal, and say it in a line the table can hear. The fight is
  * bound below it, read just now through the creator's own read of this run.
  */
-const fightPrompt = (fight: string): string =>
+const fightPrompt = (fight: string, persona: string | undefined): string =>
   [
     "You are Hob, running a monster in a live fight for the DM of a tabletop roleplaying",
     "game (5e). Choose what the creature does now, the way its stat block, its Intelligence",
     "and the encounter's tactics say it would: a beast fights like a beast, a clever foe like",
-    "a clever one, and one that is losing may run. Follow the DM's words when they give some.",
+    "a clever one, and one that is losing may run. Its allies are the creatures on its own",
+    "side, as the order and the targets say: turn on its foes and spare its allies, unless",
+    "the DM says otherwise. Follow the DM's words when they give some.",
     "",
     "Offer the choice with proposeNpcTurn: its steps in order, as moves and the options",
     "listed below by their ids, with targets by their number in the order; and one or two",
@@ -2461,6 +2494,7 @@ const fightPrompt = (fight: string): string =>
     "never a number, a roll, an outcome, or anything hidden from the players or under fog.",
     "Only the options listed are legal now. Do not ask the DM anything: offer a turn.",
     ...REFUSED_OFFERS,
+    ...(persona === undefined ? [] : ["", persona]),
     "",
     "The fight, read just now:",
     fight,
@@ -2531,7 +2565,12 @@ const offered = (turn: HobTurn): string | undefined => {
       const kind = proposal.kind ?? "combat";
       const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;
       const roster = proposal.roster
-        .map((line) => `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId})`)
+        .map(
+          (line) =>
+            `${line.npc === undefined ? `${line.count} × ` : `${line.npc.name} (npcId ${line.npc.id}) as `}${line.name} (CR ${line.cr}, id ${line.creatureId}${
+              line.side === "party" ? ", side party" : ""
+            })`,
+        )
         .join("; ");
       // Read back in the tool's own words, so "make it harder" can redraft the
       // challenge and keep the tactics rather than losing them.

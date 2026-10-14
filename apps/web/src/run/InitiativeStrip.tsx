@@ -92,7 +92,7 @@ export function InitiativeStrip({
   const shared = run.visibility === "shared";
   const held = combatants.filter((combatant) => combatant.visibility === "dm").length;
   const standing = combatants
-    .filter((combatant) => combatant.kind === "npc")
+    .filter((combatant) => combatant.side === "foes")
     .filter((combatant) => hpOf(combatant) > 0).length;
   const rows = combatants.map((combatant): StripRow => {
     const hp = hpOf(combatant);
@@ -100,7 +100,7 @@ export function InitiativeStrip({
       id: combatant.id,
       displayName: combatant.displayName,
       initiative: combatant.initiative,
-      party: combatant.kind === "pc",
+      party: combatant.side === "party",
       health: { hp, max: combatant.hpMax },
       ac: combatant.ac,
       conditions: combatant.conditions,

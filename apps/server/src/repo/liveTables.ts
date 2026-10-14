@@ -143,14 +143,17 @@ export const fightLive = (sql: SqlClient.SqlClient): Statement.Fragment =>
  * Over `combatant` and its `encounter_run` in scope: this row's token is on
  * some player's board, if the row is in their order at all — the board is
  * shown, it is not a monster while hostile tokens are hidden, and it is not a
- * monster under fog. It names no reader, so a move's log line is shared under
+ * monster under fog. A creature on the party's side (`combatant.side`) is
+ * shown while hostile tokens are hidden, since the switch hides the party's
+ * foes; fog still takes its token from every reader (`tokenShownTo`), as it
+ * does an ally's. It names no reader, so a move's log line is shared under
  * it (`Combatants.move`): a player character under fog is still on its
  * owner's board. The player's table selects positions under `tokenShownTo`,
  * which narrows this to the reader.
  */
 export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`(${boardShown(sql)}
-    and (combatant.kind = 'pc'
+    and (combatant.kind = 'pc' or combatant.side = 'party'
       or (not encounter_run.hostile_tokens_hidden and not ${underFog(sql)})))`;
 
 /**

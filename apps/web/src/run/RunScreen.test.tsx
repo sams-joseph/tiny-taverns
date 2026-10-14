@@ -193,6 +193,37 @@ describe("the runner", () => {
     expect(rowFor("Goblin Boss").querySelector("img")).toBeNull();
   });
 
+  it("says who a member of the Cast is, under its name, and links to them", async () => {
+    const ferryman = {
+      ...goblinBoss,
+      id: "2b1f2a1e-0000-4000-8000-000000000c55",
+      npcId,
+      displayName: cazril.name,
+      side: "party",
+    };
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannoc, ferryman],
+    });
+    await renderRunner();
+    await userEvent.click(await waitFor(() => rowFor(cazril.name)));
+    const link = await waitFor(() => panel().getByRole("link", { name: "From the Cast" }));
+    expect(link.getAttribute("href")).toBe(`/campaigns/${campaignId}/cast/${npcId}`);
+    expect(panel().getByText(`· ${cazril.role}`)).toBeInTheDocument();
+    expect(panel().getByText("Ally")).toBeInTheDocument();
+
+    // Archived off the Cast: Hob plays it as its stat block, and the panel says so.
+    reaim("/npcs", { status: 200, body: [] });
+    cleanup();
+    await renderRunner();
+    await userEvent.click(await waitFor(() => rowFor(cazril.name)));
+    await waitFor(() =>
+      expect(
+        panel().getByText(/now archived: Hob plays them as their stat block/),
+      ).toBeInTheDocument(),
+    );
+  });
+
   it("keeps an NPC at zero hit points in the order, struck through", async () => {
     for (const [key, answer] of [...server.routes]) {
       if (key.startsWith("GET") && key.endsWith("/combatants")) {

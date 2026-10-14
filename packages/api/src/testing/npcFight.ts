@@ -37,6 +37,8 @@ export interface Row {
   readonly name: string;
   readonly at: readonly [number, number] | null;
   readonly kind?: "pc" | "npc";
+  /** Omit and the kind decides, as an add by hand does. */
+  readonly side?: "party" | "foes";
   readonly creature?: string;
   readonly hp?: number;
   readonly conditions?: ReadonlyArray<string>;
@@ -50,6 +52,7 @@ export const combatant = (row: Row, creatureIds: Map<string, CreatureId>): Comba
     encounterRunId: "00000000-0000-4000-8000-0000000000aa" as EncounterRunId,
     characterId: null,
     creatureId: row.creature === undefined ? null : (creatureIds.get(row.creature) ?? null),
+    npcId: null,
     displayName: row.name,
     subtitle: null,
     playerName: null,
@@ -60,6 +63,9 @@ export const combatant = (row: Row, creatureIds: Map<string, CreatureId>): Comba
     hpMax: 20,
     ac: 15,
     kind: row.kind ?? (row.creature === undefined ? "pc" : "npc"),
+    side:
+      row.side ??
+      ((row.kind ?? (row.creature === undefined ? "pc" : "npc")) === "pc" ? "party" : "foes"),
     conditions: row.conditions ?? [],
     deathSaves: null,
     visibility: "dm",

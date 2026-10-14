@@ -6,6 +6,7 @@ import {
   type CharacterSheet,
   type CombatantId,
   type CombatantKind,
+  type CombatantSide,
   Conflict,
   type CreatureId,
   EncounterRun,
@@ -24,6 +25,7 @@ import {
   type NextTurn,
   NEUTRAL_RUN_NAMES,
   NotFound,
+  type NpcId,
   type Origin,
   PlayerEncounterRun,
   type RerollInitiative,
@@ -179,6 +181,7 @@ interface CarriedCombatantRow {
   readonly id: CombatantId;
   readonly character_id: CharacterId | null;
   readonly creature_id: CreatureId | null;
+  readonly npc_id: NpcId | null;
   readonly display_name: string;
   readonly subtitle: string | null;
   readonly player_name: string | null;
@@ -189,6 +192,7 @@ interface CarriedCombatantRow {
   readonly hp_max: number;
   readonly ac: number | null;
   readonly kind: CombatantKind;
+  readonly side: CombatantSide;
   readonly conditions: ReadonlyArray<string>;
   readonly death_save_successes: number;
   readonly death_save_failures: number;
@@ -327,6 +331,9 @@ interface PartyRow {
 
 interface RosterRow {
   readonly count: number;
+  readonly side: CombatantSide;
+  /** The member of the Cast the line names, fighting as this creature; `null` for a line of creatures. */
+  readonly npc_id: NpcId | null;
   readonly creature_id: CreatureId;
   readonly name: string;
   readonly size: string | null;
@@ -754,16 +761,31 @@ export class EncounterRuns extends Context.Service<
                     // join alone — half the creatures a roster may name are
                     // global `system` rows, and they are reachable only through
                     // a campaign this actor can read.
+                    //
+                    // A member of the Cast is seeded as itself, fighting as its
+                    // line's creature: its name, and its sheet's armour class
+                    // and hit points when the sheet has them, else the stat
+                    // block's — what the NPC is, over what it fights as. The
+                    // stat block alone says what it may do (`npcTurnOptions`).
+                    // The NPC is joined under the creator's own predicate, in
+                    // the join so a line never drops; the create put only this
+                    // campaign's NPCs on the roster.
                     const roster = yield* sql<RosterRow>`
-                      select encounter_creature.count as count,
-                             creature.id as creature_id, creature.name, creature.size,
-                             creature.type, creature.ac, creature.hp,
+                      select encounter_creature.count as count, encounter_creature.side,
+                             npc.id as npc_id,
+                             creature.id as creature_id, coalesce(npc.name, creature.name) as name,
+                             creature.size, creature.type,
+                             coalesce(npc_sheet.ac, creature.ac) as ac,
+                             coalesce(npc_sheet.hp_max, creature.hp) as hp,
                              creature.body as stat_block
                       from encounter_creature
                       join creature on creature.id = encounter_creature.creature_id
+                      left join npc on npc.id = encounter_creature.npc_id
+                        and ${rowReadable(sql, "npc", campaignId, actor)}
+                      left join npc_sheet on npc_sheet.npc_id = npc.id
                       where ${nestedRowReadable(sql, ROSTER, encounter.id, campaignId, actor)}
                         and ${corpusRowReadable(sql, "creature", campaignId, actor)}
-                      order by creature.cr_sort desc, creature.name asc
+                      order by creature.cr_sort desc, coalesce(npc.name, creature.name) asc
                     `;
                     // The two orderings above are for the *insert*, and they
                     // do not survive into the initiative list: everything a
@@ -778,6 +800,7 @@ export class EncounterRuns extends Context.Service<
                         encounter_run_id: run.id,
                         character_id: member.id,
                         creature_id: null,
+                        npc_id: null,
                         display_name: member.name,
                         subtitle: member.descriptor,
                         player_name: member.player_name,
@@ -805,6 +828,7 @@ export class EncounterRuns extends Context.Service<
                         death_save_successes: member.death_save_successes,
                         death_save_failures: member.death_save_failures,
                         kind: "pc",
+                        side: "party",
                       });
                     }
                     for (const line of roster) {
@@ -813,6 +837,7 @@ export class EncounterRuns extends Context.Service<
                           encounter_run_id: run.id,
                           character_id: null,
                           creature_id: line.creature_id,
+                          npc_id: line.npc_id,
                           display_name: line.name,
                           subtitle: npcSubtitle(line.size, line.type),
                           player_name: null,
@@ -834,11 +859,12 @@ export class EncounterRuns extends Context.Service<
                           death_save_successes: 0,
                           death_save_failures: 0,
                           kind: "npc",
+                          side: line.side,
                         });
                       }
                     }
-                    // Every token starts on the board, the party down the left
-                    // edge and the monsters down the right (`startingSquares`),
+                    // Every token starts on the board, the party's side down the
+                    // left edge and the foes down the right (`startingSquares`),
                     // so the DM drags them where they belong rather than
                     // putting each one down. Every row carries both keys, for
                     // `sql.insert`'s first-row column list; with no board they
@@ -855,7 +881,7 @@ export class EncounterRuns extends Context.Service<
                     for (const row of seeded) {
                       row.board_column = null;
                       row.board_row = null;
-                      sides[row.kind === "pc" ? "party" : "foes"].push(row);
+                      sides[row.side as CombatantSide].push(row);
                     }
                     if (grid !== undefined) {
                       const board = { columns: grid.board_columns, rows: grid.board_rows };
@@ -994,10 +1020,11 @@ export class EncounterRuns extends Context.Service<
                     // players is still in the fight.
                     const carried = yield* sql<CarriedCombatantRow>`
                       select combatant.id, combatant.character_id, combatant.creature_id,
+                             combatant.npc_id,
                              combatant.display_name, combatant.subtitle, combatant.player_name,
                              combatant.initiative, combatant.initiative_bonus,
                              combatant.initiative_set_by, combatant.hp_current, combatant.hp_max,
-                             combatant.ac, combatant.kind, combatant.conditions,
+                             combatant.ac, combatant.kind, combatant.side, combatant.conditions,
                              combatant.death_save_successes, combatant.death_save_failures,
                              combatant.board_column, combatant.board_row,
                              combatant.action_used, combatant.bonus_used,
@@ -1020,6 +1047,7 @@ export class EncounterRuns extends Context.Service<
                         encounter_run_id: run.id,
                         character_id: row.character_id,
                         creature_id: row.creature_id,
+                        npc_id: row.npc_id,
                         display_name: row.display_name,
                         subtitle: row.subtitle,
                         player_name: row.player_name,
@@ -1030,6 +1058,7 @@ export class EncounterRuns extends Context.Service<
                         hp_max: row.hp_max,
                         ac: row.ac,
                         kind: row.kind,
+                        side: row.side,
                         conditions: textArray(row.conditions),
                         death_save_successes: row.death_save_successes,
                         death_save_failures: row.death_save_failures,

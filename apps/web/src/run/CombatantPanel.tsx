@@ -1,4 +1,11 @@
-import type { Combatant, Creature, CreatureId, DeathSaves, Visibility } from "@taverns/api";
+import type {
+  CampaignId,
+  Combatant,
+  Creature,
+  CreatureId,
+  DeathSaves,
+  Visibility,
+} from "@taverns/api";
 import {
   Badge,
   Button,
@@ -19,6 +26,7 @@ import { actionDetail, type ActionLine } from "./actions";
 import { deathStatusOf, dotPressed, type DeathStatus } from "./deathSaves";
 import { attacks, rolls, type AttackOutcome } from "./attack";
 import { AttackResultCard } from "./AttackResult";
+import { CastGlance } from "./CastGlance";
 import { subtitleOf } from "./load";
 import type { MultiattackRun } from "./options";
 import { patchFor, resourceRows, type ResourcePatch, type ResourceRow } from "./resources";
@@ -739,6 +747,7 @@ export function Conditions({
 }
 
 export function CombatantPanel({
+  campaignId,
   combatant,
   hp,
   label,
@@ -774,6 +783,8 @@ export function CombatantPanel({
   multiattacks,
   onMultiattack,
 }: {
+  /** The campaign, for a member of the Cast's glance (`CastGlance`). */
+  readonly campaignId: CampaignId;
   readonly combatant: Combatant | undefined;
   readonly hp: number;
   /** The initials its token wears (`tokenLabels`), for the disc. */
@@ -917,7 +928,7 @@ export function CombatantPanel({
       <div className="flex items-start gap-3 border-b border-hairline p-panel">
         <Disc
           label={label}
-          party={combatant.kind === "pc"}
+          party={combatant.side === "party"}
           hidden={combatant.visibility === "dm"}
           portrait={
             combatant.kind === "pc" && combatant.portrait !== null
@@ -930,12 +941,15 @@ export function CombatantPanel({
             <SectionHeading as="h2" size="display" className="min-w-0 truncate font-semibold">
               {combatant.displayName}
             </SectionHeading>
-            {combatant.kind === "pc" ? (
-              <Badge variant="info">Party</Badge>
-            ) : (
+            {combatant.side === "foes" ? (
               <Badge variant="destructive">Hostile</Badge>
+            ) : (
+              <Badge variant="info">{combatant.kind === "pc" ? "Party" : "Ally"}</Badge>
             )}
           </div>
+          {combatant.npcId !== null && (
+            <CastGlance campaignId={campaignId} npcId={combatant.npcId} />
+          )}
           {subtitle !== undefined && (
             <p
               className={cn(

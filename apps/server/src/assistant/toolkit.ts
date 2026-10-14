@@ -39,6 +39,7 @@ import {
   encounterKindLabel,
   leftOf,
   type Combatant,
+  CombatantSide,
   type CombatantId,
   type EncounterRunId,
   NPC_MOMENT_SLOTS,
@@ -71,6 +72,7 @@ import {
   modifierFor,
   NotFound,
   NpcId,
+  rosterLineKey,
   NpcPersona,
   NpcPrep,
   NpcPrivateMaterial,
@@ -683,6 +685,9 @@ export const ReadFight = Tool.make("readFight", {
 /** How long the line the table hears may be. */
 export const NPC_TURN_NARRATION_MAX = 280;
 
+/** How long what a creature says aloud on its turn may be. */
+export const NPC_TURN_LINE_MAX = 160;
+
 /**
  * A monster's turn, offered to the DM — the fight toolkit's one proposal.
  * Steps name options by the ids `readFight` lists and creatures by their place
@@ -698,7 +703,9 @@ export const ProposeNpcTurn = Tool.make("proposeNpcTurn", {
     "area the square from its best placements (for a cone or line from itself the square it " +
     "points toward, otherwise the square it is centred on) and no targets. Targets are places " +
     "in the order: 2 for #2. Moving changes who is in reach, so move before the attack that " +
-    "needs it. No dice: say what it tries, not what happens. Nothing happens unless the DM " +
+    "needs it. No dice: say what it tries, not what happens. When the creature would speak, " +
+    "give line: a few words it says aloud, in its own voice, which the players hear too; " +
+    "leave it out otherwise. Nothing happens unless the DM " +
     "carries it out, and nothing is offered unless this tool says it offered it.",
   parameters: Schema.Struct({
     steps: Schema.Array(
@@ -718,6 +725,7 @@ export const ProposeNpcTurn = Tool.make("proposeNpcTurn", {
       }),
     ).check(Schema.isBetweenLength(1, 8)),
     narration: Schema.String.check(Schema.isBetweenLength(1, NPC_TURN_NARRATION_MAX)),
+    line: optionalText(NPC_TURN_LINE_MAX),
   }),
   success: Schema.String,
   // `proposalFailure`, which is declared below this.
@@ -1199,7 +1207,13 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "— see listCreatures; the other kinds may have creatures too, or none. Find " +
     "each creature with searchCampaign (source 'creature') and use the id from " +
     "the hit — do not invent one, and do not propose a creature you have not " +
-    "found. Give a setting when you can: one line on what the place looks like " +
+    "found. A creature fights the party unless you give it side 'party', for " +
+    "one that fights beside them (a guard captain, a summoned ally); leave side " +
+    "out otherwise. To put a member of the campaign's cast in the fight as " +
+    "itself, give its npcId (a searchCampaign hit whose source is 'npc') with " +
+    "count 1 and, as creatureId, the creature whose stat block it fights with " +
+    "(a Veteran for a seasoned guard); give side 'party' when it is the party's " +
+    "ally. Give a setting when you can: one line on what the place looks like " +
     "from above, with no creatures in it; the encounter's battle map is drawn " +
     "from it. Give tactics — a few short lines on how to run it — and treasure " +
     "when there is any. Only a challenge and a hazard take numbers: a challenge " +
@@ -1226,7 +1240,9 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
       Schema.Array(
         Schema.Struct({
           creatureId: CreatureId,
+          npcId: optional(NpcId),
           count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+          side: optional(CombatantSide),
         }),
       ).check(Schema.isMaxLength(12)),
     ),
@@ -2780,21 +2796,54 @@ export const dmHandlersFor = (
    *
    * Duplicates are merged rather than refused: a model naming the same goblin
    * twice means six goblins, and `encounter_creature` is unique per creature.
+   * A member of the Cast (`npcId`) is read as `getNpc` reads one, archived
+   * being not found, and is one creature however many the model said; named
+   * twice, it keeps the creature it was first named fighting as.
    */
   const roster = (
-    lines: ReadonlyArray<{ readonly creatureId: CreatureId; readonly count: number }>,
+    lines: ReadonlyArray<{
+      readonly creatureId: CreatureId;
+      readonly npcId?: NpcId | null | undefined;
+      readonly count: number;
+      readonly side?: CombatantSide | null | undefined;
+    }>,
   ): Effect.Effect<ReadonlyArray<HobRosterLine>, NotFound> =>
     Effect.gen(function* () {
-      const merged = new Map<CreatureId, number>();
+      // A line named twice on two sides is one line, on the side it was first
+      // named on: the roster holds a creature, or a member of the Cast, once.
+      const merged = new Map<
+        string,
+        {
+          creatureId: CreatureId;
+          npcId: NpcId | undefined;
+          count: number;
+          side: CombatantSide | null | undefined;
+        }
+      >();
       for (const line of lines) {
-        merged.set(line.creatureId, (merged.get(line.creatureId) ?? 0) + line.count);
+        const npcId = line.npcId ?? undefined;
+        const key = rosterLineKey({ creatureId: line.creatureId, npcId });
+        const before = merged.get(key);
+        merged.set(key, {
+          creatureId: before?.creatureId ?? line.creatureId,
+          npcId,
+          count: npcId === undefined ? (before?.count ?? 0) + line.count : 1,
+          side: before === undefined ? line.side : before.side,
+        });
       }
       const resolved: Array<HobRosterLine> = [];
-      for (const [creatureId, count] of merged) {
+      for (const { creatureId, npcId, count, side } of merged.values()) {
         const creature = yield* as(repositories.creatures.findById(campaignId, creatureId));
+        const npc =
+          npcId === undefined ? undefined : yield* as(repositories.npcs.findById(dm, npcId));
+        if (npc !== undefined && npc.archivedAt !== null) {
+          return yield* new NotFound({ resource: "npc", id: npc.id });
+        }
         resolved.push({
           creatureId,
           count: Math.min(count, 99),
+          ...(side === "party" ? { side } : {}),
+          ...(npc === undefined ? {} : { npc: { id: npc.id, name: npc.name } }),
           name: creature.name,
           cr: creature.cr,
           hp: creature.hp,
@@ -3290,13 +3339,15 @@ export const fightHandlersFor = (
       Effect.map(tableFight.read(context.dm, context.sessionId, context.runId), (read) => ({
         fight: fightFocusText(read, context),
       })),
-    proposeNpcTurn: ({ steps, narration }) =>
+    proposeNpcTurn: ({ steps, narration, line: spoken }) =>
       Effect.gen(function* () {
         const read = yield* tableFight
           .read(context.dm, context.sessionId, context.runId)
           .pipe(Effect.catchTag("NotFound", () => Effect.fail(refuse("The fight is gone"))));
         const line = blank(narration);
         if (line === undefined) return yield* refuse("The narration is empty");
+        // "None" and "null" are no line: a creature that says nothing is absent.
+        const said = proseOf(spoken);
         const handle = orderHandle(read.combatants);
         const named: Array<NpcTurnStep> = [];
         for (const [index, step] of steps.entries()) {
@@ -3371,6 +3422,7 @@ export const fightHandlersFor = (
             stamp: read.stamp,
             steps: proposed,
             narration: line,
+            ...(said === undefined ? {} : { line: said }),
             instruction: context.instruction ?? null,
           },
           `Offered the DM ${handle(context.combatantId)}'s ${
@@ -4339,7 +4391,7 @@ const optionText = (
         : `  Targets: ${option.targets
             .map(
               (target) =>
-                `${handle(target.combatantId)} ${String(target.feet)} ft (${
+                `${handle(target.combatantId)}${target.ally ? ", an ally," : ""} ${String(target.feet)} ft (${
                   target.band === "out"
                     ? "out of reach"
                     : target.band === "long"
@@ -4352,7 +4404,12 @@ const optionText = (
   }
   if (option.placements !== undefined) {
     const best = [...option.placements]
-      .sort((a, b) => b.catches.length - a.catches.length)
+      // Most foes first, then fewest allies: the aims a creature would pick.
+      .sort(
+        (a, b) =>
+          b.catches.length - b.allies.length - (a.catches.length - a.allies.length) ||
+          a.allies.length - b.allies.length,
+      )
       .slice(0, PLACEMENTS_READ)
       .filter((placement) => placement.catches.length > 0);
     lines.push(
@@ -4366,7 +4423,10 @@ const optionText = (
                 placement.toward.row === placement.origin.row
                   ? ""
                   : ` toward ${square(placement.toward)}`) +
-                ` catches ${placement.catches.map(handle).join(", ")}`,
+                ` catches ${placement.catches.map(handle).join(", ")}` +
+                (placement.allies.length === 0
+                  ? ""
+                  : ` (${placement.allies.length === 1 ? "an ally" : "allies"}: ${placement.allies.map(handle).join(", ")})`),
             )
             .join("; ")}.`,
     );
@@ -4441,6 +4501,20 @@ const statBlockInFull = (statBlock: StatBlock): ReadonlyArray<string> => {
 };
 
 /**
+ * What a row is and whose side it is on, in the order's words: a player
+ * character and a monster on their usual sides need nothing more, and either
+ * on the other one says so (`Combatant.side`).
+ */
+const whoText = (row: Pick<Combatant, "kind" | "side">): string =>
+  row.kind === "pc"
+    ? row.side === "party"
+      ? "player character"
+      : "player character, fighting against the party"
+    : row.side === "party"
+      ? "creature on the party's side"
+      : "monster";
+
+/**
  * The fight on the table as `readFight` reads it out: one block of plain
  * lines, the run and the board, the tactics, the order with every row's
  * numbers, a line for each other creature's stat block, and — when a monster
@@ -4496,7 +4570,7 @@ const fightText = (read: TableFightRead, focus?: FightFocus): string => {
     ];
     return (
       `#${String(index + 1)} ${row.id === run.activeCombatantId ? "▶ " : ""}${quoted(row.displayName)}` +
-      ` (${row.kind === "pc" ? "player character" : "monster"}${row.initiative === null ? ", no initiative yet" : `, initiative ${String(row.initiative)}`})` +
+      ` (${whoText(row)}${row.initiative === null ? ", no initiative yet" : `, initiative ${String(row.initiative)}`})` +
       `: HP ${String(row.hpCurrent)}/${String(row.hpMax)}${row.hpCurrent === 0 ? " (down)" : ""}` +
       (row.ac === null ? "" : `, AC ${String(row.ac)}`) +
       (board === null

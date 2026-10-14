@@ -1,5 +1,6 @@
 import {
   type AbilityKey,
+  type CombatantSide,
   type Creature,
   creatureXp,
   type CreatureId,
@@ -7,7 +8,9 @@ import {
   type EncounterChallenge,
   type EncounterCreate,
   type EncounterCreature,
+  type EncounterCreatureCreate,
   type EncounterCreatureId,
+  type EncounterCreatureUpdate,
   type DifficultyParty,
   type DifficultyThresholds,
   type EncounterDifficulty,
@@ -26,6 +29,8 @@ import {
   type Note,
   type NoteCreate,
   type NoteId,
+  type NpcId,
+  rosterLineKey,
   partyThresholds,
   STANDARD_SKILLS,
   type UnratedReason,
@@ -71,7 +76,7 @@ export const NO_PREP: Prep = { ready: false, tactics: [], treasure: null, challe
 /** A saved roster row, as far as the draft reads it. */
 export type SavedLine = Pick<
   EncounterCreature,
-  "id" | "creatureId" | "name" | "count" | "cr" | "ac" | "hp" | "xp"
+  "id" | "creatureId" | "npc" | "name" | "count" | "cr" | "ac" | "hp" | "xp" | "side"
 >;
 
 /** A read-aloud note, as far as the draft reads it. */
@@ -99,10 +104,15 @@ export const NEW_ENCOUNTER: SavedEncounter = {
 /**
  * One line of the roster. Keyed by the creature — the server holds one row per
  * creature per encounter — so adding a creature already on it raises its count
- * rather than making a second line.
+ * rather than making a second line; or, for a member of the Cast fighting as
+ * a creature, by the NPC, who is one creature (`rosterLineKey`).
  */
 export interface RosterLine {
+  /** For a member of the Cast's line, the stat block it fights as. */
   readonly creatureId: CreatureId;
+  /** The member of the Cast this line puts in the fight as itself; absent for a line of creatures. */
+  readonly npc?: { readonly id: NpcId; readonly name: string; readonly archived: boolean };
+  /** The creature's name: for a member of the Cast, what it fights as. */
   readonly name: string;
   readonly cr: string;
   readonly ac: number;
@@ -110,6 +120,8 @@ export interface RosterLine {
   /** XP for one of it, or `null` when it has none (`creatureXp`). */
   readonly xp: number | null;
   readonly count: number;
+  /** Which side its combatants start on; `foes`, the column default, unless the DM turns it. */
+  readonly side: CombatantSide;
 }
 
 /**
@@ -270,12 +282,14 @@ const hazardDraft = (challenge: EncounterChallenge | null): HazardDraft =>
 
 const lineFromRow = (row: SavedLine): RosterLine => ({
   creatureId: row.creatureId,
+  ...(row.npc === null ? {} : { npc: row.npc }),
   name: row.name,
   cr: row.cr,
   ac: row.ac,
   hp: row.hp,
   xp: row.xp,
   count: row.count,
+  side: row.side,
 });
 
 export const draftFrom = (saved: SavedEncounter): EncounterDraft => ({
@@ -328,16 +342,38 @@ export const lineFor = (
   hp: creature.hp,
   xp: creatureXp({ cr: creature.cr, statBlockXp: creature.statBlock.xp ?? null }),
   count: 1,
+  side: "foes",
 });
 
-/** Adds the line, or one more of it when the creature is already on the roster. */
+/** What makes a line one line: its NPC, else its creature, as the server's uniques say. */
+export const lineKey = (line: Pick<RosterLine, "creatureId" | "npc">): string =>
+  rosterLineKey({ creatureId: line.creatureId, npcId: line.npc?.id });
+
+/**
+ * A member of the Cast as a new line, fighting as the creature picked for it:
+ * one of them, and on the party's side unless the DM turns it, since a Cast
+ * member brought into a fight is more often an ally than not.
+ */
+export const castLineFor = (
+  npc: { readonly id: NpcId; readonly name: string },
+  creature: Parameters<typeof lineFor>[0],
+): RosterLine => ({
+  ...lineFor(creature),
+  npc: { id: npc.id, name: npc.name, archived: false },
+  side: "party",
+});
+
+/**
+ * Adds the line, or one more of it when the creature is already on the
+ * roster. A member of the Cast already on it stays as it is: it is one.
+ */
 export const addCreature = (
   roster: ReadonlyArray<RosterLine>,
   line: RosterLine,
 ): ReadonlyArray<RosterLine> =>
-  roster.some((other) => other.creatureId === line.creatureId)
+  roster.some((other) => lineKey(other) === lineKey(line))
     ? roster.map((other) =>
-        other.creatureId === line.creatureId
+        lineKey(other) === lineKey(line) && other.npc === undefined
           ? { ...other, count: Math.min(other.count + line.count, MAX_COUNT) }
           : other,
       )
@@ -346,59 +382,84 @@ export const addCreature = (
 /** A count as typed into a box. Out of range is kept for {@link validate} to name. */
 export const withCount = (
   roster: ReadonlyArray<RosterLine>,
-  creatureId: CreatureId,
+  key: string,
   count: number,
 ): ReadonlyArray<RosterLine> =>
-  roster.map((line) => (line.creatureId === creatureId ? { ...line, count } : line));
+  roster.map((line) => (lineKey(line) === key ? { ...line, count } : line));
 
-/** A stepper press. Stepping below one removes the line. */
+/** A stepper press. Stepping below one removes the line; a member of the Cast never goes above one. */
 export const stepCount = (
   roster: ReadonlyArray<RosterLine>,
-  creatureId: CreatureId,
+  key: string,
   by: -1 | 1,
 ): ReadonlyArray<RosterLine> =>
   roster.flatMap((line) => {
-    if (line.creatureId !== creatureId) return [line];
-    const count = Math.min(line.count + by, MAX_COUNT);
+    if (lineKey(line) !== key) return [line];
+    const count = Math.min(line.count + by, line.npc === undefined ? MAX_COUNT : 1);
     return count < MIN_COUNT ? [] : [{ ...line, count }];
   });
 
+/** The side a line's combatants start the fight on. */
+export const withSide = (
+  roster: ReadonlyArray<RosterLine>,
+  key: string,
+  side: CombatantSide,
+): ReadonlyArray<RosterLine> =>
+  roster.map((line) => (lineKey(line) === key ? { ...line, side } : line));
+
 export const removeLine = (
   roster: ReadonlyArray<RosterLine>,
-  creatureId: CreatureId,
-): ReadonlyArray<RosterLine> => roster.filter((line) => line.creatureId !== creatureId);
+  key: string,
+): ReadonlyArray<RosterLine> => roster.filter((line) => lineKey(line) !== key);
 
 export interface RosterDiff {
   readonly remove: ReadonlyArray<EncounterCreatureId>;
-  readonly create: ReadonlyArray<{ readonly creatureId: CreatureId; readonly count: number }>;
-  readonly update: ReadonlyArray<{ readonly id: EncounterCreatureId; readonly count: number }>;
+  readonly create: ReadonlyArray<EncounterCreatureCreate>;
+  readonly update: ReadonlyArray<{
+    readonly id: EncounterCreatureId;
+    readonly patch: EncounterCreatureUpdate;
+  }>;
 }
 
 /**
  * What the roster half of a save sends: a saved row no longer on the draft is
- * deleted, a new creature is created, a changed count is updated, and an
- * untouched line costs nothing.
+ * deleted, a new creature is created, a changed count or side is updated, and
+ * an untouched line costs nothing. A side is sent only when it is the party's
+ * or has changed, so the column default stands for every other.
  *
- * Matched by creature, not by line, so a line removed and the same creature
- * added back in one sitting is the row it always was — an update, not a
- * delete and a create that would race each other to a 409.
+ * Matched by creature (or by NPC), not by line, so a line removed and the
+ * same creature added back in one sitting is the row it always was — an
+ * update, not a delete and a create that would race each other to a 409. A
+ * member of the Cast picked again to fight as another creature is a new line:
+ * what it fights as is not patchable.
  */
 export const rosterDiff = (
   saved: ReadonlyArray<SavedLine>,
   roster: ReadonlyArray<RosterLine>,
 ): RosterDiff => {
-  const drafted = new Map(roster.map((line) => [line.creatureId, line]));
-  const stored = new Set(saved.map((row) => row.creatureId));
+  const savedKey = (row: SavedLine) =>
+    lineKey({ creatureId: row.creatureId, npc: row.npc ?? undefined });
+  const fightsAs = new Map(saved.map((row) => [savedKey(row), row.creatureId]));
+  const same = (line: RosterLine) => fightsAs.get(lineKey(line)) === line.creatureId;
+  const drafted = new Map(roster.filter(same).map((line) => [lineKey(line), line]));
   return {
-    remove: saved.filter((row) => !drafted.has(row.creatureId)).map((row) => row.id),
+    remove: saved.filter((row) => !drafted.has(savedKey(row))).map((row) => row.id),
     create: roster
-      .filter((line) => !stored.has(line.creatureId))
-      .map((line) => ({ creatureId: line.creatureId, count: line.count })),
+      .filter((line) => !same(line))
+      .map((line) => ({
+        creatureId: line.creatureId,
+        ...(line.npc === undefined ? {} : { npcId: line.npc.id }),
+        count: line.count,
+        ...(line.side === "foes" ? {} : { side: line.side }),
+      })),
     update: saved.flatMap((row) => {
-      const line = drafted.get(row.creatureId);
-      return line === undefined || line.count === row.count
-        ? []
-        : [{ id: row.id, count: line.count }];
+      const line = drafted.get(savedKey(row));
+      if (line === undefined) return [];
+      const patch = {
+        ...(line.count === row.count ? {} : { count: line.count }),
+        ...(line.side === row.side ? {} : { side: line.side }),
+      };
+      return Object.keys(patch).length === 0 ? [] : [{ id: row.id, patch }];
     }),
   };
 };
@@ -602,7 +663,9 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
       : {
           creatures: draft.roster.map((line) => ({
             creatureId: line.creatureId,
+            ...(line.npc === undefined ? {} : { npcId: line.npc.id }),
             count: line.count,
+            ...(line.side === "foes" ? {} : { side: line.side }),
           })),
         }),
   };
@@ -745,8 +808,11 @@ export const draftDifficulty = (
   roster: ReadonlyArray<RosterLine>,
   partyLevels: ReadonlyArray<number | null>,
 ): DraftDifficulty => {
+  // A line on the party's side is not one the party fights, as the server's `rosterXp` says.
   const difficulty = encounterDifficulty(
-    roster.map((line) => ({ count: line.count, xp: line.xp })),
+    roster
+      .filter((line) => line.side === "foes")
+      .map((line) => ({ count: line.count, xp: line.xp })),
     partyLevels,
   );
   if (difficulty._tag === "unrated") {

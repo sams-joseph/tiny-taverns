@@ -190,7 +190,10 @@ const creatureCount = (
  * its creature's rating and stated XP, which `rated` turns into XP.
  *
  * The same visibility rule as `creatureCount`, and for the same reason: a
- * creature hidden from this reader moves neither the count nor the band.
+ * creature hidden from this reader moves neither the count nor the band. A
+ * line on the party's side (`encounter_creature.side`) counts as a creature
+ * but not as a foe, so it moves the count and not the band; the builder's
+ * meter filters the same lines (`draftDifficulty`).
  */
 const rosterXp = (
   sql: SqlClient.SqlClient,
@@ -206,6 +209,7 @@ const rosterXp = (
     from encounter_creature
     join creature on creature.id = encounter_creature.creature_id
     where ${nestedRowReadableWithin(sql, ROSTER, campaignId, actor)}
+      and encounter_creature.side = 'foes'
   ), '[]'::json) as roster_xp`;
 
 /**
@@ -664,7 +668,12 @@ export class Encounters extends Context.Service<
                   yield* encounterCreatures.create(
                     campaignId,
                     id,
-                    { creatureId: line.creatureId, count: line.count },
+                    {
+                      creatureId: line.creatureId,
+                      ...(line.npcId === undefined ? {} : { npcId: line.npcId }),
+                      count: line.count,
+                      ...(line.side === undefined ? {} : { side: line.side }),
+                    },
                     from,
                   );
                 }

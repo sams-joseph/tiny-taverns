@@ -393,12 +393,14 @@ describe("PlayerTableScreen", () => {
             id: "2b1f2a1e-0000-4000-8000-00000000e002",
             combatantName: "Marsh Hag",
             text: "The hag cackles and rakes at Brannoc.",
+            said: "Pretty little morsel.",
             round: 3,
           },
           {
             id: "2b1f2a1e-0000-4000-8000-00000000e001",
             combatantName: "Marsh Hag",
             text: "The hag slips into the reeds.",
+            said: null,
             round: 2,
           },
         ],
@@ -407,7 +409,8 @@ describe("PlayerTableScreen", () => {
     await renderTable();
     const heard = within(await screen.findByRole("region", { name: "What the table heard" }));
     expect(heard.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      "Marsh Hag · round 3The hag cackles and rakes at Brannoc.",
+      // What it said aloud, under what it did; the turn it said nothing on says nothing.
+      "Marsh Hag · round 3The hag cackles and rakes at Brannoc.Pretty little morsel.",
       "Marsh Hag · round 2The hag slips into the reeds.",
     ]);
   });

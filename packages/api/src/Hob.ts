@@ -5,7 +5,7 @@ import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { CampaignAct } from "./CampaignAct.js";
 import { CampaignStory } from "./CampaignStory.js";
 import { Character, CharacterSheet, SheetBody } from "./Character.js";
-import { CombatantPosition } from "./Combatant.js";
+import { CombatantPosition, CombatantSide } from "./Combatant.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
 import { ChallengeRating } from "./EncounterDifficulty.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
@@ -154,6 +154,13 @@ const turnText = Schema.String.check(Schema.isBetweenLength(1, 4000));
 export const HobRosterLine = Schema.Struct({
   creatureId: CreatureId,
   count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+  /** Absent for a foe, as on the form. */
+  side: Schema.optional(CombatantSide),
+  /**
+   * A member of the Cast fighting as this creature, and its name as it stood
+   * when Hob proposed; `count` is one.
+   */
+  npc: Schema.optional(Schema.Struct({ id: NpcId, name: Schema.String })),
   name: Schema.String,
   /** As the DM says it — `"1/4"`. See the bestiary notes on `Creature.cr`. */
   cr: Schema.String,
@@ -597,7 +604,9 @@ export const HobProposal = Schema.Union([
    * Names are snapshots for the card. `stamp` fingerprints the fight state
    * the steps were checked against (`TableFight`), so a turn offered against
    * a fight that has moved since can be refused rather than replayed.
-   * `narration` is the line the table hears once the turn is carried out;
+   * `narration` is the line the table hears once the turn is carried out, and
+   * `line` what the creature says aloud, when it says anything (a member of
+   * the Cast in its own voice, a monster's snarl), heard under the same rule;
    * `instruction` is what the DM asked for, when they asked for something.
    *
    * Kept only from its fight (`hobFight.keep`), which carries it out with
@@ -614,6 +623,7 @@ export const HobProposal = Schema.Union([
     stamp: Schema.String,
     steps: Schema.Array(NpcTurnProposalStep),
     narration: Schema.String,
+    line: Schema.optional(Schema.String),
     instruction: Schema.NullOr(Schema.String),
   }),
 ]);

@@ -3,6 +3,7 @@ import {
   MIN_INITIATIVE,
   type Combatant,
   type CombatantKind,
+  type CombatantSide,
   type Visibility,
 } from "@taverns/api";
 import {
@@ -76,6 +77,7 @@ interface Draft {
   readonly subtitle: string;
   readonly playerName: string;
   readonly kind: CombatantKind;
+  readonly side: CombatantSide;
   readonly initiative: string;
   readonly hpMax: string;
   readonly hpCurrent: string;
@@ -133,9 +135,30 @@ const validate = (draft: Draft) => {
   return problems;
 };
 
-const KINDS: ReadonlyArray<{ readonly value: CombatantKind; readonly label: string }> = [
-  { value: "npc", label: "Hostile or neutral" },
-  { value: "pc", label: "Party member" },
+/**
+ * What a new row is, as one choice: its kind (a shield or a skull, death saves
+ * or out at zero) and its side (which edge it starts on, who Hob calls its
+ * allies). A creature fighting beside the party is the one pair a kind alone
+ * could not say.
+ */
+const ROLES: ReadonlyArray<{
+  readonly value: string;
+  readonly kind: CombatantKind;
+  readonly side: CombatantSide;
+  readonly label: string;
+}> = [
+  { value: "foe", kind: "npc", side: "foes", label: "Hostile or neutral" },
+  { value: "ally", kind: "npc", side: "party", label: "A creature on the party's side" },
+  { value: "pc", kind: "pc", side: "party", label: "Party member" },
+];
+
+const roleOf = (draft: Pick<Draft, "kind" | "side">) =>
+  ROLES.find((role) => role.kind === draft.kind && role.side === draft.side) ?? ROLES[0]!;
+
+/** An existing row keeps its kind; its side can turn (a charmed ogre, a guard who switches). */
+const SIDES: ReadonlyArray<{ readonly value: CombatantSide; readonly label: string }> = [
+  { value: "foes", label: "Against the party" },
+  { value: "party", label: "On the party's side" },
 ];
 
 /**
@@ -164,6 +187,7 @@ export function CombatantDialog({
     subtitle: combatant?.subtitle ?? "",
     playerName: combatant?.playerName ?? "",
     kind: combatant?.kind ?? "npc",
+    side: combatant?.side ?? "foes",
     initiative:
       combatant === undefined || combatant.initiative === null ? "" : String(combatant.initiative),
     hpMax: combatant === undefined ? "" : String(combatant.hpMax),
@@ -203,6 +227,7 @@ export function CombatantDialog({
               payload: {
                 displayName,
                 kind: draft.kind,
+                side: draft.side,
                 visibility: draft.visibility,
                 // Absent rather than null: a field the DM left blank is one the
                 // column default should decide, and `CombatantCreate` has no
@@ -226,6 +251,8 @@ export function CombatantDialog({
                 ac: ac ?? null,
                 conditions,
                 visibility: draft.visibility,
+                // Only a turn: the log line says what moved.
+                ...(draft.side === combatant.side ? {} : { side: draft.side }),
                 ...(initiative === undefined ? {} : { initiative }),
                 ...(hpMax === undefined ? {} : { hpMax }),
                 ...(hpCurrent === undefined ? {} : { hpCurrent }),
@@ -275,24 +302,51 @@ export function CombatantDialog({
             />
           </Field>
 
-          {combatant === undefined && (
+          {combatant === undefined ? (
             <Field label="Side" htmlFor="combatant-kind" hint="A shield in the order, or a skull.">
               <Select
-                value={draft.kind}
-                onValueChange={(value) => set("kind", String(value) as CombatantKind)}
+                value={roleOf(draft).value}
+                onValueChange={(value) => {
+                  const role = ROLES.find((entry) => entry.value === value) ?? ROLES[0]!;
+                  setDraft((current) => ({ ...current, kind: role.kind, side: role.side }));
+                }}
               >
                 <SelectTrigger id="combatant-kind">
                   {/* Written here, not left to Base UI: `Select.Value` with
                       neither `items` nor children serialises the *value*, so
-                      this would read "npc". */}
+                      this would read "foe". */}
                   <SelectValue>
-                    {(value) => KINDS.find((kind) => kind.value === value)?.label ?? String(value)}
+                    {(value) => ROLES.find((role) => role.value === value)?.label ?? String(value)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {KINDS.map((kind) => (
-                    <SelectItem key={kind.value} value={kind.value}>
-                      {kind.label}
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : (
+            <Field
+              label="Side"
+              htmlFor="combatant-side"
+              hint="Which side it fights on. Hob spares its allies."
+            >
+              <Select
+                value={draft.side}
+                onValueChange={(value) => set("side", String(value) as CombatantSide)}
+              >
+                <SelectTrigger id="combatant-side">
+                  <SelectValue>
+                    {(value) => SIDES.find((side) => side.value === value)?.label ?? String(value)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {SIDES.map((side) => (
+                    <SelectItem key={side.value} value={side.value}>
+                      {side.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

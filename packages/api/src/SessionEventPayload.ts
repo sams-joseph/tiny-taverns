@@ -55,9 +55,10 @@ export const DeathSavePayload = Schema.Struct({
 });
 export type DeathSavePayload = typeof DeathSavePayload.Type;
 
-/** `hob-turn-kept`: the narration of a kept monster turn, and who took it. */
+/** `hob-turn-kept`: the narration of a kept monster turn, what it said aloud if anything, and who took it. */
 export const HobTurnKeptPayload = Schema.Struct({
   narration: Schema.String,
+  line: Schema.optional(Schema.String),
   combatantName: Schema.String,
   moment: Schema.Literals(["turn", "legendary", "reaction"]),
   round: Schema.Int,
