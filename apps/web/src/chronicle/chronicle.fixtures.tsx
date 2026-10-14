@@ -122,6 +122,7 @@ const run = (id: string, sessionId: string, round: number) => ({
   endedAt: null,
   endedReason: "resolved",
   allowHobDirectWrites: false,
+  hobAutopilotDriver: null,
   mapShown: false,
   hostileTokensHidden: false,
   continuedFrom: null,

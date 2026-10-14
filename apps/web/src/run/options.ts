@@ -3,6 +3,8 @@ import {
   type CombatantId,
   type CreatureId,
   type DiagonalRule,
+  npcMomentRefusal,
+  type NpcTurnMoment,
   type EncounterRun,
   type EncounterRunBoard,
   type NpcTurnOption,
@@ -156,3 +158,9 @@ export const outOfRangeFor = (options: NpcTurnOptions | undefined, line: Pick<Ac
 /** Who the line takes in only at long range, at disadvantage. */
 export const longRangeFor = (options: NpcTurnOptions | undefined, line: Pick<ActionLine, "key">) =>
   bandOf(options, line, "long");
+
+/** The moments a creature has now, by the rule the server checks the ask against. */
+export const momentsOf = (options: NpcTurnOptions): ReadonlyArray<NpcTurnMoment> =>
+  MOMENTS.filter((moment) => npcMomentRefusal(options, moment) === undefined);
+
+const MOMENTS: ReadonlyArray<NpcTurnMoment> = ["turn", "legendary", "reaction"];

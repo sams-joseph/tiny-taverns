@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
-import { EncounterRun } from "./EncounterRun.js";
+import { PlayerEncounterRun } from "./EncounterRun.js";
 import { CombatantId, EncounterRunId } from "./Ids.js";
 import { PlayerNote } from "./PlayerNote.js";
 import { PrepItem } from "./PrepItem.js";
@@ -97,7 +97,7 @@ export type PlayerCombatant = typeof PlayerCombatant.Type;
 /**
  * One fight of the night, to a player.
  *
- * `run` is an `EncounterRun`, and nothing on it is a number the DM was keeping:
+ * `run` is a `PlayerEncounterRun`, and nothing on it is a number the DM was keeping:
  * the round it reached and how it ended are things a player who was there
  * already lived through. One thing on it is the encounter's rather than the
  * fight's — which encounter it was — so `encounterId` is `null` and
@@ -114,7 +114,7 @@ export type PlayerCombatant = typeof PlayerCombatant.Type;
  * (`RecapFight.checks`) and have no field here.
  */
 export const PlayerRecapFight = Schema.Struct({
-  run: EncounterRun,
+  run: PlayerEncounterRun,
   combatants: Schema.Array(PlayerCombatant),
   continuedFrom: Schema.NullOr(RecapRunLink),
   continuedInto: Schema.NullOr(RecapRunLink),

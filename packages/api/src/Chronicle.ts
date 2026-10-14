@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
-import { EncounterRun } from "./EncounterRun.js";
+import { EncounterRun, PlayerEncounterRun } from "./EncounterRun.js";
 import { Session } from "./Session.js";
 
 /**
@@ -55,7 +55,7 @@ export class PlayerChronicleNight extends Schema.Class<PlayerChronicleNight>(
 )({
   session: Session,
   /** Oldest first; the shared ones. */
-  runs: Schema.Array(EncounterRun),
+  runs: Schema.Array(PlayerEncounterRun),
   /** The shared beats, verbatim, oldest first. */
   beats: Schema.Array(Beat),
 }) {}

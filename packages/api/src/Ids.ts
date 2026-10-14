@@ -143,6 +143,14 @@ export type EncounterCreatureId = typeof EncounterCreatureId.Type;
 export const EncounterRunId = id("EncounterRunId");
 export type EncounterRunId = typeof EncounterRunId.Type;
 
+/**
+ * The one runner tab that drives a fight's Hob autopilot
+ * (`EncounterRun.hobAutopilotDriver`). The tab mints it and keeps it in
+ * `sessionStorage`, so a reload goes on driving and a second tab does not.
+ */
+export const HobAutopilotDriverId = id("HobAutopilotDriverId");
+export type HobAutopilotDriverId = typeof HobAutopilotDriverId.Type;
+
 /** One check or saving throw the DM logged in a running scene. */
 export const EncounterRunCheckId = id("EncounterRunCheckId");
 export type EncounterRunCheckId = typeof EncounterRunCheckId.Type;
