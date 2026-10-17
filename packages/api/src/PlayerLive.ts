@@ -1,9 +1,11 @@
 import { Schema } from "effect";
+import { AttackDelivery, DamageType } from "./AttackDelivery.js";
 import { BattleMapAlignment, BattleMapGrid, BattleMapImages, BoardArea } from "./BattleMap.js";
 import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
+import { RollOutcome } from "./Roll.js";
 import {
   CampaignCharacterId,
   CampaignId,
@@ -11,6 +13,7 @@ import {
   CombatantId,
   EncounterId,
   EncounterRunId,
+  RollId,
   SessionEventId,
   SessionId,
 } from "./Ids.js";
@@ -202,6 +205,37 @@ export const PlayerLiveNarration = Schema.Struct({
 });
 export type PlayerLiveNarration = typeof PlayerLiveNarration.Type;
 
+/**
+ * Something the board draws that happened in the fight, as a player may see
+ * it (`BoardEffects.tsx`): an attack from one creature at another, or an area
+ * where its damage went. A distinct schema on the player's path, not the
+ * creator's `Roll`: it carries the geometry and how an attack came out, and no
+ * label, total, dice or armour class. An attack is here only when this player
+ * is shown both creatures; an area whenever its fight's board is, naming the
+ * creature that loosed it only when they are shown that too. A turn the DM
+ * undid takes its acts with it.
+ */
+export const PlayerLiveAct = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("strike"),
+    /** The roll it was made by, which is no key to read it by. */
+    id: RollId,
+    from: CombatantId,
+    to: CombatantId,
+    delivery: AttackDelivery,
+    damageType: Schema.NullOr(DamageType),
+    outcome: Schema.NullOr(RollOutcome),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("blast"),
+    id: RollId,
+    from: Schema.NullOr(CombatantId),
+    area: BoardArea,
+    damageType: Schema.NullOr(DamageType),
+  }),
+]);
+export type PlayerLiveAct = typeof PlayerLiveAct.Type;
+
 export const PlayerLiveFight = Schema.Struct({
   id: EncounterRunId,
   /** `null` unless this player may read the encounter (Shared and Ready). */
@@ -234,6 +268,8 @@ export const PlayerLiveFight = Schema.Struct({
   board: Schema.NullOr(PlayerLiveBoard),
   /** The last few lines the table heard of this fight, newest first. */
   narration: Schema.Array(PlayerLiveNarration),
+  /** The fight's latest attacks and areas this player may see drawn, oldest first; none without a board. */
+  acts: Schema.Array(PlayerLiveAct),
 });
 export type PlayerLiveFight = typeof PlayerLiveFight.Type;
 

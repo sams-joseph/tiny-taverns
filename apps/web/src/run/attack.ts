@@ -1,5 +1,7 @@
 import {
+  type AttackDelivery,
   type AttackRoll,
+  type BoardArea,
   type AttackVerdict,
   type CombatantId,
   type DamageRoll,
@@ -7,6 +9,8 @@ import {
   type RollMode,
   attackLands,
   concentrationDc,
+  damageTypeOf,
+  rollOutcomeOf,
   parseDiceExpression,
   rollAttack,
   rollDamages,
@@ -38,6 +42,8 @@ export interface AttackOutcome extends AttackRoll {
   readonly target: string;
   /** The target held Concentrating when it was picked. */
   readonly concentrating: boolean;
+  /** The line's first damage type as written, which a miss, rolling no damage, still has. */
+  readonly damageType: string | undefined;
 }
 
 export const VERDICT: Record<AttackVerdict, string> = {
@@ -79,6 +85,7 @@ export const resolveAttack = ({
   attacker,
   target: target.name,
   concentrating: target.conditions.includes("Concentrating"),
+  damageType: line.damage[0]?.type,
 });
 
 /**
@@ -113,15 +120,6 @@ export const damageLine = (damage: ReadonlyArray<DamageRoll>): string =>
     )
     .join(" · ");
 
-/** The server's word for a verdict; a total with no AC to beat has none. */
-const OUTCOME: Record<AttackVerdict, DmThrow["outcome"]> = {
-  critical: "crit",
-  hit: "hit",
-  "natural-1": "fumble",
-  miss: "miss",
-  "no-ac": undefined,
-};
-
 const naturalOf = (d20: number): DmThrow["critical"] =>
   d20 === 20 ? "hit" : d20 === 1 ? "miss" : null;
 
@@ -136,22 +134,37 @@ const damageThrow = (label: string, roll: DamageRoll, about: Partial<DmThrow>): 
   mode: "normal",
   critical: null,
   kind: "damage",
+  ...typeOf(roll.type),
   ...about,
 });
 
+/** The line's first damage type, as a roll keeps it. */
+const typeOfLine = (line: ActionLine): Pick<DmThrow, "damageType"> => typeOf(line.damage[0]?.type);
+
+/** A damage type a roll can keep, when the line's is one of the thirteen. */
+const typeOf = (written: string | undefined): Pick<DmThrow, "damageType"> => {
+  const damageType = damageTypeOf(written);
+  return damageType === undefined ? {} : { damageType };
+};
+
 /**
  * The attack as the DM's rolls (`dice.ts`), one act: the to-hit, with who
- * swung, at whom, the AC it was against and how it came out, then each damage
- * roll it threw. The log prints them as one line,
- * `Brannoc · Longsword → Goblin Boss`.
+ * swung, at whom, the AC it was against, how it came out and what it was (how
+ * it was delivered, when the line's reach and range say, and its first damage
+ * type), then each damage roll it threw with its own type. The log prints them
+ * as one line, `Brannoc · Longsword → Goblin Boss`; the board draws the to-hit.
  */
 export const attackThrows = (
   outcome: AttackOutcome,
-  who: { readonly attackerId: CombatantId; readonly targetId: CombatantId },
+  who: {
+    readonly attackerId: CombatantId;
+    readonly targetId: CombatantId;
+    readonly delivery?: AttackDelivery | undefined;
+  },
 ): ReadonlyArray<DmThrow> => {
   const label = `${outcome.attacker} · ${outcome.title}`;
   const about = { combatantId: who.attackerId, targetCombatantId: who.targetId };
-  const verdict = OUTCOME[outcome.verdict];
+  const verdict = rollOutcomeOf(outcome.verdict);
   return [
     {
       label,
@@ -166,6 +179,8 @@ export const attackThrows = (
       ...about,
       ...(outcome.ac === null ? {} : { targetAc: outcome.ac }),
       ...(verdict === undefined ? {} : { outcome: verdict }),
+      ...(who.delivery === undefined ? {} : { delivery: who.delivery }),
+      ...typeOf(outcome.damageType),
     },
     ...outcome.damage.map((roll) => damageThrow(label, roll, about)),
   ];
@@ -185,16 +200,30 @@ export const rollActionThrows = ({
   attackerId,
   line,
   mode = "normal",
+  area,
+  aim,
   random = Math.random,
 }: {
   readonly attacker: string;
   readonly attackerId?: CombatantId;
   readonly line: ActionLine;
   readonly mode?: RollMode;
+  /** Where the line's area went (the DM's pinned template), kept on its first damage roll. */
+  readonly area?: BoardArea | undefined;
+  /**
+   * Whom a seated player aimed it at, and how it was delivered there: the
+   * server resolves the to-hit against the AC the player is never told.
+   */
+  readonly aim?:
+    | { readonly targetId: CombatantId; readonly delivery: AttackDelivery | undefined }
+    | undefined;
   readonly random?: Random;
 }): ReadonlyArray<DmThrow> => {
   const label = `${attacker} · ${line.name}`;
-  const about = attackerId === undefined ? {} : { combatantId: attackerId };
+  const about = {
+    ...(attackerId === undefined ? {} : { combatantId: attackerId }),
+    ...(aim === undefined ? {} : { targetCombatantId: aim.targetId }),
+  };
   const toHit =
     line.toHit === undefined
       ? undefined
@@ -203,8 +232,18 @@ export const rollActionThrows = ({
   return [
     ...(toHit === undefined
       ? []
-      : [{ ...throwOf(toHit), kind: "attack", ...about } satisfies DmThrow]),
-    ...damage.map((roll) => damageThrow(label, roll, about)),
+      : [
+          {
+            ...throwOf(toHit),
+            kind: "attack",
+            ...about,
+            ...(aim?.delivery === undefined ? {} : { delivery: aim.delivery }),
+            ...typeOfLine(line),
+          } satisfies DmThrow,
+        ]),
+    ...damage.map((roll, index) =>
+      damageThrow(label, roll, index === 0 && area !== undefined ? { ...about, area } : about),
+    ),
   ];
 };
 

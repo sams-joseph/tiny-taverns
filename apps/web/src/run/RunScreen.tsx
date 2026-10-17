@@ -85,11 +85,15 @@ import {
 } from "./load";
 import { RollsDock } from "./RollsDock";
 import { dockLines } from "./rollsLog";
+import { actsOf, actsOfRolls } from "./effects";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
 import {
+  areaFor,
+  bandOfLine,
+  deliveryFor,
   longRangeFor,
   momentsOf,
   multiattacksOf,
@@ -1258,7 +1262,28 @@ export function RunScreen() {
       target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
       mode: attackModeAt(marks?.long.has(combatant.id) === true ? "long" : undefined),
     });
-    dice.file(attackThrows(outcome, { attackerId: attacker.id, targetId: combatant.id }));
+    dice.file(
+      attackThrows(outcome, {
+        attackerId: attacker.id,
+        targetId: combatant.id,
+        delivery: deliveryFor(
+          pickOptions,
+          picking.line,
+          combatant.id,
+          bandOfLine(
+            picking.line,
+            attacker.position,
+            combatant.position,
+            boardRead == null
+              ? undefined
+              : {
+                  feetPerCell: boardRead.feetPerCell,
+                  diagonals: view?.campaign.diagonalRule ?? "five",
+                },
+          ),
+        ),
+      }),
+    );
     setTargeting(undefined);
     setAttack({
       attackerId: attacker.id,
@@ -1778,6 +1803,13 @@ export function RunScreen() {
                     attacker: selected.displayName,
                     attackerId: selected.id,
                     line,
+                    area: areaFor(
+                      optionsSource === undefined
+                        ? undefined
+                        : rangeOptionsFor(optionsSource, selected),
+                      line,
+                      boardRead?.area,
+                    ),
                   }),
                 )
         }
@@ -1865,6 +1897,8 @@ export function RunScreen() {
             onTarget: picking === undefined ? undefined : strike,
             outOfRange: marks?.out,
             onMove: move,
+            // The DM's own, with any still on their way, and the players' tray.
+            acts: [...actsOf(dice.rolls), ...actsOfRolls(trayRolls)],
           },
           hostileTokensHidden: state.run.hostileTokensHidden,
           hiding: mapShare.busy,

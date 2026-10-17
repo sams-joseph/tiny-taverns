@@ -421,6 +421,13 @@ const has = (row: KitEquipment, property: string): boolean =>
 const ordinal = (n: number): string =>
   `${String(n)}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
 
+/** A range as numbers, when the row writes its normal one. */
+const distances = (
+  normal: number | null,
+  long: number | null,
+): { readonly normal: number; readonly long?: number } | undefined =>
+  normal === null ? undefined : long === null ? { normal } : { normal, long };
+
 const feet = (normal: number | null, long: number | null): string =>
   long === null ? `${String(normal ?? 0)} ft.` : `${String(normal ?? 0)}/${String(long)} ft.`;
 
@@ -467,6 +474,13 @@ export const weaponAttack = (
     ...properties,
     ...(attacksPerAction > 1 ? [`Attack ×${String(attacksPerAction)}`] : []),
   ].join(" · ");
+  // The distances as numbers: a melee weapon reaches 5 feet, 10 with Reach;
+  // a ranged one shoots, and a thrown one is both.
+  const rangeFeet = ranged
+    ? distances(row.rangeNormal, row.rangeLong)
+    : has(row, "thrown")
+      ? distances(row.throwRangeNormal, row.throwRangeLong)
+      : undefined;
   return {
     id: `atk:${row.index ?? row.id}`,
     name: row.name,
@@ -475,6 +489,8 @@ export const weaponAttack = (
     dice: `${row.damageDice}${modifier === 0 ? "" : signed(modifier)}`,
     ...(row.damageType === null ? {} : { damageType: row.damageType }),
     ...(range === undefined ? {} : { range }),
+    ...(ranged ? {} : { reachFeet: has(row, "reach") ? 10 : 5 }),
+    ...(rangeFeet === undefined ? {} : { rangeFeet }),
     ...(text === "" ? {} : { text }),
     source: "weapon",
     equipmentId: row.id,

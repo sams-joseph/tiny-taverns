@@ -7,6 +7,7 @@ import {
   type EncounterRun,
   type EncounterRunUpdate,
   type PlayerLiveTable,
+  type RollCreate,
   type SessionId,
   TavernsApi,
 } from "@taverns/api";
@@ -370,6 +371,140 @@ describeLayer("player-board", shared, (it) => {
   });
 
   it.layer(Layer.effect(Shown)(makeShown))("once the DM shows the map", (it) => {
+    describe("its acts", () => {
+      /** The DM's own roll, filed as the runner files one: theirs alone. */
+      const dmRoll = (payload: Partial<RollCreate>) =>
+        Effect.flatMap(Fixture, ({ jo, table }) =>
+          as(jo.token, (client) =>
+            client.rolls.create({
+              params: { campaignId: table },
+              payload: {
+                label: "DM-ROLL-LABEL",
+                notation: "1d20+4",
+                dice: [16],
+                kept: [16],
+                modifier: 4,
+                total: 4242,
+                mode: "normal",
+                visibility: "dm",
+                ...payload,
+              },
+            }),
+          ),
+        );
+      const actsOf = (read: PlayerLiveTable | null) => read?.fight?.acts ?? [];
+      const madeLine = (rollId: string) =>
+        sql(
+          (sql) => sql<{ readonly visibility: string; readonly payload: unknown }>`
+            select visibility, payload from session_event
+            where kind = 'roll-made' and payload ->> 'rollId' = ${rollId}
+          `,
+        );
+
+      it.effect(
+        "draws the DM's attack between two creatures the player sees, and rings their table with its id alone",
+        () =>
+          Effect.gen(function* () {
+            const { pc, archer } = yield* Shown;
+            const { ilse } = yield* Fixture;
+            const shot = yield* dmRoll({
+              kind: "attack",
+              combatantId: archer.id,
+              targetCombatantId: pc.id,
+              targetAc: 16,
+              outcome: "hit",
+              delivery: "ranged-weapon",
+              damageType: "piercing",
+            });
+            expect(shot.visibility).toBe("dm");
+            expect(actsOf(yield* tableOf(ilse))).toContainEqual({
+              kind: "strike",
+              id: shot.id,
+              from: archer.id,
+              to: pc.id,
+              delivery: "ranged-weapon",
+              damageType: "piercing",
+              outcome: "hit",
+            });
+            // The wire carries the act, and nothing of the roll behind it.
+            const raw = JSON.stringify(yield* rawTableOf(ilse));
+            expect(raw).not.toContain("DM-ROLL-LABEL");
+            expect(raw).not.toContain("4242");
+            // Its line rings the table, and says no more than which roll.
+            expect(yield* madeLine(shot.id)).toEqual([
+              { visibility: "shared", payload: { rollId: shot.id } },
+            ]);
+          }),
+      );
+
+      it.effect(
+        "draws nothing of an attack by a creature the player cannot see, and rings nobody",
+        () =>
+          Effect.gen(function* () {
+            const { pc, lurker } = yield* Shown;
+            const { ilse } = yield* Fixture;
+            const unseen = yield* dmRoll({
+              kind: "attack",
+              combatantId: lurker.id,
+              targetCombatantId: pc.id,
+              delivery: "melee-weapon",
+            });
+            expect(actsOf(yield* tableOf(ilse)).map((act) => act.id)).not.toContain(unseen.id);
+            expect((yield* madeLine(unseen.id))[0]?.visibility).toBe("dm");
+          }),
+      );
+
+      it.effect(
+        "draws an area wherever it went, naming its creature only when the player sees it",
+        () =>
+          Effect.gen(function* () {
+            const { archer, lurker } = yield* Shown;
+            const { ilse } = yield* Fixture;
+            const area = { shape: "sphere", feet: 10, origin: { column: 2, row: 3 } } as const;
+            const seen = yield* dmRoll({ kind: "damage", combatantId: archer.id, area });
+            const hidden = yield* dmRoll({ kind: "damage", combatantId: lurker.id, area });
+            const acts = actsOf(yield* tableOf(ilse));
+            expect(acts.find((act) => act.id === seen.id)).toMatchObject({
+              kind: "blast",
+              from: archer.id,
+              area,
+            });
+            expect(acts.find((act) => act.id === hidden.id)).toMatchObject({
+              kind: "blast",
+              from: null,
+              area,
+            });
+          }),
+      );
+
+      it.effect(
+        "unsays an attack once fog covers a creature in it, and draws none off the map",
+        () =>
+          Effect.gen(function* () {
+            const { params, pc, archer } = yield* Shown;
+            const { jo, ilse } = yield* Fixture;
+            const shot = yield* dmRoll({
+              kind: "attack",
+              combatantId: archer.id,
+              targetCombatantId: pc.id,
+              delivery: "ranged-weapon",
+            });
+            yield* as(jo.token, (client) =>
+              client.runs.updateFog({ params, payload: { hide: [{ column: 3, row: 4 }] } }),
+            );
+            expect(actsOf(yield* tableOf(ilse)).map((act) => act.id)).not.toContain(shot.id);
+            yield* as(jo.token, (client) =>
+              client.runs.updateFog({ params, payload: { reveal: [{ column: 3, row: 4 }] } }),
+            );
+            expect(actsOf(yield* tableOf(ilse)).map((act) => act.id)).toContain(shot.id);
+
+            yield* set(params, { mapShown: false });
+            expect(actsOf(yield* tableOf(ilse))).toEqual([]);
+            yield* set(params, { mapShown: true });
+          }),
+      );
+    });
+
     it.effect("shows the fight's own grid and Hob's picture", () =>
       Effect.gen(function* () {
         const { params } = yield* Shown;

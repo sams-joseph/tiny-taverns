@@ -303,9 +303,18 @@ const featureAction = (
     ...(feature.attackBonus === undefined ? {} : { hit: signed(feature.attackBonus) }),
     ...(dice === undefined ? {} : { dice }),
     ...(text.length === 0 ? {} : { text: text.join(". ") }),
+    ...geometryOf(feature),
     source: attack ? sourceOf(feature.desc) : "other",
   };
 };
+
+/** A stat block line's reach and range, carried onto the sheet as numbers. */
+const geometryOf = (
+  line: Pick<CreatureFeature, "reach" | "range">,
+): Pick<SheetAction, "reachFeet" | "rangeFeet"> => ({
+  ...(line.reach === undefined ? {} : { reachFeet: line.reach }),
+  ...(line.range === undefined ? {} : { rangeFeet: line.range }),
+});
 
 /**
  * A prose trait is an attack when it has a to-hit, or when its words say it is
@@ -334,6 +343,7 @@ const traitAction = (trait: Trait, ids: ReturnType<typeof uniqueIds>): SheetActi
     ...(hit === undefined ? {} : { hit }),
     ...(trait.dice === undefined || trait.dice.trim() === "" ? {} : { dice: trait.dice.trim() }),
     ...(text.length === 0 ? {} : { text: text.join(". ") }),
+    ...geometryOf(trait),
     source: sourceOf(trait.text),
   };
 };

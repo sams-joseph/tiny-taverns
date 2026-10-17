@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { Ability, Trait } from "./Creature.js";
+import { Ability, ActionRange, Trait } from "./Creature.js";
 import {
   AccountId,
   CharacterId,
@@ -241,6 +241,17 @@ export const SheetAction = Schema.Struct({
   damageType: Schema.optional(Schema.String),
   /** `"Reach 10 ft."`, `"80/320 ft."`, `"Thrown 20/60 ft."` */
   range: Schema.optional(Schema.String),
+  /**
+   * The same distances as numbers, for the board: a melee weapon's reach, a
+   * ranged or thrown weapon's range, and a spell attack's kind. Written by the
+   * line's composer from the corpus (`weaponAttack`, `spellAction`), so a
+   * player's attack says how it was delivered by the rule a monster's does
+   * (`attackDelivery`); a line typed by hand, or derived before these were,
+   * has none, and its attack says nothing of how.
+   */
+  reachFeet: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }))),
+  rangeFeet: Schema.optional(ActionRange),
+  spellAttack: Schema.optional(Schema.Literals(["melee", "ranged"])),
   /** The kind line under the name: `"Martial melee · Versatile (1d10)"`. */
   text: Schema.optional(Schema.String),
   source: ActionSource,

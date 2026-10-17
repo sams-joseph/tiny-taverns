@@ -111,6 +111,7 @@ export const fullSheet = {
       dice: "1d10+4",
       damageType: "Slashing",
       range: "Reach 10 ft.",
+      reachFeet: 10,
       text: "Martial Melee · Heavy · Two-Handed · Attack ×2",
       source: "weapon",
       equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0001",
@@ -407,6 +408,8 @@ export const playing = (
     readonly encounterId?: string | null;
     /** What the table heard of Hob-run turns, newest first. */
     readonly narration?: ReadonlyArray<Record<string, unknown>>;
+    /** The attacks and areas the board draws, oldest first. */
+    readonly acts?: ReadonlyArray<Record<string, unknown>>;
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -441,6 +444,7 @@ export const playing = (
               ],
               encounterId: fight.encounterId ?? null,
               narration: fight.narration ?? [],
+              acts: fight.acts ?? [],
               order: fight.order ?? [
                 {
                   kind: "you",

@@ -19,6 +19,7 @@ import {
   renderRunner,
   runBoard,
   runParty,
+  savedDmRoll,
   session,
   sessionEvent,
 } from "./run.fixtures";
@@ -566,6 +567,9 @@ describe("the runner", () => {
       targetCombatantId: null,
       targetAc: null,
       outcome: null,
+      delivery: null,
+      damageType: null,
+      area: null,
       requestId: null,
       visibility: "shared",
       origin: "authored",
@@ -2116,6 +2120,123 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
   });
 
+  describe("its effects", () => {
+    const bossAt = { ...goblinBoss, position: { column: 9, row: 4 } };
+    const effect = () => document.querySelector<HTMLElement>("[data-effect]");
+    const hopOf = (name: string) =>
+      token(name).querySelector<SVGElement>("[data-slot=token-disc]")?.dataset.hop;
+    beforeEach(() => {
+      server.routes.set(`GET ${serverRunBase()}/combatants`, {
+        status: 200,
+        body: [brannocPlaced, bossAt],
+      });
+    });
+
+    it("rings a hit the server kept, with what it took, and nothing before it", async () => {
+      server.routes.set(`POST ${serverRunBase()}/combatants/${goblinBoss.id}/damage`, {
+        status: 200,
+        body: { ...bossAt, hpCurrent: bossAt.hpCurrent - 5 },
+      });
+      await open();
+      await waitFor(() => expect(token("Goblin Boss")).toBeInTheDocument());
+      expect(effect()).toBeNull();
+
+      await damage("Goblin Boss", "5");
+
+      await waitFor(() => expect(effect()?.dataset.effect).toBe("hurt"));
+      expect(effect()?.dataset.token).toBe(goblinBoss.id);
+      expect(effect()?.querySelector("[data-slot=effect-amount]")?.textContent).toBe("\u22125");
+    });
+
+    it("plays nothing for a hit the server refused, nor for putting it back", async () => {
+      server.routes.set(`POST ${serverRunBase()}/combatants/${goblinBoss.id}/damage`, {
+        status: 404,
+        body: { _tag: "NotFound", resource: "combatant", id: "x" },
+      });
+      await open();
+      await waitFor(() => expect(token("Goblin Boss")).toBeInTheDocument());
+
+      await damage("Goblin Boss", "5");
+
+      await screen.findByText("Goblin Boss is unchanged");
+      expect(effect()).toBeNull();
+    });
+
+    it("draws a player's own attack when the doorbell brings it", async () => {
+      await open();
+      await waitFor(() => expect(token("Goblin Boss")).toBeInTheDocument());
+      expect(document.querySelector("[data-effect=strike]")).toBeNull();
+
+      // Brannoc's player loosed a bolt at the boss from their own table.
+      const at = new Date().toISOString();
+      server.rolls.unshift({
+        ...savedDmRoll,
+        id: "2b1f2a1e-0000-4000-8000-00000000ac01",
+        characterId: brannoc.characterId,
+        characterName: "Brannoc",
+        visibility: "shared",
+        label: "Brannoc · Crossbow, light",
+        notation: "1d20+5",
+        kind: "attack",
+        combatantId: brannoc.id,
+        targetCombatantId: goblinBoss.id,
+        targetAc: 17,
+        outcome: "hit",
+        delivery: "ranged-weapon",
+        damageType: "piercing",
+        requestId: "player-shot:0",
+        createdAt: at,
+        updatedAt: at,
+      });
+      server.emit(sessionEvent(7, "roll-made"));
+
+      const strike = await waitFor(() => {
+        const drawn = document.querySelector<SVGElement>("[data-effect=strike]");
+        expect(drawn).not.toBeNull();
+        return drawn!;
+      });
+      expect(strike.dataset.delivery).toBe("ranged-weapon");
+      expect(strike.querySelector("[data-slot=fx-arrow]")).not.toBeNull();
+    });
+
+    it("hops a token the server moved, and flips the hop for the next move", async () => {
+      await open();
+      const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+      expect(hopOf("Brannoc")).toBeUndefined();
+
+      brannocToken.focus();
+      await userEvent.keyboard("{ArrowRight}");
+      await waitFor(() => expect(hopOf("Brannoc")).toBe("b"));
+
+      server.routes.set(brannocMove(), {
+        status: 200,
+        body: { ...brannocPlaced, position: { column: 7, row: 4 } },
+      });
+      await userEvent.keyboard("{ArrowRight}");
+      await waitFor(() => expect(hopOf("Brannoc")).toBe("a"));
+    });
+
+    // A drag is the canvas's; the narrow board takes no pointer.
+    it.runIf(wide)("does not hop a token the DM dropped when the server answers", async () => {
+      server.routes.set(brannocMove(), {
+        status: 200,
+        body: { ...brannocPlaced, position: { column: 7, row: 4 } },
+      });
+      await open();
+      const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+
+      drag(brannocToken, [
+        [5, 4],
+        [7, 4],
+      ]);
+      await waitFor(() =>
+        expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 7, row: 4 } }),
+      );
+      await waitFor(() => expect(token("Brannoc")).toHaveAccessibleName(/^Brannoc, column 8/));
+      expect(hopOf("Brannoc")).toBeUndefined();
+    });
+  });
+
   it("takes a standing token off the board from the panel's menu, where the board is played on", async () => {
     server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
     await open();
@@ -3092,6 +3213,9 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
         targetCombatantId: goblinBoss.id,
         targetAc: 17,
         outcome: "hit",
+        // A party member's sheet line has no reach or range to say how it was
+        // delivered; its damage type it does say.
+        damageType: "slashing",
         visibility: "dm",
         requestId: expect.stringMatching(/:0$/),
       },
@@ -3105,6 +3229,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
         mode: "normal",
         critical: null,
         kind: "damage",
+        damageType: "slashing",
         combatantId: brannoc.id,
         targetCombatantId: goblinBoss.id,
         visibility: "dm",
@@ -4220,6 +4345,91 @@ describe("a monster's resources", () => {
   });
 });
 
+describe("an area, rolled", () => {
+  // The Goblin Boss is up beside Brannoc, and breathes fire in a 15-foot cone.
+  const cone = {
+    shape: "cone",
+    feet: 15,
+    origin: { column: 6, row: 4 },
+    toward: { column: 5, row: 4 },
+  } as const;
+  beforeEach(() => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          traits: [],
+          actions: [
+            {
+              name: "Fire Breath",
+              desc: "The boss exhales fire in a 15-foot cone.",
+              dc: {
+                dcType: { index: "dex", name: "DEX" },
+                dcValue: 12,
+                successType: "half",
+              },
+              damage: [{ damageType: { index: "fire", name: "Fire" }, damageDice: "2d6" }],
+              area: { shape: "cone", feet: 15, origin: "self" },
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 6, row: 4 } }],
+    });
+  });
+
+  const roll = async () => {
+    await renderRunner();
+    await waitFor(() =>
+      expect(document.querySelectorAll("[data-slot=run-tokens] [data-slot=token]")).toHaveLength(2),
+    );
+    await userEvent.click(
+      await waitFor(() => panel().getByRole("button", { name: "Roll Fire Breath" })),
+    );
+  };
+
+  it("keeps the pinned cone on the breath's damage, and the board fills it", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: cone },
+    });
+    await roll();
+
+    await waitFor(() => expect(server.rolls.length).toBeGreaterThan(0));
+    expect(server.rolls[0]).toMatchObject({
+      kind: "damage",
+      combatantId: goblinBoss.id,
+      damageType: "fire",
+      area: cone,
+    });
+    const blast = await waitFor(() => {
+      const drawn = document.querySelector<SVGElement>("[data-effect=blast]");
+      expect(drawn).not.toBeNull();
+      return drawn!;
+    });
+    expect(blast.dataset.shape).toBe("cone");
+    // A cone goes off from the creature: nothing is lobbed.
+    expect(blast.dataset.lobbed).toBeUndefined();
+    expect(blast.querySelectorAll("[data-slot=fx-flare]").length).toBeGreaterThan(0);
+  });
+
+  it("fills no area with nothing pinned", async () => {
+    await roll();
+    await waitFor(() => expect(server.rolls.length).toBeGreaterThan(0));
+    expect(server.rolls[0]).toMatchObject({ area: null });
+    expect(document.querySelector("[data-effect=blast]")).toBeNull();
+  });
+});
+
 describe("a monster's multiattack, and its reach", () => {
   // The Goblin Boss is up, two squares from Brannoc: 10 feet, past a
   // scimitar's 5-foot reach. Its stat block makes two scimitar attacks.
@@ -4292,6 +4502,33 @@ describe("a monster's multiattack, and its reach", () => {
     await userEvent.click(rowFor("Brannoc"));
     // The last strike offers no next one.
     expect(result().queryByRole("button", { name: /^Next:/ })).toBeNull();
+  });
+
+  it("files what the strike was, and the board draws it from the boss to its target", async () => {
+    await open();
+    await waitFor(() =>
+      expect(document.querySelectorAll("[data-slot=run-tokens] [data-slot=token]")).toHaveLength(2),
+    );
+    // The night's rolls the board first drew are no news.
+    expect(document.querySelector("[data-effect=strike]")).toBeNull();
+
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Scimitar" }));
+    await userEvent.click(rowFor("Brannoc"));
+
+    // A scimitar only reaches, so even out of reach it is a melee weapon's swing;
+    // its damage, if it hit, keeps its type.
+    // The to-hit and the damage are posted together, so they land in either order.
+    await waitFor(() => expect(server.rolls.some((roll) => roll["kind"] === "attack")).toBe(true));
+    expect(server.rolls.find((roll) => roll["kind"] === "attack")).toMatchObject({
+      delivery: "melee-weapon",
+      damageType: "slashing",
+    });
+    for (const roll of server.rolls.filter((row) => row["kind"] === "damage")) {
+      expect(roll).toMatchObject({ delivery: null, damageType: "slashing" });
+    }
+    const strike = document.querySelector<SVGElement>("[data-effect=strike]");
+    expect(strike?.dataset.delivery).toBe("melee-weapon");
+    expect(strike?.querySelector("[data-slot=fx-swing]")).not.toBeNull();
   });
 
   it("marks a target its reach does not take in, and says so on the card, refusing nothing", async () => {

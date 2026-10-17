@@ -759,6 +759,8 @@ describe("the worked examples: a Fighter 1", () => {
         hit: "+5",
         dice: "1d8+3",
         damageType: "Slashing",
+        // A melee weapon reaches 5 feet, as a number for the board.
+        reachFeet: 5,
         text: "Martial Melee · Versatile (1d10)",
         source: "weapon",
         equipmentId: LONGSWORD.id,
@@ -772,6 +774,7 @@ describe("the worked examples: a Fighter 1", () => {
         dice: "1d8+2",
         damageType: "Piercing",
         range: "80/320 ft.",
+        rangeFeet: { normal: 80, long: 320 },
         text: "Simple Ranged · Ammunition · Loading · Two-Handed",
         source: "weapon",
         equipmentId: LIGHT_CROSSBOW.id,
@@ -1067,6 +1070,7 @@ describe("the worked examples: a Wizard 3", () => {
         hit: "+1",
         dice: "1d6-1",
         damageType: "Bludgeoning",
+        reachFeet: 5,
         text: "Simple Melee · Versatile (1d8) · Monk",
         source: "weapon",
         equipmentId: QUARTERSTAFF.id,
@@ -1084,6 +1088,9 @@ describe("the worked examples: a Wizard 3", () => {
     });
     expect(dagger.actions[0]).toMatchObject({
       name: "Dagger",
+      // Stabbed within 5 feet and thrown to its range: both, as numbers.
+      reachFeet: 5,
+      rangeFeet: { normal: 20, long: 60 },
       hit: "+4",
       dice: "1d4+2",
       range: "Thrown 20/60 ft.",

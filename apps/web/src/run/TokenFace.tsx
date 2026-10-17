@@ -28,6 +28,15 @@ import { DrawnImage } from "../hob/DrawnImage";
  * - **conditions**: how many it has, on a violet badge at the disc's shoulder.
  * - **name**: the name under it, when the board shows names (`nameShown`).
  *
+ * ### Standing on the board
+ *
+ * The disc stands a little off the map, over a shadow cast down and to the
+ * right (the board's 2.5D): the one whose turn
+ * it is rises a step, one being dragged rises two, and its shadow falls further
+ * away and fainter as it does. A token that moves hops (`hop`): its disc lifts
+ * off the shadow and settles while its box glides to the square. The bar and
+ * the name stay on the ground.
+ *
  * Fading a token that is out or hidden is the token's own box's, not the
  * face's, so the player's board decides its own (`play/PlayerBoard.tsx`).
  */
@@ -42,6 +51,8 @@ export function TokenFace({
   health,
   conditions = 0,
   name,
+  lifted,
+  hop,
 }: {
   /** The party's colour rather than everyone else's. */
   readonly party: boolean;
@@ -58,6 +69,10 @@ export function TokenFace({
   readonly conditions?: number;
   /** The name under the token, when it wears one. */
   readonly name?: string;
+  /** Off the board a step on its turn, two while it is held. */
+  readonly lifted?: "turn" | "held" | undefined;
+  /** Flips each time it moves, which restarts the hop; never moved, no hop. */
+  readonly hop?: "a" | "b" | undefined;
 }) {
   const ringed = active || selected;
   return (
@@ -67,73 +82,98 @@ export function TokenFace({
       data-slot="token-face"
       className="pointer-events-none size-full overflow-visible"
     >
-      {ringed && (
-        <>
-          <circle
-            cx={20}
-            cy={20}
-            r={17}
-            fill="none"
-            strokeWidth={2}
-            className="stroke-surface-page"
-          />
-          <circle
-            cx={20}
-            cy={20}
-            r={19}
-            fill="none"
-            strokeWidth={2}
-            data-ring={active ? "active" : "selected"}
-            className={active ? "stroke-accent" : "stroke-heading"}
-          />
-        </>
-      )}
       <circle
         cx={20}
         cy={20}
         r={15}
-        strokeWidth={2}
-        strokeDasharray={hidden ? "4 3" : undefined}
-        data-ring={hidden ? "hidden" : undefined}
-        className={cn("fill-surface-raised", party ? "stroke-info" : "stroke-danger")}
-      />
-      <text
-        x={20}
-        y={20}
-        textAnchor="middle"
-        dominantBaseline="central"
+        data-slot="token-shadow"
         className={cn(
-          "fill-heading font-sans text-label-s font-semibold",
-          struck && "line-through",
+          "fill-scrim transition-[translate,opacity] duration-(--dur-fast) ease-out",
+          lifted === "held"
+            ? "translate-x-2 translate-y-3.5 opacity-50"
+            : lifted === "turn"
+              ? "translate-x-1.5 translate-y-2.5 opacity-75"
+              : "translate-x-1 translate-y-1.5 opacity-90",
+        )}
+      />
+      <g
+        data-slot="token-disc"
+        data-hop={hop}
+        className={cn(
+          "transition-[translate] duration-(--dur-fast) ease-out",
+          lifted === "held" ? "-translate-y-2" : lifted === "turn" && "-translate-y-1",
+          hop === "a" && "animate-token-hop-a",
+          hop === "b" && "animate-token-hop-b",
         )}
       >
-        {label}
-      </text>
-      {portrait !== undefined && (
-        <foreignObject x={6} y={6} width={28} height={28}>
-          <div
-            data-slot="token-portrait"
-            className="relative size-full overflow-hidden rounded-full"
-          >
-            <DrawnImage src={apiUrl(portrait)} className="object-top" />
-          </div>
-        </foreignObject>
-      )}
+        {ringed && (
+          <>
+            <circle
+              cx={20}
+              cy={20}
+              r={17}
+              fill="none"
+              strokeWidth={2}
+              className="stroke-surface-page"
+            />
+            <circle
+              cx={20}
+              cy={20}
+              r={19}
+              fill="none"
+              strokeWidth={2}
+              data-ring={active ? "active" : "selected"}
+              className={active ? "stroke-accent" : "stroke-heading"}
+            />
+          </>
+        )}
+        <circle
+          cx={20}
+          cy={20}
+          r={15}
+          strokeWidth={2}
+          strokeDasharray={hidden ? "4 3" : undefined}
+          data-ring={hidden ? "hidden" : undefined}
+          className={cn("fill-surface-raised", party ? "stroke-info" : "stroke-danger")}
+        />
+        <text
+          x={20}
+          y={20}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className={cn(
+            "fill-heading font-sans text-label-s font-semibold",
+            struck && "line-through",
+          )}
+        >
+          {label}
+        </text>
+        {portrait !== undefined && (
+          <foreignObject x={6} y={6} width={28} height={28}>
+            <div
+              data-slot="token-portrait"
+              className="relative size-full overflow-hidden rounded-full"
+            >
+              <DrawnImage src={apiUrl(portrait)} className="object-top" />
+            </div>
+          </foreignObject>
+        )}
+        {conditions > 0 && (
+          <foreignObject x={2} y={-2} width={40} height={15}>
+            <div className="flex h-full justify-end">
+              <span
+                data-slot="token-conditions"
+                className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
+              >
+                {conditions}
+              </span>
+            </div>
+          </foreignObject>
+        )}
+      </g>
       {health !== undefined && (
         <foreignObject x={6} y={41} width={28} height={3}>
           <HpBar fraction={health} className="h-full" />
-        </foreignObject>
-      )}
-      {conditions > 0 && (
-        <foreignObject x={2} y={-2} width={40} height={15}>
-          <div className="flex h-full justify-end">
-            <span
-              data-slot="token-conditions"
-              className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
-            >
-              {conditions}
-            </span>
-          </div>
         </foreignObject>
       )}
       {name !== undefined && (

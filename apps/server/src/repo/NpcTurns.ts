@@ -1,4 +1,10 @@
 import {
+  type BoardArea,
+  type BoardSquare,
+  attackDelivery,
+  boardAreaOf,
+  rollOutcomeOf,
+  damageTypeOf,
   type AssistantTurnId,
   attackLands,
   attackModeAt,
@@ -33,7 +39,6 @@ import {
   type NpcTurnStep,
   npcTurnCheck,
   npcTurnOptions,
-  type RollOutcome,
   rollAttack,
   rollDamages,
   rollDiceExpression,
@@ -249,6 +254,12 @@ export class NpcTurns extends Context.Service<
           // Each act's dice share a request stem (`<stem>:<n>`), as the
           // runner files the DM's, so the log prints an attack and its damage
           // as one line.
+          /** A damage type a roll can keep, when the line's is one of the thirteen. */
+          const typeOf = (written: string | null | undefined) => {
+            const damageType = damageTypeOf(written);
+            return damageType === undefined ? {} : { damageType };
+          };
+
           let acts = 0;
           const stem = () => `hob-${turnId}-${String(acts++)}`;
           const damageRolls = (
@@ -257,11 +268,14 @@ export class NpcTurns extends Context.Service<
             about: { readonly combatantId: CombatantId; readonly targetCombatantId?: CombatantId },
             act: string,
             first: number,
+            area?: BoardArea,
           ) =>
             Effect.forEach(damage, (roll, index) =>
               file({
                 ...rollBase,
                 ...about,
+                // Where the area went, once for the act: on its first damage roll.
+                ...(area === undefined || index > 0 ? {} : { area }),
                 requestId: `${act}:${String(first + index)}`,
                 label: rollLabel(label),
                 notation: roll.notation,
@@ -271,6 +285,7 @@ export class NpcTurns extends Context.Service<
                 total: roll.total,
                 mode: "normal",
                 kind: "damage",
+                ...typeOf(roll.type),
               }),
             );
 
@@ -346,8 +361,9 @@ export class NpcTurns extends Context.Service<
                 random: dice.random,
               });
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
+              const delivery = attackDelivery(numbers, band);
               const about = { combatantId: selfId, targetCombatantId: targetId };
-              const outcome = OUTCOME[rolled.verdict];
+              const outcome = rollOutcomeOf(rolled.verdict);
               const act = stem();
               yield* file({
                 ...rollBase,
@@ -365,6 +381,9 @@ export class NpcTurns extends Context.Service<
                 kind: "attack",
                 ...(rolled.ac === null ? {} : { targetAc: rolled.ac }),
                 ...(outcome === undefined ? {} : { outcome }),
+                // What it was, for the board to draw: the same rule the runner's strike files by.
+                ...(delivery === undefined ? {} : { delivery }),
+                ...typeOf(numbers.damage[0]?.type),
               });
               yield* damageRolls(label, rolled.damage, about, act, 1);
 
@@ -396,6 +415,7 @@ export class NpcTurns extends Context.Service<
           const saveFor = (
             option: NpcTurnOption,
             targets: ReadonlyArray<CombatantId>,
+            placement: { readonly origin: BoardSquare; readonly toward: BoardSquare } | undefined,
             notes: Array<string>,
           ) =>
             Effect.gen(function* () {
@@ -408,6 +428,9 @@ export class NpcTurns extends Context.Service<
                 { combatantId: selfId },
                 stem(),
                 0,
+                option.area === undefined || placement === undefined
+                  ? undefined
+                  : boardAreaOf(option.area, placement),
               );
               if (save.damage.length > 0 && damage.length === 0) {
                 notes.push(`${option.name}'s damage is not dice this can roll: none was applied.`);
@@ -601,7 +624,7 @@ export class NpcTurns extends Context.Service<
                 notes.push(`${option.name} has no damage dice in the data: none was applied.`);
               }
             } else if (option.save !== undefined) {
-              save = yield* saveFor(option, step.targets, notes);
+              save = yield* saveFor(option, step.targets, step.placement, notes);
             } else {
               for (const target of step.targets) touched.add(target);
               notes.push(
@@ -1055,15 +1078,6 @@ const checkStepOf = (step: NpcTurnProposalStep): NpcTurnStep =>
 
 /** `character_roll.label` holds 80 characters. */
 const rollLabel = (text: string): string => (text.length <= 80 ? text : `${text.slice(0, 79)}…`);
-
-/** The server's word for a verdict; a total with no AC to beat has none. */
-const OUTCOME: Record<AttackRoll["verdict"], RollOutcome | undefined> = {
-  critical: "crit",
-  hit: "hit",
-  "natural-1": "fumble",
-  miss: "miss",
-  "no-ac": undefined,
-};
 
 const damageOutcome = (roll: DamageRoll): NpcTurnDamageRoll => ({
   notation: roll.notation,

@@ -1,6 +1,8 @@
 import type { Actor, CampaignId } from "@taverns/api";
 import type { SqlClient, Statement } from "effect/sql";
 import {
+  campaignWritableById,
+  containedRowReadable,
   type Containment,
   inCampaign,
   type NestedTable,
@@ -245,3 +247,28 @@ export const clearArea = (sql: SqlClient.SqlClient, runId: string) =>
     where encounter_run_board.run_id = ${runId} and encounter_run_board.area_shape is not null
     returning encounter_run_board.run_id
   `;
+
+/**
+ * The combatant `id` names is one this reader may be told of: through the
+ * combatant's own predicate and, while its fight is live, not hidden from
+ * them by fog (`hiddenByFog`); the creator is told of every one. The one test
+ * of whether a reader is shown a creature a roll names: a roll's pointers are
+ * read through it, a player's own attack may name only a target it passes,
+ * and the table's acts (`PlayerLiveAct`) list only what it passes.
+ */
+export const combatantShownTo = (
+  sql: SqlClient.SqlClient,
+  id: Statement.Fragment,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`
+  exists (
+    select 1 from combatant
+    join encounter_run on encounter_run.id = combatant.encounter_run_id
+    where combatant.id = ${id}
+      and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+      and (${campaignWritableById(sql, campaignId, actor)}
+        or not ${fightLive(sql)}
+        or not ${hiddenByFog(sql, campaignId, actor)})
+  )
+`;

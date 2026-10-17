@@ -1,5 +1,6 @@
 import {
   Actor,
+  attackVerdict,
   CampaignId,
   CharacterId,
   CombatantId,
@@ -8,6 +9,7 @@ import {
   EncounterRunId,
   NotFound,
   Roll,
+  rollOutcomeOf,
   type RollCreate,
   RollId,
   type RollListFilterValues,
@@ -29,7 +31,7 @@ import {
   orNotFound,
   timestampColumns,
 } from "./rows.js";
-import { COMBATANT, fightLive, hiddenByFog, RUN } from "./liveTables.js";
+import { boardShown, COMBATANT, combatantShownTo, RUN, underFog } from "./liveTables.js";
 import {
   campaignReadable,
   containedChildWritable,
@@ -118,6 +120,9 @@ export const fileRoll = (
           target_combatant_id: roll.targetCombatantId,
           target_ac: roll.targetAc,
           outcome: roll.outcome,
+          delivery: roll.delivery,
+          damage_type: roll.damageType,
+          area: roll.area === undefined ? undefined : JSON.stringify(roll.area),
           request_id: roll.requestId,
           visibility: roll.visibility,
           ...assistantColumns(roll.from),
@@ -133,19 +138,61 @@ export const fileRoll = (
       // one instant; the clock keeps them in the order they were thrown.
       yield* sql`update character_roll set created_at = clock_timestamp() where id = ${id}`;
     }
+    const rings = roll.visibility === "dm" && (yield* tableSeesAct(sql, roll));
     yield* appendEvent(sql, {
       sessionId: roll.sessionId,
       kind: "roll-made",
       encounterRunId: roll.runId ?? undefined,
       characterId: roll.characterId,
-      payload: { rollId: id, total: roll.total },
-      visibility: roll.visibility,
+      // A DM's roll the table sees drawn rings their doorbell with its id alone.
+      payload: rings ? { rollId: id } : { rollId: id, total: roll.total },
+      visibility: rings ? "shared" : roll.visibility,
       ...(roll.from === undefined
         ? {}
         : { origin: "assistant" as const, assistantTurnId: roll.from.assistantTurnId }),
     });
     return id;
   });
+
+/**
+ * Whether a DM's roll is an act the players' table draws (`PlayerLiveAct`),
+ * so its `roll-made` line rings their doorbell though the roll stays the
+ * DM's: its fight and board shown to them and, for an attack, both creatures
+ * shared and not under fog — the test a kept Hob turn's narration is heard by.
+ * An area needs only its board shown. Decided when it is filed; the table's
+ * read narrows again for each player, so this only says when to look.
+ */
+const tableSeesAct = (
+  sql: SqlClient.SqlClient,
+  roll: Pick<RollCreate, "kind" | "delivery" | "area" | "combatantId" | "targetCombatantId"> & {
+    readonly runId: EncounterRunId | null;
+  },
+): Effect.Effect<boolean, SqlError.SqlError> => {
+  if (roll.runId === null) return Effect.succeed(false);
+  const area = roll.area !== undefined;
+  const attack =
+    roll.kind === "attack" &&
+    roll.delivery !== undefined &&
+    roll.combatantId !== undefined &&
+    roll.targetCombatantId !== undefined;
+  if (!area && !attack) return Effect.succeed(false);
+  const creatures = area ? [] : [...new Set([roll.combatantId!, roll.targetCombatantId!])];
+  const shown =
+    creatures.length === 0
+      ? sql`true`
+      : sql`${creatures.length} = (
+          select count(*) from combatant
+          where combatant.encounter_run_id = encounter_run.id
+            and combatant.id in ${sql.in(creatures)}
+            and combatant.visibility = 'shared'
+            and not ${underFog(sql)}
+        )`;
+  return sql<{ readonly seen: boolean }>`
+    select (${boardShown(sql)} and ${shown}) as seen
+    from encounter_run
+    where encounter_run.id = ${roll.runId}
+  `.pipe(Effect.map((rows) => rows[0]?.seen === true));
+};
 
 export class Rolls extends Context.Service<
   Rolls,
@@ -242,17 +289,45 @@ export class Rolls extends Context.Service<
        * hidden by fog (`liveTables.ts`' `hiddenByFog`: a creature under it, not
        * an ally the reader may see), as the player's order reads it.
        */
-      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) => sql`
-        exists (
-          select 1 from combatant
-          join encounter_run on encounter_run.id = combatant.encounter_run_id
-          where combatant.id = ${sql(`character_roll.${column}`)}
-            and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-            and (${campaignWritableById(sql, campaignId, actor)}
-              or not ${fightLive(sql)}
-              or not ${hiddenByFog(sql, campaignId, actor)})
-        )
-      `;
+      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) =>
+        combatantShownTo(sql, sql`${sql(`character_roll.${column}`)}`, campaignId, actor);
+
+      /**
+       * A player's attack, as their table may name it: from the combatant that
+       * is the character they roll for, in tonight's fight, at one their table
+       * shows (`combatantShownTo`, the predicate a roll's pointers are
+       * read through). Answers the target's AC, which the server resolves the
+       * to-hit against because the player is never told it, or `undefined`
+       * when either is not theirs to name.
+       */
+      const playerAttack = (
+        campaignId: CampaignId,
+        runId: EncounterRunId | null,
+        characterId: CharacterId,
+        attackerId: CombatantId | undefined,
+        targetId: CombatantId | undefined,
+        actor: Actor,
+      ): Effect.Effect<{ readonly ac: number | null } | undefined> =>
+        Effect.gen(function* () {
+          if (runId === null) return undefined;
+          if (attackerId !== undefined) {
+            const own = yield* sql<{ readonly id: string }>`
+              select combatant.id from combatant
+              where combatant.id = ${attackerId}
+                and combatant.encounter_run_id = ${runId}
+                and combatant.character_id = ${characterId}
+            `;
+            if (own.length === 0) return undefined;
+          }
+          if (targetId === undefined) return { ac: null };
+          const target = yield* sql<{ readonly ac: number | null }>`
+            select combatant.ac from combatant
+            where combatant.id = ${targetId}
+              and combatant.encounter_run_id = ${runId}
+              and ${combatantShownTo(sql, sql`${targetId}::uuid`, campaignId, actor)}
+          `;
+          return target[0] === undefined ? undefined : { ac: target[0].ac };
+        }).pipe(Effect.orDie);
       const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
         case when ${combatantNamed(column, campaignId, actor)}
           then ${sql(`character_roll.${column}`)} end
@@ -285,7 +360,8 @@ export class Rolls extends Context.Service<
                 and combatant.kind = 'pc'
             ))
           then character_roll.target_ac end as target_ac,
-        character_roll.outcome, character_roll.request_id,
+        character_roll.outcome, character_roll.delivery, character_roll.damage_type,
+        character_roll.area, character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
         character_roll.undone_at,
         character_roll.created_at, character_roll.updated_at,
@@ -423,15 +499,58 @@ export class Rolls extends Context.Service<
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
 
-                  for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
-                    if (combatantId === undefined) continue;
-                    if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {
-                      return yield* new NotFound({ resource: "combatant", id: combatantId });
+                  // Where an area went is the fight's geometry, the creator's to file.
+                  if (payload.area !== undefined && !night.mayDmRoll) {
+                    return yield* new NotFound({ resource: "combatant", id: "roll-area" });
+                  }
+                  // The creator names any combatant of the fight; a player only
+                  // their own, at one their table shows, and the server says how
+                  // it came out against the AC the player is never told.
+                  let resolved: Pick<RollCreate, "targetAc" | "outcome"> = {};
+                  if (night.mayDmRoll || payload.characterId === undefined) {
+                    for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
+                      if (combatantId === undefined) continue;
+                      if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {
+                        return yield* new NotFound({ resource: "combatant", id: combatantId });
+                      }
                     }
+                  } else if (
+                    payload.combatantId !== undefined ||
+                    payload.targetCombatantId !== undefined
+                  ) {
+                    const target = yield* playerAttack(
+                      campaignId,
+                      night.runId,
+                      payload.characterId,
+                      payload.combatantId,
+                      payload.targetCombatantId,
+                      actor,
+                    );
+                    if (target === undefined) {
+                      return yield* new NotFound({
+                        resource: "combatant",
+                        id: payload.targetCombatantId ?? payload.combatantId ?? "",
+                      });
+                    }
+                    const d20 = payload.kept[0];
+                    const outcome =
+                      payload.kind === "attack" &&
+                      payload.targetCombatantId !== undefined &&
+                      d20 !== undefined
+                        ? rollOutcomeOf(attackVerdict(d20, payload.total, target.ac))
+                        : undefined;
+                    resolved = {
+                      ...(target.ac === null || payload.targetCombatantId === undefined
+                        ? {}
+                        : { targetAc: target.ac }),
+                      ...(outcome === undefined ? {} : { outcome }),
+                    };
                   }
 
+                  const { targetAc: _targetAc, outcome: _outcome, ...sent } = payload;
                   const id = yield* fileRoll(sql, {
-                    ...payload,
+                    ...(night.mayDmRoll || payload.characterId === undefined ? payload : sent),
+                    ...resolved,
                     campaignId,
                     sessionId: night.sessionId,
                     runId: night.runId,

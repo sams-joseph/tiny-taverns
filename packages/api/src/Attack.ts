@@ -1,6 +1,6 @@
 import { type Random, parseDiceExpression, rollFace } from "./Dice.js";
 import type { NpcTarget } from "./NpcTurnOptions.js";
-import type { RollMode } from "./Roll.js";
+import type { RollMode, RollOutcome } from "./Roll.js";
 import { signed } from "./Ruleset.js";
 
 /**
@@ -101,6 +101,33 @@ export const rollDamages = (
 export const damageTotal = (damage: ReadonlyArray<DamageRoll>): number =>
   damage.reduce((total, roll) => total + roll.total, 0);
 
+/**
+ * How a to-hit comes out: a natural 20 a critical and a natural 1 a miss
+ * whatever they total, else the total against the AC, and nothing to beat with
+ * no AC written. The one verdict: the DM's browser, a kept Hob turn and a
+ * player's attack the server resolves all read it.
+ */
+export const attackVerdict = (d20: number, total: number, ac: number | null): AttackVerdict =>
+  d20 === 20
+    ? "critical"
+    : d20 === 1
+      ? "natural-1"
+      : ac === null
+        ? "no-ac"
+        : total >= ac
+          ? "hit"
+          : "miss";
+
+/** A verdict as a roll keeps it; a total with no AC to beat keeps none. */
+export const rollOutcomeOf = (verdict: AttackVerdict): RollOutcome | undefined =>
+  verdict === "critical"
+    ? "crit"
+    : verdict === "natural-1"
+      ? "fumble"
+      : verdict === "no-ac"
+        ? undefined
+        : verdict;
+
 export const rollAttack = ({
   toHit,
   damage,
@@ -118,16 +145,7 @@ export const rollAttack = ({
     mode === "normal" ? [rollFace(20, random)] : [rollFace(20, random), rollFace(20, random)];
   const d20 = mode === "advantage" ? Math.max(...d20s) : Math.min(...d20s);
   const total = d20 + toHit;
-  const verdict: AttackVerdict =
-    d20 === 20
-      ? "critical"
-      : d20 === 1
-        ? "natural-1"
-        : ac === null
-          ? "no-ac"
-          : total >= ac
-            ? "hit"
-            : "miss";
+  const verdict = attackVerdict(d20, total, ac);
   const rolled = attackLands(verdict) ? rollDamages(damage, verdict === "critical", random) : [];
   return {
     d20s,

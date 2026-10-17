@@ -1,5 +1,5 @@
 import { type DiceRoll } from "@taverns/api";
-import type { CampaignId, CharacterId, Roll, RollKind } from "@taverns/api";
+import type { CampaignId, CharacterId, Roll, RollCreate, RollKind } from "@taverns/api";
 import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
@@ -9,6 +9,8 @@ import type { DmThrow } from "../run/dice";
 /** A roll as a player files it: what was rolled, and what it was for. */
 export interface TableRoll extends DiceRoll {
   readonly kind?: RollKind;
+  /** Your own attack's aim: your row, its target, and what the line was. */
+  readonly aim?: Pick<RollCreate, "combatantId" | "targetCombatantId" | "delivery" | "damageType">;
 }
 
 export interface PendingRoll extends TableRoll {
@@ -20,7 +22,7 @@ export interface PendingRoll extends TableRoll {
 const newRollRequestId = (): string =>
   globalThis.crypto?.randomUUID?.() ?? `roll-${String(Date.now())}-${String(Math.random())}`;
 
-/** One of the throws a line rolls (`rollActionThrows`), as a player's roll: no combatant named. */
+/** One of the throws a line rolls (`rollActionThrows`), as a player's roll, with its aim when it has one. */
 export const tableRollOf = (thrown: DmThrow): TableRoll => ({
   label: thrown.label,
   notation: thrown.notation,
@@ -35,6 +37,16 @@ export const tableRollOf = (thrown: DmThrow): TableRoll => ({
       ? { natural: 1 }
       : {}),
   ...(thrown.kind === undefined ? {} : { kind: thrown.kind }),
+  ...(thrown.targetCombatantId === undefined
+    ? {}
+    : {
+        aim: {
+          ...(thrown.combatantId === undefined ? {} : { combatantId: thrown.combatantId }),
+          targetCombatantId: thrown.targetCombatantId,
+          ...(thrown.delivery === undefined ? {} : { delivery: thrown.delivery }),
+          ...(thrown.damageType === undefined ? {} : { damageType: thrown.damageType }),
+        },
+      }),
 });
 
 /**
@@ -88,6 +100,7 @@ export function useTableRolls({
             requestId,
             ...(critical === undefined ? {} : { critical }),
             ...(roll.kind === undefined ? {} : { kind: roll.kind }),
+            ...roll.aim,
           },
         }),
       [reads.playerTable(campaignId)],

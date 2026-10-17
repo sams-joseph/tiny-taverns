@@ -4,8 +4,10 @@ import {
   type CombatantId,
   type DeathSaves,
   NEUTRAL_RUN_NAMES,
+  type PlayerLiveCombatant,
   type PlayerLiveCombatantYou,
   type RollMode,
+  attackModeAt,
   deathSaveRolled,
   rollDiceExpression,
   walkingFeet,
@@ -22,14 +24,17 @@ import {
   cn,
 } from "@taverns/ui";
 import { Atom } from "effect/reactivity";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { deathSaveWrites, setOwnDeathSaves } from "../characters/write";
-import { actionsOf } from "../run/actions";
+import { type ActionLine, actionsOf } from "../run/actions";
 import { rollActionThrows } from "../run/attack";
+import { actsOfTable } from "../run/effects";
+import { useEscapeAway } from "../run/escape";
+import { bandOfLine, deliveryFor } from "../run/options";
 import { RunLayout } from "../run/RunLayout";
 import { RunStage } from "../run/RunStage";
 import { useStage } from "../run/stage";
@@ -113,6 +118,8 @@ export function PlayerTableScreen() {
 
   const [rollMode, setRollMode] = useState<RollMode>("normal");
   const [picked, setPicked] = useState<CombatantId>();
+  /** Your line waiting for its target: the next creature you pick, on the board or the strip. */
+  const [aiming, setAiming] = useState<ActionLine>();
   const dice = useTableRolls({
     campaignId,
     characterId: seat?.characterId,
@@ -200,6 +207,53 @@ export function PlayerTableScreen() {
     }
   };
 
+  // You can aim only on your turn, from your own square: the aim goes when either does.
+  const canAim =
+    yourTurn &&
+    you !== undefined &&
+    fight?.board?.tokens.some((token) => token.combatantId === you.combatantId) === true;
+  useEffect(() => {
+    if (!canAim) setAiming(undefined);
+  }, [canAim]);
+  useEscapeAway(aiming !== undefined, () => setAiming(undefined));
+
+  /**
+   * Your attack, at the creature you picked: named on the roll as your row at
+   * theirs, delivered by the rule a monster's is (`deliveryFor`, at the band
+   * the board puts them in, which also rolls a long shot at disadvantage), and
+   * resolved by the server against the AC you are never told.
+   */
+  const aimAt = (row: PlayerLiveCombatant) => {
+    const line = aiming;
+    if (line === undefined || you === undefined || row.combatantId === you.combatantId) return;
+    const board = fight?.board ?? null;
+    const at = (id: CombatantId) =>
+      board?.tokens.find((token) => token.combatantId === id)?.position;
+    const band = bandOfLine(
+      line,
+      at(you.combatantId),
+      at(row.combatantId),
+      board === null
+        ? undefined
+        : { feetPerCell: board.feetPerCell, diagonals: view?.campaign.diagonalRule ?? "five" },
+    );
+    const throws = rollActionThrows({
+      attacker: you.displayName,
+      attackerId: you.combatantId,
+      line,
+      mode: rollMode === "normal" ? attackModeAt(band) : rollMode,
+      aim: {
+        targetId: row.combatantId,
+        delivery: deliveryFor(undefined, line, row.combatantId, band),
+      },
+    });
+    for (const thrown of throws) dice.file(tableRollOf(thrown));
+    setAiming(undefined);
+  };
+  /** A creature picked on the board or the strip: your aim's target, while you aim. */
+  const pick = (row: PlayerLiveCombatant) =>
+    aiming === undefined ? setPicked(row.combatantId) : aimAt(row);
+
   const failure = turnWrite.failure ?? moveWrite.failure ?? savesWrite.failure;
 
   const boardProps: PlayerBoardProps | undefined =
@@ -221,7 +275,10 @@ export function PlayerTableScreen() {
                 }),
           movable: yourTurn && !moveWrite.busy,
           onSelect: (row) => setPicked(row.combatantId),
+          onTarget: aiming === undefined ? undefined : aimAt,
           onMove: move,
+          // The fight's attacks and areas this player may see, their own among them.
+          acts: actsOfTable(fight.acts),
         };
   const canvas = stage.wide === true && boardProps !== undefined;
 
@@ -247,6 +304,9 @@ export function PlayerTableScreen() {
         onDeathSaves={setSaves}
         onDeathSaveRoll={rollDeathSave}
         onRollAction={rollAction}
+        aiming={aiming}
+        onAttack={canAim ? setAiming : undefined}
+        onCancelAim={() => setAiming(undefined)}
       />
     ) : (
       <Card>
@@ -281,7 +341,7 @@ export function PlayerTableScreen() {
         labels={labels}
         selectedId={selectedId}
         floating={canvas}
-        onSelect={(row) => setPicked(row.combatantId)}
+        onSelect={pick}
       />
     );
 
