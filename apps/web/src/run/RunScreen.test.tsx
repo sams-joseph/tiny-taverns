@@ -4444,6 +4444,56 @@ describe("an area, rolled", () => {
     expect(server.rolls[0]).toMatchObject({ area: null });
     expect(document.querySelector("[data-effect=blast]")).toBeNull();
   });
+
+  it("keeps the pinned cone on a party member's spell whose sheet line has an area", async () => {
+    // Brannoc is up, and his sheet carries Burning Hands, a 15-foot cone from him.
+    server.routes.set(`GET ${serverRunBase()}`, { status: 200, body: liveRun });
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: {
+        ...runBoard,
+        area: { ...cone, origin: { column: 5, row: 4 }, toward: { column: 6, row: 4 } },
+      },
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: runParty.map((seat) => ({
+        ...seat,
+        character: {
+          ...seat.character,
+          sheet: {
+            ...seat.character.sheet,
+            actions: [
+              {
+                id: "spell:burning-hands",
+                name: "Burning Hands",
+                cost: "action",
+                dice: "3d6",
+                damageType: "Fire",
+                range: "Self (15-foot cone)",
+                area: { shape: "cone", feet: 15, origin: "self" },
+                source: "spell",
+              },
+            ],
+          },
+        },
+      })),
+    });
+    await renderRunner();
+    const actions = within(
+      await waitFor(() => panel().getByRole("region", { name: "Actions of Brannoc" })),
+    );
+    await userEvent.click(await actions.findByRole("button", { name: "Roll Burning Hands" }));
+
+    await waitFor(() => expect(server.rolls.length).toBeGreaterThan(0));
+    expect(server.rolls[0]).toMatchObject({
+      kind: "damage",
+      combatantId: brannoc.id,
+      damageType: "fire",
+      area: { shape: "cone", feet: 15, origin: { column: 5, row: 4 } },
+    });
+    await waitFor(() => expect(document.querySelector("[data-effect=blast]")).not.toBeNull());
+  });
 });
 
 describe("a monster's multiattack, and its reach", () => {

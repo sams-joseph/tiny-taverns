@@ -34,6 +34,7 @@ import encounterOrder from "../src/migrations/0078_encounter_order.js";
 import integerSequences from "../src/migrations/0081_integer_sequences.js";
 import deathSaves from "../src/migrations/0085_death_saves.js";
 import actionGeometry from "../src/migrations/0092_action_geometry.js";
+import sheetActionGeometry from "../src/migrations/0104_sheet_action_geometry.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -92,6 +93,8 @@ const sequencesDatabase = freshDatabase("taverns_test_migrations_sequences");
 const deathSavesDatabase = freshDatabase("taverns_test_migrations_death_saves");
 /** A twenty-second, for copied stat blocks written before reach and range were structured. */
 const geometryDatabase = freshDatabase("taverns_test_migrations_action_geometry");
+/** A twenty-third, for sheets composed before a line kept its distances as numbers. */
+const sheetGeometryDatabase = freshDatabase("taverns_test_migrations_sheet_geometry");
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -387,6 +390,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 101, name: "cast_npc_combatants" },
         { migration_id: 102, name: "roll_attack_delivery" },
         { migration_id: 103, name: "roll_area" },
+        { migration_id: 104, name: "sheet_action_geometry" },
       ]);
     }),
   );
@@ -500,6 +504,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 101, name: "cast_npc_combatants" },
         { migration_id: 102, name: "roll_attack_delivery" },
         { migration_id: 103, name: "roll_area" },
+        { migration_id: 104, name: "sheet_action_geometry" },
       ]);
     }),
   );
@@ -2242,6 +2247,127 @@ describeLayer(
           { name: "Scimitar", reach: 10 },
         ]);
         expect(actionsOf("Bundle Goblin")[0]).not.toHaveProperty("range");
+      }),
+    );
+  },
+);
+
+describeLayer(
+  "upgrading sheets whose weapon and spell lines kept no distances",
+  sheetGeometryDatabase,
+  (it) => {
+    it.effect("fills in each line's distances from the row it names, once", () =>
+      Effect.gen(function* () {
+        const actions = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* migrate;
+          const account = (yield* sql<{ readonly id: string }>`
+            insert into account ${sql.insert({ name: "Jo", token_hash: "sheet-geometry-hash" })}
+            returning id
+          `)[0]!.id;
+          const weapon = (row: Record<string, unknown>) => ({
+            origin: "system",
+            category_index: "weapon",
+            category_name: "Weapon",
+            cost_quantity: 1,
+            cost_unit: "gp",
+            cost_gp: 1,
+            weapon_range: "Melee",
+            range_normal: 5,
+            range_long: null,
+            throw_range_normal: null,
+            throw_range_long: null,
+            ...row,
+          });
+          const [crossbow, javelin, glaive] = yield* sql<{ readonly id: string }>`
+            insert into equipment ${sql.insert([
+              weapon({
+                name: "Crossbow, light",
+                weapon_range: "Ranged",
+                range_normal: 80,
+                range_long: 320,
+                property_names: ["Ammunition", "Loading"],
+              }),
+              weapon({
+                name: "Javelin",
+                throw_range_normal: 30,
+                throw_range_long: 120,
+                property_names: ["Thrown"],
+              }),
+              weapon({ name: "Glaive", property_names: ["Heavy", "Reach"] }),
+            ])}
+            returning id::text
+          `;
+          const spell = (row: Record<string, unknown>) => ({
+            origin: "system",
+            level: 1,
+            school_index: "evocation",
+            school_name: "Evocation",
+            casting_time: "1 action",
+            duration: "Instantaneous",
+            ...row,
+          });
+          const [fireBolt, burningHands, flameStrike] = yield* sql<{ readonly id: string }>`
+            insert into spell ${sql.insert([
+              spell({
+                name: "Fire Bolt",
+                spell_range: "120 feet",
+                body: JSON.stringify({ attackType: "ranged" }),
+              }),
+              spell({
+                name: "Burning Hands",
+                spell_range: "Self (15-foot cone)",
+                body: JSON.stringify({ areaOfEffect: { type: "cone", size: 15 } }),
+              }),
+              spell({
+                name: "Flame Strike",
+                spell_range: "60 feet",
+                body: JSON.stringify({ areaOfEffect: { type: "cylinder", size: 10 } }),
+              }),
+            ])}
+            returning id::text
+          `;
+          // The shape a composed sheet had before its lines kept their distances.
+          yield* sql`
+            insert into character ${sql.insert({
+              account_id: account,
+              name: "Pip",
+              body: JSON.stringify({
+                notes: "",
+                traits: [],
+                abilities: [],
+                actions: [
+                  { id: "atk:crossbow", name: "Crossbow, light", equipmentId: crossbow!.id },
+                  { id: "atk:javelin", name: "Javelin", equipmentId: javelin!.id },
+                  // Already set, so kept: the migration writes only what is missing.
+                  { id: "atk:glaive", name: "Glaive", equipmentId: glaive!.id, reachFeet: 15 },
+                  { id: "spell:fire-bolt", name: "Fire Bolt", spellId: fireBolt!.id },
+                  { id: "spell:burning-hands", name: "Burning Hands", spellId: burningHands!.id },
+                  { id: "spell:flame-strike", name: "Flame Strike", spellId: flameStrike!.id },
+                  { id: "own:kick", name: "Kick", hit: "+2" },
+                ],
+              }),
+            })}
+          `;
+
+          yield* sheetActionGeometry;
+          yield* sheetActionGeometry;
+          return (yield* sql<{ readonly actions: unknown }>`
+            select body -> 'actions' as actions from character
+          `)[0]!.actions as ReadonlyArray<Record<string, unknown>>;
+        }).pipe(Effect.orDie);
+
+        expect(actions[0]).toMatchObject({ rangeFeet: { normal: 80, long: 320 } });
+        expect(actions[0]).not.toHaveProperty("reachFeet");
+        expect(actions[1]).toMatchObject({ reachFeet: 5, rangeFeet: { normal: 30, long: 120 } });
+        expect(actions[2]).toMatchObject({ reachFeet: 15 });
+        expect(actions[3]).toMatchObject({ spellAttack: "ranged" });
+        expect(actions[3]).not.toHaveProperty("area");
+        expect(actions[4]).toMatchObject({ area: { shape: "cone", feet: 15, origin: "self" } });
+        expect(actions[4]).not.toHaveProperty("spellAttack");
+        expect(actions[5]).toMatchObject({ area: { shape: "sphere", feet: 10, origin: "point" } });
+        // A hand-written line names no row, so it is given no distance.
+        expect(actions[6]).toEqual({ id: "own:kick", name: "Kick", hit: "+2" });
       }),
     );
   },
