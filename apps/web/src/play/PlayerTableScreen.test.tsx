@@ -1085,6 +1085,45 @@ describe("your turn at the table", () => {
     expect(card.queryByText("Pick a target for Halberd")).toBeNull();
   });
 
+  it("draws the fight's acts your table brings, and none it already had", async () => {
+    const act = (id: string) => ({
+      kind: "strike",
+      id,
+      from: hagCombatantId,
+      to: yourCombatantId,
+      delivery: "ranged-spell",
+      damageType: "necrotic",
+      outcome: "hit",
+    });
+    const earlier = act("2b1f2a1e-0000-4000-8000-00000000ac01");
+    server.routes.set(
+      ...playing(campaignId, { order: tableOrder, board: sharedBoard, acts: [earlier] }),
+    );
+    await renderTable();
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
+    // What the table already held when it was read is no news.
+    expect(document.querySelector("[data-effect=strike]")).toBeNull();
+
+    // The hag's bolt, read with the table again after your step.
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder,
+        board: sharedBoard,
+        acts: [earlier, act("2b1f2a1e-0000-4000-8000-00000000ac02")],
+      }),
+    );
+    you.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    const strike = await waitFor(() => {
+      const drawn = document.querySelector<SVGElement>("[data-effect=strike]");
+      expect(drawn).not.toBeNull();
+      return drawn!;
+    });
+    expect(strike.dataset.delivery).toBe("ranged-spell");
+    expect(document.querySelectorAll("[data-effect=strike]").length).toBe(1);
+  });
+
   it("offers no attack off your turn, only the roll", async () => {
     server.routes.set(
       ...playing(campaignId, { order: tableOrder, board: sharedBoard, upNext: offTurn }),

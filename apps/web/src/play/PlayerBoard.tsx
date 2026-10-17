@@ -60,7 +60,7 @@ export interface PlayerBoardProps {
   /** Set while your attack waits for its target: a token's click is the target, never yours. */
   readonly onTarget?: ((row: PlayerLiveCombatant) => void) | undefined;
   readonly onMove: (to: BoardSquare) => Promise<unknown>;
-  /** What your table draws: your own attacks, from your rolls (`actsOfRolls`). */
+  /** What your table draws: the fight's acts you may see (`PlayerLiveFight.acts`). */
   readonly acts?: ReadonlyArray<Act>;
 }
 

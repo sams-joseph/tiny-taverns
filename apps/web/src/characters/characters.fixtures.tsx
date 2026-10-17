@@ -408,6 +408,8 @@ export const playing = (
     readonly encounterId?: string | null;
     /** What the table heard of Hob-run turns, newest first. */
     readonly narration?: ReadonlyArray<Record<string, unknown>>;
+    /** The attacks and areas the board draws, oldest first. */
+    readonly acts?: ReadonlyArray<Record<string, unknown>>;
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -442,6 +444,7 @@ export const playing = (
               ],
               encounterId: fight.encounterId ?? null,
               narration: fight.narration ?? [],
+              acts: fight.acts ?? [],
               order: fight.order ?? [
                 {
                   kind: "you",

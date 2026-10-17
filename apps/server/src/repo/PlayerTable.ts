@@ -1,17 +1,21 @@
 import {
   Actor,
+  AttackDelivery,
+  BoardArea,
   CampaignCharacterId,
   CampaignId,
   CharacterId,
-  type CombatantId,
+  CombatantId,
   CombatantPosition,
   type CombatantTurn,
   Conflict,
   CurrentActor,
   EncounterKind,
+  DamageType,
   EncounterRunId,
   type InitiativeSetBy,
   NotFound,
+  type PlayerLiveAct,
   PlayerLiveCombatantAlly,
   PlayerLiveCombatantNpc,
   PlayerLiveCombatantYou,
@@ -23,6 +27,8 @@ import {
   type PlayerLiveToken,
   type PlayerLiveTurn,
   type PlayerMove,
+  RollId,
+  RollOutcome,
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
@@ -47,6 +53,7 @@ import { PlayerEncounterRunRow, playerRunColumns } from "./EncounterRuns.js";
 import {
   boardShown,
   COMBATANT,
+  combatantShownTo,
   hiddenByFog,
   initiativeOrder,
   RUNS,
@@ -75,6 +82,46 @@ const NarrationRow = fromColumns(PlayerLiveNarration);
 
 /** How many of a fight's heard lines the table carries. */
 const NARRATION_KEPT = 5;
+
+/** How many of a fight's latest acts the table carries: the board plays only those new since it last read. */
+const ACTS_KEPT = 12;
+
+/** An act as `actsOf` selects it: its pointers already narrowed to this reader. */
+const ActRow = Schema.Struct({
+  id: RollId,
+  delivery: Schema.NullOr(AttackDelivery),
+  damage_type: Schema.NullOr(DamageType),
+  outcome: Schema.NullOr(RollOutcome),
+  area: Schema.NullOr(BoardArea),
+  from_id: Schema.NullOr(CombatantId),
+  to_id: Schema.NullOr(CombatantId),
+});
+
+/** A selected act as the table sends it. */
+const actOf = (row: typeof ActRow.Type): ReadonlyArray<PlayerLiveAct> =>
+  row.area !== null
+    ? [
+        {
+          kind: "blast",
+          id: row.id,
+          from: row.from_id,
+          area: row.area,
+          damageType: row.damage_type,
+        },
+      ]
+    : row.delivery !== null && row.from_id !== null && row.to_id !== null
+      ? [
+          {
+            kind: "strike",
+            id: row.id,
+            from: row.from_id,
+            to: row.to_id,
+            delivery: row.delivery,
+            damageType: row.damage_type,
+            outcome: row.outcome,
+          },
+        ]
+      : [];
 
 /** Where a row's token stands on the player's board, or `null` when it is not on it. */
 const token = { token: Schema.NullOr(CombatantPosition) } as const;
@@ -363,6 +410,46 @@ export class PlayerTable extends Context.Service<
         `,
       });
 
+      /**
+       * The fight's latest acts this reader may see drawn, newest first: its
+       * attack rolls that say how they were delivered and its damage rolls
+       * that kept an area, whoever rolled them, none from a turn the DM undid.
+       * Each pointer is selected through `combatantShownTo`, the test a roll's
+       * pointers are read through, and an attack is selected only when both
+       * pass; an area keeps its creature only when that passes. No label,
+       * total or armour class is selected.
+       */
+      const actsOf = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId, actor: Actor }),
+        ),
+        Result: ActRow,
+        execute: ({ campaignId, runId, actor }) => sql`
+          select acts.id, acts.delivery, acts.damage_type, acts.outcome, acts.area,
+                 acts.from_id, acts.to_id
+          from (
+            select character_roll.id, character_roll.delivery, character_roll.damage_type,
+                   character_roll.outcome, character_roll.area, character_roll.created_at,
+                   case when ${combatantShownTo(sql, sql`character_roll.combatant_id`, campaignId, actor)}
+                     then character_roll.combatant_id end as from_id,
+                   case when character_roll.area is null
+                       and ${combatantShownTo(sql, sql`character_roll.target_combatant_id`, campaignId, actor)}
+                     then character_roll.target_combatant_id end as to_id
+            from character_roll
+            where character_roll.encounter_run_id = ${runId}
+              and character_roll.undone_at is null
+              and (character_roll.area is not null
+                or (character_roll.kind = 'attack'
+                  and character_roll.delivery is not null
+                  and character_roll.combatant_id is not null
+                  and character_roll.target_combatant_id is not null))
+          ) acts
+          where acts.area is not null or (acts.from_id is not null and acts.to_id is not null)
+          order by acts.created_at desc, acts.id desc
+          limit ${ACTS_KEPT}
+        `,
+      });
+
       const boardOf = SqlSchema.findOneOption({
         Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId })),
         Result: PlayerBoardRow,
@@ -506,6 +593,10 @@ export class PlayerTable extends Context.Service<
 
               const board = yield* boardOf({ campaignId, runId: run.id });
               const narration = yield* narrationOf(run.id);
+              // Drawn on the board, so carried only while the board is shown.
+              const acts = Option.isNone(board)
+                ? []
+                : (yield* actsOf({ campaignId, runId: run.id, actor })).flatMap(actOf).reverse();
 
               const rows = yield* liveOrder({ campaignId, runId: run.id, mode: run.mode });
               const tokens: ReadonlyArray<PlayerLiveToken> = rows.flatMap((row) =>
@@ -559,6 +650,7 @@ export class PlayerTable extends Context.Service<
                     onSome: (row) => ({ ...row, tokens }),
                   }),
                   narration,
+                  acts,
                 },
               });
             }),

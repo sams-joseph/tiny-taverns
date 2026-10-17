@@ -5,6 +5,7 @@ import type {
   BoardSquare,
   CombatantId,
   DamageType,
+  PlayerLiveAct,
   Roll,
   RollOutcome,
 } from "@taverns/api";
@@ -199,3 +200,7 @@ export const actsOfRolls = (rolls: ReadonlyArray<Roll>): ReadonlyArray<Act> =>
       undone: roll.undoneAt !== null,
     })),
   );
+
+/** A player's table's acts (`PlayerLiveAct`, already narrowed to them), as the board plays them. */
+export const actsOfTable = (acts: ReadonlyArray<PlayerLiveAct>): ReadonlyArray<Act> =>
+  acts.map(({ id, ...act }) => ({ ...act, key: id }));

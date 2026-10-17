@@ -1158,9 +1158,11 @@ describeLayer(
               client.table.read({ params: { campaignId: own } }),
             );
             expect(read?.fight?.id).toBe(fight.id);
-            // The player's table as it was before fights kept boards, and no board.
+            // The player's table as it was before fights kept boards, and no board
+            // (its acts are drawn on one, so there are none).
             expect(Object.keys(read!.fight!).sort()).toEqual(
               [
+                "acts",
                 "board",
                 "encounterId",
                 "id",
@@ -1174,6 +1176,7 @@ describeLayer(
               ].sort(),
             );
             expect(read?.fight?.board).toBeNull();
+            expect(read?.fight?.acts).toEqual([]);
             const text = JSON.stringify(read);
             expect(text).not.toContain("battle-map-images");
             expect(text).not.toContain("SETTING-A-ROTTEN-PIER");

@@ -32,7 +32,7 @@ import { useMutation } from "../api/mutation";
 import { deathSaveWrites, setOwnDeathSaves } from "../characters/write";
 import { type ActionLine, actionsOf } from "../run/actions";
 import { rollActionThrows } from "../run/attack";
-import { actsOfRolls } from "../run/effects";
+import { actsOfTable } from "../run/effects";
 import { useEscapeAway } from "../run/escape";
 import { bandOfLine, deliveryFor } from "../run/options";
 import { RunLayout } from "../run/RunLayout";
@@ -277,7 +277,8 @@ export function PlayerTableScreen() {
           onSelect: (row) => setPicked(row.combatantId),
           onTarget: aiming === undefined ? undefined : aimAt,
           onMove: move,
-          acts: actsOfRolls(view?.rolls ?? []),
+          // The fight's attacks and areas this player may see, their own among them.
+          acts: actsOfTable(fight.acts),
         };
   const canvas = stage.wide === true && boardProps !== undefined;
 

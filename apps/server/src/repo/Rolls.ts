@@ -31,7 +31,7 @@ import {
   orNotFound,
   timestampColumns,
 } from "./rows.js";
-import { COMBATANT, fightLive, hiddenByFog, RUN } from "./liveTables.js";
+import { boardShown, COMBATANT, combatantShownTo, RUN, underFog } from "./liveTables.js";
 import {
   campaignReadable,
   containedChildWritable,
@@ -138,19 +138,61 @@ export const fileRoll = (
       // one instant; the clock keeps them in the order they were thrown.
       yield* sql`update character_roll set created_at = clock_timestamp() where id = ${id}`;
     }
+    const rings = roll.visibility === "dm" && (yield* tableSeesAct(sql, roll));
     yield* appendEvent(sql, {
       sessionId: roll.sessionId,
       kind: "roll-made",
       encounterRunId: roll.runId ?? undefined,
       characterId: roll.characterId,
-      payload: { rollId: id, total: roll.total },
-      visibility: roll.visibility,
+      // A DM's roll the table sees drawn rings their doorbell with its id alone.
+      payload: rings ? { rollId: id } : { rollId: id, total: roll.total },
+      visibility: rings ? "shared" : roll.visibility,
       ...(roll.from === undefined
         ? {}
         : { origin: "assistant" as const, assistantTurnId: roll.from.assistantTurnId }),
     });
     return id;
   });
+
+/**
+ * Whether a DM's roll is an act the players' table draws (`PlayerLiveAct`),
+ * so its `roll-made` line rings their doorbell though the roll stays the
+ * DM's: its fight and board shown to them and, for an attack, both creatures
+ * shared and not under fog — the test a kept Hob turn's narration is heard by.
+ * An area needs only its board shown. Decided when it is filed; the table's
+ * read narrows again for each player, so this only says when to look.
+ */
+const tableSeesAct = (
+  sql: SqlClient.SqlClient,
+  roll: Pick<RollCreate, "kind" | "delivery" | "area" | "combatantId" | "targetCombatantId"> & {
+    readonly runId: EncounterRunId | null;
+  },
+): Effect.Effect<boolean, SqlError.SqlError> => {
+  if (roll.runId === null) return Effect.succeed(false);
+  const area = roll.area !== undefined;
+  const attack =
+    roll.kind === "attack" &&
+    roll.delivery !== undefined &&
+    roll.combatantId !== undefined &&
+    roll.targetCombatantId !== undefined;
+  if (!area && !attack) return Effect.succeed(false);
+  const creatures = area ? [] : [...new Set([roll.combatantId!, roll.targetCombatantId!])];
+  const shown =
+    creatures.length === 0
+      ? sql`true`
+      : sql`${creatures.length} = (
+          select count(*) from combatant
+          where combatant.encounter_run_id = encounter_run.id
+            and combatant.id in ${sql.in(creatures)}
+            and combatant.visibility = 'shared'
+            and not ${underFog(sql)}
+        )`;
+  return sql<{ readonly seen: boolean }>`
+    select (${boardShown(sql)} and ${shown}) as seen
+    from encounter_run
+    where encounter_run.id = ${roll.runId}
+  `.pipe(Effect.map((rows) => rows[0]?.seen === true));
+};
 
 export class Rolls extends Context.Service<
   Rolls,
@@ -247,29 +289,14 @@ export class Rolls extends Context.Service<
        * hidden by fog (`liveTables.ts`' `hiddenByFog`: a creature under it, not
        * an ally the reader may see), as the player's order reads it.
        */
-      const combatantVisible = (
-        id: Statement.Fragment,
-        campaignId: CampaignId,
-        actor: Actor,
-      ) => sql`
-        exists (
-          select 1 from combatant
-          join encounter_run on encounter_run.id = combatant.encounter_run_id
-          where combatant.id = ${id}
-            and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-            and (${campaignWritableById(sql, campaignId, actor)}
-              or not ${fightLive(sql)}
-              or not ${hiddenByFog(sql, campaignId, actor)})
-        )
-      `;
       const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) =>
-        combatantVisible(sql`${sql(`character_roll.${column}`)}`, campaignId, actor);
+        combatantShownTo(sql, sql`${sql(`character_roll.${column}`)}`, campaignId, actor);
 
       /**
        * A player's attack, as their table may name it: from the combatant that
        * is the character they roll for, in tonight's fight, at one their table
-       * shows (`combatantVisible`, the predicate a roll's pointers are read
-       * through). Answers the target's AC, which the server resolves the
+       * shows (`combatantShownTo`, the predicate a roll's pointers are
+       * read through). Answers the target's AC, which the server resolves the
        * to-hit against because the player is never told it, or `undefined`
        * when either is not theirs to name.
        */
@@ -297,7 +324,7 @@ export class Rolls extends Context.Service<
             select combatant.ac from combatant
             where combatant.id = ${targetId}
               and combatant.encounter_run_id = ${runId}
-              and ${combatantVisible(sql`${targetId}::uuid`, campaignId, actor)}
+              and ${combatantShownTo(sql, sql`${targetId}::uuid`, campaignId, actor)}
           `;
           return target[0] === undefined ? undefined : { ac: target[0].ac };
         }).pipe(Effect.orDie);
