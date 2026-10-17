@@ -16,6 +16,7 @@ import type {
 import { attackModeAt, rollFace, saveModifier, walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
+  BackLink,
   Badge,
   Button,
   Icon,
@@ -35,6 +36,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "r
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
+import { useFullscreen, useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
@@ -114,7 +116,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * (where whoever is up attacks, `attack.ts`) and the *Rolls* dock, which
  * merges the DM's own dice with the players' tray and the night's log
  * (`RollsDock.tsx`). At a desktop width the board is a canvas filling the
- * viewport under the header with the rest floating over it (`RunStage.tsx`,
+ * whole window, the header and the rest floating over it (`RunStage.tsx`,
  * from `Encounter Runner.dc.html`); narrower, or with no board, the cards are
  * the window-scrolling grid of `RunLayout.tsx`. Everything the drawings leave
  * out that the runner already did — adding and editing combatants, *Make it
@@ -968,6 +970,7 @@ export function RunScreen() {
   // Hob's autopilot (`hob/autopilot.ts`): on while the run names a driver,
   // driven here while it names this tab.
   const hobAvailable = useHobAvailable(campaignId);
+  const showHob = useShowHob();
   const driverId = useMemo(autopilotDriverId, []);
   const pilotSwitch = useMutation();
   const pilotWrites = useMutation();
@@ -1907,127 +1910,183 @@ export function RunScreen() {
           onArea: pinArea,
         };
 
+  // On the canvas the screen holds the whole window: the shell puts its nav
+  // rows away and the header floats over the board (`RunStage.tsx`).
+  const onCanvas = canvas && state !== undefined && view !== undefined && boardProps !== undefined;
+  useFullscreen(onCanvas);
+
+  const header = (
+    <TopBar
+      framed
+      title={state?.run.encounterName ?? "The fight"}
+      {...(state !== undefined &&
+        scene !== undefined && {
+          badge: <Badge variant="secondary">{sceneBadge(scene)}</Badge>,
+          ...(over
+            ? { subtitle: `This ${sceneNoun(scene)} is over` }
+            : sceneResource.state === "ready" &&
+              sceneResource.value !== null && {
+                subtitle: sceneUpLine(scene, sceneResource.value),
+              }),
+        })}
+      {...(state !== undefined &&
+        scene === undefined && {
+          badge: (
+            <Badge variant="secondary">
+              {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
+            </Badge>
+          ),
+          subtitle: over
+            ? "This fight is over"
+            : rolling
+              ? rollingLine(state.combatants)
+              : upLine(state.combatants, state.run.activeCombatantId),
+        })}
+    >
+      {onCanvas && (
+        // The nav rows are put away while the canvas holds the window, so the
+        // way back is the header's.
+        <BackLink render={<Link {...back} />}>Overview</BackLink>
+      )}
+      {onCanvas && hobAvailable === true && showHob !== undefined && (
+        // The nav's *Ask Hob* is put away with it; ⌘K still reaches the panel.
+        <Button variant="outline" size="sm" onClick={showHob}>
+          Ask Hob
+        </Button>
+      )}
+      {state !== undefined && !over && (
+        <>
+          {connection.status !== "live" && (
+            <Button variant="outline" size="sm" onClick={connection.reconnect}>
+              <Icon name="octagon-x" size={13} />
+              {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
+            </Button>
+          )}
+          <span className="flex items-center gap-2">
+            <Switch
+              id="run-share"
+              checked={state.run.visibility === "shared"}
+              disabled={share.busy}
+              onCheckedChange={(next) =>
+                void setShown(share, { visibility: next ? "shared" : "dm" })
+              }
+            />
+            <Label htmlFor="run-share">Share</Label>
+          </span>
+          {mapToShare && (
+            // A narrowing of *Share*, not a second way in: players see the
+            // map only while they see the fight, so it waits for that. Off,
+            // it keeps what the DM left it at for when the fight is shared.
+            <span className="flex items-center gap-2">
+              <Switch
+                id="run-share-map"
+                checked={state.run.mapShown}
+                disabled={mapShare.busy || state.run.visibility !== "shared"}
+                onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
+              />
+              <Label htmlFor="run-share-map">Share map</Label>
+            </span>
+          )}
+          {scene === undefined && (hobAvailable === true || pilotDriver !== null) && (
+            // Offered only with a model behind Hob; once on, it can always
+            // be turned off.
+            <span className="flex items-center gap-2">
+              <Switch
+                id="run-hob-autopilot"
+                checked={pilotDriver !== null}
+                disabled={pilotSwitch.busy}
+                onCheckedChange={(next) => void setAutopilot(next)}
+              />
+              <Label htmlFor="run-hob-autopilot">Autopilot</Label>
+            </span>
+          )}
+          {/* While rolling, the round's one start is the panel's *Start
+            round N*, so the bar carries no second peach button. */}
+          {!rolling && scene === undefined && (
+            // No key advances the turn: the table's own call (D13), so a
+            // stray key press mid-fight never moves the marker.
+            <Button
+              size="sm"
+              disabled={
+                turn.busy || (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")
+              }
+              onClick={() => {
+                // Autopilot takes the legendary actions due first.
+                if (driving && pilot.endTurn()) return;
+                void advance();
+              }}
+            >
+              {turn.busy ? "Advancing…" : "Next turn"}
+              <Icon name="chevron-right" size={14} />
+            </Button>
+          )}
+          <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
+            End
+          </Button>
+        </>
+      )}
+      {over && (
+        <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
+          Back to the campaign
+        </Button>
+      )}
+    </TopBar>
+  );
+
+  /** The lines under the header: an ended fight, the autopilot, a fight that fell behind. */
+  const notices = (
+    <>
+      {over && view !== undefined && (
+        <p
+          role="status"
+          className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+        >
+          {scene === undefined
+            ? `This fight came off the table. The order and the hit points below are how it finished — they are saved to Session ${String(view.session.number)}.`
+            : `This ${sceneNoun(scene)} came off the table. Its checks below are how it finished — they are saved to Session ${String(view.session.number)}.`}
+        </p>
+      )}
+      {!over && scene === undefined && pilotDriver !== null && (
+        <AutopilotBar
+          mine={driving}
+          loop={pilot.loop}
+          status={pilot.status}
+          countdown={pilot.countdown}
+          busy={pilotSwitch.busy}
+          onStop={pilot.stop}
+          onResume={pilot.resume}
+          onNextNow={pilot.nextNow}
+          onDriveHere={() => void setAutopilot(true)}
+        />
+      )}
+      {controller.staleness !== undefined && (
+        <p
+          role="status"
+          className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
+        >
+          The last re-read did not answer, so this may be a moment behind. Everything below is the
+          last thing the server said.
+        </p>
+      )}
+    </>
+  );
+
   return (
     <TooltipProvider>
-      {/* On the canvas the screen is the viewport under the chrome, and the
-          stage takes what the header leaves (`RunStage.tsx`); otherwise it is
-          a document like every other screen. */}
+      {/* On the canvas the screen is the whole viewport and the stage all of
+          it (`RunStage.tsx`); otherwise it is a document like every other
+          screen. */}
       <div
         data-slot="run-screen"
         className={cn(
-          canvas &&
-            "flex h-[calc(100dvh_-_var(--chrome-height)_-_2_*_var(--spacing-page))] flex-col",
+          onCanvas && "flex h-dvh flex-col",
           // Picking a target: whatever can be the target says so.
           picking !== undefined &&
             "[&_[data-slot=board-canvas]]:cursor-crosshair [&_[data-slot=run-board-squares]]:cursor-crosshair [&_[data-slot=token]]:cursor-crosshair [&_[data-combatant]]:cursor-crosshair",
         )}
       >
         {stage.probe}
-        <TopBar
-          framed
-          title={state?.run.encounterName ?? "The fight"}
-          {...(state !== undefined &&
-            scene !== undefined && {
-              badge: <Badge variant="secondary">{sceneBadge(scene)}</Badge>,
-              ...(over
-                ? { subtitle: `This ${sceneNoun(scene)} is over` }
-                : sceneResource.state === "ready" &&
-                  sceneResource.value !== null && {
-                    subtitle: sceneUpLine(scene, sceneResource.value),
-                  }),
-            })}
-          {...(state !== undefined &&
-            scene === undefined && {
-              badge: (
-                <Badge variant="secondary">
-                  {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
-                </Badge>
-              ),
-              subtitle: over
-                ? "This fight is over"
-                : rolling
-                  ? rollingLine(state.combatants)
-                  : upLine(state.combatants, state.run.activeCombatantId),
-            })}
-        >
-          {state !== undefined && !over && (
-            <>
-              {connection.status !== "live" && (
-                <Button variant="outline" size="sm" onClick={connection.reconnect}>
-                  <Icon name="octagon-x" size={13} />
-                  {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
-                </Button>
-              )}
-              <span className="flex items-center gap-2">
-                <Switch
-                  id="run-share"
-                  checked={state.run.visibility === "shared"}
-                  disabled={share.busy}
-                  onCheckedChange={(next) =>
-                    void setShown(share, { visibility: next ? "shared" : "dm" })
-                  }
-                />
-                <Label htmlFor="run-share">Share</Label>
-              </span>
-              {mapToShare && (
-                // A narrowing of *Share*, not a second way in: players see the
-                // map only while they see the fight, so it waits for that. Off,
-                // it keeps what the DM left it at for when the fight is shared.
-                <span className="flex items-center gap-2">
-                  <Switch
-                    id="run-share-map"
-                    checked={state.run.mapShown}
-                    disabled={mapShare.busy || state.run.visibility !== "shared"}
-                    onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
-                  />
-                  <Label htmlFor="run-share-map">Share map</Label>
-                </span>
-              )}
-              {scene === undefined && (hobAvailable === true || pilotDriver !== null) && (
-                // Offered only with a model behind Hob; once on, it can always
-                // be turned off.
-                <span className="flex items-center gap-2">
-                  <Switch
-                    id="run-hob-autopilot"
-                    checked={pilotDriver !== null}
-                    disabled={pilotSwitch.busy}
-                    onCheckedChange={(next) => void setAutopilot(next)}
-                  />
-                  <Label htmlFor="run-hob-autopilot">Autopilot</Label>
-                </span>
-              )}
-              {/* While rolling, the round's one start is the panel's *Start
-                round N*, so the bar carries no second peach button. */}
-              {!rolling && scene === undefined && (
-                // No key advances the turn: the table's own call (D13), so a
-                // stray key press mid-fight never moves the marker.
-                <Button
-                  size="sm"
-                  disabled={
-                    turn.busy ||
-                    (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")
-                  }
-                  onClick={() => {
-                    // Autopilot takes the legendary actions due first.
-                    if (driving && pilot.endTurn()) return;
-                    void advance();
-                  }}
-                >
-                  {turn.busy ? "Advancing…" : "Next turn"}
-                  <Icon name="chevron-right" size={14} />
-                </Button>
-              )}
-              <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
-                End
-              </Button>
-            </>
-          )}
-          {over && (
-            <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
-              Back to the campaign
-            </Button>
-          )}
-        </TopBar>
+        {!onCanvas && header}
         {resource.state === "loading" && <Loading label="Reading the fight…" />}
         {resource.state === "failed" && (
           <div className="max-w-3xl">
@@ -2036,40 +2095,8 @@ export function RunScreen() {
         )}
 
         {state !== undefined && view !== undefined && stage.wide !== undefined && (
-          <div className={cn("flex flex-col gap-4", canvas && "min-h-0 flex-1")}>
-            {over && (
-              <p
-                role="status"
-                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
-              >
-                {scene === undefined
-                  ? `This fight came off the table. The order and the hit points below are how it finished — they are saved to Session ${String(view.session.number)}.`
-                  : `This ${sceneNoun(scene)} came off the table. Its checks below are how it finished — they are saved to Session ${String(view.session.number)}.`}
-              </p>
-            )}
-            {!over && scene === undefined && pilotDriver !== null && (
-              <AutopilotBar
-                mine={driving}
-                loop={pilot.loop}
-                status={pilot.status}
-                countdown={pilot.countdown}
-                busy={pilotSwitch.busy}
-                onStop={pilot.stop}
-                onResume={pilot.resume}
-                onNextNow={pilot.nextNow}
-                onDriveHere={() => void setAutopilot(true)}
-              />
-            )}
-            {controller.staleness !== undefined && (
-              <p
-                role="status"
-                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
-              >
-                The last re-read did not answer, so this may be a moment behind. Everything below is
-                the last thing the server said.
-              </p>
-            )}
-
+          <div className={cn("flex flex-col gap-4", onCanvas && "min-h-0 flex-1")}>
+            {!onCanvas && notices}
             {scene !== undefined ? (
               <SceneRunner
                 path={path}
@@ -2089,8 +2116,14 @@ export function RunScreen() {
                 onEnd={() => setEnding(true)}
                 extras={extras}
               />
-            ) : canvas && boardProps !== undefined ? (
+            ) : onCanvas ? (
               <RunStage
+                header={
+                  <>
+                    {header}
+                    {notices}
+                  </>
+                }
                 strip={strip}
                 rolling={rollPanel}
                 banner={banner}

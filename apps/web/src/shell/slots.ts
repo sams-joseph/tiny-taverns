@@ -1,7 +1,7 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useLayoutEffect } from "react";
 
 /**
- * What the persistent layout publishes to the screen below it — the two points
+ * What the persistent layout publishes to the screen below it — the points
  * where a screen reaches up into a shell it does not render.
  */
 
@@ -40,3 +40,23 @@ export const useShowHob = (): (() => void) | undefined => useContext(ShowHob);
 export const AskHob = createContext<((text: string) => void) | undefined>(undefined);
 
 export const useAskHob = (): ((text: string) => void) | undefined => useContext(AskHob);
+
+/**
+ * *Take the whole window*, for the one screen that is a canvas rather than a
+ * page: the live runner's board at a desktop width (`run/RunStage.tsx`), and
+ * the seated player's table that shares it. While a screen holds it, the shell
+ * draws no nav rows and `main` no page edge, so the board runs to the window's
+ * edges like a whiteboard's and the screen's own header floats over it.
+ * `undefined` outside the persistent layout.
+ */
+export const Fullscreen = createContext<((on: boolean) => void) | undefined>(undefined);
+
+/** Hold the window while `on`, and give it back when `on` turns off or the screen goes. */
+export function useFullscreen(on: boolean): void {
+  const set = useContext(Fullscreen);
+  useLayoutEffect(() => {
+    if (!on || set === undefined) return;
+    set(true);
+    return () => set(false);
+  }, [on, set]);
+}

@@ -31,6 +31,11 @@ for (const width of WIDTHS) {
         const campaignNav = page.getByRole("navigation", { name: "This campaign" });
         const inCampaign = (await campaignNav.count()) > 0;
         const header = page.locator('[data-slot="page-header"]');
+        // The runner's canvas and the player's table holding the window
+        // (`useFullscreen`, `shell/slots.ts`): the shell draws no chrome, so
+        // there are no rows to measure. `run.spec.ts` and
+        // `player-table.spec.ts` measure the canvas instead.
+        const fullscreen = await stack.isHidden();
 
         await test.step("draws no failure notice", async () => {
           await expect(page.locator('[data-slot="failure-notice"]')).toHaveCount(0);
@@ -136,7 +141,13 @@ for (const width of WIDTHS) {
           expect.soft(overlaps).toEqual([]);
         });
 
+        if (fullscreen)
+          await test.step("only a canvas puts the chrome away", async () => {
+            await expect.soft(page.locator('[data-slot="run-stage"]')).toHaveCount(1);
+          });
+
         await test.step("the chrome rows are their fixed heights", async () => {
+          if (fullscreen) return;
           expect.soft((await box(globalRow)).height, "global row").toBeCloseTo(44, 0);
           await expect.soft(stack).toHaveCSS("z-index", "10");
           // Every control on the global row is the one 26px pill, Ask Hob included.
@@ -227,7 +238,7 @@ for (const width of WIDTHS) {
           expect.soft(scrollers).toEqual([]);
         });
 
-        if (!inCampaign) return;
+        if (!inCampaign || fullscreen) return;
 
         await test.step("inside a campaign the chrome is the two nav rows", async () => {
           // No per-screen bar: the screen's header is the top of its content,

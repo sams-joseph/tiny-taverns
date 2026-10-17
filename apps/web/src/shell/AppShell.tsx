@@ -38,7 +38,7 @@ import {
   useSection,
   type Section,
 } from "./location";
-import { TopBarSlot } from "./slots";
+import { Fullscreen, TopBarSlot } from "./slots";
 import { TabRow, type Collapse } from "./TabRow";
 
 /**
@@ -855,6 +855,8 @@ export function AppShell({
   /** The bar's slot, published to the screen below once it has mounted. */
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
   const stack = useRef<HTMLDivElement>(null);
+  /** A canvas screen holds the whole window (`useFullscreen`, `shell/slots.ts`). */
+  const [fullscreen, setFullscreen] = useState(false);
 
   // The sticky stack's height, measured and published as `--chrome-height` on
   // the document's root, so a screen's own `sticky` can pin just under it — the
@@ -892,8 +894,11 @@ export function AppShell({
       <div className="@container/app flex min-w-0 flex-1 flex-col">
         {/* One sticky stack, so the global row, campaign row, screen bar and its
             optional tabs pin as a unit. Keeping the slot here also means none of
-            those rows needs its own scroll container or a calculated top offset. */}
-        <div ref={stack} className="sticky top-0 z-chrome shrink-0">
+            those rows needs its own scroll container or a calculated top offset.
+            A canvas screen hides it rather than unmounting it, so the rows are
+            the same nodes when it gives the window back, and the measured
+            height reads 0 while it is hidden. */}
+        <div ref={stack} className={cn("sticky top-0 z-chrome shrink-0", fullscreen && "hidden")}>
           <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
           <div ref={setBar} />
         </div>
@@ -903,8 +908,15 @@ export function AppShell({
                 column it actually has. Every `fixed` overlay in the product is
                 portalled to the body, so the containing block this establishes
                 catches nothing. */}
-            <main className="@container flex-1 px-page-sm py-page @3xl/app:px-page">
-              <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
+            <main
+              className={cn(
+                "@container flex-1",
+                !fullscreen && "px-page-sm py-page @3xl/app:px-page",
+              )}
+            >
+              <Fullscreen.Provider value={setFullscreen}>
+                <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
+              </Fullscreen.Provider>
             </main>
           </div>
         </HobRegion>

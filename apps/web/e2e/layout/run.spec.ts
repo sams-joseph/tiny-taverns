@@ -41,8 +41,6 @@ const INSET = 12;
 const TARGET = 24;
 /** `main` from `@3xl` (48rem): the canvas, and the board takes clicks (`run/RunTokens.tsx`). */
 const CANVAS = new Set<number>([1440, 1024]);
-/** `main`'s bottom padding, `py-page`: the stage ends this far above the viewport's bottom. */
-const PAGE = 32;
 
 type Box = Awaited<ReturnType<typeof box>>;
 const right = (b: Box) => b.x + b.width;
@@ -177,17 +175,15 @@ for (const width of WIDTHS) {
         const tools = page.locator('[data-slot="run-hud-tools"]');
         await expect(page.locator('[data-slot="run-layout"]')).toHaveCount(0);
 
-        await test.step("the stage fills the viewport under the header, and the window keeps still", async () => {
+        await test.step("the stage is the whole window, and the window keeps still", async () => {
           const at = await box(stage);
-          const header = await box(page.locator('main [data-slot="page-heading"]'));
-          const mainBox = await box(page.locator("main"));
-          const pad = await page
-            .locator("main")
-            .evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft));
-          expect.soft(at.y, "stage under the header").toBeGreaterThan(bottom(header));
-          expect.soft(bottom(at), "stage to the page's bottom edge").toBeCloseTo(HEIGHT - PAGE, 0);
-          expect.soft(at.x, "stage x").toBeCloseTo(mainBox.x + pad, 0);
-          expect.soft(right(at), "stage right").toBeCloseTo(right(mainBox) - pad, 0);
+          const { clientWidth } = await app.widths();
+          expect.soft(at.x, "stage x").toBeCloseTo(0, 0);
+          expect.soft(at.y, "stage y").toBeCloseTo(0, 0);
+          expect.soft(right(at), "stage right").toBeCloseTo(clientWidth, 0);
+          expect.soft(bottom(at), "stage bottom").toBeCloseTo(HEIGHT, 0);
+          // The shell's nav rows are put away while the canvas holds the window.
+          await expect.soft(page.getByRole("navigation", { name: "This campaign" })).toBeHidden();
           const scroll = await page.evaluate(() => ({
             scrollHeight: document.documentElement.scrollHeight,
             clientHeight: document.documentElement.clientHeight,
@@ -197,13 +193,19 @@ for (const width of WIDTHS) {
             .toBeLessThanOrEqual(scroll.clientHeight);
           // The board's canvas is the whole stage, behind everything.
           const board = await box(page.locator('[data-slot="board-canvas"]'));
-          expect.soft(board.width, "canvas width").toBeCloseTo(at.width - 2, 0);
-          expect.soft(board.height, "canvas height").toBeCloseTo(at.height - 2, 0);
+          expect.soft(board.width, "canvas width").toBeCloseTo(at.width, 0);
+          expect.soft(board.height, "canvas height").toBeCloseTo(at.height, 0);
+          // The header floats at the top, inset as the panels are.
+          const header = await box(page.locator('[data-slot="run-hud-header"]'));
+          expect.soft(header.x - at.x, "header from the left").toBeCloseTo(INSET, 0);
+          expect.soft(header.y - at.y, "header from the top").toBeCloseTo(INSET, 0);
+          expect.soft(right(at) - right(header), "header from the right").toBeCloseTo(INSET, 0);
         });
 
         await test.step("the panels float in their homes, on the HUD rung", async () => {
           const at = {
             stage: await box(stage),
+            header: await box(page.locator('[data-slot="run-hud-header"]')),
             list: await box(list),
             left: await box(page.locator('[data-slot="run-hud-left"]')),
             card: await box(card),
@@ -212,23 +214,25 @@ for (const width of WIDTHS) {
             tools: await box(tools),
           };
           // Initiative, across the top.
-          expect.soft(at.list.x - at.stage.x, "strip from the left").toBeCloseTo(INSET + 1, 0);
-          expect.soft(at.list.y - at.stage.y, "strip from the top").toBeCloseTo(INSET + 1, 0);
+          expect.soft(at.list.x - at.stage.x, "strip from the left").toBeCloseTo(INSET, 0);
+          expect
+            .soft(at.list.y - bottom(at.header), "strip under the header")
+            .toBeCloseTo(INSET, 0);
           expect
             .soft(right(at.stage) - right(at.list), "strip from the right")
-            .toBeCloseTo(INSET + 1, 0);
+            .toBeCloseTo(INSET, 0);
           // The selected creature, top right, under the strip.
           expect
             .soft(right(at.stage) - right(at.card), "card from the right")
-            .toBeCloseTo(INSET + 1, 0);
+            .toBeCloseTo(INSET, 0);
           expect.soft(at.card.y - bottom(at.list), "card under the strip").toBeCloseTo(INSET, 0);
           expect.soft(at.card.width, "card width").toBeCloseTo(ASIDE, 0);
           // The rolls, bottom left, in the column under the strip.
-          expect.soft(at.dice.x - at.stage.x, "dice from the left").toBeCloseTo(INSET + 1, 0);
+          expect.soft(at.dice.x - at.stage.x, "dice from the left").toBeCloseTo(INSET, 0);
           expect.soft(at.dice.width, "dice width").toBeCloseTo(ASIDE, 0);
           expect
             .soft(bottom(at.stage) - bottom(at.rolls), "rolls from the bottom")
-            .toBeCloseTo(INSET + 1, 0);
+            .toBeCloseTo(INSET, 0);
           expect.soft(at.rolls.y, "rolls below the strip").toBeGreaterThanOrEqual(bottom(at.list));
           // The tools, bottom centre, between the two columns.
           expect
@@ -239,7 +243,7 @@ for (const width of WIDTHS) {
             .toBeLessThanOrEqual(at.card.x - INSET + 0.5);
           expect
             .soft(bottom(at.stage) - bottom(at.tools), "tools from the bottom")
-            .toBeCloseTo(INSET + 1, 0);
+            .toBeCloseTo(INSET, 0);
           await expect.soft(page.locator('[data-slot="run-hud"]')).toHaveCSS("z-index", "5");
           // Over the board: a point inside each panel lands in the panel.
           for (const [name, part] of [
@@ -251,8 +255,6 @@ for (const width of WIDTHS) {
               .soft(await landsOn(page, part.x + part.width / 2, part.y + 8), `${name} is on top`)
               .toMatch(/^run-hud-|^Roll|^Brannoc|^Goblin|^rolls-toggle$/);
           }
-          // And the chrome is over the HUD: the stack is z-chrome (10).
-          await expect.soft(page.locator(".sticky.top-0").first()).toHaveCSS("z-index", "10");
         });
 
         await test.step("the dock holds the four tools, inside its edge", async () => {
@@ -1222,13 +1224,14 @@ for (const width of WIDTHS) {
         const at = { panel: await box(panel), map: await box(map), card: await box(card) };
         if (canvas) {
           const stage = await box(page.locator('[data-slot="run-stage"]'));
+          const header = await box(page.locator('[data-slot="run-hud-header"]'));
           await expect
             .soft(page.locator('[data-slot="run-hud-rolling"]'))
             .toContainText("Roll initiative");
           await expect.soft(page.locator('[data-slot="run-hud-strip"]')).toHaveCount(0);
           expect.soft(at.panel.width, "panel width").toBeCloseTo(ASIDE, 0);
-          expect.soft(at.panel.x - stage.x, "panel from the left").toBeCloseTo(INSET + 1, 0);
-          expect.soft(at.panel.y - stage.y, "panel from the top").toBeCloseTo(INSET + 1, 0);
+          expect.soft(at.panel.x - stage.x, "panel from the left").toBeCloseTo(INSET, 0);
+          expect.soft(at.panel.y - bottom(header), "panel under the header").toBeCloseTo(INSET, 0);
         } else {
           const whole = await box(page.locator('[data-slot="run-layout"]'));
           if (width === 390) {

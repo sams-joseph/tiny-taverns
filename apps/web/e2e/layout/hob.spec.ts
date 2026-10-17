@@ -45,7 +45,10 @@ for (const width of WIDTHS) {
       for (const [index, step] of walk.entries()) {
         await test.step(`${index}: ${step.name}`, async () => {
           if (index > 0) await app.go(step.path);
-          await expect.soft(askHob).toHaveAttribute("aria-pressed", "true");
+          // The runner's canvas holds the whole window and the shell puts its
+          // chrome away (`useFullscreen`), *Ask Hob* with it; the panel stays.
+          const canvas = (await page.locator('[data-slot="run-stage"]').count()) > 0;
+          if (!canvas) await expect.soft(askHob).toHaveAttribute("aria-pressed", "true");
           await expect.soft(panel).toBeVisible();
           const same = await page.evaluate(() => {
             const marked = (el: Element | null) =>
@@ -61,6 +64,20 @@ for (const width of WIDTHS) {
 
           const { scrollWidth, clientWidth } = await app.widths();
           expect.soft(scrollWidth, "scrollWidth with the panel open").toBe(clientWidth);
+
+          if (canvas) {
+            await expect.soft(stack).toBeHidden();
+            // Docked beside the canvas, which ends where the panel starts.
+            const docked = await box(
+              page.locator("[data-slot=sidebar-container]").filter({ has: panel }),
+            );
+            const stage = await box(page.locator('[data-slot="run-stage"]'));
+            expect.soft(docked.x + docked.width, "panel's right edge").toBeCloseTo(clientWidth, 0);
+            expect
+              .soft(stage.x + stage.width, "the canvas ends where the panel starts")
+              .toBeCloseTo(docked.x, 0);
+            return;
+          }
 
           // Beside a docked panel the rows are narrower than the window;
           // nothing in them may be drawn past the column they have.

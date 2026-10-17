@@ -2504,11 +2504,28 @@ describe("the canvas", () => {
     expect(hud("tools").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
   });
 
-  it("bounds the screen to the viewport under the chrome, and lets each panel scroll itself", async () => {
+  it("takes the whole window, and lets each panel scroll itself", async () => {
     await open();
     const screenBox = document.querySelector<HTMLElement>("[data-slot=run-screen]")!;
-    expect(screenBox.className).toContain("var(--chrome-height)");
+    expect(screenBox.className).toMatch(/(^|\s)h-dvh(\s|$)/);
+    // The shell's nav rows are put away, and `main` draws no page edge.
+    const nav = screen.getByRole("navigation", { name: "This campaign", hidden: true });
+    expect(nav.closest(".hidden")).not.toBeNull();
+    expect(screenBox.closest("main")?.className).not.toMatch(/px-page/);
+    // The header floats over the board, and its back link is the way out.
+    expect(hud("header")).toContainElement(screen.getByRole("heading", { level: 1 }));
+    expect(within(hud("header")).getByRole("link", { name: /Overview/ })).toBeInTheDocument();
     for (const name of ["rolls", "panel"]) expect(hud(name).className).toMatch(/overflow-y-auto/);
+  });
+
+  it("gives the window back to the shell when it leaves", async () => {
+    await open();
+    fireEvent.click(within(hud("header")).getByRole("link", { name: /Overview/ }));
+    await waitFor(() => expect(stage()).toBeNull());
+    const nav = screen.getByRole("navigation", { name: "This campaign" });
+    expect(nav.closest(".hidden")).toBeNull();
+    expect(nav.closest("main")).toBeNull();
+    expect(document.querySelector("main")?.className).toMatch(/px-page/);
   });
 
   it("zooms on a scroll about the pointer, and the page itself never scrolls for it", async () => {
@@ -2732,7 +2749,7 @@ describe("the canvas", () => {
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
   });
 
-  it("keeps the ended and behind lines above the stage", async () => {
+  it("floats the ended and behind lines under the header, clear of the board", async () => {
     for (const [key, answer] of [...server.routes]) {
       if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
         server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
@@ -2740,8 +2757,7 @@ describe("the canvas", () => {
     }
     await open();
     const ended = await screen.findByText(/came off the table/);
-    expect(stage()).not.toContainElement(ended);
-    expect(ended.compareDocumentPosition(stage()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hud("header")).toContainElement(ended);
     // Over, nothing on the board takes a tool.
     expect(within(hud("tools")).getByRole("button", { name: "Measure" })).toBeDisabled();
   });
