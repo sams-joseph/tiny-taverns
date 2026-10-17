@@ -101,6 +101,55 @@
      read across a table rather than at a control. Ours until the designers
      answer it; the board's effects are `run/BoardEffects.tsx`. */
   --dur-effect: 900ms;
+
+  /* PROTOTYPE, not from the delivery: the board's effects in the Hades-like
+     direction the maintainer chose on 2026-10-17 — inked shapes, a white-hot
+     core, a saturated body and a glow, per damage family, over one ink. Ours
+     until the designers' delivery answers them; `run/fx/palette.ts` maps each
+     damage type to a family. `--fx-blood` is a damage number's fill. */
+  --fx-ink: #0a050c;
+  --fx-blood: #ff2a3d;
+  --fx-fire-glow: #ff4a1c;
+  --fx-fire: #ff9a3c;
+  --fx-fire-core: #fff1c4;
+  --fx-cold-glow: #2b8cff;
+  --fx-cold: #9fe3ff;
+  --fx-cold-core: #f4fdff;
+  --fx-lightning-glow: #2bb6ff;
+  --fx-lightning: #9ff6ff;
+  --fx-lightning-core: #ffffff;
+  --fx-thunder-glow: #5a6cff;
+  --fx-thunder: #b9c4ff;
+  --fx-thunder-core: #f5f7ff;
+  --fx-acid-glow: #7bdc1e;
+  --fx-acid: #c6ff5a;
+  --fx-acid-core: #f6ffd8;
+  --fx-poison-glow: #3f9e3a;
+  --fx-poison: #8fe36b;
+  --fx-poison-core: #e8ffd8;
+  --fx-necrotic-glow: #6a1fd1;
+  --fx-necrotic: #b07cff;
+  --fx-necrotic-core: #f1e6ff;
+  --fx-radiant-glow: #ffb800;
+  --fx-radiant: #ffe28a;
+  --fx-radiant-core: #fffbe8;
+  --fx-force-glow: #b04cff;
+  --fx-force: #e2a8ff;
+  --fx-force-core: #fbf2ff;
+  --fx-psychic-glow: #ff3fa8;
+  --fx-psychic: #ff9fd6;
+  --fx-psychic-core: #fff0f8;
+  --fx-steel-glow: #c9973f;
+  --fx-steel: #ffe2a8;
+  --fx-steel-core: #fffaf0;
+  --fx-heal-glow: #22c76a;
+  --fx-heal: #8dffc0;
+  --fx-heal-core: #f0fff6;
+
+  /* PROTOTYPE: the effects' one overshoot, a hit's knock-back and a number's
+     pop, against the delivery's "nothing overshoots" by the maintainer's
+     choice of 2026-10-17. */
+  --ease-overshoot: cubic-bezier(0.2, 1.6, 0.4, 1);
 }
 
 /* The delivery zeroes its own durations under reduced motion

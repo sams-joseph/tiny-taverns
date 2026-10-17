@@ -12,8 +12,16 @@ import {
   squareAt,
 } from "@taverns/api";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { BoardEffects } from "./BoardEffects";
+import { boardStage } from "./fx/stage";
 import type { Act } from "./effects";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
@@ -430,6 +438,23 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
 
   const standing = placed(tokens);
+  /** Where everyone stands now, for an area's knock-back. */
+  const standingNow = useRef(standing);
+  standingNow.current = standing;
+  /** What an effect may do to this board: shake it, freeze it, knock a token back. */
+  const stage = useMemo(
+    () =>
+      boardStage({
+        box: () => layer.current?.closest("[data-slot=battle-map]") ?? null,
+        standing: (squares) =>
+          standingNow.current.flatMap((token) =>
+            squares.some((square) => same(square, token.position))
+              ? [{ id: token.id, square: token.position }]
+              : [],
+          ),
+      }),
+    [],
+  );
   /** Squares this board dropped a token on, until the server's answer puts it there. */
   const dropped = useRef(new Map<CombatantId, BoardSquare>());
   const effects = useBoardEffects(
@@ -688,7 +713,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         {fog.veil === "dim" && veil}
       </div>
 
-      <BoardEffects board={board} playing={effects.playing} ended={effects.ended} />
+      <BoardEffects board={board} playing={effects.playing} stage={stage} ended={effects.ended} />
     </>
   );
 }

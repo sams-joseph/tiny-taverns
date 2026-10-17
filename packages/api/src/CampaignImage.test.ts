@@ -98,10 +98,14 @@ describe("campaignImageHasSubject", () => {
 });
 
 describe("the house style", () => {
-  it("keeps the portrait style a character has always been drawn in, word for word", () => {
+  // Pinned word for word: a character's portrait changes look only by a
+  // decision, as the move to the inked, firelit direction (2026-10-17) was.
+  it("keeps the portrait style a character is drawn in, word for word", () => {
     expect(HOUSE_PORTRAIT_STYLE).toBe(
-      "Fantasy illustration somewhat cartoony think World of Warcraft from Blizzard, cool and low-key, slight grain, blue-hour light rather " +
-        "than firelight. Single subject, centred bust, plain dark background. No text, no " +
+      "Painterly fantasy illustration with a bold comic-book finish: confident dark ink outlines on every " +
+        "form, flat saturated colour, dramatic chiaroscuro. Warm firelight and a hard rim of light carve the " +
+        "subject out of deep near-black shadow; ember orange, blood red and burnished gold against cool " +
+        "violet and teal shade. Single subject, centred bust, plain dark background. No text, no " +
         "lettering, no frame, no watermark. Tasteful and non-graphic.",
     );
   });

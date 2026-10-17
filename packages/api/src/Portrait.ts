@@ -38,7 +38,7 @@ const KIT_MAX = 2;
  * The longest prompt the builder can return with the house style: every label
  * at {@link LABEL_MAX}, a full appearance line, and the joining words.
  */
-export const PORTRAIT_PROMPT_MAX = 1200;
+export const PORTRAIT_PROMPT_MAX = 1400;
 
 /** The parts of a character a portrait reads. A proposal's draft has them too. */
 export type PortraitSubject = Pick<Character, "race" | "subrace" | "className"> & {
