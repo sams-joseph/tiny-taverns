@@ -73,9 +73,12 @@ export interface DmRoll extends Pick<
   | "mode"
   | "critical"
   | "kind"
+  | "combatantId"
   | "targetCombatantId"
   | "targetAc"
   | "outcome"
+  | "delivery"
+  | "damageType"
 > {
   /** What it was sent under: the pending copy and the saved one share it. */
   readonly requestId: string | null;
@@ -98,9 +101,12 @@ const fromServer = (roll: Roll): DmRoll => ({
   mode: roll.mode,
   critical: roll.critical,
   kind: roll.kind,
+  combatantId: roll.combatantId,
   targetCombatantId: roll.targetCombatantId,
   targetAc: roll.targetAc,
   outcome: roll.outcome,
+  delivery: roll.delivery,
+  damageType: roll.damageType,
   requestId: roll.requestId,
   at: DateTime.toEpochMillis(roll.createdAt),
   undone: roll.undoneAt !== null,
@@ -121,9 +127,12 @@ const fromPending = ({ payload, at }: Pending): DmRoll => ({
   mode: payload.mode,
   critical: payload.critical ?? null,
   kind: payload.kind ?? "plain",
+  combatantId: payload.combatantId ?? null,
   targetCombatantId: payload.targetCombatantId ?? null,
   targetAc: payload.targetAc ?? null,
   outcome: payload.outcome ?? null,
+  delivery: payload.delivery ?? null,
+  damageType: payload.damageType ?? null,
   requestId: payload.requestId,
   at,
   undone: false,

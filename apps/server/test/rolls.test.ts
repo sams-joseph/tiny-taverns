@@ -310,35 +310,45 @@ describeLayer("rolls", services, (it) => {
       }),
     );
 
-    it.effect("logs an attack with who, at whom, the target's AC and the outcome", () =>
-      Effect.gen(function* () {
-        const f = yield* aFight;
-        const rolls = yield* Rolls;
-        const attack = yield* as(
-          f.dm,
-          rolls.create(
-            f.campaign.id,
-            dmRoll({
-              kind: "attack",
-              combatantId: f.hag.id,
-              targetCombatantId: f.brannoc.id,
-              targetAc: 17,
-              outcome: "hit",
-            }),
-          ),
-        );
-        const read = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, attack.id));
-        expect(read).toMatchObject({
-          kind: "attack",
-          combatantId: f.hag.id,
-          targetCombatantId: f.brannoc.id,
-          targetAc: 17,
-          outcome: "hit",
-          visibility: "dm",
-          encounterRunId: f.run.id,
-        });
-        expect(yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
-      }),
+    it.effect(
+      "logs an attack with who, at whom, the target's AC, the outcome and what it was",
+      () =>
+        Effect.gen(function* () {
+          const f = yield* aFight;
+          const rolls = yield* Rolls;
+          const attack = yield* as(
+            f.dm,
+            rolls.create(
+              f.campaign.id,
+              dmRoll({
+                kind: "attack",
+                combatantId: f.hag.id,
+                targetCombatantId: f.brannoc.id,
+                targetAc: 17,
+                outcome: "hit",
+                delivery: "ranged-spell",
+                damageType: "fire",
+              }),
+            ),
+          );
+          const read = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, attack.id));
+          expect(read).toMatchObject({
+            kind: "attack",
+            combatantId: f.hag.id,
+            targetCombatantId: f.brannoc.id,
+            targetAc: 17,
+            outcome: "hit",
+            delivery: "ranged-spell",
+            damageType: "fire",
+            visibility: "dm",
+            encounterRunId: f.run.id,
+          });
+          expect(yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+
+          // A roll that cannot say what it was says nothing.
+          const plain = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll()));
+          expect(plain).toMatchObject({ delivery: null, damageType: null });
+        }),
     );
 
     it.effect("logs a concentration save in a fight as a roll, for the DM and for a player", () =>

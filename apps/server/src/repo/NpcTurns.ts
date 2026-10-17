@@ -1,4 +1,6 @@
 import {
+  attackDelivery,
+  damageTypeOf,
   type AssistantTurnId,
   attackLands,
   attackModeAt,
@@ -249,6 +251,12 @@ export class NpcTurns extends Context.Service<
           // Each act's dice share a request stem (`<stem>:<n>`), as the
           // runner files the DM's, so the log prints an attack and its damage
           // as one line.
+          /** A damage type a roll can keep, when the line's is one of the thirteen. */
+          const typeOf = (written: string | null | undefined) => {
+            const damageType = damageTypeOf(written);
+            return damageType === undefined ? {} : { damageType };
+          };
+
           let acts = 0;
           const stem = () => `hob-${turnId}-${String(acts++)}`;
           const damageRolls = (
@@ -271,6 +279,7 @@ export class NpcTurns extends Context.Service<
                 total: roll.total,
                 mode: "normal",
                 kind: "damage",
+                ...typeOf(roll.type),
               }),
             );
 
@@ -346,6 +355,7 @@ export class NpcTurns extends Context.Service<
                 random: dice.random,
               });
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
+              const delivery = attackDelivery(numbers, band);
               const about = { combatantId: selfId, targetCombatantId: targetId };
               const outcome = OUTCOME[rolled.verdict];
               const act = stem();
@@ -365,6 +375,9 @@ export class NpcTurns extends Context.Service<
                 kind: "attack",
                 ...(rolled.ac === null ? {} : { targetAc: rolled.ac }),
                 ...(outcome === undefined ? {} : { outcome }),
+                // What it was, for the board to draw: the same rule the runner's strike files by.
+                ...(delivery === undefined ? {} : { delivery }),
+                ...typeOf(numbers.damage[0]?.type),
               });
               yield* damageRolls(label, rolled.damage, about, act, 1);
 

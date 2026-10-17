@@ -5,6 +5,7 @@ export * from "./Advancement.js";
 export * from "./Api.js";
 export * from "./AreaShape.js";
 export * from "./Attack.js";
+export * from "./AttackDelivery.js";
 export * from "./BattleMap.js";
 export * from "./Beat.js";
 export * from "./Campaign.js";

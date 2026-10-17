@@ -45,9 +45,12 @@ const printed = (throws: ReadonlyArray<DmThrow>) =>
       ...part,
       critical: part.critical ?? null,
       kind: part.kind ?? "plain",
+      combatantId: part.combatantId ?? null,
       targetCombatantId: part.targetCombatantId ?? null,
       targetAc: part.targetAc ?? null,
       outcome: part.outcome ?? null,
+      delivery: part.delivery ?? null,
+      damageType: part.damageType ?? null,
       requestId: `act:${String(index)}`,
       at: 0,
       undone: false,
@@ -88,6 +91,7 @@ describe("an attack", () => {
         targetCombatantId: goblinBossId,
         targetAc: 17,
         outcome: "hit",
+        damageType: "slashing",
       },
       {
         label: "Brannoc · Longsword → Goblin Boss",
@@ -99,10 +103,14 @@ describe("an attack", () => {
         mode: "normal",
         critical: null,
         kind: "damage",
+        damageType: "slashing",
         combatantId: brannocId,
         targetCombatantId: goblinBossId,
       },
     ]);
+    // How it was delivered, when the options could say, goes on the to-hit alone.
+    const delivered = attackThrows(outcome, { ...who, delivery: "melee-weapon" });
+    expect(delivered.map((part) => part.delivery)).toEqual(["melee-weapon", undefined]);
     expect(printed(throws)).toEqual([
       {
         label: "Brannoc · Longsword → Goblin Boss",

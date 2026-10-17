@@ -455,6 +455,8 @@ describe("a character sheet", () => {
         targetCombatantId: null,
         targetAc: null,
         outcome: null,
+        delivery: null,
+        damageType: null,
         requestId: "from-browser",
         visibility: "shared",
         origin: "authored",

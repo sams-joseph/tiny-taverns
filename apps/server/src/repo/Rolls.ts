@@ -118,6 +118,8 @@ export const fileRoll = (
           target_combatant_id: roll.targetCombatantId,
           target_ac: roll.targetAc,
           outcome: roll.outcome,
+          delivery: roll.delivery,
+          damage_type: roll.damageType,
           request_id: roll.requestId,
           visibility: roll.visibility,
           ...assistantColumns(roll.from),
@@ -285,7 +287,8 @@ export class Rolls extends Context.Service<
                 and combatant.kind = 'pc'
             ))
           then character_roll.target_ac end as target_ac,
-        character_roll.outcome, character_roll.request_id,
+        character_roll.outcome, character_roll.delivery, character_roll.damage_type,
+        character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
         character_roll.undone_at,
         character_roll.created_at, character_roll.updated_at,

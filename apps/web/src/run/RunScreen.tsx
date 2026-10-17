@@ -85,11 +85,13 @@ import {
 } from "./load";
 import { RollsDock } from "./RollsDock";
 import { dockLines } from "./rollsLog";
+import { strikesOf } from "./effects";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
 import {
+  deliveryFor,
   longRangeFor,
   momentsOf,
   multiattacksOf,
@@ -1258,7 +1260,13 @@ export function RunScreen() {
       target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
       mode: attackModeAt(marks?.long.has(combatant.id) === true ? "long" : undefined),
     });
-    dice.file(attackThrows(outcome, { attackerId: attacker.id, targetId: combatant.id }));
+    dice.file(
+      attackThrows(outcome, {
+        attackerId: attacker.id,
+        targetId: combatant.id,
+        delivery: deliveryFor(pickOptions, picking.line, combatant.id),
+      }),
+    );
     setTargeting(undefined);
     setAttack({
       attackerId: attacker.id,
@@ -1865,6 +1873,7 @@ export function RunScreen() {
             onTarget: picking === undefined ? undefined : strike,
             outOfRange: marks?.out,
             onMove: move,
+            strikes: strikesOf(dice.rolls),
           },
           hostileTokensHidden: state.run.hostileTokensHidden,
           hiding: mapShare.busy,

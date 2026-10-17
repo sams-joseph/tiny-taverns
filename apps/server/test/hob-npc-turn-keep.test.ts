@@ -328,8 +328,11 @@ const writtenBy = (turnId: AssistantTurnId) =>
       readonly dice: ReadonlyArray<number>;
       readonly total: number;
       readonly outcome: string | null;
+      readonly delivery: string | null;
+      readonly damage_type: string | null;
     }>`
-      select kind, origin, visibility, mode, dice, total, outcome from character_roll
+      select kind, origin, visibility, mode, dice, total, outcome, delivery, damage_type
+      from character_roll
       where assistant_turn_id = ${turnId} order by created_at, id
     `;
     const events = yield* sql<{
@@ -481,6 +484,15 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
         expect(
           written.rolls.filter((row) => row.kind === "attack").map((row) => row.outcome),
         ).toEqual(["hit", "fumble", "hit"]);
+        // What each strike was, for the board: teeth and claws within reach.
+        expect(written.rolls.map((row) => [row.kind, row.delivery, row.damage_type])).toEqual([
+          ["attack", "melee-weapon", "piercing"],
+          ["damage", null, "piercing"],
+          ["damage", null, "fire"],
+          ["attack", "melee-weapon", "slashing"],
+          ["attack", "melee-weapon", "slashing"],
+          ["damage", null, "slashing"],
+        ]);
         expect(written.events.every((row) => row.origin === "assistant")).toBe(true);
         expect(new Set(written.events.map((row) => row.kind))).toEqual(
           new Set([
@@ -684,6 +696,12 @@ describeLayer("hob-npc-turn-keep", shared, (it) => {
           damage: [{ notation: "4d6", total: 8, type: "Radiant" }],
           hit: { amount: 8, hpAfter: 22 },
         });
+        // A ranged spell attack, and its radiant damage, for the board.
+        const written = yield* writtenBy(turnId);
+        expect(written.rolls.map((row) => [row.kind, row.delivery, row.damage_type])).toEqual([
+          ["attack", "ranged-spell", "radiant"],
+          ["damage", null, "radiant"],
+        ]);
         const priest = rowOf(yield* rowsOf(table, fight), fight.priest.id);
         expect(priest.slotsSpent).toEqual({ "slot/Spellcasting/1": 1 });
         expect(priest.actionUsed).toBe(true);

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AttackDelivery, DamageType } from "./AttackDelivery.js";
 import {
   AccountId,
   CampaignId,
@@ -84,6 +85,13 @@ export class Roll extends Schema.Class<Roll>("Roll")({
   targetCombatantId: Schema.NullOr(CombatantId),
   targetAc: Schema.NullOr(Schema.Int),
   outcome: Schema.NullOr(RollOutcome),
+  /**
+   * What the attack was (`AttackDelivery.ts`): how it was delivered, on an
+   * attack's to-hit, and the damage type, on the to-hit and each damage roll.
+   * Null on every other roll, and on one whose line could not say.
+   */
+  delivery: Schema.NullOr(AttackDelivery),
+  damageType: Schema.NullOr(DamageType),
   requestId: Schema.NullOr(Schema.NonEmptyString),
   visibility: Visibility,
   ...provenanceFields,
@@ -113,6 +121,8 @@ export const RollCreate = Schema.Struct({
   targetCombatantId: Schema.optional(CombatantId),
   targetAc: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }))),
   outcome: Schema.optional(RollOutcome),
+  delivery: Schema.optional(AttackDelivery),
+  damageType: Schema.optional(DamageType),
   label: RollLabel,
   notation: RollNotation,
   dice: RollFaces,

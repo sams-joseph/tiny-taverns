@@ -100,6 +100,8 @@ const roll = {
   targetCombatantId: null,
   targetAc: null,
   outcome: null,
+  delivery: null,
+  damageType: null,
   requestId: null,
   visibility: "shared",
   origin: "authored",

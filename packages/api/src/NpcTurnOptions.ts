@@ -1,3 +1,4 @@
+import { spellAttackOf } from "./AttackDelivery.js";
 import {
   type BoardSquare,
   type DiagonalRule,
@@ -120,6 +121,8 @@ export interface NpcAttack {
   readonly damage: ReadonlyArray<{ readonly dice: string; readonly type?: string }>;
   readonly reach?: number;
   readonly range?: ActionRange;
+  /** A spell attack, melee or ranged, as the spell's `attack_type` says; absent on a weapon's. */
+  readonly spell?: "melee" | "ranged";
 }
 
 export interface NpcSave {
@@ -732,6 +735,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
               const targets = targetsFor(undefined, range);
               return targets === undefined ? {} : { targets };
             })();
+      const spellAttack = spellAttackOf(spell.spell.attackType);
       const base = {
         id,
         slot,
@@ -750,6 +754,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
                 toHit: spellcasting.modifier,
                 damage,
                 ...(range === undefined ? {} : { range }),
+                ...(spellAttack === undefined ? {} : { spell: spellAttack }),
               },
             }
           : {}),

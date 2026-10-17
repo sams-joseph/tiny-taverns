@@ -94,4 +94,20 @@
      width below that), opening on a 200px portrait. */
   --cast-drawer-w: 480px;
   --cast-drawer-portrait-h: 200px;
+
+  /* PROTOTYPE, not from the delivery: the battle board's combat effects (a
+     burst on a token that is hit or healed, the number rising off it) play
+     longer than the delivery's slowest step, `--dur-slower`, because they are
+     read across a table rather than at a control. Ours until the designers
+     answer it; the board's effects are `run/BoardEffects.tsx`. */
+  --dur-effect: 900ms;
+}
+
+/* The delivery zeroes its own durations under reduced motion
+   (tokens/motion.css); this one follows, so a board effect ends the frame it
+   starts and is never seen. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-effect: 0ms;
+  }
 }

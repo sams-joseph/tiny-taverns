@@ -1,4 +1,6 @@
 import {
+  type AttackDelivery,
+  attackDelivery,
   type Combatant,
   type CombatantId,
   type CreatureId,
@@ -158,6 +160,23 @@ export const outOfRangeFor = (options: NpcTurnOptions | undefined, line: Pick<Ac
 /** Who the line takes in only at long range, at disadvantage. */
 export const longRangeFor = (options: NpcTurnOptions | undefined, line: Pick<ActionLine, "key">) =>
   bandOf(options, line, "long");
+
+/**
+ * How the line is delivered at this target (`attackDelivery`, the rule a kept
+ * Hob turn files by): its option's reach, range or spell, and the band the
+ * target stands in. Nothing when the options measured no such line.
+ */
+export const deliveryFor = (
+  options: NpcTurnOptions | undefined,
+  line: Pick<ActionLine, "key">,
+  targetId: CombatantId,
+): AttackDelivery | undefined => {
+  const id = optionIdOf(line);
+  const option = options?.options.find((entry) => entry.id === id);
+  if (option?.attack === undefined) return undefined;
+  const band = option.targets?.find((target) => target.combatantId === targetId)?.band;
+  return attackDelivery(option.attack, band);
+};
 
 /** The moments a creature has now, by the rule the server checks the ask against. */
 export const momentsOf = (options: NpcTurnOptions): ReadonlyArray<NpcTurnMoment> =>

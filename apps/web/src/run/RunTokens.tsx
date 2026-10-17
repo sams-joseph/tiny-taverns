@@ -13,8 +13,11 @@ import {
 } from "@taverns/api";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
+import { BoardEffects } from "./BoardEffects";
+import type { Strike } from "./effects";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
+import { useBoardEffects } from "./useBoardEffects";
 import type { DrawnBoard } from "./BoardTools";
 import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } from "./tokens";
 
@@ -65,6 +68,14 @@ import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } fr
  * its ruler's *left* or *over* is against the same feet, so the board and the
  * panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
  * Area or Fog is on (`BoardTools.tsx`, `Fog.tsx`) it is not drawn.
+ *
+ * ### Effects
+ *
+ * A token that is hit or healed is ringed by a burst, with the number rising
+ * off it on the DM's board, and one that moves hops to its square
+ * (`BoardEffects.tsx`), worked out from what the board re-reads, so every
+ * write plays whoever made it. A token the DM drops does not hop again when
+ * the server answers.
  *
  * ### Fog
  *
@@ -125,6 +136,8 @@ export interface TokenProps {
   readonly outOfRange?: ReadonlySet<CombatantId> | undefined;
   /** Put it on a square, or `null` to take it off the board; settles once the server answers. */
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<unknown>;
+  /** The night's attacks the board draws, from the DM's rolls (`strikesOf`). */
+  readonly strikes?: ReadonlyArray<Strike>;
 }
 
 /**
@@ -146,6 +159,8 @@ export interface LayerToken extends Omit<TokenState, "health"> {
   readonly conditions: number;
   /** Hit points over maximum, 0–1, when this reader may know them; no bar otherwise. */
   readonly health: number | undefined;
+  /** Its hit points, when this reader may know the number; the board's effects say it. */
+  readonly hp?: number;
   /** Said after its name on the token's button: `" (you)"`. */
   readonly spoken?: string;
   /** Beyond the reach and range of the DM's line whose target is being picked. */
@@ -174,6 +189,8 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onSelect: (token: T) => void;
   readonly onTarget: ((token: T) => void) | undefined;
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
+  /** The attacks this reader may see drawn; a player's board has none yet. */
+  readonly strikes?: ReadonlyArray<Strike>;
 }
 
 type Placed<T extends LayerToken> = T & { readonly position: BoardSquare };
@@ -365,6 +382,9 @@ export function RunTokens(props: TokenProps) {
         ? combatant.portrait.thumbUrl
         : undefined,
     conditions: combatant.conditions.length,
+    // The server's, not the optimistic number the bar shows: a hit the server
+    // refuses never played, so putting it back plays no heal.
+    hp: combatant.hpCurrent,
     outOfRange: outOfRange?.has(combatant.id) ?? false,
   }));
   const byId = (id: CombatantId | undefined) => tokens.find((token) => token.id === id);
@@ -410,6 +430,23 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
 
   const standing = placed(tokens);
+  /** Squares this board dropped a token on, until the server's answer puts it there. */
+  const dropped = useRef(new Map<CombatantId, BoardSquare>());
+  const effects = useBoardEffects(
+    standing.map((token) => ({
+      id: token.id,
+      square: token.position,
+      health: token.health,
+      hp: token.hp,
+    })),
+    (id, to) => {
+      const at = dropped.current.get(id);
+      if (at === undefined || !same(at, to)) return false;
+      dropped.current.delete(id);
+      return true;
+    },
+    props.strikes,
+  );
   const squareOf = (combatant: Placed<T>): BoardSquare =>
     drag?.id === combatant.id
       ? drag.over
@@ -466,6 +503,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     if (same(to, drag.from)) return;
     if (heldBesides(combatant.id).some((held) => same(held, to))) return;
     setLanding({ id: combatant.id, at: to });
+    dropped.current.set(combatant.id, to);
     void onMove(combatant, to).finally(() =>
       setLanding((current) => (current?.id === combatant.id ? undefined : current)),
     );
@@ -543,6 +581,8 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
           portrait={combatant.portrait}
           {...(combatant.health === undefined ? {} : { health: combatant.health })}
           conditions={combatant.conditions}
+          lifted={dragging ? "held" : active ? "turn" : undefined}
+          hop={effects.hopOf(combatant.id)}
           name={
             nameShown(names, { active, selected: isSelected, dragging })
               ? combatant.displayName
@@ -589,7 +629,9 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
                     onKeyDown={step(combatant)}
                     className={cn(
                       "absolute rounded-circle outline-none focus-visible:ring-focus",
-                      "transition-[left,top] duration-(--dur-fast) ease-out",
+                      "transition-[left,top] ease-out",
+                      // A drag keeps up with the pointer; any other move glides as its token hops.
+                      dragging ? "duration-(--dur-fast)" : "duration-(--dur-slower)",
                       targeting
                         ? "cursor-crosshair"
                         : movable(combatant)
@@ -631,7 +673,11 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
             <span
               key={combatant.id}
               data-token={combatant.id}
-              className={cn("absolute", active && "z-lifted", fade)}
+              className={cn(
+                "absolute transition-[left,top] duration-(--dur-slower) ease-out",
+                active && "z-lifted",
+                fade,
+              )}
               // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
               style={at(squareOf(combatant))}
             >
@@ -641,6 +687,8 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         })}
         {fog.veil === "dim" && veil}
       </div>
+
+      <BoardEffects board={board} playing={effects.playing} ended={effects.ended} />
     </>
   );
 }
