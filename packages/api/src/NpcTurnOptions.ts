@@ -1,4 +1,4 @@
-import { spellAttackOf } from "./AttackDelivery.js";
+import { spellAreaOf, spellAttackOf, spellRangeOf } from "./AttackDelivery.js";
 import {
   type BoardSquare,
   type DiagonalRule,
@@ -266,21 +266,6 @@ const signedNumber = (text: string | undefined): number | undefined => {
 };
 
 /**
- * A spell row's range: `"60 feet"`, `"1 mile"`, `"Touch"` (5 feet, the reach
- * of a touch), `"Self"` (the caster, or an area from it). `"Sight"`,
- * `"Unlimited"` and `"Special"` are no distance a board measures.
- */
-const spellRangeOf = (label: string): number | "self" | undefined => {
-  const trimmed = label.trim().toLowerCase();
-  if (trimmed.startsWith("self")) return "self";
-  if (trimmed === "touch") return 5;
-  const feet = /^(\d+)\s*(?:feet|foot|ft\.?)$/.exec(trimmed);
-  if (feet !== null) return Number(feet[1]);
-  const miles = /^(\d+)\s*miles?$/.exec(trimmed);
-  return miles === null ? undefined : Number(miles[1]) * 5280;
-};
-
-/**
  * Whether a feature rolls to hit. The source writes `attack_bonus: 0` on some
  * features that only point at others (the kraken's, the vampire's legendary
  * actions), so a zero is a to-hit only when the prose says `+0 to hit`.
@@ -310,20 +295,6 @@ const castingSlotOf = (castingTime: string): NpcSlot | undefined => {
   if (time === "1 bonus action") return "bonus";
   if (time.startsWith("1 reaction")) return "reaction";
   return undefined;
-};
-
-const spellAreaOf = (
-  area: NpcSpell["spell"]["areaOfEffect"],
-  self: boolean,
-): ActionArea | undefined => {
-  if (area === undefined) return undefined;
-  const shape =
-    area.type === "cylinder"
-      ? "sphere"
-      : (["sphere", "cone", "line", "cube"] as const).find((s) => s === area.type);
-  return shape === undefined
-    ? undefined
-    : { shape, feet: area.size, origin: self ? "self" : "point" };
 };
 
 /**

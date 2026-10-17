@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { AREA_FEET, type BoardArea, type BoardSquare } from "./BattleMap.js";
 import type { ActionArea } from "./Creature.js";
+import type { SpellArea } from "./Spell.js";
 import type { NpcAttack, NpcTarget } from "./NpcTurnOptions.js";
 
 /**
@@ -56,6 +57,39 @@ export const damageTypeOf = (written: string | null | undefined): DamageType | u
 export const spellAttackOf = (written: string | undefined): "melee" | "ranged" | undefined => {
   const word = written?.trim().toLowerCase();
   return word === "melee" || word === "ranged" ? word : undefined;
+};
+
+/**
+ * A spell row's range: `"60 feet"`, `"1 mile"`, `"Touch"` (5 feet, the reach
+ * of a touch), `"Self"` (the caster, or an area from it). `"Sight"`,
+ * `"Unlimited"` and `"Special"` are no distance a board measures.
+ */
+export const spellRangeOf = (label: string): number | "self" | undefined => {
+  const trimmed = label.trim().toLowerCase();
+  if (trimmed.startsWith("self")) return "self";
+  if (trimmed === "touch") return 5;
+  const feet = /^(\d+)\s*(?:feet|foot|ft\.?)$/.exec(trimmed);
+  if (feet !== null) return Number(feet[1]);
+  const miles = /^(\d+)\s*miles?$/.exec(trimmed);
+  return miles === null ? undefined : Number(miles[1]) * 5280;
+};
+
+/**
+ * A spell row's area as an action's: a cylinder is drawn as the sphere it
+ * covers on a flat board, and an area from a `"Self"` range starts at the
+ * caster (a cone, a line, a burst), any other at a point it picks. One rule
+ * for a monster's casting (`npcTurnOptions`) and a character's spell line
+ * (`spellActionFor`).
+ */
+export const spellAreaOf = (area: SpellArea | undefined, self: boolean): ActionArea | undefined => {
+  if (area === undefined) return undefined;
+  const shape =
+    area.type === "cylinder"
+      ? "sphere"
+      : (["sphere", "cone", "line", "cube"] as const).find((s) => s === area.type);
+  return shape === undefined
+    ? undefined
+    : { shape, feet: area.size, origin: self ? "self" : "point" };
 };
 
 /**

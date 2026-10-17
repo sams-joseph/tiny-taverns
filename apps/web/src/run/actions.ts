@@ -1,4 +1,5 @@
 import type {
+  ActionArea,
   CharacterSheet,
   CreatureFeature,
   NpcAttack,
@@ -44,6 +45,12 @@ export interface ActionLine {
    * say how an attack with it was delivered. Empty when they hold none.
    */
   readonly geometry: Pick<NpcAttack, "reach" | "range" | "spell">;
+  /**
+   * A party member's spell's area, as their sheet keeps it: what `areaFor`
+   * fills with the pinned template for a line no option measures. A monster's
+   * comes from its option instead.
+   */
+  readonly area?: ActionArea;
 }
 
 /** `+7`, `-1`, `+0`. */
@@ -111,6 +118,7 @@ const fromSheet = (action: SheetAction): ActionLine => {
       ...(action.rangeFeet === undefined ? {} : { range: action.rangeFeet }),
       ...(action.spellAttack === undefined ? {} : { spell: action.spellAttack }),
     },
+    ...(action.area === undefined ? {} : { area: action.area }),
   };
 };
 

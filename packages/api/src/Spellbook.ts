@@ -6,7 +6,7 @@ import type {
   SheetResource,
   SpellKnown,
 } from "./Character.js";
-import { spellAttackOf } from "./AttackDelivery.js";
+import { spellAreaOf, spellAttackOf, spellRangeOf } from "./AttackDelivery.js";
 import { Spell } from "./Spell.js";
 import { CharacterId, NpcId, type SpellId } from "./Ids.js";
 
@@ -143,6 +143,7 @@ export const spellActionFor = (
   const save = spell.spell.dc?.dcType.name;
   const hit = spell.spell.attackType === undefined ? undefined : context.spellAttack;
   const spellAttack = spellAttackOf(spell.spell.attackType);
+  const area = spellAreaOf(spell.spell.areaOfEffect, spellRangeOf(spell.range) === "self");
   const descriptors = [
     spell.schoolName,
     spell.spell.attackType,
@@ -161,6 +162,7 @@ export const spellActionFor = (
     ...(damage?.damageType?.name === undefined ? {} : { damageType: damage.damageType.name }),
     range: spell.range,
     ...(spellAttack === undefined ? {} : { spellAttack }),
+    ...(area === undefined ? {} : { area }),
     ...(descriptors.length === 0 ? {} : { text: descriptors.join(" · ") }),
     source: "spell",
     ...(spell.level > 0 ? { resource: `slot:${String(spell.level)}` } : {}),

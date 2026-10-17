@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { Ability, ActionRange, Trait } from "./Creature.js";
+import { Ability, ActionArea, ActionRange, Trait } from "./Creature.js";
 import {
   AccountId,
   CharacterId,
@@ -252,6 +252,12 @@ export const SheetAction = Schema.Struct({
   reachFeet: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }))),
   rangeFeet: Schema.optional(ActionRange),
   spellAttack: Schema.optional(Schema.Literals(["melee", "ranged"])),
+  /**
+   * A spell's area, as a stat block's action keeps one (`spellAreaOf`): what
+   * the runner fills with the DM's pinned template when the line is rolled, so
+   * the board draws a party member's fireball as it draws a monster's.
+   */
+  area: Schema.optional(ActionArea),
   /** The kind line under the name: `"Martial melee · Versatile (1d10)"`. */
   text: Schema.optional(Schema.String),
   source: ActionSource,

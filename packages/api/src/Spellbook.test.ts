@@ -143,7 +143,10 @@ describe("spellSelectionProblems", () => {
 });
 
 describe("spellActionFor", () => {
-  const spellOf = (attackType: string | undefined) =>
+  const spellOf = (
+    attackType: string | undefined,
+    cast: { readonly range?: string; readonly areaOfEffect?: unknown } = {},
+  ) =>
     Schema.decodeUnknownSync(Spell)({
       id: "2b1f2a1e-0000-4000-8000-00000000f1b0",
       campaignId: null,
@@ -156,7 +159,7 @@ describe("spellActionFor", () => {
       ritual: false,
       concentration: false,
       castingTime: "1 action",
-      range: "120 feet",
+      range: cast.range ?? "120 feet",
       duration: "Instantaneous",
       classIndexes: [],
       classNames: [],
@@ -166,6 +169,7 @@ describe("spellActionFor", () => {
         desc: [],
         components: ["V", "S"],
         ...(attackType === undefined ? {} : { attackType }),
+        ...(cast.areaOfEffect === undefined ? {} : { areaOfEffect: cast.areaOfEffect }),
         school: { index: "evocation", name: "Evocation" },
         classes: [],
         subclasses: [],
@@ -191,5 +195,29 @@ describe("spellActionFor", () => {
       { characterLevel: 1, spellAttack: "+5" },
     );
     expect(line.spellAttack).toBeUndefined();
+    expect(line).not.toHaveProperty("area");
+  });
+
+  it("keeps a spell's area on its line: from the caster for a Self range, else at a point", () => {
+    const cone = spellActionFor(
+      {
+        spell: spellOf(undefined, {
+          range: "Self (15-foot cone)",
+          areaOfEffect: { type: "cone", size: 15 },
+        }),
+      },
+      { characterLevel: 1 },
+    );
+    expect(cone.area).toEqual({ shape: "cone", feet: 15, origin: "self" });
+    const pillar = spellActionFor(
+      {
+        spell: spellOf(undefined, {
+          range: "60 feet",
+          areaOfEffect: { type: "cylinder", size: 10 },
+        }),
+      },
+      { characterLevel: 1 },
+    );
+    expect(pillar.area).toEqual({ shape: "sphere", feet: 10, origin: "point" });
   });
 });

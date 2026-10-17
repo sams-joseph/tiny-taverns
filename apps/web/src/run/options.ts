@@ -204,18 +204,20 @@ export const bandOfLine = (
 
 /**
  * Where the line's area goes when the DM rolls it: the template pinned on the
- * board, when the line has an area (its stat block's `area`) and one is
- * pinned. Nothing otherwise, so a sword rolled under a pinned fireball fills
- * no area.
+ * board, when the line has an area and one is pinned. A monster's line has
+ * one when its option does (its stat block's `area`); a party member's, which
+ * no option measures, when its sheet line does (a spell's `area`). Nothing
+ * otherwise, so a sword rolled under a pinned fireball fills no area.
  */
 export const areaFor = (
   options: NpcTurnOptions | undefined,
-  line: Pick<ActionLine, "key">,
+  line: Pick<ActionLine, "key" | "area">,
   pinned: BoardArea | null | undefined,
 ): BoardArea | undefined => {
   const id = optionIdOf(line);
   const option = options?.options.find((entry) => entry.id === id);
-  return option?.area === undefined || pinned == null ? undefined : pinned;
+  const area = option === undefined ? line.area : option.area;
+  return area === undefined || pinned == null ? undefined : pinned;
 };
 
 /** The moments a creature has now, by the rule the server checks the ask against. */

@@ -2,6 +2,7 @@ import type { Combatant, CombatantId, CreatureId, StatBlock } from "@taverns/api
 import { describe, expect, it } from "vitest";
 import fixture from "../../../../packages/api/src/fixtures/srd-turn.json";
 import {
+  areaFor,
   multiattacksOf,
   optionIdOf,
   outOfRangeFor,
@@ -90,5 +91,28 @@ describe("the runner's turn options", () => {
     expect(optionIdOf({ key: "action:Fire Breath" })).toBe("actions/Fire Breath");
     expect(optionIdOf({ key: "trait:Scimitar" })).toBe("traits/Scimitar");
     expect(optionIdOf({ key: "atk:longsword" })).toBeUndefined();
+  });
+});
+
+describe("where a rolled line's area goes", () => {
+  const pinned = { shape: "sphere" as const, feet: 20, origin: { column: 7, row: 5 } };
+
+  it("fills the pinned template for a party member's spell whose sheet line keeps an area", () => {
+    const burningHands = {
+      key: "spell:burning-hands",
+      area: { shape: "cone" as const, feet: 15, origin: "self" as const },
+    };
+    expect(areaFor(undefined, burningHands, pinned)).toEqual(pinned);
+    expect(areaFor(undefined, burningHands, null)).toBeUndefined();
+  });
+
+  it("fills none for a sheet line with no area, under a pinned template", () => {
+    expect(areaFor(undefined, { key: "atk:longsword" }, pinned)).toBeUndefined();
+  });
+
+  it("reads a monster's line from its option, as it did", () => {
+    const options = runOptionsFor(source([wyrm, near]), wyrm);
+    expect(areaFor(options, { key: "action:Fire Breath" }, pinned)).toEqual(pinned);
+    expect(areaFor(options, { key: "action:Bite" }, pinned)).toBeUndefined();
   });
 });
