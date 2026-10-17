@@ -215,6 +215,7 @@ describe("sheetWithGear", () => {
         dice: "1d6+2",
         damageType: "Piercing",
         range: "80/320 ft.",
+        rangeFeet: { normal: 80, long: 320 },
         text: "Simple Ranged · Ammunition · Two-Handed",
         source: "weapon",
         equipmentId: SHORTBOW.id,

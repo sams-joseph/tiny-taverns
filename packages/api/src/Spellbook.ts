@@ -6,6 +6,7 @@ import type {
   SheetResource,
   SpellKnown,
 } from "./Character.js";
+import { spellAttackOf } from "./AttackDelivery.js";
 import { Spell } from "./Spell.js";
 import { CharacterId, NpcId, type SpellId } from "./Ids.js";
 
@@ -141,6 +142,7 @@ export const spellActionFor = (
     diceAt(spell.spell.healAtSlotLevel, Math.max(1, spell.level));
   const save = spell.spell.dc?.dcType.name;
   const hit = spell.spell.attackType === undefined ? undefined : context.spellAttack;
+  const spellAttack = spellAttackOf(spell.spell.attackType);
   const descriptors = [
     spell.schoolName,
     spell.spell.attackType,
@@ -158,6 +160,7 @@ export const spellActionFor = (
     ...(dice === undefined ? {} : { dice }),
     ...(damage?.damageType?.name === undefined ? {} : { damageType: damage.damageType.name }),
     range: spell.range,
+    ...(spellAttack === undefined ? {} : { spellAttack }),
     ...(descriptors.length === 0 ? {} : { text: descriptors.join(" · ") }),
     source: "spell",
     ...(spell.level > 0 ? { resource: `slot:${String(spell.level)}` } : {}),

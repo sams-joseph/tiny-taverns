@@ -1048,6 +1048,53 @@ describe("your turn at the table", () => {
     expect(writes("move")).toHaveLength(1);
   });
 
+  const rollsSent = () =>
+    server.calls
+      .filter(
+        (call) => call.method === "POST" && call.pathname === `/campaigns/${campaignId}/rolls`,
+      )
+      .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+
+  it("aims your attack at a creature you pick on the board, and names both on the roll", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+    const card = within(await screen.findByRole("region", { name: "Your character" }));
+
+    await userEvent.click(card.getByRole("button", { name: "Attack with Halberd" }));
+    expect(card.getByText("Pick a target for Halberd")).toBeInTheDocument();
+    const map = within(screen.getByRole("region", { name: "Battle map" }));
+    await userEvent.click(map.getByRole("button", { name: /^Marsh Hag/ }));
+
+    // Your row at the hag's, as a halberd swing; how it came out is the
+    // server's, against the armour class you are never told.
+    await waitFor(() => expect(rollsSent()).toHaveLength(2));
+    expect(rollsSent()[0]).toMatchObject({
+      kind: "attack",
+      combatantId: yourCombatantId,
+      targetCombatantId: hagCombatantId,
+      delivery: "melee-weapon",
+      damageType: "slashing",
+    });
+    expect(Object.keys(rollsSent()[0]!)).not.toContain("outcome");
+    expect(Object.keys(rollsSent()[0]!)).not.toContain("targetAc");
+    expect(rollsSent()[1]).toMatchObject({
+      kind: "damage",
+      combatantId: yourCombatantId,
+      targetCombatantId: hagCombatantId,
+    });
+    expect(card.queryByText("Pick a target for Halberd")).toBeNull();
+  });
+
+  it("offers no attack off your turn, only the roll", async () => {
+    server.routes.set(
+      ...playing(campaignId, { order: tableOrder, board: sharedBoard, upNext: offTurn }),
+    );
+    await renderTable();
+    const card = within(await screen.findByRole("region", { name: "Your character" }));
+    expect(card.getByRole("button", { name: "Roll Halberd" })).toBeInTheDocument();
+    expect(card.queryByRole("button", { name: "Attack with Halberd" })).toBeNull();
+  });
+
   it("moves nothing off your turn", async () => {
     server.routes.set(
       ...playing(campaignId, { order: tableOrder, board: sharedBoard, upNext: offTurn }),

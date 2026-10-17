@@ -85,13 +85,14 @@ import {
 } from "./load";
 import { RollsDock } from "./RollsDock";
 import { dockLines } from "./rollsLog";
-import { actsOf } from "./effects";
+import { actsOf, actsOfRolls } from "./effects";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
 import {
   areaFor,
+  bandOfLine,
   deliveryFor,
   longRangeFor,
   momentsOf,
@@ -1265,7 +1266,22 @@ export function RunScreen() {
       attackThrows(outcome, {
         attackerId: attacker.id,
         targetId: combatant.id,
-        delivery: deliveryFor(pickOptions, picking.line, combatant.id),
+        delivery: deliveryFor(
+          pickOptions,
+          picking.line,
+          combatant.id,
+          bandOfLine(
+            picking.line,
+            attacker.position,
+            combatant.position,
+            boardRead == null
+              ? undefined
+              : {
+                  feetPerCell: boardRead.feetPerCell,
+                  diagonals: view?.campaign.diagonalRule ?? "five",
+                },
+          ),
+        ),
       }),
     );
     setTargeting(undefined);
@@ -1881,7 +1897,8 @@ export function RunScreen() {
             onTarget: picking === undefined ? undefined : strike,
             outOfRange: marks?.out,
             onMove: move,
-            acts: actsOf(dice.rolls),
+            // The DM's own, with any still on their way, and the players' tray.
+            acts: [...actsOf(dice.rolls), ...actsOfRolls(trayRolls)],
           },
           hostileTokensHidden: state.run.hostileTokensHidden,
           hiding: mapShare.busy,

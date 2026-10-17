@@ -1,6 +1,7 @@
 import type { DeathSaves, PlayerLiveCombatant, PlayerLiveCombatantYou } from "@taverns/api";
 import { Badge, Button, Card, CardContent, Icon, SectionHeading, cn } from "@taverns/ui";
 import type { ActionLine } from "../run/actions";
+import { TargetBanner } from "../run/AttackResult";
 import { Actions, DeathSaveBlock, Disc, SectionTitle, ThisTurn, Tile } from "../run/CombatantPanel";
 import type { TurnTicks } from "../run/turn";
 import { BAND_WORDS } from "./tableRows";
@@ -42,6 +43,9 @@ export function YourCard({
   onDeathSaves,
   onDeathSaveRoll,
   onRollAction,
+  aiming,
+  onAttack,
+  onCancelAim,
 }: {
   readonly name: string;
   /** Your row of the order, when there is an order to be in. */
@@ -59,6 +63,11 @@ export function YourCard({
   readonly onDeathSaves: (saves: DeathSaves) => void;
   readonly onDeathSaveRoll: () => void;
   readonly onRollAction: (action: ActionLine) => void;
+  /** Your line waiting for its target, while you pick one. */
+  readonly aiming: ActionLine | undefined;
+  /** *Attack*, on your turn with your token on the board; absent, every line is *Roll*. */
+  readonly onAttack: ((action: ActionLine) => void) | undefined;
+  readonly onCancelAim: () => void;
 }) {
   return (
     <Card role="region" aria-label="Your character">
@@ -131,16 +140,22 @@ export function YourCard({
 
         {actions.length > 0 && (
           <div className={cn(you !== undefined && "border-t border-hairline pt-3.5")}>
+            {aiming !== undefined && (
+              <div className="mb-3">
+                <TargetBanner action={aiming.name} onCancel={onCancelAim} />
+              </div>
+            )}
             <Actions
               name={name}
               actions={actions}
               // A sheet has no stat-block multiattack to run.
               multiattacks={[]}
-              // Every line is *Roll*: a player's attack names no target.
-              active={false}
+              // On your turn, from your square, a line that rolls to hit is
+              // *Attack* at a creature you pick; otherwise every line is *Roll*.
+              active={onAttack !== undefined}
               disabled={false}
-              targeting={undefined}
-              onAttack={undefined}
+              targeting={aiming}
+              onAttack={onAttack}
               onMultiattack={undefined}
               onRoll={onRollAction}
             />

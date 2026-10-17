@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import type {
   AttackDelivery,
   BoardArea,
@@ -188,3 +189,13 @@ export const actsOf = (rolls: Parameters<typeof strikesOf>[0] & Parameters<typeo
     (a, b) => (at.get(a.key) ?? 0) - (at.get(b.key) ?? 0),
   );
 };
+
+/** The server's rolls, as `actsOf` reads them: when each was made, and whether its turn was undone. */
+export const actsOfRolls = (rolls: ReadonlyArray<Roll>): ReadonlyArray<Act> =>
+  actsOf(
+    rolls.map((roll) => ({
+      ...roll,
+      at: DateTime.toEpochMillis(roll.createdAt),
+      undone: roll.undoneAt !== null,
+    })),
+  );

@@ -32,6 +32,7 @@ const longsword: ActionLine = {
   toHit: 7,
   damage: [{ dice: "1d8+4", type: "slashing" }],
   save: undefined,
+  geometry: { reach: 5 },
 };
 const goblinBoss = { name: "Goblin Boss", ac: 17, conditions: [] };
 const brannocId = Schema.decodeSync(CombatantId)("2b1f2a1e-0000-4000-8000-000000000d01");

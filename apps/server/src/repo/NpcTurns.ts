@@ -3,6 +3,7 @@ import {
   type BoardSquare,
   attackDelivery,
   boardAreaOf,
+  rollOutcomeOf,
   damageTypeOf,
   type AssistantTurnId,
   attackLands,
@@ -38,7 +39,6 @@ import {
   type NpcTurnStep,
   npcTurnCheck,
   npcTurnOptions,
-  type RollOutcome,
   rollAttack,
   rollDamages,
   rollDiceExpression,
@@ -363,7 +363,7 @@ export class NpcTurns extends Context.Service<
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
               const delivery = attackDelivery(numbers, band);
               const about = { combatantId: selfId, targetCombatantId: targetId };
-              const outcome = OUTCOME[rolled.verdict];
+              const outcome = rollOutcomeOf(rolled.verdict);
               const act = stem();
               yield* file({
                 ...rollBase,
@@ -1078,15 +1078,6 @@ const checkStepOf = (step: NpcTurnProposalStep): NpcTurnStep =>
 
 /** `character_roll.label` holds 80 characters. */
 const rollLabel = (text: string): string => (text.length <= 80 ? text : `${text.slice(0, 79)}…`);
-
-/** The server's word for a verdict; a total with no AC to beat has none. */
-const OUTCOME: Record<AttackRoll["verdict"], RollOutcome | undefined> = {
-  critical: "crit",
-  hit: "hit",
-  "natural-1": "fumble",
-  miss: "miss",
-  "no-ac": undefined,
-};
 
 const damageOutcome = (roll: DamageRoll): NpcTurnDamageRoll => ({
   notation: roll.notation,

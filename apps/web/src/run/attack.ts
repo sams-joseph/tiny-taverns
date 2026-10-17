@@ -10,6 +10,7 @@ import {
   attackLands,
   concentrationDc,
   damageTypeOf,
+  rollOutcomeOf,
   parseDiceExpression,
   rollAttack,
   rollDamages,
@@ -119,15 +120,6 @@ export const damageLine = (damage: ReadonlyArray<DamageRoll>): string =>
     )
     .join(" · ");
 
-/** The server's word for a verdict; a total with no AC to beat has none. */
-const OUTCOME: Record<AttackVerdict, DmThrow["outcome"]> = {
-  critical: "crit",
-  hit: "hit",
-  "natural-1": "fumble",
-  miss: "miss",
-  "no-ac": undefined,
-};
-
 const naturalOf = (d20: number): DmThrow["critical"] =>
   d20 === 20 ? "hit" : d20 === 1 ? "miss" : null;
 
@@ -145,6 +137,9 @@ const damageThrow = (label: string, roll: DamageRoll, about: Partial<DmThrow>): 
   ...typeOf(roll.type),
   ...about,
 });
+
+/** The line's first damage type, as a roll keeps it. */
+const typeOfLine = (line: ActionLine): Pick<DmThrow, "damageType"> => typeOf(line.damage[0]?.type);
 
 /** A damage type a roll can keep, when the line's is one of the thirteen. */
 const typeOf = (written: string | undefined): Pick<DmThrow, "damageType"> => {
@@ -169,7 +164,7 @@ export const attackThrows = (
 ): ReadonlyArray<DmThrow> => {
   const label = `${outcome.attacker} · ${outcome.title}`;
   const about = { combatantId: who.attackerId, targetCombatantId: who.targetId };
-  const verdict = OUTCOME[outcome.verdict];
+  const verdict = rollOutcomeOf(outcome.verdict);
   return [
     {
       label,
@@ -206,6 +201,7 @@ export const rollActionThrows = ({
   line,
   mode = "normal",
   area,
+  aim,
   random = Math.random,
 }: {
   readonly attacker: string;
@@ -214,10 +210,20 @@ export const rollActionThrows = ({
   readonly mode?: RollMode;
   /** Where the line's area went (the DM's pinned template), kept on its first damage roll. */
   readonly area?: BoardArea | undefined;
+  /**
+   * Whom a seated player aimed it at, and how it was delivered there: the
+   * server resolves the to-hit against the AC the player is never told.
+   */
+  readonly aim?:
+    | { readonly targetId: CombatantId; readonly delivery: AttackDelivery | undefined }
+    | undefined;
   readonly random?: Random;
 }): ReadonlyArray<DmThrow> => {
   const label = `${attacker} · ${line.name}`;
-  const about = attackerId === undefined ? {} : { combatantId: attackerId };
+  const about = {
+    ...(attackerId === undefined ? {} : { combatantId: attackerId }),
+    ...(aim === undefined ? {} : { targetCombatantId: aim.targetId }),
+  };
   const toHit =
     line.toHit === undefined
       ? undefined
@@ -226,7 +232,15 @@ export const rollActionThrows = ({
   return [
     ...(toHit === undefined
       ? []
-      : [{ ...throwOf(toHit), kind: "attack", ...about } satisfies DmThrow]),
+      : [
+          {
+            ...throwOf(toHit),
+            kind: "attack",
+            ...about,
+            ...(aim?.delivery === undefined ? {} : { delivery: aim.delivery }),
+            ...typeOfLine(line),
+          } satisfies DmThrow,
+        ]),
     ...damage.map((roll, index) =>
       damageThrow(label, roll, index === 0 && area !== undefined ? { ...about, area } : about),
     ),

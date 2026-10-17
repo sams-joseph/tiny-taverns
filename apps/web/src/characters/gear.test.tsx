@@ -225,6 +225,7 @@ describe("picking gear from the catalogue", () => {
       hit: "+4",
       dice: "1d8+4",
       damageType: "Slashing",
+      reachFeet: 5,
       text: "Martial Melee · Versatile (1d10) · Attack ×2",
       source: "weapon",
       equipmentId: LONGSWORD_ID,

@@ -111,6 +111,7 @@ export const fullSheet = {
       dice: "1d10+4",
       damageType: "Slashing",
       range: "Reach 10 ft.",
+      reachFeet: 10,
       text: "Martial Melee · Heavy · Two-Handed · Attack ×2",
       source: "weapon",
       equipmentId: "2b1f2a1e-0000-4000-8000-0000000e0001",

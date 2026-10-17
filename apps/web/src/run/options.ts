@@ -1,6 +1,10 @@
 import {
   type AttackDelivery,
   attackDelivery,
+  bandAt,
+  type BoardSquare,
+  feetBetween,
+  type NpcTarget,
   type BoardArea,
   type Combatant,
   type CombatantId,
@@ -78,6 +82,11 @@ const lineOf = (option: NpcTurnOption): ActionLine | undefined =>
           option.save === undefined
             ? undefined
             : `DC ${String(option.save.dc)} ${option.save.ability}`,
+        geometry: {
+          ...(option.attack.reach === undefined ? {} : { reach: option.attack.reach }),
+          ...(option.attack.range === undefined ? {} : { range: option.attack.range }),
+          ...(option.attack.spell === undefined ? {} : { spell: option.attack.spell }),
+        },
       };
 
 /** One way of taking a multiattack: its name, what it says, and the attack rolls it makes, in order. */
@@ -164,20 +173,34 @@ export const longRangeFor = (options: NpcTurnOptions | undefined, line: Pick<Act
 
 /**
  * How the line is delivered at this target (`attackDelivery`, the rule a kept
- * Hob turn files by): its option's reach, range or spell, and the band the
- * target stands in. Nothing when the options measured no such line.
+ * Hob turn files by): its option's reach, range or spell and the band the
+ * target stands in, when the options measured the line; else the line's own
+ * reach, range and spell (a party member's sheet line, which no option
+ * measures) at the band `bandOfLine` says.
  */
 export const deliveryFor = (
   options: NpcTurnOptions | undefined,
-  line: Pick<ActionLine, "key">,
+  line: Pick<ActionLine, "key" | "geometry">,
   targetId: CombatantId,
+  band: NpcTarget["band"] | undefined,
 ): AttackDelivery | undefined => {
   const id = optionIdOf(line);
   const option = options?.options.find((entry) => entry.id === id);
-  if (option?.attack === undefined) return undefined;
-  const band = option.targets?.find((target) => target.combatantId === targetId)?.band;
-  return attackDelivery(option.attack, band);
+  if (option?.attack === undefined) return attackDelivery(line.geometry, band);
+  const measured = option.targets?.find((target) => target.combatantId === targetId)?.band;
+  return attackDelivery(option.attack, measured);
 };
+
+/** Where a target on `to` stands for the line swung from `from`, by the board's measure (`bandAt`). */
+export const bandOfLine = (
+  line: Pick<ActionLine, "geometry">,
+  from: BoardSquare | null | undefined,
+  to: BoardSquare | null | undefined,
+  measure: { readonly feetPerCell: number; readonly diagonals: DiagonalRule } | undefined,
+): NpcTarget["band"] | undefined =>
+  from == null || to == null || measure === undefined
+    ? undefined
+    : bandAt(feetBetween(from, to, measure), line.geometry.reach, line.geometry.range);
 
 /**
  * Where the line's area goes when the DM rolls it: the template pinned on the

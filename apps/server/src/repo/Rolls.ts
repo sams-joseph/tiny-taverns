@@ -1,5 +1,6 @@
 import {
   Actor,
+  attackVerdict,
   CampaignId,
   CharacterId,
   CombatantId,
@@ -8,6 +9,7 @@ import {
   EncounterRunId,
   NotFound,
   Roll,
+  rollOutcomeOf,
   type RollCreate,
   RollId,
   type RollListFilterValues,
@@ -245,17 +247,60 @@ export class Rolls extends Context.Service<
        * hidden by fog (`liveTables.ts`' `hiddenByFog`: a creature under it, not
        * an ally the reader may see), as the player's order reads it.
        */
-      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) => sql`
+      const combatantVisible = (
+        id: Statement.Fragment,
+        campaignId: CampaignId,
+        actor: Actor,
+      ) => sql`
         exists (
           select 1 from combatant
           join encounter_run on encounter_run.id = combatant.encounter_run_id
-          where combatant.id = ${sql(`character_roll.${column}`)}
+          where combatant.id = ${id}
             and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
             and (${campaignWritableById(sql, campaignId, actor)}
               or not ${fightLive(sql)}
               or not ${hiddenByFog(sql, campaignId, actor)})
         )
       `;
+      const combatantNamed = (column: string, campaignId: CampaignId, actor: Actor) =>
+        combatantVisible(sql`${sql(`character_roll.${column}`)}`, campaignId, actor);
+
+      /**
+       * A player's attack, as their table may name it: from the combatant that
+       * is the character they roll for, in tonight's fight, at one their table
+       * shows (`combatantVisible`, the predicate a roll's pointers are read
+       * through). Answers the target's AC, which the server resolves the
+       * to-hit against because the player is never told it, or `undefined`
+       * when either is not theirs to name.
+       */
+      const playerAttack = (
+        campaignId: CampaignId,
+        runId: EncounterRunId | null,
+        characterId: CharacterId,
+        attackerId: CombatantId | undefined,
+        targetId: CombatantId | undefined,
+        actor: Actor,
+      ): Effect.Effect<{ readonly ac: number | null } | undefined> =>
+        Effect.gen(function* () {
+          if (runId === null) return undefined;
+          if (attackerId !== undefined) {
+            const own = yield* sql<{ readonly id: string }>`
+              select combatant.id from combatant
+              where combatant.id = ${attackerId}
+                and combatant.encounter_run_id = ${runId}
+                and combatant.character_id = ${characterId}
+            `;
+            if (own.length === 0) return undefined;
+          }
+          if (targetId === undefined) return { ac: null };
+          const target = yield* sql<{ readonly ac: number | null }>`
+            select combatant.ac from combatant
+            where combatant.id = ${targetId}
+              and combatant.encounter_run_id = ${runId}
+              and ${combatantVisible(sql`${targetId}::uuid`, campaignId, actor)}
+          `;
+          return target[0] === undefined ? undefined : { ac: target[0].ac };
+        }).pipe(Effect.orDie);
       const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
         case when ${combatantNamed(column, campaignId, actor)}
           then ${sql(`character_roll.${column}`)} end
@@ -431,15 +476,54 @@ export class Rolls extends Context.Service<
                   if (payload.area !== undefined && !night.mayDmRoll) {
                     return yield* new NotFound({ resource: "combatant", id: "roll-area" });
                   }
-                  for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
-                    if (combatantId === undefined) continue;
-                    if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {
-                      return yield* new NotFound({ resource: "combatant", id: combatantId });
+                  // The creator names any combatant of the fight; a player only
+                  // their own, at one their table shows, and the server says how
+                  // it came out against the AC the player is never told.
+                  let resolved: Pick<RollCreate, "targetAc" | "outcome"> = {};
+                  if (night.mayDmRoll || payload.characterId === undefined) {
+                    for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
+                      if (combatantId === undefined) continue;
+                      if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {
+                        return yield* new NotFound({ resource: "combatant", id: combatantId });
+                      }
                     }
+                  } else if (
+                    payload.combatantId !== undefined ||
+                    payload.targetCombatantId !== undefined
+                  ) {
+                    const target = yield* playerAttack(
+                      campaignId,
+                      night.runId,
+                      payload.characterId,
+                      payload.combatantId,
+                      payload.targetCombatantId,
+                      actor,
+                    );
+                    if (target === undefined) {
+                      return yield* new NotFound({
+                        resource: "combatant",
+                        id: payload.targetCombatantId ?? payload.combatantId ?? "",
+                      });
+                    }
+                    const d20 = payload.kept[0];
+                    const outcome =
+                      payload.kind === "attack" &&
+                      payload.targetCombatantId !== undefined &&
+                      d20 !== undefined
+                        ? rollOutcomeOf(attackVerdict(d20, payload.total, target.ac))
+                        : undefined;
+                    resolved = {
+                      ...(target.ac === null || payload.targetCombatantId === undefined
+                        ? {}
+                        : { targetAc: target.ac }),
+                      ...(outcome === undefined ? {} : { outcome }),
+                    };
                   }
 
+                  const { targetAc: _targetAc, outcome: _outcome, ...sent } = payload;
                   const id = yield* fileRoll(sql, {
-                    ...payload,
+                    ...(night.mayDmRoll || payload.characterId === undefined ? payload : sent),
+                    ...resolved,
                     campaignId,
                     sessionId: night.sessionId,
                     runId: night.runId,

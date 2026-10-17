@@ -1,4 +1,11 @@
-import type { CharacterSheet, CreatureFeature, StatBlock, SheetAction, Trait } from "@taverns/api";
+import type {
+  CharacterSheet,
+  CreatureFeature,
+  NpcAttack,
+  StatBlock,
+  SheetAction,
+  Trait,
+} from "@taverns/api";
 
 /**
  * The selected creature's *Actions* list (`Encounter Runner.dc.html`): one line
@@ -31,6 +38,12 @@ export interface ActionLine {
   readonly damage: ReadonlyArray<{ readonly dice: string; readonly type: string | undefined }>;
   /** `DC 13 Dexterity`, when the target saves rather than the attacker rolls. */
   readonly save: string | undefined;
+  /**
+   * How far it reaches and shoots, and whether it is a spell attack, as the
+   * block or the sheet hold them as numbers: what `attackDelivery` reads to
+   * say how an attack with it was delivered. Empty when they hold none.
+   */
+  readonly geometry: Pick<NpcAttack, "reach" | "range" | "spell">;
 }
 
 /** `+7`, `-1`, `+0`. */
@@ -64,6 +77,10 @@ const fromFeature =
       feature.dc === undefined
         ? undefined
         : `DC ${String(feature.dc.dcValue)} ${feature.dc.dcType.name}`,
+    geometry: {
+      ...(feature.reach === undefined ? {} : { reach: feature.reach }),
+      ...(feature.range === undefined ? {} : { range: feature.range }),
+    },
   });
 
 const fromTrait = (trait: Trait): ActionLine => {
@@ -74,6 +91,10 @@ const fromTrait = (trait: Trait): ActionLine => {
     toHit: parseHit(trait.hit),
     damage: dice === undefined ? [] : [{ dice, type: undefined }],
     save: undefined,
+    geometry: {
+      ...(trait.reach === undefined ? {} : { reach: trait.reach }),
+      ...(trait.range === undefined ? {} : { range: trait.range }),
+    },
   };
 };
 
@@ -85,6 +106,11 @@ const fromSheet = (action: SheetAction): ActionLine => {
     toHit: parseHit(action.hit),
     damage: dice === undefined ? [] : [{ dice, type: nonEmpty(action.damageType)?.toLowerCase() }],
     save: undefined,
+    geometry: {
+      ...(action.reachFeet === undefined ? {} : { reach: action.reachFeet }),
+      ...(action.rangeFeet === undefined ? {} : { range: action.rangeFeet }),
+      ...(action.spellAttack === undefined ? {} : { spell: action.spellAttack }),
+    },
   };
 };
 

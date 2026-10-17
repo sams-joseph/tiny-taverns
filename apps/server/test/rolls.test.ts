@@ -414,7 +414,7 @@ describeLayer("rolls", services, (it) => {
     );
 
     it.effect(
-      "refuses a combatant outside tonight's fight, with no fight, or named by a player",
+      "refuses a combatant outside tonight's fight, from the creator or a player, and with no fight",
       () =>
         Effect.gen(function* () {
           const f = yield* aFight;
@@ -435,7 +435,7 @@ describeLayer("rolls", services, (it) => {
               rolls.create(f.campaign.id, {
                 ...payload(f.character.id),
                 kind: "attack",
-                targetCombatantId: f.brannoc.id,
+                targetCombatantId: elsewhere.brannoc.id,
               }),
             ),
           );
@@ -549,6 +549,93 @@ describeLayer("rolls", services, (it) => {
           ).toBe(13);
         }),
     );
+
+    describe("a player's own attack", () => {
+      /** The goblin the player can see, and the player's own row of the fight. */
+      const theirFight = Effect.gen(function* () {
+        const f = yield* aFight;
+        const combatants = yield* Combatants;
+        const goblin = yield* combatants.create(f.dmProof, f.sessionId, f.run.id, {
+          displayName: "Goblin",
+          ac: 13,
+          visibility: "shared",
+        });
+        const square = { column: 3, row: 4 };
+        yield* combatants.move(f.dmProof, f.sessionId, f.run.id, goblin.id, { position: square });
+        const own = (yield* combatants.list(f.dmProof, f.sessionId, f.run.id)).find(
+          (row) => row.characterId === f.character.id,
+        )!;
+        return { ...f, goblin, square, own };
+      });
+      const attack = (
+        f: Effect.Success<typeof theirFight>,
+        over: Partial<RollCreate> = {},
+      ): RollCreate => ({
+        ...payload(f.character.id),
+        kind: "attack",
+        combatantId: f.own.id,
+        targetCombatantId: f.goblin.id,
+        delivery: "ranged-weapon",
+        damageType: "piercing",
+        ...over,
+      });
+
+      it.effect(
+        "files it from their own row at one their table shows, resolved against the AC they never see",
+        () =>
+          Effect.gen(function* () {
+            const f = yield* theirFight;
+            const rolls = yield* Rolls;
+            // 17 + 5 against the goblin's 13 is a hit, whatever the browser says.
+            const shot = yield* as(
+              f.player,
+              rolls.create(f.campaign.id, attack(f, { outcome: "miss", targetAc: 30 })),
+            );
+            const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+            expect(asCreator).toMatchObject({
+              combatantId: f.own.id,
+              targetCombatantId: f.goblin.id,
+              targetAc: 13,
+              outcome: "hit",
+              delivery: "ranged-weapon",
+              damageType: "piercing",
+            });
+            // The player hears how it came out, never the creature's AC.
+            expect(shot).toMatchObject({ outcome: "hit", targetAc: null });
+
+            // A natural 1 misses whatever it totals.
+            const fumble = yield* as(
+              f.player,
+              rolls.create(f.campaign.id, attack(f, { kept: [1], dice: [1], total: 30 })),
+            );
+            expect(fumble.outcome).toBe("fumble");
+          }),
+      );
+
+      it.effect(
+        "refuses one from somebody else's row, at a hidden creature or one under fog, and writes nothing",
+        () =>
+          Effect.gen(function* () {
+            const f = yield* theirFight;
+            const rolls = yield* Rolls;
+            const maps = yield* BattleMaps;
+            const refused = (over: Partial<RollCreate>) =>
+              as(f.player, Effect.flip(rolls.create(f.campaign.id, attack(f, over))));
+
+            expect(yield* refused({ combatantId: f.goblin.id })).toBeInstanceOf(NotFound);
+            expect(yield* refused({ combatantId: f.brannoc.id })).toBeInstanceOf(NotFound);
+            expect(yield* refused({ targetCombatantId: f.hag.id })).toBeInstanceOf(NotFound);
+            yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [f.square] });
+            expect(yield* refused({})).toBeInstanceOf(NotFound);
+            // Where an area went is still the creator's alone.
+            expect(
+              yield* refused({ area: { shape: "sphere", feet: 20, origin: f.square } }),
+            ).toBeInstanceOf(NotFound);
+
+            expect(yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+          }),
+      );
+    });
 
     it.effect("names a shared creature under fog to the creator alone, and an ally to all", () =>
       Effect.gen(function* () {

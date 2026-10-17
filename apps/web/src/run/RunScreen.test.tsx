@@ -19,6 +19,7 @@ import {
   renderRunner,
   runBoard,
   runParty,
+  savedDmRoll,
   session,
   sessionEvent,
 } from "./run.fixtures";
@@ -2159,6 +2160,43 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
 
       await screen.findByText("Goblin Boss is unchanged");
       expect(effect()).toBeNull();
+    });
+
+    it("draws a player's own attack when the doorbell brings it", async () => {
+      await open();
+      await waitFor(() => expect(token("Goblin Boss")).toBeInTheDocument());
+      expect(document.querySelector("[data-effect=strike]")).toBeNull();
+
+      // Brannoc's player loosed a bolt at the boss from their own table.
+      const at = new Date().toISOString();
+      server.rolls.unshift({
+        ...savedDmRoll,
+        id: "2b1f2a1e-0000-4000-8000-00000000ac01",
+        characterId: brannoc.characterId,
+        characterName: "Brannoc",
+        visibility: "shared",
+        label: "Brannoc · Crossbow, light",
+        notation: "1d20+5",
+        kind: "attack",
+        combatantId: brannoc.id,
+        targetCombatantId: goblinBoss.id,
+        targetAc: 17,
+        outcome: "hit",
+        delivery: "ranged-weapon",
+        damageType: "piercing",
+        requestId: "player-shot:0",
+        createdAt: at,
+        updatedAt: at,
+      });
+      server.emit(sessionEvent(7, "roll-made"));
+
+      const strike = await waitFor(() => {
+        const drawn = document.querySelector<SVGElement>("[data-effect=strike]");
+        expect(drawn).not.toBeNull();
+        return drawn!;
+      });
+      expect(strike.dataset.delivery).toBe("ranged-weapon");
+      expect(strike.querySelector("[data-slot=fx-arrow]")).not.toBeNull();
     });
 
     it("hops a token the server moved, and flips the hop for the next move", async () => {

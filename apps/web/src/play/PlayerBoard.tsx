@@ -11,6 +11,7 @@ import { Card, Icon, SectionHeading } from "@taverns/ui";
 import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
 import { BoardCanvas } from "../run/BoardCanvas";
 import { AreaLayer } from "../run/BoardTools";
+import type { Act } from "../run/effects";
 import { type LayerToken, TokenLayer } from "../run/RunTokens";
 import { tableRowState } from "./tableRows";
 
@@ -56,7 +57,11 @@ export interface PlayerBoardProps {
   /** Whether your own token may be moved now: your turn, and nothing in flight. */
   readonly movable: boolean;
   readonly onSelect: (row: PlayerLiveCombatant) => void;
+  /** Set while your attack waits for its target: a token's click is the target, never yours. */
+  readonly onTarget?: ((row: PlayerLiveCombatant) => void) | undefined;
   readonly onMove: (to: BoardSquare) => Promise<unknown>;
+  /** What your table draws: your own attacks, from your rolls (`actsOfRolls`). */
+  readonly acts?: ReadonlyArray<Act>;
 }
 
 interface TableToken extends LayerToken {
@@ -103,7 +108,14 @@ function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
       fog={{ squares: board.fog, veil: "opaque" }}
       rangeShown
       onSelect={(token) => props.onSelect(token.row)}
-      onTarget={undefined}
+      onTarget={
+        props.onTarget === undefined
+          ? undefined
+          : (token) => {
+              if (token.row.kind !== "you") props.onTarget?.(token.row);
+            }
+      }
+      {...(props.acts === undefined ? {} : { acts: props.acts })}
       onMove={(_token, to) => (to === null ? Promise.resolve() : props.onMove(to))}
     />
   );

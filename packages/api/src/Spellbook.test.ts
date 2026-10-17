@@ -6,6 +6,7 @@ import { Spell, emptySpellBody } from "./Spell.js";
 import {
   type CharacterSpellRules,
   sheetWithSpellSelection,
+  spellActionFor,
   spellKnownFor,
   spellSelectionProblems,
 } from "./Spellbook.js";
@@ -138,5 +139,57 @@ describe("spellSelectionProblems", () => {
     expect(spellSelectionProblems(book, known(13))).toEqual([
       "Choose at most 14 leveled spells known.",
     ]);
+  });
+});
+
+describe("spellActionFor", () => {
+  const spellOf = (attackType: string | undefined) =>
+    Schema.decodeUnknownSync(Spell)({
+      id: "2b1f2a1e-0000-4000-8000-00000000f1b0",
+      campaignId: null,
+      accountId: null,
+      derivedFrom: null,
+      name: "Fire Bolt",
+      level: 0,
+      schoolIndex: "evocation",
+      schoolName: "Evocation",
+      ritual: false,
+      concentration: false,
+      castingTime: "1 action",
+      range: "120 feet",
+      duration: "Instantaneous",
+      classIndexes: [],
+      classNames: [],
+      subclassIndexes: [],
+      subclassNames: [],
+      spell: {
+        desc: [],
+        components: ["V", "S"],
+        ...(attackType === undefined ? {} : { attackType }),
+        school: { index: "evocation", name: "Evocation" },
+        classes: [],
+        subclasses: [],
+      },
+      visibility: "shared",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: "2026-10-17T00:00:00.000Z",
+      updatedAt: "2026-10-17T00:00:00.000Z",
+    });
+
+  it("keeps a spell attack's kind on its line, for the board", () => {
+    const line = spellActionFor(
+      { spell: spellOf("ranged") },
+      { characterLevel: 1, spellAttack: "+5" },
+    );
+    expect(line).toMatchObject({ hit: "+5", spellAttack: "ranged" });
+  });
+
+  it("keeps none for a spell that makes no attack", () => {
+    const line = spellActionFor(
+      { spell: spellOf(undefined) },
+      { characterLevel: 1, spellAttack: "+5" },
+    );
+    expect(line.spellAttack).toBeUndefined();
   });
 });

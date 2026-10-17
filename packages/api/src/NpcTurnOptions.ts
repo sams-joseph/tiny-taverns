@@ -96,6 +96,24 @@ export interface NpcTarget {
   readonly band: "reach" | "normal" | "long" | "out";
 }
 
+/**
+ * Where a target `feet` away stands for a line's `reach` and `range`: within
+ * reach, within the normal range, within the long one (at disadvantage), or
+ * beyond them all. The one banding: the options, and a player's own attack.
+ */
+export const bandAt = (
+  feet: number,
+  reach: number | undefined,
+  range: ActionRange | undefined,
+): NpcTarget["band"] =>
+  reach !== undefined && feet <= reach
+    ? "reach"
+    : range !== undefined && feet <= range.normal
+      ? "normal"
+      : range?.long !== undefined && feet <= range.long
+        ? "long"
+        : "out";
+
 /** One place an area could go, the squares it covers and who stands in them. */
 export interface NpcPlacement {
   readonly origin: BoardSquare;
@@ -376,14 +394,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
     return placed
       .map(({ row, at }) => {
         const feet = feetBetween(from, at, measure);
-        const band: NpcTarget["band"] =
-          reach !== undefined && feet <= reach
-            ? "reach"
-            : range !== undefined && feet <= range.normal
-              ? "normal"
-              : range?.long !== undefined && feet <= range.long
-                ? "long"
-                : "out";
+        const band = bandAt(feet, reach, range);
         return { combatantId: row.id, kind: row.kind, ally: row.side === self.side, feet, band };
       })
       .sort((a, b) => a.feet - b.feet);
