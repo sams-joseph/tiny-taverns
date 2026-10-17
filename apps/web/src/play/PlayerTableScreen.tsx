@@ -39,6 +39,7 @@ import { RunLayout } from "../run/RunLayout";
 import { RunStage } from "../run/RunStage";
 import { useStage } from "../run/stage";
 import { feetLeft, type TurnTicks } from "../run/turn";
+import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
@@ -382,37 +383,54 @@ export function PlayerTableScreen() {
     />
   );
 
-  return (
-    <div
-      data-slot="player-table"
-      className={cn(
-        canvas && "flex h-[calc(100dvh_-_var(--chrome-height)_-_2_*_var(--spacing-page))] flex-col",
-      )}
+  // On the canvas the screen holds the whole window, as the DM's does: the
+  // shell puts its nav rows away and the header floats over the board.
+  const onCanvas =
+    canvas && view !== undefined && table !== undefined && table !== null && fight !== null;
+  useFullscreen(onCanvas);
+
+  const header = (
+    <TopBar
+      framed
+      title={view?.campaign.name ?? "The table"}
+      subtitle={
+        table === undefined
+          ? undefined
+          : table === null
+            ? "No shared live table for one of your seats."
+            : `Session ${String(table.sessionNumber)}${
+                fight === null
+                  ? " · nothing on the table"
+                  : fight.mode !== "combat"
+                    ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
+                    : fight.phase === "initiative"
+                      ? " · rolling initiative"
+                      : ` · round ${String(fight.round)}`
+              }`
+      }
     >
+      <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
+        Overview
+      </BackLink>
+    </TopBar>
+  );
+
+  /** Said only when it has fallen behind: a table keeping up needs no word. */
+  const notice = (connection.status === "reconnecting" || connection.status === "stopped") && (
+    <p
+      role="status"
+      className="mb-0 rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+    >
+      {connection.status === "stopped"
+        ? "The live updates stopped. Reload to pick the table up again."
+        : "Reconnecting to the table…"}
+    </p>
+  );
+
+  return (
+    <div data-slot="player-table" className={cn(onCanvas && "flex h-dvh flex-col")}>
       {stage.probe}
-      <TopBar
-        framed
-        title={view?.campaign.name ?? "The table"}
-        subtitle={
-          table === undefined
-            ? undefined
-            : table === null
-              ? "No shared live table for one of your seats."
-              : `Session ${String(table.sessionNumber)}${
-                  fight === null
-                    ? " · nothing on the table"
-                    : fight.mode !== "combat"
-                      ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
-                      : fight.phase === "initiative"
-                        ? " · rolling initiative"
-                        : ` · round ${String(fight.round)}`
-                }`
-        }
-      >
-        <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
-          Overview
-        </BackLink>
-      </TopBar>
+      {!onCanvas && header}
       {resource.state === "loading" && <Loading label="Reading the live table…" />}
       {resource.state === "failed" && (
         <ApiFailureNotice failure={resource.failure} onRetry={reload} />
@@ -424,18 +442,8 @@ export function PlayerTableScreen() {
         </EmptyState>
       )}
       {view !== undefined && table !== null && table !== undefined && stage.wide !== undefined && (
-        <div className={cn("flex flex-col gap-4", canvas && "min-h-0 flex-1")}>
-          {/* Said only when it has fallen behind: a table keeping up needs no word. */}
-          {(connection.status === "reconnecting" || connection.status === "stopped") && (
-            <p
-              role="status"
-              className="mb-0 rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
-            >
-              {connection.status === "stopped"
-                ? "The live updates stopped. Reload to pick the table up again."
-                : "Reconnecting to the table…"}
-            </p>
-          )}
+        <div className={cn("flex flex-col gap-4", onCanvas && "min-h-0 flex-1")}>
+          {!onCanvas && notice}
           {fight === null ? (
             <>
               <Card>
@@ -450,8 +458,14 @@ export function PlayerTableScreen() {
               </Card>
               {tableCards}
             </>
-          ) : canvas && boardProps !== undefined ? (
+          ) : onCanvas && boardProps !== undefined ? (
             <RunStage
+              header={
+                <>
+                  {header}
+                  {notice}
+                </>
+              }
               strip={strip}
               rolling={yourInitiative}
               banner={undefined}

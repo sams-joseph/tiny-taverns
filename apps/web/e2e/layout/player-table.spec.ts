@@ -6,8 +6,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * shared, at every width, laid out as the DM's runner is.
  *
  * - **On the canvas** (from `@3xl` of `main`, `run/RunStage.tsx`): the stage
- *   is bounded to the viewport and the window does not scroll; the strip runs
- *   across the top, the player's card and the turn banner are the right-hand
+ *   is the whole window, the shell's nav rows put away, and the window does
+ *   not scroll; the header floats at the top, the strip runs across under it, the player's card and the turn banner are the right-hand
  *   panel, their rolls the left; the board lies under them, and the player's
  *   own token is on the board clear of every panel.
  * - **In the grid** (`run/RunLayout.tsx`), below it: the strip heads the page
@@ -149,9 +149,11 @@ for (const width of WIDTHS) {
       if (canvas) {
         await test.step("the canvas is the viewport, and the window does not scroll", async () => {
           const stage = await box(page.locator("[data-slot=run-stage]"));
+          expect.soft(stage.y, "the stage starts at the window's top").toBeCloseTo(0, 0);
           expect
-            .soft(stage.y + stage.height, "the stage ends in the viewport")
-            .toBeLessThanOrEqual(HEIGHT + 0.5);
+            .soft(stage.y + stage.height, "the stage ends at the window's bottom")
+            .toBeCloseTo(HEIGHT, 0);
+          await expect.soft(page.getByRole("navigation", { name: "This campaign" })).toBeHidden();
           const scrolls = await page.evaluate(
             () => document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
           );
@@ -161,11 +163,15 @@ for (const width of WIDTHS) {
         await test.step("the strip across the top, your card right, your rolls left", async () => {
           const stage = await box(page.locator("[data-slot=run-stage]"));
           const at = {
+            header: await box(page.locator("[data-slot=run-hud-header]")),
             strip: await box(strip),
             panel: await box(page.locator("[data-slot=run-hud-panel]")),
             rolls: await box(page.getByRole("region", { name: "Your rolls" })),
           };
-          expect.soft(at.strip.y - stage.y, "the strip at the stage's top").toBeLessThan(16);
+          expect.soft(at.header.y - stage.y, "the header at the stage's top").toBeLessThan(16);
+          expect
+            .soft(at.strip.y - (at.header.y + at.header.height), "the strip under the header")
+            .toBeLessThan(16);
           expect
             .soft(at.panel.y, "the panel under the strip")
             .toBeGreaterThan(at.strip.y + at.strip.height - 0.5);

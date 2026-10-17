@@ -12,18 +12,23 @@ import { RunTokens } from "./RunTokens";
 
 /**
  * The fight at a desktop width: **a canvas, not a page.** The board fills the
- * stage under the runner's header, the DM pans and zooms it (`BoardCanvas.tsx`),
- * and everything else floats over it on the `hud` rung — the captain's call on
- * the encounter runner redesign (`Encounter Runner.dc.html`, D1: "more like a
- * canvas").
+ * whole window, the DM pans and zooms it (`BoardCanvas.tsx`), and everything
+ * else, the runner's own header included, floats over it on the `hud` rung —
+ * the captain's call on the encounter runner redesign (`Encounter
+ * Runner.dc.html`, D1: "more like a canvas"), taken to the window's edges like
+ * a whiteboard's by the maintainer (2026-10-17). The screen holds the window
+ * through `useFullscreen` (`shell/slots.ts`), so the shell draws no nav rows
+ * while it is up; the header's back link is the way out.
  *
  * This is the one screen that does not scroll with the window: the stage is
- * bounded to the viewport under the chrome, and each panel scrolls inside
- * itself. A table's DM keeps the board in view while reading a stat block, and
- * a page that scrolled would carry the board away with it.
+ * bounded to the viewport, and each panel scrolls inside itself. A table's DM
+ * keeps the board in view while reading a stat block, and a page that scrolled
+ * would carry the board away with it.
  *
  * The regions, each a home a later piece of the redesign fills:
  *
+ * - **header** — the screen's own header across the top, with whatever line
+ *   it keeps under it (the autopilot's, an ended or behind fight's).
  * - **strip** — the initiative strip across the top while the fight takes
  *   turns (`InitiativeStrip.tsx`); the columns start under it.
  * - **rolling** — *Roll initiative* (`InitiativePhase.tsx`), top left, in the
@@ -46,6 +51,7 @@ import { RunTokens } from "./RunTokens";
  * disagree about which side of it the screen is on.
  */
 export function RunStage({
+  header,
   strip,
   rolling,
   banner,
@@ -53,6 +59,8 @@ export function RunStage({
   rolls,
   board,
 }: {
+  /** The screen's header and the lines under it, over everything else. */
+  readonly header: ReactNode;
   /** The initiative strip, across the top; `null` while the fight rolls. */
   readonly strip: ReactNode | null;
   /** *Roll initiative*, top left; `null` once turns are taken. */
@@ -64,14 +72,15 @@ export function RunStage({
   /** The board, told which part of the stage no panel covers. */
   readonly board: (freeArea: (canvas: DOMRect) => PictureRect) => ReactNode;
 }) {
+  const head = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const left = useRef<HTMLDivElement>(null);
   const right = useRef<HTMLDivElement>(null);
 
-  // Between the two columns and under the strip, inset as far as they are
-  // from the stage's edge.
+  // Between the two columns and under the strip (or the header, while the
+  // fight rolls), inset as far as they are from the stage's edge.
   const freeArea = useCallback((canvas: DOMRect): PictureRect => {
-    const t = top.current?.getBoundingClientRect();
+    const t = (top.current ?? head.current)?.getBoundingClientRect();
     const l = left.current?.getBoundingClientRect();
     const r = right.current?.getBoundingClientRect();
     const inset = l === undefined ? 0 : l.left - canvas.left;
@@ -84,13 +93,22 @@ export function RunStage({
   return (
     <div
       data-slot="run-stage"
-      className="relative min-h-120 flex-1 overflow-clip rounded-card border border-hairline bg-surface-sunken"
+      className="relative min-h-120 flex-1 overflow-clip bg-surface-sunken"
     >
       {board(freeArea)}
       <div
         data-slot="run-hud"
         className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3"
       >
+        {/* `*:mb-0`: the header's gutter below it is a page's, and here the
+            HUD's gap is the space between its regions. */}
+        <div
+          ref={head}
+          data-slot="run-hud-header"
+          className="pointer-events-auto flex min-w-0 shrink-0 flex-col gap-3 *:mb-0"
+        >
+          {header}
+        </div>
         {strip !== null && (
           <div ref={top} data-slot="run-hud-strip" className="pointer-events-auto min-w-0 shrink-0">
             {strip}
