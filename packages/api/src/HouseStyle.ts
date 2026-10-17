@@ -1,6 +1,11 @@
 /**
- * The one house style every Hob-drawn image is made in, from the design
- * delivery's imagery direction (`packages/design-system/readme.md`, *Imagery*).
+ * The one house style every Hob-drawn image is made in: the inked, firelit
+ * direction the maintainer chose on 2026-10-17, the look the board's effects
+ * share (`apps/web/src/run/fx/`). It supersedes the design delivery's
+ * provisional imagery note (`packages/design-system/readme.md`, *Imagery*:
+ * "blue-hour rather than firelight", which it calls a recommendation) until a
+ * delivery answers it. The words describe the look's qualities and name no
+ * game or studio, so a model draws the qualities rather than imitating a work.
  *
  * **One style, four framings.** The palette and the rules are the same words for
  * every kind of image; what differs is only the framing the place it shows
@@ -10,10 +15,12 @@
  * one constant and never assembles the style itself.
  */
 
-/** The look: the delivery's *cool, low-key, slight grain, blue-hour rather than firelight*. */
+/** The look: inked and painterly, saturated colour over deep shadow, carved out by warm firelight. */
 const HOUSE_PALETTE =
-  "Fantasy illustration somewhat cartoony think World of Warcraft from Blizzard, cool and low-key, slight grain, blue-hour light rather " +
-  "than firelight.";
+  "Painterly fantasy illustration with a bold comic-book finish: confident dark ink outlines on every " +
+  "form, flat saturated colour, dramatic chiaroscuro. Warm firelight and a hard rim of light carve the " +
+  "subject out of deep near-black shadow; ember orange, blood red and burnished gold against cool " +
+  "violet and teal shade.";
 
 /** What no image may carry, whatever it shows. */
 const HOUSE_RULES = "No text, no lettering, no frame, no watermark. Tasteful and non-graphic.";
@@ -42,4 +49,4 @@ export const HOUSE_COVER_STYLE = `${HOUSE_PALETTE} Wide landscape composition, a
  * creatures, because the tokens are the pieces and a painted goblin is one the
  * DM cannot move.
  */
-export const HOUSE_MAP_STYLE = `${HOUSE_PALETTE} A top-down view from directly overhead, flat like a floor plan: no perspective, no horizon, no sky. No grid, no grid lines, no squares marked on the ground. No people, no creatures, no tokens: the ground is empty and ready for play. Even, readable light; walls, obstacles and open ground clearly told apart, the playable ground running to the edges. ${HOUSE_RULES}`;
+export const HOUSE_MAP_STYLE = `${HOUSE_PALETTE} A top-down view from directly overhead, flat like a floor plan: no perspective, no horizon, no sky. No grid, no grid lines, no squares marked on the ground. No people, no creatures, no tokens: the ground is empty and ready for play. Readable for play: walls, obstacles and open ground clearly told apart, light pooled warm from torches, braziers or glowing hazards against deep shadow but never so dark the ground is lost, the playable ground running to the edges. ${HOUSE_RULES}`;
