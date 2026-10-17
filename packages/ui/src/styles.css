@@ -308,6 +308,18 @@
   --ease-overshoot: var(--ease-overshoot);
   /* Read by the board's effects (`run/fx/motion.ts`), never by a utility. */
   --duration-effect: var(--dur-effect);
+  --duration-anticipate: var(--dur-anticipate);
+  --duration-flight: var(--dur-flight);
+  --duration-impact: var(--dur-impact);
+  --duration-hitstop: var(--dur-hitstop);
+  --duration-hitstop-crit: var(--dur-hitstop-crit);
+  --duration-shake: var(--dur-shake);
+  --duration-pop: var(--dur-pop);
+  --duration-linger: var(--dur-linger);
+  --duration-shake-amp: var(--shake-amp);
+  --ease-anticipate: var(--ease-anticipate);
+  --ease-strike: var(--ease-strike);
+  --ease-recoil: var(--ease-recoil);
 
   /* -- motion. Nothing overshoots and nothing steps. ------------------------ */
   --ease-out: var(--ease-out);
