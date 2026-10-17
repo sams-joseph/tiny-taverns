@@ -1,8 +1,11 @@
+import { useState } from "react";
 import type { DrawnBoard } from "./BoardTools";
 import { BlastFx } from "./fx/Blast";
 import { NumberFx } from "./fx/Number";
 import type { BoardStage } from "./fx/stage";
 import { StrikeFx } from "./fx/Strike";
+import { Fx3D } from "./fx3d/Fx3D";
+import { canDrawWebGL } from "./fx3d/support";
 import type { Playing } from "./useBoardEffects";
 
 /**
@@ -16,7 +19,11 @@ import type { Playing } from "./useBoardEffects";
  * tokens it re-reads (`effectsBetween`), and the night's attacks and areas
  * (`actsOf`) — an attack from the attacker's square to the target's
  * (`fx/Strike.tsx`), an area over its own squares (`fx/Blast.tsx`), a number
- * on a token (`fx/Number.tsx`). Each is its own element, choreographed from
+ * on a token (`fx/Number.tsx`). Where the browser has WebGL, attacks and
+ * areas play instead on one three.js stage over the board (`fx3d/`, after
+ * the designers' `Board Effects 3D` draft): lit, inked meshes, glowing and
+ * inked particles, flash lights and bloom. The SVG is its fallback, and what
+ * a browser without WebGL (and a test) draws. Each SVG effect is its own element, choreographed from
  * its mount by the Web Animations API (`fx/motion.ts`) and removed when it
  * ends; under reduced motion every beat is zero and it ends at once. Attacks
  * and areas are drawn first, so a number knows a blow is coming at its square
@@ -34,36 +41,49 @@ export function BoardEffects({
   readonly stage: BoardStage;
   readonly ended: (key: number) => void;
 }) {
-  if (playing.length === 0) return null;
+  // WebGL where the browser has it (`fx3d/`), else the inked SVG effects; decided once a board.
+  const [three, setThree] = useState(canDrawWebGL);
   const blows = playing.filter((effect) => effect.kind === "strike" || effect.kind === "blast");
   const changes = playing.filter((effect) => effect.kind === "hurt" || effect.kind === "heal");
+  if (!three && playing.length === 0) return null;
   return (
     <div
       data-slot="board-effects"
+      data-renderer={three ? "webgl" : "svg"}
       aria-hidden
       className="pointer-events-none absolute inset-0 z-lifted"
     >
-      {blows.map((effect) =>
-        effect.kind === "blast" ? (
-          <BlastFx
-            key={effect.key}
-            board={board}
-            blast={effect}
-            stage={stage}
-            seed={effect.key}
-            onEnd={() => ended(effect.key)}
-          />
-        ) : effect.kind === "strike" ? (
-          <StrikeFx
-            key={effect.key}
-            board={board}
-            strike={effect}
-            stage={stage}
-            seed={effect.key}
-            onEnd={() => ended(effect.key)}
-          />
-        ) : null,
+      {three && (
+        <Fx3D
+          board={board}
+          playing={playing}
+          stage={stage}
+          ended={ended}
+          onFail={() => setThree(false)}
+        />
       )}
+      {!three &&
+        blows.map((effect) =>
+          effect.kind === "blast" ? (
+            <BlastFx
+              key={effect.key}
+              board={board}
+              blast={effect}
+              stage={stage}
+              seed={effect.key}
+              onEnd={() => ended(effect.key)}
+            />
+          ) : effect.kind === "strike" ? (
+            <StrikeFx
+              key={effect.key}
+              board={board}
+              strike={effect}
+              stage={stage}
+              seed={effect.key}
+              onEnd={() => ended(effect.key)}
+            />
+          ) : null,
+        )}
       {changes.map((effect) =>
         effect.kind === "hurt" || effect.kind === "heal" ? (
           <NumberFx
