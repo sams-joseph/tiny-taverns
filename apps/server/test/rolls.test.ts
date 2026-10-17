@@ -295,6 +295,24 @@ describeLayer("rolls", services, (it) => {
       }),
     );
 
+    it.effect("refuses a player who says where an area went, and writes nothing", () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const rolls = yield* Rolls;
+        const refused = yield* as(
+          f.player,
+          Effect.flip(
+            rolls.create(f.campaign.id, {
+              ...payload(f.character.id),
+              area: { shape: "sphere", feet: 20, origin: { column: 3, row: 3 } },
+            }),
+          ),
+        );
+        expect(refused).toBeInstanceOf(NotFound);
+        expect(yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+      }),
+    );
+
     it.effect("dedupes a DM roll by its request", () =>
       Effect.gen(function* () {
         const f = yield* fixture;
@@ -347,7 +365,25 @@ describeLayer("rolls", services, (it) => {
 
           // A roll that cannot say what it was says nothing.
           const plain = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll()));
-          expect(plain).toMatchObject({ delivery: null, damageType: null });
+          expect(plain).toMatchObject({ delivery: null, damageType: null, area: null });
+
+          // An area's damage keeps where the area went.
+          const cone = {
+            shape: "cone",
+            feet: 15,
+            origin: { column: 2, row: 2 },
+            toward: { column: 4, row: 2 },
+          } as const;
+          const breath = yield* as(
+            f.dm,
+            rolls.create(
+              f.campaign.id,
+              dmRoll({ kind: "damage", combatantId: f.hag.id, damageType: "fire", area: cone }),
+            ),
+          );
+          expect(
+            yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, breath.id)),
+          ).toMatchObject({ area: cone, damageType: "fire" });
         }),
     );
 

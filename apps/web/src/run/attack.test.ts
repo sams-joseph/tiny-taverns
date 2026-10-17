@@ -51,6 +51,7 @@ const printed = (throws: ReadonlyArray<DmThrow>) =>
       outcome: part.outcome ?? null,
       delivery: part.delivery ?? null,
       damageType: part.damageType ?? null,
+      area: part.area ?? null,
       requestId: `act:${String(index)}`,
       at: 0,
       undone: false,

@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { AttackDelivery, DamageType } from "./AttackDelivery.js";
+import { BoardArea } from "./BattleMap.js";
 import {
   AccountId,
   CampaignId,
@@ -92,6 +93,13 @@ export class Roll extends Schema.Class<Roll>("Roll")({
    */
   delivery: Schema.NullOr(AttackDelivery),
   damageType: Schema.NullOr(DamageType),
+  /**
+   * The template an area's damage filled, on the first damage roll of a save
+   * for damage that went somewhere on the board: a kept Hob turn's placement,
+   * or the template the DM had pinned when they rolled the line. The creator's
+   * to file, as the combatant pointers are; null on every other roll.
+   */
+  area: Schema.NullOr(BoardArea),
   requestId: Schema.NullOr(Schema.NonEmptyString),
   visibility: Visibility,
   ...provenanceFields,
@@ -123,6 +131,7 @@ export const RollCreate = Schema.Struct({
   outcome: Schema.optional(RollOutcome),
   delivery: Schema.optional(AttackDelivery),
   damageType: Schema.optional(DamageType),
+  area: Schema.optional(BoardArea),
   label: RollLabel,
   notation: RollNotation,
   dice: RollFaces,

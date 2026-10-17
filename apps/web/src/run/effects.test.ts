@@ -1,6 +1,6 @@
 import type { CombatantId } from "@taverns/api";
 import { describe, expect, it } from "vitest";
-import { type EffectToken, effectsBetween, strikesOf } from "./effects";
+import { type EffectToken, actsOf, blastsOf, effectsBetween, strikesOf } from "./effects";
 
 const id = (name: string) => name as CombatantId;
 
@@ -65,8 +65,9 @@ describe("effectsBetween", () => {
 });
 
 describe("strikesOf", () => {
-  const roll = (over: Partial<Parameters<typeof strikesOf>[0][number]> = {}) => ({
+  const roll = (over: Partial<Parameters<typeof actsOf>[0][number]> = {}) => ({
     kind: "attack" as const,
+    area: null,
     combatantId: id("goblin"),
     targetCombatantId: id("brannoc"),
     delivery: "ranged-weapon" as const,
@@ -81,6 +82,7 @@ describe("strikesOf", () => {
   it("draws an attack that names both and says how it was delivered, oldest first", () => {
     expect(strikesOf([roll(), roll({ requestId: "act0:0", at: 1, outcome: "miss" })])).toEqual([
       {
+        kind: "strike",
         key: "act0:0",
         from: id("goblin"),
         to: id("brannoc"),
@@ -89,6 +91,7 @@ describe("strikesOf", () => {
         outcome: "miss",
       },
       {
+        kind: "strike",
         key: "act1:0",
         from: id("goblin"),
         to: id("brannoc"),
@@ -108,5 +111,54 @@ describe("strikesOf", () => {
         roll({ undone: true }),
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("blastsOf", () => {
+  const cone = {
+    shape: "cone",
+    feet: 15,
+    origin: { column: 2, row: 2 },
+    toward: { column: 4, row: 2 },
+  } as const;
+  const roll = (over: Partial<Parameters<typeof actsOf>[0][number]> = {}) => ({
+    kind: "damage" as const,
+    combatantId: id("dragon"),
+    targetCombatantId: null,
+    delivery: null,
+    damageType: "fire" as const,
+    outcome: null,
+    area: cone,
+    requestId: "breath:0",
+    at: 1,
+    undone: false,
+    ...over,
+  });
+
+  it("draws a damage roll that kept where its area went, from the creature that loosed it", () => {
+    expect(blastsOf([roll(), roll({ requestId: "breath:1", area: null })])).toEqual([
+      { kind: "blast", key: "breath:0", from: id("dragon"), area: cone, damageType: "fire" },
+    ]);
+  });
+
+  it("draws an area whose creature the reader may not know, from nowhere", () => {
+    expect(blastsOf([roll({ combatantId: null })])[0]?.from).toBeNull();
+  });
+
+  it("draws nothing for an undone turn's", () => {
+    expect(blastsOf([roll({ undone: true })])).toEqual([]);
+  });
+
+  it("puts attacks and areas in the order they happened", () => {
+    const acts = actsOf([
+      roll({ at: 3 }),
+      {
+        ...roll({ at: 2, requestId: "swing:0", area: null }),
+        kind: "attack",
+        targetCombatantId: id("brannoc"),
+        delivery: "melee-weapon",
+      },
+    ]);
+    expect(acts.map((act) => act.kind)).toEqual(["strike", "blast"]);
   });
 });

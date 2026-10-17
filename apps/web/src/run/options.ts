@@ -1,6 +1,7 @@
 import {
   type AttackDelivery,
   attackDelivery,
+  type BoardArea,
   type Combatant,
   type CombatantId,
   type CreatureId,
@@ -176,6 +177,22 @@ export const deliveryFor = (
   if (option?.attack === undefined) return undefined;
   const band = option.targets?.find((target) => target.combatantId === targetId)?.band;
   return attackDelivery(option.attack, band);
+};
+
+/**
+ * Where the line's area goes when the DM rolls it: the template pinned on the
+ * board, when the line has an area (its stat block's `area`) and one is
+ * pinned. Nothing otherwise, so a sword rolled under a pinned fireball fills
+ * no area.
+ */
+export const areaFor = (
+  options: NpcTurnOptions | undefined,
+  line: Pick<ActionLine, "key">,
+  pinned: BoardArea | null | undefined,
+): BoardArea | undefined => {
+  const id = optionIdOf(line);
+  const option = options?.options.find((entry) => entry.id === id);
+  return option?.area === undefined || pinned == null ? undefined : pinned;
 };
 
 /** The moments a creature has now, by the rule the server checks the ask against. */

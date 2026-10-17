@@ -1,16 +1,27 @@
 import type { BoardSquare, CombatantId } from "@taverns/api";
 import { useEffect, useRef, useState } from "react";
-import { type BoardEffect, type EffectToken, type Strike, effectsBetween } from "./effects";
+import {
+  type Act,
+  type Blast,
+  type BoardEffect,
+  type EffectToken,
+  type Strike,
+  effectsBetween,
+} from "./effects";
 
 /** A strike as the board plays it: from the attacker's square to the target's. */
 export interface StrikePlay extends Omit<Strike, "key" | "from" | "to"> {
-  readonly kind: "strike";
   readonly from: BoardSquare;
   readonly to: BoardSquare;
 }
 
+/** An area as the board plays it: from where its creature stands, if it stands on the board. */
+export interface BlastPlay extends Omit<Blast, "key" | "from"> {
+  readonly from: BoardSquare | undefined;
+}
+
 /** A playing effect, with the key that tells two on one token apart. */
-export type Playing = (Extract<BoardEffect, { kind: "hurt" | "heal" }> | StrikePlay) & {
+export type Playing = (Extract<BoardEffect, { kind: "hurt" | "heal" }> | StrikePlay | BlastPlay) & {
   readonly key: number;
 };
 
@@ -19,10 +30,11 @@ const MOST = 24;
 
 /**
  * What the board plays as `tokens` change: the bursts, and each token's hop;
- * and each of `strikes` that arrives after the board first drew them, from
- * where its attacker stands to where its target does. A reload or a
- * reconnect replays none of the night's attacks; one whose attacker or target
- * is off the board plays nothing.
+ * and each of `acts` that arrives after the board first drew them: an attack
+ * from where its attacker stands to where its target does, an area over its
+ * squares from where its creature stands. A reload or a reconnect replays
+ * none of the night's; an attack whose attacker or target is off the board
+ * plays nothing.
  *
  * `settled` names the token the board itself just put down (a drop holds its
  * square until the server answers), whose move arriving from the server is no
@@ -31,7 +43,7 @@ const MOST = 24;
 export function useBoardEffects(
   tokens: ReadonlyArray<EffectToken>,
   settled: (id: CombatantId, to: BoardSquare) => boolean,
-  strikes: ReadonlyArray<Strike> = [],
+  acts: ReadonlyArray<Act> = [],
 ): {
   readonly playing: ReadonlyArray<Playing>;
   readonly hopOf: (id: CombatantId) => "a" | "b" | undefined;
@@ -47,24 +59,22 @@ export function useBoardEffects(
   squares.current = new Map(tokens.map((token) => [token.id, token.square]));
   const seen = useRef<Set<string> | undefined>(undefined);
 
-  const strikesRead = JSON.stringify(strikes);
+  const actsRead = JSON.stringify(acts);
   useEffect(() => {
-    const now = JSON.parse(strikesRead) as ReadonlyArray<Strike>;
+    const now = JSON.parse(actsRead) as ReadonlyArray<Act>;
     if (seen.current === undefined) {
-      seen.current = new Set(now.map((strike) => strike.key));
+      seen.current = new Set(now.map((act) => act.key));
       return;
     }
-    const fresh = now.filter((strike) => !seen.current!.has(strike.key));
-    for (const strike of fresh) seen.current.add(strike.key);
-    const plays = fresh.flatMap((strike): ReadonlyArray<Playing> => {
-      const from = squares.current.get(strike.from);
-      const to = squares.current.get(strike.to);
-      if (from === undefined || to === undefined) return [];
-      const { key: _key, ...what } = strike;
-      return [{ ...what, kind: "strike", from, to, key: next.current++ }];
-    });
-    if (plays.length > 0) setPlaying((current) => [...current, ...plays].slice(-MOST));
-  }, [strikesRead]);
+    const fresh = now.filter((act) => !seen.current!.has(act.key));
+    for (const act of fresh) seen.current.add(act.key);
+    const plays = fresh.flatMap((act) => playOf(act, squares.current));
+    if (plays.length > 0) {
+      setPlaying((current) =>
+        [...current, ...plays.map((play) => ({ ...play, key: next.current++ }))].slice(-MOST),
+      );
+    }
+  }, [actsRead]);
 
   // One string for what the effects read, so a render that changed nothing they read plays nothing.
   const reading = JSON.stringify(tokens);
@@ -99,3 +109,19 @@ export function useBoardEffects(
     ended: (key) => setPlaying((current) => current.filter((effect) => effect.key !== key)),
   };
 }
+
+/** One act as the board plays it, from the squares its creatures stand on now. */
+const playOf = (
+  act: Act,
+  squares: ReadonlyMap<CombatantId, BoardSquare>,
+): ReadonlyArray<StrikePlay | BlastPlay> => {
+  if (act.kind === "blast") {
+    const { key: _key, from, ...what } = act;
+    return [{ ...what, from: from === null ? undefined : squares.get(from) }];
+  }
+  const from = squares.get(act.from);
+  const to = squares.get(act.to);
+  if (from === undefined || to === undefined) return [];
+  const { key: _key, ...what } = act;
+  return [{ ...what, from, to }];
+};

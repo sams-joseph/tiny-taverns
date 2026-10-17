@@ -102,6 +102,7 @@ const roll = {
   outcome: null,
   delivery: null,
   damageType: null,
+  area: null,
   requestId: null,
   visibility: "shared",
   origin: "authored",

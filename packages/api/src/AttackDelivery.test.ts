@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attackDelivery, damageTypeOf, spellAttackOf } from "./AttackDelivery.js";
+import { attackDelivery, boardAreaOf, damageTypeOf, spellAttackOf } from "./AttackDelivery.js";
 
 describe("attackDelivery", () => {
   const dagger = { reach: 5, range: { normal: 20, long: 60 } };
@@ -46,5 +46,30 @@ describe("spellAttackOf", () => {
     expect(spellAttackOf("ranged")).toBe("ranged");
     expect(spellAttackOf("Melee")).toBe("melee");
     expect(spellAttackOf("touch")).toBeUndefined();
+  });
+});
+
+describe("boardAreaOf", () => {
+  const at = { origin: { column: 4, row: 4 }, toward: { column: 6, row: 4 } };
+
+  it("centres a sphere or a cube on its origin", () => {
+    expect(boardAreaOf({ shape: "sphere", feet: 20 }, at)).toEqual({
+      shape: "sphere",
+      feet: 20,
+      origin: { column: 4, row: 4 },
+    });
+  });
+
+  it("points a cone or a line from its origin toward its aim", () => {
+    expect(boardAreaOf({ shape: "line", feet: 60 }, at)).toEqual({
+      shape: "line",
+      feet: 60,
+      ...at,
+    });
+  });
+
+  it("is nothing the board's template cannot hold", () => {
+    expect(boardAreaOf({ shape: "cone", feet: 150 }, at)).toBeUndefined();
+    expect(boardAreaOf({ shape: "cone", feet: 30 }, { ...at, toward: at.origin })).toBeUndefined();
   });
 });

@@ -457,6 +457,7 @@ describe("a character sheet", () => {
         outcome: null,
         delivery: null,
         damageType: null,
+        area: null,
         requestId: "from-browser",
         visibility: "shared",
         origin: "authored",

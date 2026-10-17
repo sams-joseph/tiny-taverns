@@ -14,7 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
 import { BoardEffects } from "./BoardEffects";
-import type { Strike } from "./effects";
+import type { Act } from "./effects";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
 import { useBoardEffects } from "./useBoardEffects";
@@ -136,8 +136,8 @@ export interface TokenProps {
   readonly outOfRange?: ReadonlySet<CombatantId> | undefined;
   /** Put it on a square, or `null` to take it off the board; settles once the server answers. */
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<unknown>;
-  /** The night's attacks the board draws, from the DM's rolls (`strikesOf`). */
-  readonly strikes?: ReadonlyArray<Strike>;
+  /** The night's attacks and areas the board draws, from the DM's rolls (`actsOf`). */
+  readonly acts?: ReadonlyArray<Act>;
 }
 
 /**
@@ -189,8 +189,8 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onSelect: (token: T) => void;
   readonly onTarget: ((token: T) => void) | undefined;
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
-  /** The attacks this reader may see drawn; a player's board has none yet. */
-  readonly strikes?: ReadonlyArray<Strike>;
+  /** The attacks and areas this reader may see drawn; a player's board has none yet. */
+  readonly acts?: ReadonlyArray<Act>;
 }
 
 type Placed<T extends LayerToken> = T & { readonly position: BoardSquare };
@@ -445,7 +445,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
       dropped.current.delete(id);
       return true;
     },
-    props.strikes,
+    props.acts,
   );
   const squareOf = (combatant: Placed<T>): BoardSquare =>
     drag?.id === combatant.id

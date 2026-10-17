@@ -1,5 +1,8 @@
 import {
+  type BoardArea,
+  type BoardSquare,
   attackDelivery,
+  boardAreaOf,
   damageTypeOf,
   type AssistantTurnId,
   attackLands,
@@ -265,11 +268,14 @@ export class NpcTurns extends Context.Service<
             about: { readonly combatantId: CombatantId; readonly targetCombatantId?: CombatantId },
             act: string,
             first: number,
+            area?: BoardArea,
           ) =>
             Effect.forEach(damage, (roll, index) =>
               file({
                 ...rollBase,
                 ...about,
+                // Where the area went, once for the act: on its first damage roll.
+                ...(area === undefined || index > 0 ? {} : { area }),
                 requestId: `${act}:${String(first + index)}`,
                 label: rollLabel(label),
                 notation: roll.notation,
@@ -409,6 +415,7 @@ export class NpcTurns extends Context.Service<
           const saveFor = (
             option: NpcTurnOption,
             targets: ReadonlyArray<CombatantId>,
+            placement: { readonly origin: BoardSquare; readonly toward: BoardSquare } | undefined,
             notes: Array<string>,
           ) =>
             Effect.gen(function* () {
@@ -421,6 +428,9 @@ export class NpcTurns extends Context.Service<
                 { combatantId: selfId },
                 stem(),
                 0,
+                option.area === undefined || placement === undefined
+                  ? undefined
+                  : boardAreaOf(option.area, placement),
               );
               if (save.damage.length > 0 && damage.length === 0) {
                 notes.push(`${option.name}'s damage is not dice this can roll: none was applied.`);
@@ -614,7 +624,7 @@ export class NpcTurns extends Context.Service<
                 notes.push(`${option.name} has no damage dice in the data: none was applied.`);
               }
             } else if (option.save !== undefined) {
-              save = yield* saveFor(option, step.targets, notes);
+              save = yield* saveFor(option, step.targets, step.placement, notes);
             } else {
               for (const target of step.targets) touched.add(target);
               notes.push(

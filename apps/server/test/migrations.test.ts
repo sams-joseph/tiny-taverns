@@ -386,6 +386,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 100, name: "combatant_sides" },
         { migration_id: 101, name: "cast_npc_combatants" },
         { migration_id: 102, name: "roll_attack_delivery" },
+        { migration_id: 103, name: "roll_area" },
       ]);
     }),
   );
@@ -498,6 +499,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 100, name: "combatant_sides" },
         { migration_id: 101, name: "cast_npc_combatants" },
         { migration_id: 102, name: "roll_attack_delivery" },
+        { migration_id: 103, name: "roll_area" },
       ]);
     }),
   );

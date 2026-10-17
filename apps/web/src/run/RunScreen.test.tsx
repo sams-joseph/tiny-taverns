@@ -568,6 +568,7 @@ describe("the runner", () => {
       outcome: null,
       delivery: null,
       damageType: null,
+      area: null,
       requestId: null,
       visibility: "shared",
       origin: "authored",
@@ -4303,6 +4304,91 @@ describe("a monster's resources", () => {
     await renderRunner();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
     expect(panel().queryByRole("region", { name: /^Resources of / })).toBeNull();
+  });
+});
+
+describe("an area, rolled", () => {
+  // The Goblin Boss is up beside Brannoc, and breathes fire in a 15-foot cone.
+  const cone = {
+    shape: "cone",
+    feet: 15,
+    origin: { column: 6, row: 4 },
+    toward: { column: 5, row: 4 },
+  } as const;
+  beforeEach(() => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          traits: [],
+          actions: [
+            {
+              name: "Fire Breath",
+              desc: "The boss exhales fire in a 15-foot cone.",
+              dc: {
+                dcType: { index: "dex", name: "DEX" },
+                dcValue: 12,
+                successType: "half",
+              },
+              damage: [{ damageType: { index: "fire", name: "Fire" }, damageDice: "2d6" }],
+              area: { shape: "cone", feet: 15, origin: "self" },
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 6, row: 4 } }],
+    });
+  });
+
+  const roll = async () => {
+    await renderRunner();
+    await waitFor(() =>
+      expect(document.querySelectorAll("[data-slot=run-tokens] [data-slot=token]")).toHaveLength(2),
+    );
+    await userEvent.click(
+      await waitFor(() => panel().getByRole("button", { name: "Roll Fire Breath" })),
+    );
+  };
+
+  it("keeps the pinned cone on the breath's damage, and the board fills it", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, area: cone },
+    });
+    await roll();
+
+    await waitFor(() => expect(server.rolls.length).toBeGreaterThan(0));
+    expect(server.rolls[0]).toMatchObject({
+      kind: "damage",
+      combatantId: goblinBoss.id,
+      damageType: "fire",
+      area: cone,
+    });
+    const blast = await waitFor(() => {
+      const drawn = document.querySelector<SVGElement>("[data-effect=blast]");
+      expect(drawn).not.toBeNull();
+      return drawn!;
+    });
+    expect(blast.dataset.shape).toBe("cone");
+    // A cone goes off from the creature: nothing is lobbed.
+    expect(blast.dataset.lobbed).toBeUndefined();
+    expect(blast.querySelectorAll("[data-slot=fx-flare]").length).toBeGreaterThan(0);
+  });
+
+  it("fills no area with nothing pinned", async () => {
+    await roll();
+    await waitFor(() => expect(server.rolls.length).toBeGreaterThan(0));
+    expect(server.rolls[0]).toMatchObject({ area: null });
+    expect(document.querySelector("[data-effect=blast]")).toBeNull();
   });
 });
 

@@ -120,6 +120,7 @@ export const fileRoll = (
           outcome: roll.outcome,
           delivery: roll.delivery,
           damage_type: roll.damageType,
+          area: roll.area === undefined ? undefined : JSON.stringify(roll.area),
           request_id: roll.requestId,
           visibility: roll.visibility,
           ...assistantColumns(roll.from),
@@ -288,7 +289,7 @@ export class Rolls extends Context.Service<
             ))
           then character_roll.target_ac end as target_ac,
         character_roll.outcome, character_roll.delivery, character_roll.damage_type,
-        character_roll.request_id,
+        character_roll.area, character_roll.request_id,
         character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
         character_roll.undone_at,
         character_roll.created_at, character_roll.updated_at,
@@ -426,6 +427,10 @@ export class Rolls extends Context.Service<
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
 
+                  // Where an area went is the fight's geometry, the creator's to file.
+                  if (payload.area !== undefined && !night.mayDmRoll) {
+                    return yield* new NotFound({ resource: "combatant", id: "roll-area" });
+                  }
                   for (const combatantId of [payload.combatantId, payload.targetCombatantId]) {
                     if (combatantId === undefined) continue;
                     if (!(yield* canNameCombatant(campaignId, night.runId, combatantId, actor))) {

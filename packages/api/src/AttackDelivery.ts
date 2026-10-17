@@ -1,4 +1,6 @@
 import { Schema } from "effect";
+import { AREA_FEET, type BoardArea, type BoardSquare } from "./BattleMap.js";
+import type { ActionArea } from "./Creature.js";
 import type { NpcAttack, NpcTarget } from "./NpcTurnOptions.js";
 
 /**
@@ -76,4 +78,23 @@ export const attackDelivery = (
   if (attack.reach !== undefined && attack.range === undefined) return "melee-weapon";
   if (attack.range !== undefined && attack.reach === undefined) return "ranged-weapon";
   return undefined;
+};
+
+/**
+ * A stat block's area where it was put, as the board's template: a sphere or a
+ * cube about `origin`, a cone or a line from `origin` toward `toward`. Nothing
+ * for a size the board's template cannot hold (`AREA_FEET`), or a cone or a
+ * line with nowhere to point.
+ */
+export const boardAreaOf = (
+  area: Pick<ActionArea, "shape" | "feet">,
+  placement: { readonly origin: BoardSquare; readonly toward: BoardSquare },
+): BoardArea | undefined => {
+  if (area.feet < AREA_FEET.minimum || area.feet > AREA_FEET.maximum) return undefined;
+  if (area.shape === "sphere" || area.shape === "cube") {
+    return { shape: area.shape, feet: area.feet, origin: placement.origin };
+  }
+  const { origin, toward } = placement;
+  if (origin.column === toward.column && origin.row === toward.row) return undefined;
+  return { shape: area.shape, feet: area.feet, origin, toward };
 };

@@ -1,6 +1,7 @@
 import {
   type AttackDelivery,
   type AttackRoll,
+  type BoardArea,
   type AttackVerdict,
   type CombatantId,
   type DamageRoll,
@@ -204,12 +205,15 @@ export const rollActionThrows = ({
   attackerId,
   line,
   mode = "normal",
+  area,
   random = Math.random,
 }: {
   readonly attacker: string;
   readonly attackerId?: CombatantId;
   readonly line: ActionLine;
   readonly mode?: RollMode;
+  /** Where the line's area went (the DM's pinned template), kept on its first damage roll. */
+  readonly area?: BoardArea | undefined;
   readonly random?: Random;
 }): ReadonlyArray<DmThrow> => {
   const label = `${attacker} · ${line.name}`;
@@ -223,7 +227,9 @@ export const rollActionThrows = ({
     ...(toHit === undefined
       ? []
       : [{ ...throwOf(toHit), kind: "attack", ...about } satisfies DmThrow]),
-    ...damage.map((roll) => damageThrow(label, roll, about)),
+    ...damage.map((roll, index) =>
+      damageThrow(label, roll, index === 0 && area !== undefined ? { ...about, area } : about),
+    ),
   ];
 };
 

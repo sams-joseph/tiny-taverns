@@ -1,8 +1,8 @@
-import { type DamageType, battleMapPlane, cellRect } from "@taverns/api";
+import { type DamageType, areaSquares, areaToward, battleMapPlane, cellRect } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import type { AnimationEvent, CSSProperties } from "react";
 import type { DrawnBoard } from "./BoardTools";
-import type { Playing, StrikePlay } from "./useBoardEffects";
+import type { BlastPlay, Playing, StrikePlay } from "./useBoardEffects";
 import { percentOf } from "./tokens";
 
 /**
@@ -21,8 +21,11 @@ import { percentOf } from "./tokens";
  * from the attacker's square to the target's: a ranged weapon looses an arrow
  * that arcs over its own ground shadow, a spell a bolt with a trail, a melee
  * weapon a swing across the target. A hit lands in a flash at the target, a
- * miss a square aside in a puff. Every tone is a semantic one, by damage type
- * (`TONE`), until the designers' delivery answers them.
+ * miss a square aside in a puff. An area (`blastsOf`) fills its own squares in
+ * a wave out from its origin: a cone or a line from the creature, a sphere or
+ * a cube from its centre, lobbed there first as an arcing orb when it went off
+ * away from the creature, with a shockwave ring. Every tone is a semantic one,
+ * by damage type (`TONE`), until the designers' delivery answers them.
  */
 
 /** `−5`, `+4`, with a true minus. */
@@ -47,6 +50,16 @@ export function BoardEffects({
       className="pointer-events-none absolute inset-0 z-lifted"
     >
       {playing.map((effect) => {
+        if (effect.kind === "blast") {
+          return (
+            <BlastEffect
+              key={effect.key}
+              board={board}
+              blast={effect}
+              onEnd={() => ended(effect.key)}
+            />
+          );
+        }
         if (effect.kind === "strike") {
           return (
             <StrikeEffect
@@ -323,3 +336,188 @@ const swing = (
   const end = point((65 * Math.PI) / 180);
   return `M ${String(start.x)} ${String(start.y)} A ${String(radius)} ${String(radius)} 0 0 1 ${String(end.x)} ${String(end.y)}`;
 };
+
+/**
+ * One area, on a plane-sized layer: each square it covers flares in turn, a
+ * beat of `--dur-instant` further for every square or so from its origin, so a
+ * cone rolls out of the dragon and a fireball bursts outward. A sphere or a
+ * cube that went off away from its creature is lobbed there first, and its
+ * burst waits for the orb.
+ */
+function BlastEffect({
+  board,
+  blast,
+  onEnd,
+}: {
+  readonly board: DrawnBoard;
+  readonly blast: BlastPlay;
+  readonly onEnd: () => void;
+}) {
+  const plane = battleMapPlane(board, board.image);
+  const { area } = blast;
+  const centre = (square: { readonly column: number; readonly row: number }) => {
+    const rect = cellRect(board, square);
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, cell: rect.width };
+  };
+  const origin = centre(area.origin);
+  const cell = origin.cell;
+  const squares = areaSquares(board, {
+    shape: area.shape,
+    feet: area.feet,
+    feetPerCell: board.feetPerCell,
+    origin: area.origin,
+    toward: areaToward(area),
+  });
+  const point = area.shape === "sphere" || area.shape === "cube";
+  const from = blast.from === undefined ? undefined : centre(blast.from);
+  const lobbed =
+    point &&
+    blast.from !== undefined &&
+    (blast.from.column !== area.origin.column || blast.from.row !== area.origin.row);
+  const dx = from === undefined ? 0 : origin.x - from.x;
+  const dy = from === undefined ? 0 : origin.y - from.y;
+  const flightSquares = Math.hypot(dx, dy) / cell;
+  const flight = times("--dur-fast", Math.min(7, Math.max(3, flightSquares * 0.6)));
+  const tone = TONE[blast.damageType ?? "force"];
+  const distance = (square: { readonly column: number; readonly row: number }) =>
+    Math.hypot(square.column - area.origin.column, square.row - area.origin.row);
+  const farthest = Math.max(0, ...squares.map(distance));
+  const waitFor = (square: { readonly column: number; readonly row: number }) => {
+    const wave = times("--dur-instant", distance(square) * 0.6);
+    return lobbed ? `calc(${flight} + ${wave})` : wave;
+  };
+  const radius = (area.feet / board.feetPerCell) * cell;
+  const geometry = {
+    "--fx-dx": `${String(dx)}px`,
+    "--fx-dy": `${String(dy)}px`,
+    "--fx-arc": `${String(Math.min(cell * 2.5, flightSquares * cell * 0.4))}px`,
+    "--fx-flight": flight,
+    "--fx-after": lobbed ? flight : "0s",
+  } as CSSProperties;
+
+  const ended = (event: AnimationEvent) => {
+    if (
+      event.animationName === "tt-fx-flare" &&
+      (event.target as Element).getAttribute("data-last") === "true"
+    ) {
+      onEnd();
+    }
+  };
+
+  let lastMarked = false;
+  return (
+    <svg
+      data-effect="blast"
+      data-shape={area.shape}
+      data-lobbed={lobbed ? "true" : undefined}
+      viewBox={`0 0 ${String(plane.width)} ${String(plane.height)}`}
+      preserveAspectRatio="none"
+      className="absolute inset-0 size-full overflow-visible"
+      // eslint-disable-next-line shadcn/no-inline-styles -- the area's own geometry and timing, as custom properties its keyframes read.
+      style={geometry}
+      onAnimationEnd={ended}
+    >
+      {lobbed && from !== undefined && (
+        <g data-slot="fx-orb" transform={`translate(${String(from.x)} ${String(from.y)})`}>
+          <g className="animate-fx-travel">
+            <ellipse rx={cell * 0.3} ry={cell * 0.08} className="fill-scrim opacity-70" />
+          </g>
+          <g className="animate-fx-travel">
+            <g className="animate-fx-arc">
+              <circle r={cell * 0.5} className={HALO[tone]} />
+              <circle r={cell * 0.28} className={FILL[tone]} />
+              <circle r={cell * 0.12} className="fill-heading" />
+            </g>
+          </g>
+        </g>
+      )}
+      {squares.map((square) => {
+        const rect = cellRect(board, square);
+        const last = !lastMarked && distance(square) === farthest;
+        if (last) lastMarked = true;
+        return (
+          <rect
+            key={`${String(square.column)}:${String(square.row)}`}
+            data-slot="fx-flare"
+            data-last={last ? "true" : undefined}
+            x={rect.x}
+            y={rect.y}
+            width={rect.width}
+            height={rect.height}
+            className={cn("origin-center animate-fx-flare transform-fill", FILL[tone])}
+            // eslint-disable-next-line shadcn/no-inline-styles -- each square flares as the wave reaches it.
+            style={{ "--fx-wait": waitFor(square) } as CSSProperties}
+          />
+        );
+      })}
+      {area.shape === "line" && "toward" in area && (
+        <Beam from={origin} toward={centre(area.toward)} length={radius} cell={cell} tone={tone} />
+      )}
+      {point && (
+        <>
+          <circle
+            data-slot="fx-core"
+            cx={origin.x}
+            cy={origin.y}
+            r={radius * 0.6}
+            className={cn("origin-center animate-fx-impact transform-fill", HALO[tone])}
+          />
+          <circle
+            data-slot="fx-ring"
+            cx={origin.x}
+            cy={origin.y}
+            r={radius + cell * 0.5}
+            fill="none"
+            strokeWidth={cell * 0.12}
+            className={cn("origin-center animate-fx-impact transform-fill", STROKE[tone])}
+          />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** A line's bolt, drawn along its whole length from its origin and fading: a glow under a white-hot core. */
+function Beam({
+  from,
+  toward,
+  length,
+  cell,
+  tone,
+}: {
+  readonly from: { readonly x: number; readonly y: number };
+  readonly toward: { readonly x: number; readonly y: number };
+  readonly length: number;
+  readonly cell: number;
+  readonly tone: Tone;
+}) {
+  const span = Math.hypot(toward.x - from.x, toward.y - from.y) || 1;
+  const end = {
+    x: from.x + ((toward.x - from.x) / span) * length,
+    y: from.y + ((toward.y - from.y) / span) * length,
+  };
+  const d = `M ${String(from.x)} ${String(from.y)} L ${String(end.x)} ${String(end.y)}`;
+  return (
+    <g data-slot="fx-beam">
+      <path
+        d={d}
+        pathLength={1}
+        strokeDasharray={1}
+        strokeWidth={cell * 0.45}
+        strokeOpacity={0.5}
+        strokeLinecap="round"
+        fill="none"
+        className={cn("animate-fx-beam", STROKE[tone])}
+      />
+      <path
+        d={d}
+        pathLength={1}
+        strokeDasharray={1}
+        strokeWidth={cell * 0.12}
+        strokeLinecap="round"
+        fill="none"
+        className="animate-fx-beam stroke-heading"
+      />
+    </g>
+  );
+}

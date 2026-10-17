@@ -172,6 +172,8 @@ export const twTheme = {
     "fx-arc",
     "fx-impact",
     "fx-swing",
+    "fx-flare",
+    "fx-beam",
   ],
   container: [
     "measure",

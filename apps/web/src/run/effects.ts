@@ -1,5 +1,6 @@
 import type {
   AttackDelivery,
+  BoardArea,
   BoardSquare,
   CombatantId,
   DamageType,
@@ -88,6 +89,7 @@ export const effectsBetween = (
  * cannot say is drawn as nothing, and its hit as the burst above.
  */
 export interface Strike {
+  readonly kind: "strike";
   /** Its request, which this tab's roll on its way and the server's copy share. */
   readonly key: string;
   readonly from: CombatantId;
@@ -121,6 +123,7 @@ export const strikesOf = (
       roll.delivery !== null
         ? [
             {
+              kind: "strike",
               key: roll.requestId ?? `at:${String(roll.at)}`,
               from: roll.combatantId,
               to: roll.targetCombatantId,
@@ -134,3 +137,54 @@ export const strikesOf = (
     )
     .sort((a, b) => a.at - b.at)
     .map(({ at: _at, ...strike }) => strike);
+
+/**
+ * An area the board draws filling its squares: a damage roll that kept where
+ * its area went (`Roll.area`), from the creature that loosed it when the
+ * reader may know which.
+ */
+export interface Blast {
+  readonly kind: "blast";
+  readonly key: string;
+  readonly from: CombatantId | null;
+  readonly area: BoardArea;
+  readonly damageType: DamageType | null;
+}
+
+/** What the board draws from a night's rolls: its attacks and its areas, oldest first. */
+export type Act = Strike | Blast;
+
+/** The areas among a night's rolls, oldest first; a kept Hob turn the DM undid draws none. */
+export const blastsOf = (
+  rolls: ReadonlyArray<
+    Pick<Roll, "combatantId" | "area" | "damageType" | "requestId"> & {
+      readonly at: number;
+      readonly undone: boolean;
+    }
+  >,
+): ReadonlyArray<Blast> =>
+  rolls
+    .flatMap((roll): ReadonlyArray<Blast & { readonly at: number }> =>
+      roll.area === null || roll.undone
+        ? []
+        : [
+            {
+              kind: "blast",
+              key: roll.requestId ?? `at:${String(roll.at)}`,
+              from: roll.combatantId,
+              area: roll.area,
+              damageType: roll.damageType,
+              at: roll.at,
+            },
+          ],
+    )
+    .sort((a, b) => a.at - b.at)
+    .map(({ at: _at, ...blast }) => blast);
+
+/** Both, in the order they happened. */
+export const actsOf = (rolls: Parameters<typeof strikesOf>[0] & Parameters<typeof blastsOf>[0]) => {
+  const at = new Map(rolls.map((roll) => [roll.requestId ?? `at:${String(roll.at)}`, roll.at]));
+  return [...strikesOf(rolls), ...blastsOf(rolls)].sort(
+    (a, b) => (at.get(a.key) ?? 0) - (at.get(b.key) ?? 0),
+  );
+};

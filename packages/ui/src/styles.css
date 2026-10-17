@@ -281,6 +281,8 @@
   --animate-fx-arc: tt-fx-arc var(--fx-flight, var(--dur-slow)) linear both;
   --animate-fx-impact: tt-fx-impact var(--dur-slower) var(--ease-out) var(--fx-after, 0s) both;
   --animate-fx-swing: tt-fx-swing var(--dur-slower) var(--ease-out) both;
+  --animate-fx-beam: tt-fx-swing var(--dur-effect) var(--ease-out) both;
+  --animate-fx-flare: tt-fx-flare var(--dur-effect) var(--ease-out) var(--fx-wait, 0s) both;
 
   /* -- layout tokens. The 2px spacing scale itself maps onto Tailwind's
         default steps (2px = 0.5, 6px = 1.5, 20px = 5, …); only the named
@@ -520,13 +522,34 @@
   }
 }
 @keyframes tt-fx-impact {
+  /* Invisible while it waits for the flight: a delayed animation filled
+     backwards sits in its first keyframe. */
   from {
-    opacity: 0.95;
+    opacity: 0;
     transform: scale(0.3);
+  }
+  1% {
+    opacity: 0.95;
   }
   to {
     opacity: 0;
     transform: scale(1);
+  }
+}
+/* An area's square, as the wave reaches it (`--fx-wait`, its own element's):
+   it flares up and fades, so the squares together roll out of the origin. */
+@keyframes tt-fx-flare {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  30% {
+    opacity: 0.75;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: none;
   }
 }
 @keyframes tt-fx-swing {

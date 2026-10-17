@@ -85,12 +85,13 @@ import {
 } from "./load";
 import { RollsDock } from "./RollsDock";
 import { dockLines } from "./rollsLog";
-import { strikesOf } from "./effects";
+import { actsOf } from "./effects";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { tokenLabels } from "./tokens";
 import {
+  areaFor,
   deliveryFor,
   longRangeFor,
   momentsOf,
@@ -1786,6 +1787,13 @@ export function RunScreen() {
                     attacker: selected.displayName,
                     attackerId: selected.id,
                     line,
+                    area: areaFor(
+                      optionsSource === undefined
+                        ? undefined
+                        : rangeOptionsFor(optionsSource, selected),
+                      line,
+                      boardRead?.area,
+                    ),
                   }),
                 )
         }
@@ -1873,7 +1881,7 @@ export function RunScreen() {
             onTarget: picking === undefined ? undefined : strike,
             outOfRange: marks?.out,
             onMove: move,
-            strikes: strikesOf(dice.rolls),
+            acts: actsOf(dice.rolls),
           },
           hostileTokensHidden: state.run.hostileTokensHidden,
           hiding: mapShare.busy,
