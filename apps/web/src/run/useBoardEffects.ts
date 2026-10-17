@@ -11,12 +11,15 @@ import {
 
 /** A strike as the board plays it: from the attacker's square to the target's. */
 export interface StrikePlay extends Omit<Strike, "key" | "from" | "to"> {
+  readonly fromId: CombatantId;
+  readonly toId: CombatantId;
   readonly from: BoardSquare;
   readonly to: BoardSquare;
 }
 
 /** An area as the board plays it: from where its creature stands, if it stands on the board. */
 export interface BlastPlay extends Omit<Blast, "key" | "from"> {
+  readonly fromId: CombatantId | undefined;
   readonly from: BoardSquare | undefined;
 }
 
@@ -117,11 +120,17 @@ const playOf = (
 ): ReadonlyArray<StrikePlay | BlastPlay> => {
   if (act.kind === "blast") {
     const { key: _key, from, ...what } = act;
-    return [{ ...what, from: from === null ? undefined : squares.get(from) }];
+    return [
+      {
+        ...what,
+        fromId: from ?? undefined,
+        from: from === null ? undefined : squares.get(from),
+      },
+    ];
   }
   const from = squares.get(act.from);
   const to = squares.get(act.to);
   if (from === undefined || to === undefined) return [];
-  const { key: _key, ...what } = act;
-  return [{ ...what, from, to }];
+  const { key: _key, from: fromId, to: toId, ...what } = act;
+  return [{ ...what, fromId, toId, from, to }];
 };

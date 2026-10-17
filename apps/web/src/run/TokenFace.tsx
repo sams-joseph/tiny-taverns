@@ -106,70 +106,98 @@ export function TokenFace({
           hop === "b" && "animate-token-hop-b",
         )}
       >
-        {ringed && (
-          <>
-            <circle
-              cx={20}
-              cy={20}
-              r={17}
-              fill="none"
-              strokeWidth={2}
-              className="stroke-surface-page"
-            />
-            <circle
-              cx={20}
-              cy={20}
-              r={19}
-              fill="none"
-              strokeWidth={2}
-              data-ring={active ? "active" : "selected"}
-              className={active ? "stroke-accent" : "stroke-heading"}
-            />
-          </>
-        )}
-        <circle
-          cx={20}
-          cy={20}
-          r={15}
-          strokeWidth={2}
-          strokeDasharray={hidden ? "4 3" : undefined}
-          data-ring={hidden ? "hidden" : undefined}
-          className={cn("fill-surface-raised", party ? "stroke-info" : "stroke-danger")}
-        />
-        <text
-          x={20}
-          y={20}
-          textAnchor="middle"
-          dominantBaseline="central"
-          className={cn(
-            "fill-heading font-sans text-label-s font-semibold",
-            struck && "line-through",
+        {/* What a blow does to it (`fx/stage.ts`): knocked back and flashed white. */}
+        <g data-slot="token-recoil">
+          {ringed && (
+            <>
+              <circle
+                cx={20}
+                cy={20}
+                r={17}
+                fill="none"
+                strokeWidth={2}
+                className="stroke-surface-page"
+              />
+              <circle
+                cx={20}
+                cy={20}
+                r={19}
+                fill="none"
+                strokeWidth={2}
+                data-ring={active ? "active" : "selected"}
+                className={active ? "stroke-accent" : "stroke-heading"}
+              />
+            </>
           )}
-        >
-          {label}
-        </text>
-        {portrait !== undefined && (
-          <foreignObject x={6} y={6} width={28} height={28}>
-            <div
-              data-slot="token-portrait"
-              className="relative size-full overflow-hidden rounded-full"
-            >
-              <DrawnImage src={apiUrl(portrait)} className="object-top" />
-            </div>
-          </foreignObject>
-        )}
-        {conditions > 0 && (
-          <foreignObject x={2} y={-2} width={40} height={15}>
-            <div className="flex h-full justify-end">
-              <span
-                data-slot="token-conditions"
-                className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
+          {/* The ink every shape on the board is drawn in. */}
+          <circle
+            cx={20}
+            cy={20}
+            r={16.5}
+            strokeWidth={1.5}
+            fill="none"
+            className="stroke-fx-ink"
+          />
+          <circle
+            cx={20}
+            cy={20}
+            r={15}
+            strokeWidth={2}
+            strokeDasharray={hidden ? "4 3" : undefined}
+            data-ring={hidden ? "hidden" : undefined}
+            className={cn("fill-surface-raised", party ? "stroke-info" : "stroke-danger")}
+          />
+          <text
+            x={20}
+            y={20}
+            textAnchor="middle"
+            dominantBaseline="central"
+            className={cn(
+              "fill-heading font-sans text-label-s font-semibold",
+              struck && "line-through",
+            )}
+          >
+            {label}
+          </text>
+          {portrait !== undefined && (
+            <foreignObject x={6} y={6} width={28} height={28}>
+              <div
+                data-slot="token-portrait"
+                className="relative size-full overflow-hidden rounded-full"
               >
-                {conditions}
-              </span>
-            </div>
-          </foreignObject>
-        )}
+                <DrawnImage src={apiUrl(portrait)} className="object-top" />
+              </div>
+            </foreignObject>
+          )}
+          {/* A hard rim of light from the top left. */}
+          <path
+            d="M 6.5 22 A 13.5 13.5 0 0 1 18 6.6"
+            fill="none"
+            strokeWidth={1.2}
+            strokeLinecap="round"
+            className="stroke-fx-radiant-core opacity-70"
+          />
+          <circle
+            data-slot="token-flash"
+            cx={20}
+            cy={20}
+            r={15}
+            opacity={0}
+            className="fill-fx-radiant-core"
+          />
+          {conditions > 0 && (
+            <foreignObject x={2} y={-2} width={40} height={15}>
+              <div className="flex h-full justify-end">
+                <span
+                  data-slot="token-conditions"
+                  className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
+                >
+                  {conditions}
+                </span>
+              </div>
+            </foreignObject>
+          )}
+        </g>
       </g>
       {health !== undefined && (
         <foreignObject x={6} y={41} width={28} height={3}>

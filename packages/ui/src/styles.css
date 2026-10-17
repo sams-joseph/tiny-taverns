@@ -266,23 +266,57 @@
   --blur-scrim: var(--scrim-blur);
   --blur-site-header: var(--site-header-blur);
 
+  /* -- the board's effects (local-tokens.css, prototype). ------------------- */
+  --color-fx-ink: var(--fx-ink);
+  --color-fx-blood: var(--fx-blood);
+  --color-fx-fire-glow: var(--fx-fire-glow);
+  --color-fx-fire: var(--fx-fire);
+  --color-fx-fire-core: var(--fx-fire-core);
+  --color-fx-cold-glow: var(--fx-cold-glow);
+  --color-fx-cold: var(--fx-cold);
+  --color-fx-cold-core: var(--fx-cold-core);
+  --color-fx-lightning-glow: var(--fx-lightning-glow);
+  --color-fx-lightning: var(--fx-lightning);
+  --color-fx-lightning-core: var(--fx-lightning-core);
+  --color-fx-thunder-glow: var(--fx-thunder-glow);
+  --color-fx-thunder: var(--fx-thunder);
+  --color-fx-thunder-core: var(--fx-thunder-core);
+  --color-fx-acid-glow: var(--fx-acid-glow);
+  --color-fx-acid: var(--fx-acid);
+  --color-fx-acid-core: var(--fx-acid-core);
+  --color-fx-poison-glow: var(--fx-poison-glow);
+  --color-fx-poison: var(--fx-poison);
+  --color-fx-poison-core: var(--fx-poison-core);
+  --color-fx-necrotic-glow: var(--fx-necrotic-glow);
+  --color-fx-necrotic: var(--fx-necrotic);
+  --color-fx-necrotic-core: var(--fx-necrotic-core);
+  --color-fx-radiant-glow: var(--fx-radiant-glow);
+  --color-fx-radiant: var(--fx-radiant);
+  --color-fx-radiant-core: var(--fx-radiant-core);
+  --color-fx-force-glow: var(--fx-force-glow);
+  --color-fx-force: var(--fx-force);
+  --color-fx-force-core: var(--fx-force-core);
+  --color-fx-psychic-glow: var(--fx-psychic-glow);
+  --color-fx-psychic: var(--fx-psychic);
+  --color-fx-psychic-core: var(--fx-psychic-core);
+  --color-fx-steel-glow: var(--fx-steel-glow);
+  --color-fx-steel: var(--fx-steel);
+  --color-fx-steel-core: var(--fx-steel-core);
+  --color-fx-heal-glow: var(--fx-heal-glow);
+  --color-fx-heal: var(--fx-heal);
+  --color-fx-heal-core: var(--fx-heal-core);
+  --ease-overshoot: var(--ease-overshoot);
+  /* Read by the board's effects (`run/fx/motion.ts`), never by a utility. */
+  --duration-effect: var(--dur-effect);
+
   /* -- motion. Nothing overshoots and nothing steps. ------------------------ */
   --ease-out: var(--ease-out);
   --ease-in-out: var(--ease-in-out);
   --ease-settle: var(--ease-settle);
   --animate-dialog-in: tt-dialog-in var(--dur-base) var(--ease-out);
   --animate-dialog-out: tt-dialog-out var(--dur-base) var(--ease-in-out);
-  --animate-effect-burst: tt-effect-burst var(--dur-effect) var(--ease-out) both;
-  --animate-effect-rise: tt-effect-rise var(--dur-effect) var(--ease-out) both;
   --animate-token-hop-a: tt-token-hop-a var(--dur-slower) var(--ease-in-out);
   --animate-token-hop-b: tt-token-hop-b var(--dur-slower) var(--ease-in-out);
-  --animate-fx-travel: tt-fx-travel var(--fx-flight, var(--dur-slow)) linear var(--fx-trail, 0s)
-    both;
-  --animate-fx-arc: tt-fx-arc var(--fx-flight, var(--dur-slow)) linear both;
-  --animate-fx-impact: tt-fx-impact var(--dur-slower) var(--ease-out) var(--fx-after, 0s) both;
-  --animate-fx-swing: tt-fx-swing var(--dur-slower) var(--ease-out) both;
-  --animate-fx-beam: tt-fx-swing var(--dur-effect) var(--ease-out) both;
-  --animate-fx-flare: tt-fx-flare var(--dur-effect) var(--ease-out) var(--fx-wait, 0s) both;
 
   /* -- layout tokens. The 2px spacing scale itself maps onto Tailwind's
         default steps (2px = 0.5, 6px = 1.5, 20px = 5, …); only the named
@@ -430,11 +464,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   4b. The battle board's effects (`apps/web/src/run/BoardEffects.tsx`).
-
-      A burst rings a token that was hit or healed and its number rises off
-      it; both run `--dur-effect` (local-tokens.css) and end invisible, so the
-      element that plays them is removed on `animationend`.
+   4b. The battle board's token hop (`apps/web/src/run/TokenFace.tsx`).
 
       A token hops when it moves to a new square: its disc rises off its
       shadow and settles, over the `--dur-slower` its box glides in. The hop is
@@ -442,36 +472,10 @@
       `animation-name` is what restarts a CSS animation; the token flips
       between them on each move. It animates `transform` and ends on `none`,
       so it composes with the `translate` a lifted token already wears.
+
+      The board's combat effects are choreographed in script (`run/fx/`),
+      timed by the same tokens and `--dur-effect`.
    -------------------------------------------------------------------------- */
-@keyframes tt-effect-burst {
-  from {
-    opacity: 1;
-    transform: scale(0.8);
-  }
-  35% {
-    opacity: 0.9;
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.6);
-  }
-}
-@keyframes tt-effect-rise {
-  from {
-    opacity: 0;
-    transform: none;
-  }
-  15% {
-    opacity: 1;
-  }
-  70% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(calc(-1 * var(--s-8)));
-  }
-}
 @keyframes tt-token-hop-a {
   40% {
     transform: translateY(calc(-1 * var(--s-3)));
@@ -486,84 +490,6 @@
   }
   to {
     transform: none;
-  }
-}
-
-/* A strike (`StrikeEffect`, the same file), which sets every `--fx-*` on its
-   root: a projectile travels `--fx-dx`/`--fx-dy` over `--fx-flight` (a trailing
-   mote starts `--fx-trail` late), an arrow rises `--fx-arc` over the ground and
-   falls back, the impact flashes `--fx-after` the strike began (once the flight
-   is down), and a melee swing draws its arc (`pathLength` 1) and fades. All end
-   invisible. */
-@keyframes tt-fx-travel {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  90% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-    transform: translate(var(--fx-dx), var(--fx-dy));
-  }
-}
-@keyframes tt-fx-arc {
-  from {
-    transform: none;
-    animation-timing-function: var(--ease-out);
-  }
-  50% {
-    transform: translateY(calc(-1 * var(--fx-arc)));
-    animation-timing-function: var(--ease-in-out);
-  }
-  to {
-    transform: none;
-  }
-}
-@keyframes tt-fx-impact {
-  /* Invisible while it waits for the flight: a delayed animation filled
-     backwards sits in its first keyframe. */
-  from {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  1% {
-    opacity: 0.95;
-  }
-  to {
-    opacity: 0;
-    transform: scale(1);
-  }
-}
-/* An area's square, as the wave reaches it (`--fx-wait`, its own element's):
-   it flares up and fades, so the squares together roll out of the origin. */
-@keyframes tt-fx-flare {
-  from {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  30% {
-    opacity: 0.75;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: none;
-  }
-}
-@keyframes tt-fx-swing {
-  from {
-    opacity: 1;
-    stroke-dashoffset: 1;
-  }
-  55% {
-    opacity: 1;
-    stroke-dashoffset: 0;
-  }
-  to {
-    opacity: 0;
-    stroke-dashoffset: 0;
   }
 }
 
