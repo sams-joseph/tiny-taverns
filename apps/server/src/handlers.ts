@@ -50,6 +50,7 @@ import { NpcTurns } from "./repo/NpcTurns.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Locations } from "./repo/Locations.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -641,6 +642,71 @@ const PlayerNotesLive = HttpApiBuilder.group(
     return handlers.handle("list", ({ params, query }) =>
       notes.listAsPlayer(params.campaignId, query),
     );
+  }),
+);
+
+/** The owner's Locations shelf: every method answers the asker's own places only. */
+const LibraryLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "libraryLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    return handlers
+      .handle("list", () => locations.library)
+      .handle("create", ({ payload }) => locations.create(payload))
+      .handle("findById", ({ params }) => locations.findById(params.locationId))
+      .handle("update", ({ params, payload }) => locations.update(params.locationId, payload))
+      .handle("remove", ({ params }) => locations.remove(params.locationId))
+      .handle("appearances", ({ params }) => locations.appearances(params.locationId));
+  }),
+);
+
+/**
+ * A table's places, behind the creator proof: anybody else is `NotFound`
+ * before a place is read. A player reads `playerLocations`.
+ */
+const LocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "locations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.atCampaign(creator)),
+      )
+      .handle("place", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.place(creator, params.locationId)),
+      )
+      .handle("unplace", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.unplace(creator, params.locationId)),
+      )
+      .handle("reveal", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.reveal(creator, params.locationId)),
+      )
+      .handle("unreveal", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.unreveal(creator, params.locationId)),
+      );
+  }),
+);
+
+/** The places a table has revealed, as a player is told them. */
+const PlayerLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    return handlers.handle("list", ({ params }) => locations.forPlayer(params.campaignId));
+  }),
+);
+
+/** A Shared World's atlas, for its live members. */
+const SharedWorldLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "sharedWorldLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    return handlers.handle("list", ({ params }) => locations.inWorld(params.worldId));
   }),
 );
 
@@ -1969,6 +2035,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldHistoryLive,
     SharedWorldLibraryLive,
     SharedWorldMembersLive,
+    SharedWorldLocationsLive,
+    LibraryLocationsLive,
     InvitePreviewLive,
     ImagesLive,
     UploadsLive,
@@ -1986,6 +2054,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     BattleMapsLive,
     PlayerEncountersLive,
     PlayerNotesLive,
+    LocationsLive,
+    PlayerLocationsLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

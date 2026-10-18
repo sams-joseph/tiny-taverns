@@ -49,6 +49,9 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 - **Library**: an account's own originals of any copyable corpus (creatures, options, spells, equipment, magic items, feats, rule articles). Library rows are in no campaign.
 - **instance**: the one campaign-owned copy the product still mints, inside `EncounterCreatures.create`, so a fight can track state. Enumerable by nothing and editable by nobody.
 - **share**: an explicit grant of a Library original to a Shared World (`group_library_share`), which is how homebrew reaches a table's other members.
+- **location** (a place): an account's own realm, city, dungeon or tavern (`location`), top-level like a character and nested only under the same owner's places. Never copied into a campaign. See [Visibility](visibility.md), _Locations_.
+- **placement**: a row putting one of an account's places, with everything under it, into a context (`context_location`), so every campaign in that Shared World (or the one table of a hidden context) has it. Only the place's owner places it.
+- **reveal**: one table's showing of a place in its context to its players (`campaign_location_reveal`). Inert once the place leaves the context.
 - **option**: a class, race (containing subraces) or background (`character_option`). The vocabulary the create form and Hob draft from.
 
 ## The assistant

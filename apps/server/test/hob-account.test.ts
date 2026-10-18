@@ -210,9 +210,11 @@ describeLayer(
             const { owner } = yield* Fixture;
             const { requests } = yield* ask(owner.token);
             expect(toolNames(requests[0])).toEqual([
+              "listLocations",
               "listStartingSpells",
               "proposeCampaign",
               "proposeCharacter",
+              "proposeLocation",
               "proposeSharedWorld",
             ]);
             const shown = JSON.stringify(requests[0]?.tools);

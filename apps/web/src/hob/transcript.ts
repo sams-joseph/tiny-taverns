@@ -6,6 +6,7 @@ import {
 } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import type { DateTime } from "effect";
+import { locationKindLabel } from "../locations/kind";
 
 /**
  * What a Hob conversation is made of.
@@ -66,6 +67,7 @@ export const ARTIFACT_KINDS = {
   character: { icon: "user-round", label: "Character", variant: "magic" },
   npcSheet: { icon: "shield-half", label: "NPC sheet", variant: "magic" },
   levelUp: { icon: "arrow-big-up-dash", label: "Level up", variant: "magic" },
+  location: { icon: "map-pin", label: "Place", variant: "default" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -218,6 +220,19 @@ export type HobArtifact =
       readonly lines: ReadonlyArray<readonly [string, string]>;
       /** Hob's reasons, one line each. */
       readonly rationale: ReadonlyArray<string>;
+    })
+  | (ArtifactBase & {
+      /**
+       * A place for the asker's Library: its title is the place, its meta the
+       * kind and where it sits. Only what was written is drawn.
+       */
+      readonly kind: "location";
+      /** What a visitor finds there, which players may be shown. */
+      readonly description?: string;
+      /** What it looks like from above, which its map will be drawn from. */
+      readonly appearance?: string;
+      /** The places drafted inside it, each with its own, one line apiece. */
+      readonly children: ReadonlyArray<string>;
     })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
@@ -424,6 +439,26 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
         ].join(" · "),
         chips: [],
         items: proposal.prep.map((text) => ({ text, done: false })),
+      };
+    case "location":
+      return {
+        id: turnId,
+        kind: "location",
+        title: proposal.name,
+        meta: [
+          locationKindLabel(proposal.kind),
+          ...(proposal.parent === null ? [] : [`In ${proposal.parent.name}`]),
+        ].join(" · "),
+        chips: [],
+        ...(proposal.description === null ? {} : { description: proposal.description }),
+        ...(proposal.appearance === null ? {} : { appearance: proposal.appearance }),
+        children: proposal.children.map((child) =>
+          child.children.length === 0
+            ? `${child.name} (${locationKindLabel(child.kind)})`
+            : `${child.name} (${locationKindLabel(child.kind)}): ${child.children
+                .map((leaf) => leaf.name)
+                .join(", ")}`,
+        ),
       };
     case "act":
       return {

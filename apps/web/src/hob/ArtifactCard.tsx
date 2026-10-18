@@ -291,6 +291,41 @@ function SharedWorldBody({
   );
 }
 
+/**
+ * A place Hob drafted: what a visitor finds, the line its map will be drawn
+ * from, and the places inside it — only what was written.
+ */
+function LocationBody({ artifact }: { readonly artifact: HobArtifact & { kind: "location" } }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {artifact.description !== undefined && (
+        <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+          {artifact.description}
+        </p>
+      )}
+      {artifact.appearance !== undefined && (
+        <p className="flex items-start gap-2 text-body-s leading-body text-muted-foreground">
+          <Icon name="map" size={14} className="mt-0.5 shrink-0 text-faint" />
+          <span>{artifact.appearance}</span>
+        </p>
+      )}
+      {artifact.children.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {artifact.children.map((child) => (
+            <li
+              key={child}
+              className="flex items-start gap-2 text-body-s leading-body text-foreground"
+            >
+              <Icon name="map-pin" size={12} className="mt-1 shrink-0 text-faint" />
+              <span>{child}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** A character the account's panel drafted: how they look, and Hob's reasons. */
 function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "character" } }) {
   return (
@@ -424,6 +459,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <NpcSheetBody artifact={artifact} />;
     case "levelUp":
       return <LevelUpBody artifact={artifact} />;
+    case "location":
+      return <LocationBody artifact={artifact} />;
     default:
       return <RulesBody artifact={artifact} />;
   }
@@ -465,6 +502,7 @@ export function ArtifactCard({
   const night = artifact.kind === "checklist";
   const act = artifact.kind === "act";
   const levelUp = artifact.kind === "levelUp";
+  const location = artifact.kind === "location";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -585,7 +623,9 @@ export function ArtifactCard({
                                     ? "In the Chronicle"
                                     : levelUp
                                       ? "On the sheet"
-                                      : "In tonight’s session"}
+                                      : location
+                                        ? "In your Library’s places"
+                                        : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -607,7 +647,8 @@ export function ArtifactCard({
                             npcSheet ||
                             night ||
                             act ||
-                            levelUp
+                            levelUp ||
+                            location
                           ? "Keep it"
                           : "Save to session"}
               </Button>

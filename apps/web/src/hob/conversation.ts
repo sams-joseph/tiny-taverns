@@ -351,11 +351,13 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                       ]
                     : accepted.accepted === "act"
                       ? [reads.acts(campaignId)]
-                      : [
-                          reads.notes(campaignId),
-                          reads.encounters(campaignId),
-                          reads.story(campaignId),
-                        ],
+                      : accepted.accepted === "location"
+                        ? [reads.libraryLocations, reads.locations(campaignId)]
+                        : [
+                            reads.notes(campaignId),
+                            reads.encounters(campaignId),
+                            reads.story(campaignId),
+                          ],
       };
     }
     case "sharedWorld": {
@@ -375,7 +377,12 @@ const callsFor = (scope: HobScope): ScopeCalls => {
           client.sharedWorldHob.accept({ params: { worldId, threadId, turnId }, payload: {} }),
         discard: (client, threadId, turnId) =>
           client.sharedWorldHob.discard({ params: { worldId, threadId, turnId }, payload: {} }),
-        keeps: () => [reads.sharedWorldHistory(worldId)],
+        // A kept place is in the keeper's Library and on the world's atlas,
+        // and so at every table in the world.
+        keeps: (accepted) =>
+          accepted.accepted === "location"
+            ? [reads.libraryLocations, reads.worldLocations(worldId)]
+            : [reads.sharedWorldHistory(worldId)],
       };
     }
     case "account":
@@ -411,7 +418,9 @@ const callsFor = (scope: HobScope): ScopeCalls => {
               ? [reads.mySharedWorlds]
               : accepted.accepted === "levelUp"
                 ? levelUpWrites(accepted.owned)
-                : [reads.myCharacters],
+                : accepted.accepted === "location"
+                  ? [reads.libraryLocations]
+                  : [reads.myCharacters],
       };
   }
 };

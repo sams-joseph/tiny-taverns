@@ -27,6 +27,7 @@ import { ActionsMenu } from "../ui/ActionsMenu";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { DeleteSharedWorldDialog } from "./DeleteSharedWorldDialog";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
+import { WorldPlaces } from "../locations/WorldPlaces";
 import { StorySoFarCard } from "./StorySoFarCard";
 import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
 
@@ -255,6 +256,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
                 )}
               </section>
               <StorySoFarCard worldId={worldId} />
+              <WorldPlaces worldId={worldId} />
             </>
           }
           aside={<MembersCard members={view.members} />}

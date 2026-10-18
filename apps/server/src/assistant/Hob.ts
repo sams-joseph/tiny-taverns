@@ -49,6 +49,7 @@ import { Campaigns } from "../repo/Campaigns.js";
 import { CampaignStories } from "../repo/CampaignStories.js";
 import { GroupHistory } from "../repo/GroupHistory.js";
 import { Groups } from "../repo/Groups.js";
+import { Locations } from "../repo/Locations.js";
 import { Creatures } from "../repo/Creatures.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { EquipmentRepo } from "../repo/Equipment.js";
@@ -289,6 +290,7 @@ export class Hob extends Context.Service<
     | EquipmentRepo
     | GroupHistory
     | Groups
+    | Locations
     | HobThreads
     | NpcKnowledge
     | NpcMemories
@@ -373,6 +375,10 @@ export class Hob extends Context.Service<
           // The group context: the chronicle and the summary for the DM's two
           // group tools, and the whole record for group Hob's.
           history: yield* GroupHistory,
+          // The places a conversation can see — the campaign's world, the
+          // Shared World's atlas or the account's own Library — and the
+          // asker's own places a drafted place nests under.
+          locations: yield* Locations,
         };
 
         /**
@@ -814,7 +820,7 @@ export class Hob extends Context.Service<
                 Effect.flatMap(
                   SharedWorldToolkit.toHandlers(
                     groupHandlersFor(
-                      { history: repositories.history, groups },
+                      { history: repositories.history, groups, locations: repositories.locations },
                       actor,
                       groupId,
                       proposal,
@@ -926,6 +932,7 @@ export class Hob extends Context.Service<
               const drafting = {
                 spells: repositories.spells,
                 equipment: repositories.equipment,
+                locations: repositories.locations,
               };
               const system =
                 levelling !== undefined
@@ -1827,6 +1834,32 @@ const NIGHT_NOUNS: ReadonlyArray<string> = [
  */
 const NIGHT_VERBS: ReadonlyArray<string> = ["plan"];
 
+/**
+ * A place, which `proposeLocation` drafts — "make me a port town", "add a
+ * dungeon under the keep". "place" alone is left out: *"put her in a safe
+ * place"* is chat.
+ */
+const LOCATION_NOUNS: ReadonlyArray<string> = [
+  "location",
+  "locations",
+  "city",
+  "cities",
+  "town",
+  "towns",
+  "village",
+  "villages",
+  "region",
+  "regions",
+  "realm",
+  "dungeon",
+  "dungeons",
+  "district",
+  "districts",
+  "landmark",
+  "tavern",
+  "inn",
+];
+
 /** The things the DM's toolkit can build, in the words a DM uses for them. */
 const DM_NOUNS: ReadonlyArray<string> = [
   "encounter",
@@ -1871,6 +1904,7 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "stat sheet",
   "stats",
   "stat block",
+  ...LOCATION_NOUNS,
 ];
 
 /**
@@ -1891,6 +1925,7 @@ export const ACCOUNT_NOUNS: ReadonlyArray<string> = [
   "characters",
   "hero",
   "pc",
+  ...LOCATION_NOUNS,
 ];
 
 /** *"build me something"* names no table and is still a build ask. */
@@ -2199,6 +2234,10 @@ const dmPrompt = (
     "and offer one with proposeNpcSheet; getNpc reads the sheet an NPC already has.",
     "When your research shows an existing campaign NPC should explicitly know or remember",
     "something, offer a Cast review row with proposeNpcAwareness.",
+    "When the DM asks for a new place — a city, a town, a region, a dungeon, a tavern —",
+    "offer it with proposeLocation, with the places inside it when they asked for them.",
+    "listLocations shows the places in this campaign's world; a new place can only go",
+    "inside one that is the DM's own.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
     "offer it rather than asking permission first. Offer one thing at a time, and once",
     "the tool says it offered it, say one short line about it: the DM is already looking at it.",
@@ -2256,6 +2295,9 @@ const groupPrompt = (groupName: string): string =>
     "write a concise synthesis using only that result, then offer it with",
     "proposeStorySoFar. Its exact Chronicle coverage is recorded for you. For a new",
     "event or connection the world should remember, use proposeSharedWorldEntry instead.",
+    "When a member asks for a new place in the world — a city, a region, a dungeon — offer",
+    "it with proposeLocation; listLocations shows the world's places, and a new place can",
+    "only go inside one that is the member's own.",
     "Nothing you offer becomes world memory unless a member accepts it. Offer one thing",
     "at a time, and say one short line about it.",
     ...REFUSED_OFFERS,
@@ -2357,12 +2399,14 @@ const accountPrompt = (): string =>
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for playing",
     "tabletop roleplaying games. Right now you are helping somebody outside any campaign.",
     "",
-    "You can draft three things for them. When they want a new campaign to run, offer it",
+    "You can draft four things for them. When they want a new campaign to run, offer it",
     "with proposeCampaign: a name, a party name if one fits, and a short pitch. When they",
     "want a new Shared World — a setting several of their campaigns can share — offer it",
     "with proposeSharedWorld: a name and a few sentences about the land, its age and its",
-    "trouble. When they want a character, draft one with proposeCharacter against the",
-    "core rules, as follows.",
+    "trouble. When they want a new place for their Library — a city, a region, a dungeon —",
+    "offer it with proposeLocation; listLocations shows the places they already have. When",
+    "they want a character, draft one with proposeCharacter against the core rules, as",
+    "follows.",
     "",
     ...DRAFTING,
     "",
@@ -2768,6 +2812,31 @@ const offered = (turn: HobTurn): string | undefined => {
             ? "legendary action"
             : "reaction";
       return `[You offered the DM ${JSON.stringify(proposal.combatantName)}'s ${moment} in round ${String(proposal.round)} — ${kept}: ${steps.join("; ")}. Narration: ${proposal.narration}]`;
+    }
+    // Read back in the tool's own words, so "add a smithy to it" redrafts the
+    // place offered rather than a new one. A kept one is on listLocations.
+    case "location": {
+      const under = proposal.children
+        .map((child) =>
+          child.children.length === 0
+            ? `${child.kind} "${child.name}"`
+            : `${child.kind} "${child.name}" (${child.children
+                .map((leaf) => `${leaf.kind} "${leaf.name}"`)
+                .join(", ")})`,
+        )
+        .join("; ");
+      const parts = [
+        proposal.parent === null
+          ? undefined
+          : `inside "${proposal.parent.name}" (parentId ${proposal.parent.id})`,
+        proposal.description === null ? undefined : `description: ${proposal.description}`,
+        proposal.appearance === null ? undefined : `appearance: ${proposal.appearance}`,
+        proposal.notes === null ? undefined : `notes: ${proposal.notes}`,
+        under === "" ? undefined : `children: ${under}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered the ${proposal.kind} "${proposal.name}" — ${draft}${
+        parts.length === 0 ? "" : `: ${parts.join("; ")}`
+      }]`;
     }
     case "nightSummary":
       return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;

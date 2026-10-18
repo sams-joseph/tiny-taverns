@@ -64,6 +64,7 @@ import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Locations } from "./repo/Locations.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -202,6 +203,7 @@ export const assistantFromConfig: Layer.Layer<
   | EquipmentRepo
   | GroupHistory
   | Groups
+  | Locations
   | HobThreads
   | NpcKnowledge
   | NpcMemories
@@ -449,6 +451,7 @@ export const servicesOver = <E>(
     | EquipmentRepo
     | GroupHistory
     | Groups
+    | Locations
     | HobThreads
     | NpcKnowledge
     | NpcMemories
@@ -510,6 +513,7 @@ export const servicesOver = <E>(
   | LiveEvents
   | MagicItems
   | Memberships
+  | Locations
   | Notes
   | NpcAgent
   | NpcKnowledge
@@ -652,6 +656,9 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     // `GET /me/campaigns` is a campaign read, so it signs covers too.
     Memberships.layer.pipe(Layer.provide(imageUrls)),
+    // Account-owned places, their placements in worlds and each table's
+    // reveals. Hob reads it for `listLocations`; the accept writes through it.
+    Locations.layer,
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof. An NPC read signs
@@ -789,6 +796,10 @@ export const servicesOver = <E>(
         // NPC has no portrait to sign yet, and the handler draws it after.
         Npcs.layer,
         NpcPreps.layer,
+        // A kept place goes into the keeper's Library through the shelf's own
+        // create, and into the campaign's or the world's context through the
+        // creator's or member's own placement.
+        Locations.layer,
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
@@ -830,6 +841,9 @@ export const servicesOver = <E>(
         // layers the handlers already hold.
         Groups.layer,
         GroupHistory.layer,
+        // The places `listLocations` reads, and the asker's own a drafted
+        // place nests under. Reads only; the accept writes.
+        Locations.layer,
         HobThreads.layer,
         Npcs.layer,
         NpcKnowledge.layer,
@@ -909,6 +923,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | MagicItems
     | Memberships
+    | Locations
     | Notes
     | NpcAgent
     | NpcKnowledge

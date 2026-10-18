@@ -14,6 +14,7 @@ import {
   worldId,
 } from "../test/ids";
 import { TEST_SESSION } from "../test/session";
+import { fullLocations } from "../locations/locations.fixtures";
 
 /**
  * The campaign view's test wire: fixtures, a stub server, and one way in.
@@ -1954,6 +1955,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     ["GET /me/campaigns/archived", { status: 200, body: [] }],
     [`DELETE /campaigns/${campaignId}`, { status: 200, body: archivedCampaign }],
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
+    // The places at the table, on the shelf and in the world.
+    ...fullLocations(),
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
     [`GET /campaigns/${campaignId}/player-notes`, { status: 200, body: page([playerReadAloud]) }],

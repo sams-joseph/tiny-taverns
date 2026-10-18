@@ -55,6 +55,12 @@ import {
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
+  LOCATION_APPEARANCE_MAX,
+  LOCATION_DESCRIPTION_MAX,
+  LOCATION_NAME_MAX,
+  LOCATION_NOTES_MAX,
+  LocationId,
+  LocationKind,
   NoteCategory,
   NpcKnowledgeSourceKind,
   NPC_WHEREABOUTS_MAX,
@@ -109,6 +115,7 @@ import type { CampaignStories } from "../repo/CampaignStories.js";
 import type { Creatures } from "../repo/Creatures.js";
 import type { GroupHistory, PlayedNight } from "../repo/GroupHistory.js";
 import type { Groups } from "../repo/Groups.js";
+import type { Locations } from "../repo/Locations.js";
 import type {
   HobDirectResourceContext,
   HobDirectResourceTarget,
@@ -1913,6 +1920,173 @@ export const CoreListStartingSpells = Tool.make("listStartingSpells", {
   failureMode: "return",
 });
 
+/** How many places a drafted place may have under it, at each of its two levels. */
+const LOCATION_CHILDREN_MAX = 12;
+
+/** A drafted place's own fields, the same at every depth. */
+const locationDraftFields = {
+  kind: LocationKind,
+  name: Schema.String.check(Schema.isBetweenLength(1, LOCATION_NAME_MAX)),
+  description: optionalText(LOCATION_DESCRIPTION_MAX),
+  appearance: optionalText(LOCATION_APPEARANCE_MAX),
+} as const;
+
+/**
+ * The places this conversation can see, as Hob reads them: no owner's notes,
+ * no owner's name, no reveal. `yours` is whether the asker owns the place,
+ * which is the one thing `proposeLocation` needs to nest under it.
+ *
+ * One tool, bound three ways: at a campaign it is the places in the
+ * campaign's world (`Locations.atCampaign`, behind the creator proof), in a
+ * Shared World its atlas (`Locations.inWorld`), and on the account's panel the
+ * asker's own Library (`Locations.library`).
+ */
+export const ListLocations = Tool.make("listLocations", {
+  description:
+    "The places you can see here — realms, regions, cities, towns, villages, dungeons, " +
+    "landmarks, buildings — each with its kind, the place it sits inside (parentId, " +
+    "or null) and whether it belongs to the person you are talking with (yours). A new " +
+    "place can only go inside one of theirs: use its locationId as proposeLocation's parentId.",
+  success: Schema.Array(
+    Schema.Struct({
+      locationId: LocationId,
+      parentId: Schema.NullOr(LocationId),
+      kind: LocationKind,
+      name: Schema.String,
+      description: Schema.NullOr(Schema.String),
+      yours: Schema.Boolean,
+    }),
+  ),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/**
+ * `proposeLocation`: a place for the asker's Library, with up to two levels of
+ * places under it, kept through the shelf's own create. One tool for the three
+ * toolkits that have it; what the keep does beyond the Library (place it in
+ * the campaign's or the world's context) is the accept's, by where the
+ * conversation is.
+ */
+export const ProposeLocation = Tool.make("proposeLocation", {
+  description:
+    "Offer them a new place — a realm, region, wilderness, city, town, village, district, " +
+    "dungeon, landmark or building — built from what they described, with the places " +
+    "inside it when they asked for them (a town's districts, a district's taverns; two " +
+    "levels at most). Give each a kind and a name, a description of what a visitor finds " +
+    "there (players may be shown it), and an appearance line saying what it looks like " +
+    "from above, which its map will be drawn from. Put anything only the DM should know " +
+    "in notes. To put it inside a place they already have, give parentId from " +
+    "listLocations where yours is true; leave it out for a place that stands on its own. " +
+    "Only a suggestion: nothing is made unless they keep it. Say one short line about it " +
+    "and stop.",
+  parameters: Schema.Struct({
+    ...locationDraftFields,
+    notes: optionalText(LOCATION_NOTES_MAX),
+    parentId: optional(LocationId),
+    children: optional(
+      Schema.Array(
+        Schema.Struct({
+          ...locationDraftFields,
+          children: optional(
+            Schema.Array(Schema.Struct(locationDraftFields)).check(
+              Schema.isMaxLength(LOCATION_CHILDREN_MAX),
+            ),
+          ),
+        }),
+      ).check(Schema.isMaxLength(LOCATION_CHILDREN_MAX)),
+    ),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+type LocationDraft = Tool.Parameters<typeof ProposeLocation>;
+
+/** What `listLocations` answers, from any of the three reads it is bound to. */
+const locationReads = (
+  places: ReadonlyArray<{
+    readonly id: LocationId;
+    readonly parentId: LocationId | null;
+    readonly kind: LocationKind;
+    readonly name: string;
+    readonly description: string | null;
+    readonly mine: boolean;
+  }>,
+) =>
+  places.map((place) => ({
+    locationId: place.id,
+    parentId: place.parentId,
+    kind: place.kind,
+    name: place.name,
+    description: place.description,
+    yours: place.mine,
+  }));
+
+/**
+ * `proposeLocation`, bound: the draft as the card shows it. The parent is
+ * resolved through the owner's own read, so a place that is not the asker's —
+ * somebody else's in the same world included — is refused in words the model
+ * can act on rather than kept under a parent the keep would refuse.
+ */
+const locationHandlerFor =
+  (locations: (typeof Locations)["Service"], actor: Actor, proposal: ProposalSlot) =>
+  ({ kind, name, description, appearance, notes, parentId, children }: LocationDraft) =>
+    Effect.gen(function* () {
+      const { as, offer } = bind(actor, proposal);
+      const title = name.trim();
+      if (title === "") return yield* new Conflict({ message: "give the place a name" });
+      const wanted = absent(parentId);
+      const parent =
+        wanted === undefined
+          ? null
+          : yield* as(locations.findById(wanted)).pipe(
+              Effect.map((place) => ({ id: place.id, name: place.name })),
+              Effect.catchTag("NotFound", () =>
+                Effect.fail(
+                  new Conflict({
+                    message:
+                      "that parentId is not one of their places — take one from listLocations " +
+                      "where yours is true, or leave parentId out",
+                  }),
+                ),
+              ),
+            );
+      const draft = (place: {
+        readonly kind: LocationKind;
+        readonly name: string;
+        readonly description?: string | null;
+        readonly appearance?: string | null;
+      }) => ({
+        kind: place.kind,
+        name: place.name.trim(),
+        description: blank(place.description) ?? null,
+        appearance: blank(place.appearance) ?? null,
+      });
+      const under = (absent(children) ?? [])
+        .filter((child) => child.name.trim() !== "")
+        .map((child) => ({
+          ...draft(child),
+          children: (absent(child.children) ?? [])
+            .filter((leaf) => leaf.name.trim() !== "")
+            .map(draft),
+        }));
+      const count = under.reduce((total, child) => total + 1 + child.children.length, 0);
+      return yield* offer(
+        {
+          target: "location",
+          ...draft({ kind, name: title, description, appearance }),
+          notes: blank(notes) ?? null,
+          parent,
+          children: under,
+        },
+        `Offered the ${kind} "${title}"${parent === null ? "" : ` inside ${parent.name}`}` +
+          `${count === 0 ? "" : `, with ${String(count)} ${count === 1 ? "place" : "places"} inside it`}. ` +
+          "Nothing is made unless they keep it; say one short line about it and stop.",
+      );
+    });
+
 /**
  * The DM's campaign toolkit.
  *
@@ -1987,6 +2161,8 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeCampaignStory,
     ProposeNpc,
     ProposeNpcSheet,
+    ListLocations,
+    ProposeLocation,
     ReadFight,
     SpendCharacterResource,
   );
@@ -2023,6 +2199,10 @@ export const HobToolkit = Toolkit.make(
   // the creator's alone, as `getNpc`, which reads both back, is.
   ProposeNpc,
   ProposeNpcSheet,
+  // The places in the campaign's world, and a new one for the creator's
+  // Library, placed in that world when kept.
+  ListLocations,
+  ProposeLocation,
   // The fight on the table, read: the creator's alone, as every runner read is.
   ReadFight,
 );
@@ -2037,13 +2217,15 @@ export const HobToolkit = Toolkit.make(
 export const FightToolkit = Toolkit.make(ReadFight, ProposeNpcTurn);
 
 /**
- * What **group** Hob is offered: the canonical record and one proposal.
+ * What **group** Hob is offered: the canonical record, the world's places, and
+ * three proposals.
  *
  * A third toolkit rather than the DM's narrowed, for the reason the player's
  * is: a toolkit is what the provider is shown. Group Hob has never heard of
  * `getCreature`, `sessionRecap` or any campaign write — its whole world is
- * what the group-Hob boundary decision grants, and the one thing it can offer
- * is a chronicle line, accepted by a member through `Proposals.acceptSharedWorld`.
+ * what the group-Hob boundary decision grants. What it can offer is a
+ * chronicle line, a Story So Far, or a place for the asker's Library placed in
+ * the world, each accepted by a member through `Proposals.acceptSharedWorld`.
  */
 export const SharedWorldToolkit = Toolkit.make(
   SearchSharedWorldHistory,
@@ -2054,6 +2236,10 @@ export const SharedWorldToolkit = Toolkit.make(
   NightStory,
   ProposeSharedWorldEntry,
   ProposeStorySoFar,
+  // The world's atlas, and a new place for the asker's Library, placed in
+  // the world when kept.
+  ListLocations,
+  ProposeLocation,
 );
 
 /**
@@ -2212,11 +2398,12 @@ export const ProposeSharedWorld = Tool.make("proposeSharedWorld", {
  * **The account's own panel** — Hob on every screen outside a campaign or
  * Shared World (`/me/hob` with no `intent`).
  *
- * The core drafting toolkit plus {@link proposeCampaignOver} and
- * {@link ProposeSharedWorld}, and nothing else: it has no campaign to read and
- * no Shared World record, so it can draft the three things an account makes
- * on its own — a character over the core rules, a new campaign and a new
- * Shared World. Campaign content (a note, an encounter) needs a campaign, and
+ * The core drafting toolkit plus {@link proposeCampaignOver},
+ * {@link ProposeSharedWorld}, {@link ListLocations} over the asker's own
+ * Library and {@link ProposeLocation}, and nothing else: it has no campaign to
+ * read and no Shared World record, so it can draft the four things an account
+ * makes on its own — a character over the core rules, a new campaign, a new
+ * Shared World and a place. Campaign content (a note, an encounter) needs a campaign, and
  * a Chronicle entry needs a world; their tools are absent rather than refused.
  */
 export const accountToolkitOver = (
@@ -2228,9 +2415,11 @@ export const accountToolkitOver = (
     proposeCharacterOver(vocabulary, "core"),
     proposeCampaignOver(worlds),
     ProposeSharedWorld,
+    ListLocations,
+    ProposeLocation,
   );
 
-/** {@link accountToolkitOver} above the cap: the same four, plus the listing. */
+/** {@link accountToolkitOver} above the cap: the same six, plus the listing. */
 export const accountToolkitListing = (
   vocabulary: CharacterVocabulary,
   worlds: ReadonlyArray<CampaignWorld>,
@@ -2241,6 +2430,8 @@ export const accountToolkitListing = (
     proposeCharacterOver(vocabulary, "core"),
     proposeCampaignOver(worlds),
     ProposeSharedWorld,
+    ListLocations,
+    ProposeLocation,
   );
 
 /**
@@ -2514,12 +2705,20 @@ export interface HobRepositories {
    * the decision's whole design.
    */
   readonly history: (typeof GroupHistory)["Service"];
+  /**
+   * The places in the campaign's world (`listLocations`, behind the creator
+   * proof), the account's Library on its own panel, and the asker's own
+   * places a `proposeLocation` nests under.
+   */
+  readonly locations: (typeof Locations)["Service"];
 }
 
 /** What group Hob's tools may reach. Read-only, every one, plus the slot. */
 export interface SharedWorldHobRepositories {
   readonly history: (typeof GroupHistory)["Service"];
   readonly groups: (typeof Groups)["Service"];
+  /** The world's atlas, and the asker's own places a draft nests under. */
+  readonly locations: (typeof Locations)["Service"];
 }
 
 /**
@@ -2883,6 +3082,9 @@ export const dmHandlersFor = (
       Effect.map(repositories.tableFight.onTable(dm), (read) => ({
         fight: read === undefined ? "No fight is on the table." : fightText(read),
       })),
+    // The places in the campaign's world, through the creator's own read.
+    listLocations: () => Effect.map(repositories.locations.atCampaign(dm), locationReads),
+    proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
     getNpc: ({ npcId }) =>
       Effect.gen(function* () {
         const npc = yield* repositories.npcs.findById(dm, npcId);
@@ -3586,6 +3788,8 @@ export const groupHandlersFor = (
                 "accepts it; say one short line about it and stop.",
             ),
       ),
+    listLocations: () => Effect.map(as(repositories.locations.inWorld(groupId)), locationReads),
+    proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
   });
 };
 
@@ -3821,7 +4025,7 @@ export const coreHandlersFor = (
   );
 
 /** What the drafting half reads: the spells and the bundled kit names. */
-export type DraftingRepositories = Pick<HobRepositories, "spells" | "equipment">;
+export type DraftingRepositories = Pick<HobRepositories, "spells" | "equipment" | "locations">;
 
 /**
  * The three drafting handlers both character surfaces share: `listOptions`,
@@ -4194,6 +4398,12 @@ const accountHandlersFor = (
   ...coreHandlersFor(repositories, actor, proposal, vocabulary),
   proposeCampaign: campaignHandlerFor(actor, proposal, worlds),
   proposeSharedWorld: sharedWorldHandlerFor(actor, proposal),
+  listLocations: () =>
+    Effect.map(
+      Effect.provideService(repositories.locations.library, CurrentActor, actor),
+      (places) => locationReads(places.map((place) => ({ ...place, mine: true }))),
+    ),
+  proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
 });
 
 /** {@link accountToolkitOver}, bound to {@link accountHandlersFor}. */

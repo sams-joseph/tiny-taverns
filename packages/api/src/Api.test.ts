@@ -291,6 +291,7 @@ describe("the API declaration", () => {
       "sharedWorldHistory",
       "sharedWorldHob",
       "sharedWorldLibrary",
+      "sharedWorldLocations",
       "sharedWorldMembers",
       "sharedWorlds",
     ]);
@@ -342,7 +343,13 @@ describe("the API declaration", () => {
       // those corpora have no per-campaign consumer, so the Library is their
       // whole surface now.
       "library",
+      // An account's own places, top-level like a character: the owner's
+      // shelf, with no campaign in the path.
+      "libraryLocations",
       "live",
+      // A table's places: the creator's arrangement and reveals over every
+      // place in the campaign's world. A player reads `playerLocations`.
+      "locations",
       "me",
       // Hob drafting a character with no campaign: the account's own thread,
       // against the core rules.
@@ -368,6 +375,8 @@ describe("the API declaration", () => {
       // difficulty (captain's decision, 2026-09-25). `encounters` is the
       // creator's.
       "playerEncounters",
+      // The places a player's table has revealed: no notes, no owner.
+      "playerLocations",
       // A shared note as a player is told it: no visibility, no provenance,
       // and an attachment only to an encounter they may read. `notes` is the
       // creator's.
@@ -381,11 +390,12 @@ describe("the API declaration", () => {
       "seatPrep",
       "sessions",
       // Shared Worlds are the explicit cross-campaign context. Their history,
-      // Library grants, informational roster and Hob conversation each keep a
-      // separate authorization boundary under the same `/worlds` namespace.
+      // Library grants, places, informational roster and Hob conversation each
+      // keep a separate authorization boundary under the same `/worlds` namespace.
       "sharedWorldHistory",
       "sharedWorldHob",
       "sharedWorldLibrary",
+      "sharedWorldLocations",
       "sharedWorldMembers",
       "sharedWorlds",
       // A campaign's story so far: the creator's read and writes, and a

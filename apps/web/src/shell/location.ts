@@ -60,6 +60,7 @@ export type Section =
   | "encounters"
   | "notes"
   | "cast"
+  | "locations"
   | "party"
   | "chronicle"
   | "table";
@@ -78,6 +79,7 @@ export function useSection(): Section {
   // One encounter's page is *within* the list, as an NPC's is within the cast.
   if (matchRoute({ to: "/campaigns/$campaignId/encounters", fuzzy: true })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
+  if (matchRoute({ to: "/campaigns/$campaignId/locations" })) return "locations";
   // One NPC's screen is *within* the cast, the way a sheet is within the roster.
   if (matchRoute({ to: "/campaigns/$campaignId/cast", fuzzy: true })) return "cast";
   // Anything else *inside* a campaign is that campaign's Overview — the index,

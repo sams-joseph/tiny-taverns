@@ -74,6 +74,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/library/npcs/": "/library/npcs",
   "/_shell/library/npcs/$npcId": `/library/npcs/${npcId}`,
   "/_shell/library/npcs/$": "/library/npcs/not-a-uuid",
+  "/_shell/library/locations": "/library/locations",
   "/_shell/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/_shell/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/_shell/campaigns/$campaignId/encounters/": `/campaigns/${campaignId}/encounters`,
@@ -89,6 +90,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns/$campaignId/cast/$npcId/": `/campaigns/${campaignId}/cast/${npcId}`,
   "/_shell/campaigns/$campaignId/cast/$": `/campaigns/${campaignId}/cast/not-a-uuid`,
   "/_shell/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
+  "/_shell/campaigns/$campaignId/locations": `/campaigns/${campaignId}/locations`,
   "/_shell/campaigns/$campaignId/party/": `/campaigns/${campaignId}/party`,
   "/_shell/campaigns/$campaignId/party/$seatId": `/campaigns/${campaignId}/party/${seatId}`,
   "/_shell/campaigns/$campaignId/party/$": `/campaigns/${campaignId}/party/not-a-uuid`,
@@ -496,6 +498,7 @@ describe("the shell's top bar", () => {
         "Party",
         "Cast",
         "Notes",
+        "Locations",
         "Chronicle",
       ]);
       // Every one of them names the campaign, because every endpoint behind

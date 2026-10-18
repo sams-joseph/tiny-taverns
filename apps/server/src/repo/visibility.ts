@@ -1757,3 +1757,116 @@ export const containedChildReadable = (
         sql`${sql(`${containment.table}.${containment.foreignKey}`)} = ${parentId}`,
         containedRowReadable(sql, containment, campaignId, actor),
       ]);
+
+// ---------------------------------------------------------------------------
+// Locations (`0105_locations.ts`)
+//
+// A location is account-owned and in no campaign. Three questions reach one,
+// and only three: the owner's (`locationOwned`), a world member's or a
+// creator's through a placement (`locationInContext`), and a player's through
+// a placement and their table's reveal (`locationShownToPlayer`). `parent_id`
+// is structure, never reach: a place is in a context because it or a place
+// above it has a placement there, and the walk up is over the owner's own
+// tree, so it can never cross into somebody else's places.
+// ---------------------------------------------------------------------------
+
+/** Rows of `location` the actor owns: the Library's read and every write. */
+export const locationOwned = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+  sql`location.account_id = ${actor.accountId}`;
+
+/**
+ * Whether the place `location` names is in the context `group` names: it, or a
+ * place above it, has a placement there. Both arguments are SQL expressions the
+ * enclosing query binds — a column (`location.id`, `campaign.group_id`) or a
+ * parameter — so one fragment answers a row, its parent, or a reveal's place.
+ * A `null` place is in nothing.
+ */
+export const locationInContext = (
+  sql: SqlClient.SqlClient,
+  location: Statement.Fragment,
+  group: Statement.Fragment,
+): Statement.Fragment =>
+  sql`exists (
+    with recursive location_ancestry (id, parent_id) as (
+      select ancestor.id, ancestor.parent_id from location as ancestor
+      where ancestor.id = ${location}
+      union all
+      select above.id, above.parent_id from location as above
+      join location_ancestry on above.id = location_ancestry.parent_id
+    )
+    select 1 from location_ancestry
+    join context_location on context_location.location_id = location_ancestry.id
+    where context_location.group_id = ${group}
+  )`;
+
+/**
+ * Rows of `location` a member of the named Shared World reads there: the
+ * world gate (`groupReadable`, which a hidden context fails), then placement.
+ */
+export const locationInWorld = (
+  sql: SqlClient.SqlClient,
+  worldId: SharedWorldId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    groupReadable(sql, actor, worldId),
+    locationInContext(sql, sql`location.id`, sql`${worldId}`),
+  ]);
+
+/**
+ * Rows of `location` the named campaign's creator arranges at their table:
+ * the creator gate (`campaignWritableById`), then placement in the campaign's
+ * own context, read from the campaign row rather than trusted from a proof.
+ */
+export const locationAtCampaign = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    campaignWritableById(sql, campaignId, actor),
+    locationInContext(
+      sql,
+      sql`location.id`,
+      sql`(select placing_campaign.group_id from campaign as placing_campaign
+           where placing_campaign.id = ${campaignId})`,
+    ),
+  ]);
+
+/**
+ * Whether the place `location` names has been revealed at the named campaign
+ * and is still in its context. A reveal alone reaches nothing: one left behind
+ * by a move, a re-parent or an unplace names a place the context no longer has.
+ */
+export const locationRevealedAt = (
+  sql: SqlClient.SqlClient,
+  location: Statement.Fragment,
+  campaignId: CampaignId,
+): Statement.Fragment =>
+  sql.and([
+    sql`exists (select 1 from campaign_location_reveal
+                where campaign_location_reveal.campaign_id = ${campaignId}
+                  and campaign_location_reveal.location_id = ${location})`,
+    locationInContext(
+      sql,
+      location,
+      sql`(select revealing_campaign.group_id from campaign as revealing_campaign
+           where revealing_campaign.id = ${campaignId})`,
+    ),
+  ]);
+
+/**
+ * Rows of `location` a player at the named campaign is told: they may read the
+ * campaign (`campaignReadable`), and the table has revealed the place.
+ */
+export const locationShownToPlayer = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`exists (select 1 from campaign
+                where campaign.id = ${campaignId}
+                  and ${campaignReadable(sql, actor, campaignId)})`,
+    locationRevealedAt(sql, sql`location.id`, campaignId),
+  ]);

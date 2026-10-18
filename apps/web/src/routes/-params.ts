@@ -4,6 +4,7 @@ import {
   CharacterId,
   EncounterId,
   EncounterRunId,
+  LocationId,
   NoteId,
   NpcId,
   SessionId,
@@ -111,6 +112,7 @@ export const tokenParam = {
 };
 
 export const encounterSearch = searchId("encounter", EncounterId);
+export const locationSearch = searchId("location", LocationId);
 export const noteSearch = searchId("note", NoteId);
 export const npcSearch = searchId("npc", NpcId);
 export const sessionSearch = searchId("session", SessionId);

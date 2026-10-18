@@ -48,6 +48,10 @@ const NOT_CONTENT = [
   // through the campaign's own reads — `character_portrait`'s reason, one
   // subject over. See 0049_campaign_images.ts.
   "campaign_image",
+  // A table's reveal of a place: an edge between a campaign and a location,
+  // written by the creator alone and inert unless the place is in the
+  // campaign's context. See 0105_locations.ts.
+  "campaign_location_reveal",
   "campaign_member",
   "character_option_ability_bonus",
   "character_option_equipment_reference",
@@ -66,6 +70,9 @@ const NOT_CONTENT = [
   "character_banner",
   "character_resource_request",
   "condition",
+  // A placement: a grant of a place to a context, a predicate input like a
+  // Library share, never content. See 0105_locations.ts.
+  "context_location",
   "creature_armor_equipment",
   "creature_condition_immunity",
   "creature_damage_type",
@@ -124,6 +131,11 @@ const NOT_CONTENT = [
   // own account's apply. See 0091_image_uploads.ts.
   "image_upload",
   "language",
+  // An account's place: who may read it is its owner, a member of a world it
+  // is placed in, or a player of a table that revealed it — never a dm/shared
+  // switch. It carries the provenance pair because a person may keep a Hob
+  // draft of one. See 0105_locations.ts.
+  "location",
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",

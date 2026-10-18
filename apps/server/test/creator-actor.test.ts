@@ -610,7 +610,12 @@ describeLayer("creator-actor", shared, (it) => {
       // and fifty-five to fifty-eight are `NpcTurns.kept`, `undo` and the
       // transaction inside it, and `Combatants.inTurn.restore`: a kept turn
       // read back, and taken back.
-      expect(gated).toBe(158);
+      // A hundred and fifty-nine to sixty-four are a table's places:
+      // `Locations.atCampaign`, `place`, `unplace`, `reveal` and `unreveal`,
+      // and the check `reveal` and `unreveal` share that the place is in the
+      // campaign's world. Arranging and revealing places is the creator's,
+      // and a player reads `forPlayer`, ungated for `listAsPlayer`'s reason.
+      expect(gated).toBe(164);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
@@ -919,7 +924,13 @@ describeLayer("creator-actor", shared, (it) => {
       // `PlayerTable.setInitiative`'s reason: each reaches exactly the row
       // `ownSeatedCombatant` allows, and the DM, who holds no seat, writes
       // through the gated `Combatants` instead.
-      expect(ungated).toBe(190);
+      // A hundred and ninety-one to ninety-nine are places: `Locations.library`,
+      // `findById`, `create`, `update`, `remove` and `appearances`, the owner's
+      // shelf, for `Npcs.library`'s reason — a place is in no campaign, and
+      // `locationOwned` is already the owner predicate; `inWorld` and
+      // `placeInWorld`, a Shared World's, whose reach is `groupReadable`; and
+      // `forPlayer`, for `Notes.listAsPlayer`'s reason.
+      expect(ungated).toBe(199);
     });
   });
 });

@@ -10,6 +10,8 @@ import {
   keptFrom,
   type CharacterOwnCreate,
   type HobProposal,
+  type Location,
+  type LocationKind,
   NotFound,
   type NpcPrepUpdate,
   type NpcSheetPut,
@@ -27,6 +29,7 @@ import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { Groups } from "./Groups.js";
+import { Locations } from "./Locations.js";
 import { discardedConflict, lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import { NpcPreps } from "./NpcPrep.js";
@@ -250,6 +253,50 @@ export class Proposals extends Context.Service<
       const prepItems = yield* PrepItems;
       const acts = yield* Acts;
       const advancement = yield* Advancement;
+      const locations = yield* Locations;
+
+      /**
+       * A drafted place and everything under it, made through the shelf's own
+       * create, parent first, each stamped with the turn and owned by the
+       * accepting credential. The parent was the asker's when Hob offered the
+       * draft; `create` asks again, so one deleted since is its `NotFound`.
+       */
+      const keepPlaces = (
+        proposal: Extract<HobProposal, { target: "location" }>,
+        from: AssistantOrigin,
+      ) =>
+        Effect.gen(function* () {
+          const fields = (draft: {
+            readonly kind: LocationKind;
+            readonly name: string;
+            readonly description: string | null;
+            readonly appearance: string | null;
+          }) => ({
+            kind: draft.kind,
+            name: draft.name,
+            ...(draft.description === null ? {} : { description: draft.description }),
+            ...(draft.appearance === null ? {} : { appearance: draft.appearance }),
+          });
+          const location = yield* locations.create(
+            {
+              ...fields(proposal),
+              ...(proposal.notes === null ? {} : { notes: proposal.notes }),
+              ...(proposal.parent === null ? {} : { parentId: proposal.parent.id }),
+            },
+            from,
+          );
+          const descendants: Array<Location> = [];
+          for (const child of proposal.children) {
+            const made = yield* locations.create({ ...fields(child), parentId: location.id }, from);
+            descendants.push(made);
+            for (const leaf of child.children) {
+              descendants.push(
+                yield* locations.create({ ...fields(leaf), parentId: made.id }, from),
+              );
+            }
+          }
+          return { accepted: "location" as const, location, descendants };
+        });
 
       const materialise = (
         campaignId: CampaignId,
@@ -451,6 +498,25 @@ export class Proposals extends Context.Service<
               return { accepted: "npc" as const, npc };
             });
 
+          case "location":
+            // The creator's toolkit offers it, into the campaign's own
+            // thread; the proof is asked again, so nobody else keeps one.
+            // The places go into the creator's Library, and the top one into
+            // the campaign's world unless its parent already has it there.
+            // No reveal: the players see nothing until the creator says so.
+            return Effect.gen(function* () {
+              const creator = yield* creators.of(campaignId);
+              const kept = yield* keepPlaces(proposal, from);
+              const there = yield* locations.atCampaign(creator);
+              if (
+                proposal.parent === null ||
+                !there.some((place) => place.id === proposal.parent!.id)
+              ) {
+                yield* locations.place(creator, kept.location.id);
+              }
+              return kept;
+            });
+
           case "campaign":
             // Only the account's own panel offers one, into a thread no
             // campaign reaches; the account accept below is where it is kept.
@@ -610,7 +676,10 @@ export class Proposals extends Context.Service<
                                 from,
                               ),
                             }
-                          : undefined;
+                          : proposal.target === "location"
+                            ? // Into the asker's Library, and nowhere else.
+                              yield* keepPlaces(proposal, from)
+                            : undefined;
                   if (accepted === undefined) {
                     // Only the account's own toolkits write into these threads
                     // and they propose nothing else; the refusal is the same
@@ -646,6 +715,18 @@ export class Proposals extends Context.Service<
                 }
                 if (turn.acceptedAt !== null) return yield* alreadyAccepted;
                 if (turn.discardedAt !== null) return yield* discardedConflict;
+                if (turn.proposal.target === "location") {
+                  // Into the keeper's Library, then into this world, which
+                  // they are a member of or the lock above found no turn.
+                  const kept = yield* keepPlaces(turn.proposal, { assistantTurnId: turnId });
+                  const there = yield* locations.inWorld(groupId);
+                  const parent = turn.proposal.parent;
+                  if (parent === null || !there.some((place) => place.id === parent.id)) {
+                    yield* locations.placeInWorld(groupId, kept.location.id);
+                  }
+                  yield* markAccepted(sql, turnId, keptFrom(kept));
+                  return kept;
+                }
                 if (
                   turn.proposal.target !== "sharedWorldHistory" &&
                   turn.proposal.target !== "sharedWorldSummary"

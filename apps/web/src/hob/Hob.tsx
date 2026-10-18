@@ -196,6 +196,9 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
           // The Story So Far is the world's page's own card.
           case "sharedWorldSummary":
             return navigate({ to: "/worlds/$worldId", params: { worldId: kept.worldId } });
+          // A kept place is on its owner's shelf, wherever it was kept from.
+          case "location":
+            return navigate({ to: "/library/locations", search: { location: kept.id } });
         }
         if (campaignId === undefined) return undefined;
         switch (kept.accepted) {

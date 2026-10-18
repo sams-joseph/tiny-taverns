@@ -236,6 +236,12 @@ describe("the reach seam, enforced rather than asserted", () => {
       // counts by it. Never a caller-supplied account.
       "repo/Images.ts",
       "repo/LibraryShares.ts",
+      // A place's owner is written from `CurrentActor` at create and copied
+      // onto a placement from the place row itself; the ownership comparison
+      // is `locationOwned` in `repo/visibility.ts`. A placement's own
+      // `account_id` is compared only to the creator proof's actor, to take
+      // back the creator's own placement. Never a caller-supplied account.
+      "repo/Locations.ts",
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
       "repo/NpcMemories.ts",
@@ -1049,6 +1055,13 @@ describeLayer("membership", shared, (it) => {
               -- A cover is read only as a field of the campaign, through the
               -- campaign's own shipped reads; it has no read of its own.
               'campaign_image',
+              -- A place, its placements and a table's reveals are account-
+              -- and world-scoped rather than a DM's campaign rows; the owner,
+              -- world member, creator and player refusals, a stranger's
+              -- included, are covered in locations.test.ts.
+              'campaign_location_reveal',
+              'context_location',
+              'location',
               'campaign_member',
               -- A banner is read only as a field of the character, beside its
               -- portrait, through the character's own shipped reads.
