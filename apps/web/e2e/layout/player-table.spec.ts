@@ -1,12 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
-// The squares a spec measures are a flat board's: the canvas is looked at
-// straight down here, and the isometric view has a test of its own.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "top"));
-});
-
 /**
  * A seated player's table (`play/PlayerTableScreen.tsx`) with the fight's map
  * shared, at every width, laid out as the DM's runner is.

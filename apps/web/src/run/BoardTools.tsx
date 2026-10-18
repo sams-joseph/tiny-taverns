@@ -10,7 +10,6 @@ import {
   cellRect,
   squareAt,
 } from "@taverns/api";
-import { usePlanePoint } from "./boardFrame";
 import { Button, Icon, Toggle } from "@taverns/ui";
 import { type PointerEvent, type ReactNode, useRef } from "react";
 import { AREA_SHAPES, areaName, squaresOf } from "./area";
@@ -136,7 +135,6 @@ export function ToolSurface({
 }) {
   const plane = battleMapPlane(board, board.image);
   const layer = useRef<HTMLDivElement>(null);
-  const planePoint = usePlanePoint(layer, plane);
   /** The pointer laying a ruler, while it is held down. */
   const held = useRef<{ readonly pointerId: number } | undefined>(undefined);
 
@@ -144,8 +142,12 @@ export function ToolSurface({
     readonly clientX: number;
     readonly clientY: number;
   }): BoardSquare | undefined => {
-    const point = planePoint(event.clientX, event.clientY);
-    return point === undefined ? undefined : squareAt(board, point);
+    const box = layer.current?.getBoundingClientRect();
+    if (box === undefined || box.width === 0 || box.height === 0) return undefined;
+    return squareAt(board, {
+      x: ((event.clientX - box.left) / box.width) * plane.width,
+      y: ((event.clientY - box.top) / box.height) * plane.height,
+    });
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {

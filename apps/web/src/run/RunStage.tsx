@@ -20,7 +20,6 @@ import { CameraBar } from "./CameraBar";
 import { FogActions, FogBrush } from "./Fog";
 import { useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens } from "./RunTokens";
-import { useBoardView } from "./view";
 
 /**
  * The fight at a desktop width: **a canvas, not a page.** The board fills the
@@ -282,7 +281,6 @@ export function RunBoardStage({
 }: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
   const { resource, reload, over } = props;
   const { board, gridShown, withBoard, tools, fogTool } = useRunBoard(props, true);
-  const [view, setView] = useBoardView();
   const camera = useRef<Camera | null>(null);
   const active = props.tokens.combatants.find(
     (combatant) => combatant.id === props.tokens.activeId,
@@ -320,7 +318,6 @@ export function RunBoardStage({
         plane={plane}
         cellPx={board.alignment.cellPx}
         freeArea={freeArea}
-        view={view}
         focus={activeAt}
         camera={camera}
         controls={(at) => (
@@ -340,8 +337,6 @@ export function RunBoardStage({
             >
               <CameraBar
                 camera={at}
-                view={view}
-                onView={setView}
                 onCentre={activeAt === undefined ? undefined : () => at.centre(activeAt)}
               />
               <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-hairline pt-2">
@@ -362,8 +357,7 @@ export function RunBoardStage({
       >
         <BattleMapBoard
           map={{ ...board, grid: gridShown ? "square" : "none" }}
-          // Tilted, a token's stand rises past the board's edge (`TokenFace`).
-          className={cn("box-content", view === "iso" && "overflow-visible")}
+          className="box-content"
         >
           {tools.pinned !== null && <AreaLayer board={board} area={tools.pinned} state="pinned" />}
           {tools.preview !== undefined && (

@@ -11,7 +11,6 @@ import {
   rulerReading,
   squareAt,
 } from "@taverns/api";
-import { useBoardViewOf, usePlanePoint } from "./boardFrame";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import {
   type KeyboardEvent,
@@ -26,7 +25,6 @@ import { boardStage } from "./fx/stage";
 import type { Act } from "./effects";
 import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
-import { uprightTransform } from "./view";
 import { useBoardEffects } from "./useBoardEffects";
 import type { DrawnBoard } from "./BoardTools";
 import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } from "./tokens";
@@ -435,9 +433,6 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const targeting = onTarget !== undefined;
   const plane = battleMapPlane(board, board.image);
   const layer = useRef<HTMLDivElement>(null);
-  const planePoint = usePlanePoint(layer, plane);
-  const boardView = useBoardViewOf();
-  const upright = uprightTransform(boardView);
   const [drag, setDrag] = useState<Drag>();
   /** A dropped token, held on its square until the server answers the move. */
   const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
@@ -494,8 +489,12 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
 
   /** The square under a point on the screen, or `undefined` off the board. */
   const squareUnder = (clientX: number, clientY: number): BoardSquare | undefined => {
-    const point = planePoint(clientX, clientY);
-    return point === undefined ? undefined : squareAt(board, point);
+    const box = layer.current?.getBoundingClientRect();
+    if (box === undefined || box.width === 0 || box.height === 0) return undefined;
+    return squareAt(board, {
+      x: ((clientX - box.left) / box.width) * plane.width,
+      y: ((clientY - box.top) / box.height) * plane.height,
+    });
   };
 
   const place = (event: MouseEvent<HTMLDivElement>) => {
@@ -609,7 +608,6 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
           conditions={combatant.conditions}
           lifted={dragging ? "held" : active ? "turn" : undefined}
           hop={effects.hopOf(combatant.id)}
-          upright={upright}
           name={
             nameShown(names, { active, selected: isSelected, dragging })
               ? combatant.displayName
@@ -634,7 +632,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         />
         {fog.veil === "opaque" && veil}
         {range}
-        {(boardView === "iso" ? nearestLast(standing, squareOf) : standing).map((combatant) => {
+        {standing.map((combatant) => {
           const square = squareOf(combatant);
           const { active, dragging, fade, face } = look(combatant);
           return (
@@ -719,17 +717,3 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     </>
   );
 }
-
-/**
- * Tilted, a token nearer the bottom of the screen stands in front of one behind
- * it: drawn later, by the diagonal its square is on, so no z-index is chosen
- * outside the layering scale.
- */
-const nearestLast = <T,>(
-  tokens: ReadonlyArray<T>,
-  squareOf: (token: T) => BoardSquare,
-): ReadonlyArray<T> =>
-  tokens
-    .map((token, index) => ({ token, index, depth: squareOf(token).column + squareOf(token).row }))
-    .sort((a, b) => a.depth - b.depth || a.index - b.index)
-    .map(({ token }) => token);

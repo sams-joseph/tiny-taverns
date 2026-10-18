@@ -2,12 +2,6 @@ import type { Page } from "@playwright/test";
 import { runId } from "../../src/test/ids";
 import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
-// The squares a spec measures are a flat board's: the canvas is looked at
-// straight down here, and the isometric view has a test of its own.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "top"));
-});
-
 /**
  * The runner (`run/RunScreen.tsx`) at every width. From `@3xl` of `main` (1440
  * and 1024 here) it is a canvas (`run/RunStage.tsx`): the board fills the stage
@@ -294,7 +288,6 @@ for (const width of WIDTHS) {
             "Zoom out",
             "Zoom in",
             "Centre on whoever is up",
-            "Isometric",
           ]) {
             const control = await box(tools.getByRole("button", { name, exact: true }));
             expect.soft(control.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
@@ -946,89 +939,6 @@ for (const width of WIDTHS) {
           await expect
             .poll(() => last().filter((write) => write === "rolls").length, { message: "rolls" })
             .toBeGreaterThanOrEqual(1);
-        });
-      });
-
-      test("the isometric view", async ({ app, page }) => {
-        // Tilted, as the drawing opens; the Goblin Boss stands two squares from Brannoc.
-        await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "iso"));
-        await page.route(
-          (url) =>
-            /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/combatants$/.test(
-              url.pathname,
-            ),
-          async (route) => {
-            const response = await route.fetch();
-            const rows = (await response.json()) as ReadonlyArray<Record<string, unknown>>;
-            await route.fulfill({
-              response,
-              json: rows.map((row) =>
-                row["displayName"] === "Goblin Boss"
-                  ? { ...row, position: { column: 7, row: 4 } }
-                  : row,
-              ),
-            });
-          },
-        );
-        const moves: Array<unknown> = [];
-        await page.route(
-          (url) => url.pathname.endsWith("/move"),
-          async (route) => {
-            const body = route.request().postDataJSON() as { position: unknown };
-            moves.push(body.position);
-            const response = await route.fetch();
-            await route.fulfill({ response });
-          },
-        );
-        await app.open(run);
-        const map = page.getByRole("region", { name: "Battle map" });
-        const brannoc = map.getByRole("button", { name: /^Brannoc, column/ });
-        const goblin = map.getByRole("button", { name: /^Goblin Boss, column/ });
-        await expect(goblin).toBeVisible();
-        await expect(page.locator('[data-slot="board-canvas-content"]')).toHaveAttribute(
-          "data-view",
-          "iso",
-        );
-
-        await test.step("a square is a diamond, and a press in its middle lands on its token", async () => {
-          const at = await box(brannoc);
-          // The square's box is twice as wide as it is tall: the drawing's 45° turn, height halved.
-          expect.soft(at.width / at.height, "a diamond's box").toBeCloseTo(2, 1);
-          expect
-            .soft(await landsOn(page, at.x + at.width / 2, at.y + at.height / 2), "token on top")
-            .toMatch(/^Brannoc, column/);
-        });
-
-        await test.step("the token stands up off its square, and its disc takes the press", async () => {
-          const square = await box(goblin);
-          const disc = await box(goblin.locator('[data-slot="token-stand"] circle').nth(2));
-          // Upright: a round disc, not a squashed one, standing above the square's middle.
-          expect.soft(disc.width / disc.height, "the disc is round").toBeCloseTo(1, 1);
-          expect
-            .soft(disc.y + disc.height / 2, "the disc above the square's middle")
-            .toBeLessThan(square.y + square.height / 2);
-          await page.mouse.click(disc.x + disc.width / 2, disc.y + disc.height / 2);
-          await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
-            "Goblin Boss",
-          );
-        });
-
-        await test.step("a drag one square across lands one column on", async () => {
-          const at = await box(brannoc);
-          const name = (await brannoc.getAttribute("aria-label")) ?? "";
-          const [, column, row] = /column (\d+), row (\d+)/.exec(name) ?? [];
-          // One column across the tilted plane is half the diamond right and half down.
-          const start = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
-          const end = { x: start.x + at.width / 2, y: start.y + at.height / 2 };
-          await page.mouse.move(start.x, start.y);
-          await page.mouse.down();
-          await page.mouse.move(end.x, end.y, { steps: 6 });
-          await page.mouse.up();
-          await expect.poll(() => moves.length).toBe(1);
-          expect.soft(moves[0], "the square under the pointer").toEqual({
-            column: Number(column),
-            row: Number(row) - 1,
-          });
         });
       });
 

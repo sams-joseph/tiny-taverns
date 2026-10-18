@@ -1,23 +1,17 @@
-import { Button, Icon, Toggle } from "@taverns/ui";
+import { Button, Icon } from "@taverns/ui";
 import type { Camera } from "./BoardCanvas";
-import type { BoardView } from "./view";
 
 /**
  * The canvas's camera, in the stage's bottom-left corner (`Encounter
  * Canvas.dc.html`): zoom out, the zoom against the view the canvas opened on
- * (a press on it fits the board again), zoom in, centre on whoever is up, and
- * the view, tilted or straight down (`view.ts`). The wheel, a pinch and a drag
- * still do all of it but the tilt; these are for a DM without a wheel.
+ * (a press on it fits the board again), zoom in, and centre on whoever is up.
+ * The wheel, a pinch and a drag do the same; these are for a DM without a wheel.
  */
 export function CameraBar({
   camera,
-  view,
-  onView,
   onCentre,
 }: {
   readonly camera: Camera;
-  readonly view: BoardView;
-  readonly onView: (view: BoardView) => void;
   /** Absent while nobody is up, or whoever is has no square. */
   readonly onCentre: (() => void) | undefined;
 }) {
@@ -60,16 +54,6 @@ export function CameraBar({
       >
         <Icon name="locate-fixed" size={14} />
       </Button>
-      <Toggle
-        size="sm"
-        className="ml-auto"
-        aria-label="Isometric"
-        title={view === "iso" ? "Isometric view: press to look straight down" : "Tilt the board"}
-        pressed={view === "iso"}
-        onPressedChange={(tilted) => onView(tilted ? "iso" : "top")}
-      >
-        <Icon name="layers" size={14} />
-      </Toggle>
     </div>
   );
 }
