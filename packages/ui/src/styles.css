@@ -262,6 +262,7 @@
   --shadow-inset-lip: var(--shadow-inset-lip);
   --shadow-inset-press: var(--shadow-inset-press);
   --shadow-ring: var(--ring);
+  --shadow-glow-accent: var(--shadow-glow-accent);
 
   --blur-scrim: var(--scrim-blur);
   --blur-site-header: var(--site-header-blur);
@@ -347,6 +348,8 @@
   --spacing-chat-panel: var(--panel-chat-w);
   --spacing-overview-main: var(--overview-main-w);
   --spacing-overview-aside: var(--overview-aside-w);
+  --spacing-run-rail: var(--run-rail-w);
+  --spacing-run-turn: var(--run-turn-w);
   --spacing-overview-cover: var(--overview-cover-h);
   --spacing-overview-overlap: var(--overview-cover-overlap);
   --spacing-encounters-list-min: var(--encounters-list-min);

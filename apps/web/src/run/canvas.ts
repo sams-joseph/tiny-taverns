@@ -1,4 +1,5 @@
-import type { PictureRect, PictureSize } from "@taverns/api";
+import type { BoardSquare, PictureRect, PictureSize } from "@taverns/api";
+import { cellRect } from "@taverns/api";
 
 /**
  * Where the fight's board sits on the runner's canvas (`BoardCanvas.tsx`), as
@@ -28,6 +29,12 @@ export const SQUARE_PX = {
   max: 160,
   /** The smallest thing a pointer is asked to hit (WCAG 2.5.8), so the opening view can be played. */
   target: 24,
+  /**
+   * A token a DM can read at a glance: the drawing's 44px standee
+   * (`Encounter Canvas.dc.html`), what the view opens on when it opens on
+   * whoever is up.
+   */
+  readable: 44,
 } as const;
 
 export interface ZoomLimits {
@@ -62,10 +69,30 @@ export const fitView = (plane: PictureSize, area: PictureRect, limits: ZoomLimit
  * smaller than a pointer can hit, in which case the board is drawn at that
  * smallest playable size from the area's top-left corner and the rest is a pan
  * away. A board that fits at that size is centred.
+ *
+ * Given a `focus` (whoever is up, in the plane's units), it opens on them
+ * instead: the fitted board when its squares are readable, else readable
+ * squares centred on them.
  */
-export const openingView = (plane: PictureSize, area: PictureRect, cellPx: number): CanvasView => {
+export const openingView = (
+  plane: PictureSize,
+  area: PictureRect,
+  cellPx: number,
+  focus?: { readonly x: number; readonly y: number },
+): CanvasView => {
   const limits = zoomLimits(cellPx);
   const fitted = fitView(plane, area, limits);
+  if (focus !== undefined) {
+    // On whoever is up: the whole board when it fits at a readable size,
+    // otherwise that size, centred on them.
+    const readable = SQUARE_PX.readable / cellPx;
+    if (fitted.zoom >= readable) return fitted;
+    return {
+      zoom: readable,
+      x: area.x + area.width / 2 - focus.x * readable,
+      y: area.y + area.height / 2 - focus.y * readable,
+    };
+  }
   const playable = SQUARE_PX.target / cellPx;
   if (fitted.zoom >= playable) return fitted;
   const width = plane.width * playable;
@@ -123,3 +150,12 @@ export const wheelUnit = (event: { readonly deltaMode: number }): number =>
  */
 export const wheelZoomFactor = (deltaY: number): number =>
   2 ** (-Math.min(50, Math.max(-50, deltaY)) / 100);
+
+/** The middle of a square, in the plane's units: what the camera centres. */
+export const centreOf = (
+  board: Parameters<typeof cellRect>[0],
+  square: BoardSquare,
+): { readonly x: number; readonly y: number } => {
+  const rect = cellRect(board, square);
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+};

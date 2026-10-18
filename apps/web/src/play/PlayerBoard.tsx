@@ -7,7 +7,11 @@ import {
   type PlayerLiveCombatant,
   battleMapPlane,
 } from "@taverns/api";
-import { Card, Icon, SectionHeading } from "@taverns/ui";
+import { CameraBar } from "../run/CameraBar";
+import { centreOf } from "../run/canvas";
+import { InStageCorner } from "../run/RunStage";
+import { useBoardView } from "../run/view";
+import { Card, Icon, SectionHeading, cn } from "@taverns/ui";
 import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
 import { BoardCanvas } from "../run/BoardCanvas";
 import { AreaLayer } from "../run/BoardTools";
@@ -154,21 +158,46 @@ export function PlayerBattleMap(props: PlayerBoardProps) {
  * The board on the canvas, as the DM's runner has it (`run/RunStage.tsx`): it
  * fills the stage under the panels, and the player pans and zooms it. No tool
  * dock: the DM's tools write the board, and a player's board takes nothing but
- * their own token.
+ * their own token. The camera (`CameraBar.tsx`) is theirs, in the stage's corner.
  */
 export function PlayerBoardStage({
   freeArea,
   ...props
 }: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
   const map = drawn(props.board);
+  const [view, setView] = useBoardView();
+  const up = props.order.find((row) => row.combatantId === props.upNextId);
+  const upAt = props.board.tokens.find((token) => token.combatantId === up?.combatantId)?.position;
+  const upPoint = upAt === undefined ? undefined : centreOf(map, upAt);
   return (
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
         plane={battleMapPlane(map, map.image)}
         cellPx={map.alignment.cellPx}
         freeArea={freeArea}
+        view={view}
+        controls={(camera) => (
+          <InStageCorner
+            fallback={(children) => (
+              <div className="absolute bottom-3 left-3 z-hud w-run-rail">{children}</div>
+            )}
+          >
+            <div className="rounded-card border border-strong bg-surface-card p-2 shadow-3">
+              <CameraBar
+                camera={camera}
+                view={view}
+                onView={setView}
+                onCentre={upPoint === undefined ? undefined : () => camera.centre(upPoint)}
+              />
+            </div>
+          </InStageCorner>
+        )}
       >
-        <BattleMapBoard map={map} className="box-content">
+        <BattleMapBoard
+          map={map}
+          // Tilted, a token's stand rises past the board's edge (`TokenFace`).
+          className={cn("box-content", view === "iso" && "overflow-visible")}
+        >
           {props.board.area !== null && (
             <AreaLayer board={map} area={props.board.area} state="pinned" />
           )}

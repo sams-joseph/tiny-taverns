@@ -2,6 +2,12 @@ import type { Page } from "@playwright/test";
 import { runId } from "../../src/test/ids";
 import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
+// The squares a spec measures are a flat board's: the canvas is looked at
+// straight down here, and the isometric view has a test of its own.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "top"));
+});
+
 /**
  * The runner (`run/RunScreen.tsx`) at every width. From `@3xl` of `main` (1440
  * and 1024 here) it is a canvas (`run/RunStage.tsx`): the board fills the stage
@@ -31,8 +37,12 @@ const run = screens.find((screen) => screen.name === "run")!;
 
 /** The strip's chip (`run/InitiativeStrip.tsx`): the drawing's 52px tall, and wide enough for a name. */
 const CHIP = { height: 52, minWidth: 152 };
-/** The inspector's width (`--aside-w`): the grid's side columns, and the canvas's panels. */
+/** The inspector's width (`--aside-w`): the grid's side columns, and the canvas's right column. */
 const ASIDE = 340;
+/** The canvas's party rail (`--run-rail-w`). */
+const RAIL = 232;
+/** The canvas's turn card at its widest (`--run-turn-w`). */
+const TURN = 720;
 /** The grid's gap, `gap-4`. */
 const GAP = 16;
 /** How far the canvas's panels float in from the stage's edge, `inset-3`. */
@@ -131,7 +141,7 @@ const rolling = (page: Page) =>
  * Answer the fight's rows with a long order: the fixture's two, then a dozen
  * more goblins, so the strip has more chips than any width holds.
  */
-const crowded = (page: Page) =>
+const crowded = (page: Page, count = 12) =>
   page.route(
     (url) =>
       /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/combatants$/.test(url.pathname),
@@ -139,7 +149,7 @@ const crowded = (page: Page) =>
       const response = await route.fetch();
       const rows = (await response.json()) as ReadonlyArray<Record<string, unknown>>;
       const boss = rows[rows.length - 1]!;
-      const more = Array.from({ length: 12 }, (_, index) => ({
+      const more = Array.from({ length: count }, (_, index) => ({
         ...boss,
         id: `${String(boss.id).slice(0, -4)}${(0xe000 + index).toString(16)}`,
         displayName: `Goblin ${String(index + 1)}`,
@@ -207,67 +217,111 @@ for (const width of WIDTHS) {
             stage: await box(stage),
             header: await box(page.locator('[data-slot="run-hud-header"]')),
             list: await box(list),
-            left: await box(page.locator('[data-slot="run-hud-left"]')),
+            party: await box(page.getByRole("region", { name: "Party", exact: true })),
+            corner: await box(page.locator('[data-slot="run-hud-corner"]')),
+            turn: await box(page.locator('[data-slot="run-hud-turn"]')),
             card: await box(card),
             dice: await box(dice),
             rolls: await box(page.locator('[data-slot="run-hud-rolls"]')),
-            tools: await box(tools),
+            right: await box(page.locator('[data-slot="run-hud-right"]')),
           };
-          // Initiative, across the top.
-          expect.soft(at.list.x - at.stage.x, "strip from the left").toBeCloseTo(INSET, 0);
+          // The ribbon, at the top: beside the title where there is room, under it where not.
+          expect.soft(at.list.y, "ribbon in the top row").toBeLessThan(bottom(at.header));
           expect
-            .soft(at.list.y - bottom(at.header), "strip under the header")
-            .toBeCloseTo(INSET, 0);
+            .soft(
+              Math.abs(at.list.x + at.list.width / 2 - (at.stage.x + at.stage.width / 2)),
+              "ribbon centred",
+            )
+            .toBeLessThanOrEqual(width >= 1280 ? 200 : 1);
+          // The party down the left, the camera and tools in its corner.
+          expect.soft(at.party.x - at.stage.x, "party from the left").toBeCloseTo(INSET, 0);
+          expect.soft(at.party.width, "party width").toBeCloseTo(RAIL, 0);
+          expect.soft(at.party.y, "party under the top row").toBeGreaterThan(bottom(at.header));
+          expect.soft(at.corner.x - at.stage.x, "corner from the left").toBeCloseTo(INSET, 0);
           expect
-            .soft(right(at.stage) - right(at.list), "strip from the right")
+            .soft(bottom(at.stage) - bottom(at.corner), "corner from the bottom")
             .toBeCloseTo(INSET, 0);
-          // The selected creature, top right, under the strip.
+          expect.soft(at.corner.y, "corner under the party").toBeGreaterThan(bottom(at.party));
+          // The selected card and the rolls down the right, the rolls at its foot.
           expect
             .soft(right(at.stage) - right(at.card), "card from the right")
             .toBeCloseTo(INSET, 0);
-          expect.soft(at.card.y - bottom(at.list), "card under the strip").toBeCloseTo(INSET, 0);
           expect.soft(at.card.width, "card width").toBeCloseTo(ASIDE, 0);
-          // The rolls, bottom left, in the column under the strip.
-          expect.soft(at.dice.x - at.stage.x, "dice from the left").toBeCloseTo(INSET, 0);
+          expect.soft(at.card.y, "card under the top row").toBeGreaterThan(bottom(at.header));
           expect.soft(at.dice.width, "dice width").toBeCloseTo(ASIDE, 0);
+          expect
+            .soft(right(at.stage) - right(at.dice), "dice from the right")
+            .toBeCloseTo(INSET, 0);
           expect
             .soft(bottom(at.stage) - bottom(at.rolls), "rolls from the bottom")
             .toBeCloseTo(INSET, 0);
-          expect.soft(at.rolls.y, "rolls below the strip").toBeGreaterThanOrEqual(bottom(at.list));
-          // The tools, bottom centre, between the two columns.
+          expect.soft(at.rolls.y, "rolls under the card").toBeGreaterThanOrEqual(bottom(at.card));
+          // Whoever is up, at the foot between the columns.
           expect
-            .soft(at.tools.x, "tools after the left column")
-            .toBeGreaterThanOrEqual(right(at.left) + INSET - 0.5);
+            .soft(at.turn.x, "turn card after the party")
+            .toBeGreaterThanOrEqual(right(at.party) + INSET - 0.5);
           expect
-            .soft(right(at.tools), "tools before the card")
-            .toBeLessThanOrEqual(at.card.x - INSET + 0.5);
+            .soft(right(at.turn), "turn card before the right column")
+            .toBeLessThanOrEqual(at.right.x - INSET + 0.5);
+          expect.soft(at.turn.width, "turn card at most its width").toBeLessThanOrEqual(TURN + 0.5);
           expect
-            .soft(bottom(at.stage) - bottom(at.tools), "tools from the bottom")
+            .soft(bottom(at.stage) - bottom(at.turn), "turn card from the bottom")
             .toBeCloseTo(INSET, 0);
           await expect.soft(page.locator('[data-slot="run-hud"]')).toHaveCSS("z-index", "5");
           // Over the board: a point inside each panel lands in the panel.
           for (const [name, part] of [
             ["list", at.list],
+            ["party", at.party],
+            ["turn card", at.turn],
             ["card", at.card],
             ["the Rolls dock", at.dice],
           ] as const) {
             expect
               .soft(await landsOn(page, part.x + part.width / 2, part.y + 8), `${name} is on top`)
-              .toMatch(/^run-hud-|^Roll|^Brannoc|^Goblin|^rolls-toggle$/);
+              .not.toBe("board-canvas");
           }
         });
 
-        await test.step("the dock holds the four tools, inside its edge", async () => {
+        await test.step("the corner holds the camera and the four tools, inside its edge", async () => {
           const edge = await box(tools);
-          await expect.soft(tools.getByRole("button")).toHaveCount(4);
-          for (const name of ["Move", "Measure", "Area", "Fog"]) {
+          const group = tools.getByRole("group", { name: "Tools" });
+          await expect.soft(group.getByRole("button")).toHaveCount(4);
+          for (const name of [
+            "Move",
+            "Measure",
+            "Area",
+            "Fog",
+            "Zoom out",
+            "Zoom in",
+            "Centre on whoever is up",
+            "Isometric",
+          ]) {
             const control = await box(tools.getByRole("button", { name, exact: true }));
             expect.soft(control.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
             expect.soft(right(control), `${name} right`).toBeLessThanOrEqual(right(edge) + 0.5);
+            expect.soft(control.height, `${name} height`).toBeGreaterThanOrEqual(TARGET);
           }
           const shareMap = page.getByRole("switch", { name: "Share map" });
           await expect.soft(shareMap).toBeVisible();
           await expect.soft(shareMap).toHaveAttribute("aria-disabled", "true");
+        });
+
+        await test.step("the camera zooms, and centres on whoever is up", async () => {
+          const before = await viewOf(page);
+          await tools.getByRole("button", { name: "Zoom in", exact: true }).click();
+          await expect.poll(async () => (await viewOf(page)).zoom).toBeGreaterThan(before.zoom);
+          await tools.getByRole("button", { name: "Zoom out", exact: true }).click();
+          await expect.poll(async () => (await viewOf(page)).zoom).toBeCloseTo(before.zoom, 5);
+          // Centred: Brannoc's token stands in the middle of the free area.
+          await tools.getByRole("button", { name: "Centre on whoever is up", exact: true }).click();
+          await page.waitForTimeout(100);
+          const token = await box(map.getByRole("button", { name: /^Brannoc, column/ }));
+          const party = await box(page.getByRole("region", { name: "Party", exact: true }));
+          const panel = await box(page.locator('[data-slot="run-hud-right"]'));
+          expect
+            .soft(token.x + token.width / 2, "token between the columns")
+            .toBeGreaterThan(right(party));
+          expect.soft(token.x + token.width / 2, "token before the panel").toBeLessThan(panel.x);
         });
       } else {
         const layout = page.locator('[data-slot="run-layout"]');
@@ -328,25 +382,39 @@ for (const width of WIDTHS) {
         });
       }
 
-      await test.step("the header is the drawn card, with the round beside the title", async () => {
-        const header = page.locator('main [data-slot="page-heading"]');
-        await expect.soft(header).toHaveCSS("border-top-width", "3px");
-        const title = await box(header.locator("h1"));
-        const badge = await box(header.getByText("Round 1", { exact: true }));
-        expect.soft(badge.x, "badge after the title").toBeGreaterThan(title.x + title.width);
-        // Centred on the title's line box, which the display face's descender
-        // pads below the glyphs by a pixel or so.
-        expect
-          .soft(
-            Math.abs(badge.y + badge.height / 2 - (title.y + title.height / 2)),
-            "badge on the title's line",
-          )
-          .toBeLessThanOrEqual(2);
-        // Next turn is the one peach, and no key stands in for it.
-        await expect
-          .soft(header.getByRole("button", { name: "Next turn" }))
-          .toHaveClass(/bg-accent/);
-      });
+      if (canvas) {
+        await test.step("the title is the way back, and the turn card holds the one peach", async () => {
+          const title = page.locator('[data-slot="run-hud-title"]');
+          await expect.soft(title.locator("h1")).toHaveText("Ambush in the reeds");
+          await expect.soft(title.getByRole("link", { name: "Overview" })).toBeVisible();
+          // Next turn is the one peach, and no key stands in for it.
+          const turn = page.locator('[data-slot="run-hud-turn"]');
+          await expect
+            .soft(turn.getByRole("button", { name: "Next turn" }))
+            .toHaveClass(/bg-accent/);
+          await expect.soft(page.locator('[data-slot="button"].bg-accent')).toHaveCount(1);
+        });
+      } else {
+        await test.step("the header is the drawn card, with the round beside the title", async () => {
+          const header = page.locator('main [data-slot="page-heading"]');
+          await expect.soft(header).toHaveCSS("border-top-width", "3px");
+          const title = await box(header.locator("h1"));
+          const badge = await box(header.getByText("Round 1", { exact: true }));
+          expect.soft(badge.x, "badge after the title").toBeGreaterThan(title.x + title.width);
+          // Centred on the title's line box, which the display face's descender
+          // pads below the glyphs by a pixel or so.
+          expect
+            .soft(
+              Math.abs(badge.y + badge.height / 2 - (title.y + title.height / 2)),
+              "badge on the title's line",
+            )
+            .toBeLessThanOrEqual(2);
+          // Next turn is the one peach, and no key stands in for it.
+          await expect
+            .soft(header.getByRole("button", { name: "Next turn" }))
+            .toHaveClass(/bg-accent/);
+        });
+      }
 
       await test.step("the strip's chips are the drawing's, inside it and on top", async () => {
         const edge = await box(list);
@@ -361,18 +429,31 @@ for (const width of WIDTHS) {
         for (const chip of await chips.all()) {
           const at = await box(chip);
           const name = (await chip.getAttribute("aria-label")) ?? "chip";
-          expect.soft(at.height, `${name} height`).toBeCloseTo(CHIP.height, 0);
-          expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
+          if (canvas) {
+            // The ribbon's disc, with its initiative under it.
+            expect.soft(at.height, `${name} height`).toBeGreaterThanOrEqual(TARGET);
+            expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(TARGET);
+          } else {
+            expect.soft(at.height, `${name} height`).toBeCloseTo(CHIP.height, 0);
+            expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
+          }
           const centre = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
           if (centre.x > right(view)) continue;
           // A press in the middle of a chip in view lands on it, over the board.
           expect.soft(await landsOn(page, centre.x, centre.y), `${name} on top`).toBe(name);
         }
-        // Whoever is up wears the accent edge; the trailing controls stay inside
+        // Whoever is up wears the accent; the trailing controls stay inside
         // the strip and are targets a pointer can hit.
-        await expect
-          .soft(order.getByRole("button", { name: /^Brannoc,/ }))
-          .toHaveCSS("border-top-color", await accentColour(page));
+        const up = order.getByRole("button", { name: /^Brannoc,/ });
+        if (canvas) {
+          // First on the ribbon, in a peach ring.
+          await expect.soft(chips.first()).toHaveAttribute("aria-label", /^Brannoc,/);
+          await expect
+            .soft(up.locator('[data-slot="strip-disc"]'))
+            .toHaveCSS("border-top-color", await accentColour(page));
+        } else {
+          await expect.soft(up).toHaveCSS("border-top-color", await accentColour(page));
+        }
         for (const name of ["Add combatant", "More about the order"]) {
           const control = await box(list.getByRole("button", { name, exact: true }));
           expect.soft(control.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
@@ -426,6 +507,8 @@ for (const width of WIDTHS) {
       });
 
       await test.step("a stat on the card rolls into the Rolls dock", async () => {
+        // On the canvas the target card folds everything but its numbers under *Details*.
+        if (canvas) await card.getByRole("button", { name: "Details" }).click();
         // The whole block is folded under the Actions until it is asked for.
         await card.getByRole("button", { name: "Stat block" }).click();
         const dex = card.getByRole("button", { name: "Roll DEX check, 1d20+2" });
@@ -459,14 +542,14 @@ for (const width of WIDTHS) {
               "the token is on top",
             )
             .toMatch(/^Brannoc, column/);
-          // He is up and followed: his name and hit points are drawn under him,
-          // inside the board, scaled with his square.
+          // He is up and followed: his hit points and his name stand over his
+          // disc, the standee's (`TokenFace`), scaled with his square.
           const name = await box(token.locator('[data-slot="token-name"]'));
           expect.soft(name.width, "name drawn").toBeGreaterThan(0);
-          expect.soft(name.y, "name under the token").toBeGreaterThan(at.y + at.height * 0.9);
           const hp = await box(token.locator('[data-slot="hp-bar"]'));
           expect.soft(hp.width, "hit points drawn").toBeGreaterThan(at.width * 0.5);
-          expect.soft(hp.y, "hit points under the disc").toBeGreaterThan(at.y + at.height * 0.9);
+          expect.soft(bottom(hp), "hit points over the disc").toBeLessThanOrEqual(at.y + 0.5);
+          expect.soft(bottom(name), "name over the hit points").toBeLessThanOrEqual(hp.y + 0.5);
           // His sheet says a speed and it is his turn, so selected, his range is tinted.
           await token.click();
           await expect(card).toContainText("Brannoc");
@@ -636,12 +719,14 @@ for (const width of WIDTHS) {
     });
 
     test("a long order scrolls sideways inside the strip", async ({ app, page }) => {
-      await crowded(page);
+      // The canvas's ribbon of discs holds twice the chips the grid's strip does.
+      const extra = canvas ? 30 : 12;
+      await crowded(page, extra);
       await app.open(run);
       const strip = page.getByRole("region", { name: "Initiative", exact: true });
       const order = strip.getByRole("list", { name: "Initiative order" });
       const chips = order.getByRole("button");
-      await expect(chips).toHaveCount(14);
+      await expect(chips).toHaveCount(extra + 2);
 
       await test.step("the order scrolls, the page does not", async () => {
         const { scrollWidth, clientWidth } = await app.widths();
@@ -654,29 +739,33 @@ for (const width of WIDTHS) {
         // The scrollbar is hidden, as drawn; the chips keep the drawing's size.
         await expect.soft(order).toHaveCSS("scrollbar-width", "none");
         const last = await box(chips.last());
-        expect.soft(last.width, "last chip width").toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
+        expect
+          .soft(last.width, "last chip width")
+          .toBeGreaterThanOrEqual(canvas ? TARGET : CHIP.minWidth - 0.5);
       });
 
-      await test.step("a crowded strip still shows each name, not a letter or two", async () => {
-        // The chip's floor holds eight characters or so before the ellipsis:
-        // "Goblin 12" all but whole, never "G…".
-        for (const chip of await chips.all()) {
-          const label = (await chip.getAttribute("aria-label")) ?? "chip";
-          const name = chip.locator("[data-slot=strip-name]");
-          const { shown, length } = await name.evaluate((el) => {
-            const length = el.textContent?.length ?? 0;
-            const glyph = el.scrollWidth / Math.max(length, 1);
-            return { shown: el.clientWidth / glyph, length };
-          });
-          expect
-            .soft(shown, `${label} characters shown`)
-            .toBeGreaterThanOrEqual(Math.min(8, length) - 0.5);
-        }
-      });
+      // The ribbon draws a disc and says the name in its tooltip and accessible name.
+      if (!canvas)
+        await test.step("a crowded strip still shows each name, not a letter or two", async () => {
+          // The chip's floor holds eight characters or so before the ellipsis:
+          // "Goblin 12" all but whole, never "G…".
+          for (const chip of await chips.all()) {
+            const label = (await chip.getAttribute("aria-label")) ?? "chip";
+            const name = chip.locator("[data-slot=strip-name]");
+            const { shown, length } = await name.evaluate((el) => {
+              const length = el.textContent?.length ?? 0;
+              const glyph = el.scrollWidth / Math.max(length, 1);
+              return { shown: el.clientWidth / glyph, length };
+            });
+            expect
+              .soft(shown, `${label} characters shown`)
+              .toBeGreaterThanOrEqual(Math.min(8, length) - 0.5);
+          }
+        });
 
       await test.step("the keyboard reaches every chip, and the strip brings it into view", async () => {
         await chips.first().focus();
-        for (let step = 1; step < 14; step++) await page.keyboard.press("Tab");
+        for (let step = 1; step < extra + 2; step++) await page.keyboard.press("Tab");
         await expect(chips.last()).toBeFocused();
         const view = await box(order);
         const last = await box(chips.last());
@@ -691,7 +780,7 @@ for (const width of WIDTHS) {
         await page.keyboard.press("Enter");
         await expect(chips.last()).toHaveAttribute("aria-pressed", "true");
         await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
-          "Goblin 12",
+          `Goblin ${String(extra)}`,
         );
       });
 
@@ -775,7 +864,8 @@ for (const width of WIDTHS) {
             writes.push(new URL(request.url()).pathname);
         });
         await app.open(run);
-        const card = page.getByRole("region", { name: "Selected combatant" });
+        // Whoever is up acts from the turn card at the canvas's foot.
+        const card = page.getByRole("region", { name: "This turn of Brannoc" });
         const map = page.getByRole("region", { name: "Battle map" });
         const attack = card.getByRole("button", { name: "Attack with Longsword" });
         const goblin = map.getByRole("button", { name: /^Goblin Boss, column/ });
@@ -788,9 +878,11 @@ for (const width of WIDTHS) {
           await expect(banner).toContainText("Pick a target for Longsword");
           const at = await box(banner);
           const left = await box(page.locator('[data-slot="run-hud-left"]'));
-          const panel = await box(page.locator('[data-slot="run-hud-panel"]'));
+          const panel = await box(page.locator('[data-slot="run-hud-right"]'));
+          const turn = await box(page.locator('[data-slot="run-hud-turn"]'));
           expect.soft(at.x, "banner after the left column").toBeGreaterThanOrEqual(right(left));
           expect.soft(right(at), "banner before the panel").toBeLessThanOrEqual(panel.x);
+          expect.soft(bottom(at), "banner over the turn card").toBeLessThanOrEqual(turn.y);
           expect
             .soft(await landsOn(page, at.x + 24, at.y + at.height / 2), "the banner is on top")
             .toBe("run-hud-banner");
@@ -840,13 +932,103 @@ for (const width of WIDTHS) {
               .getByRole("status", { name: "Latest roll" }),
           ).toContainText("Brannoc · Longsword → Goblin Boss");
           // The attack's rolls are kept as the DM's: the to-hit, then the
-          // damage when it lands. Beside them the one write is his turn's
-          // Action (`attackSpends`); no damage until Apply.
+          // damage when it lands. Beside them his turn's Action
+          // (`attackSpends`), and a hit's damage, which applies itself.
           const last = () => writes.map((path) => path.split("/").slice(-1)[0]);
-          await expect.poll(() => last().filter((write) => write !== "rolls")).toEqual(["turn"]);
+          const landed = /Hit|Critical hit/.test((await result.textContent()) ?? "");
+          await expect
+            .poll(() =>
+              last()
+                .filter((write) => write !== "rolls")
+                .sort(),
+            )
+            .toEqual(landed ? ["damage", "turn"] : ["turn"]);
           await expect
             .poll(() => last().filter((write) => write === "rolls").length, { message: "rolls" })
             .toBeGreaterThanOrEqual(1);
+        });
+      });
+
+      test("the isometric view", async ({ app, page }) => {
+        // Tilted, as the drawing opens; the Goblin Boss stands two squares from Brannoc.
+        await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "iso"));
+        await page.route(
+          (url) =>
+            /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/combatants$/.test(
+              url.pathname,
+            ),
+          async (route) => {
+            const response = await route.fetch();
+            const rows = (await response.json()) as ReadonlyArray<Record<string, unknown>>;
+            await route.fulfill({
+              response,
+              json: rows.map((row) =>
+                row["displayName"] === "Goblin Boss"
+                  ? { ...row, position: { column: 7, row: 4 } }
+                  : row,
+              ),
+            });
+          },
+        );
+        const moves: Array<unknown> = [];
+        await page.route(
+          (url) => url.pathname.endsWith("/move"),
+          async (route) => {
+            const body = route.request().postDataJSON() as { position: unknown };
+            moves.push(body.position);
+            const response = await route.fetch();
+            await route.fulfill({ response });
+          },
+        );
+        await app.open(run);
+        const map = page.getByRole("region", { name: "Battle map" });
+        const brannoc = map.getByRole("button", { name: /^Brannoc, column/ });
+        const goblin = map.getByRole("button", { name: /^Goblin Boss, column/ });
+        await expect(goblin).toBeVisible();
+        await expect(page.locator('[data-slot="board-canvas-content"]')).toHaveAttribute(
+          "data-view",
+          "iso",
+        );
+
+        await test.step("a square is a diamond, and a press in its middle lands on its token", async () => {
+          const at = await box(brannoc);
+          // The square's box is twice as wide as it is tall: the drawing's 45° turn, height halved.
+          expect.soft(at.width / at.height, "a diamond's box").toBeCloseTo(2, 1);
+          expect
+            .soft(await landsOn(page, at.x + at.width / 2, at.y + at.height / 2), "token on top")
+            .toMatch(/^Brannoc, column/);
+        });
+
+        await test.step("the token stands up off its square, and its disc takes the press", async () => {
+          const square = await box(goblin);
+          const disc = await box(goblin.locator('[data-slot="token-stand"] circle').nth(2));
+          // Upright: a round disc, not a squashed one, standing above the square's middle.
+          expect.soft(disc.width / disc.height, "the disc is round").toBeCloseTo(1, 1);
+          expect
+            .soft(disc.y + disc.height / 2, "the disc above the square's middle")
+            .toBeLessThan(square.y + square.height / 2);
+          await page.mouse.click(disc.x + disc.width / 2, disc.y + disc.height / 2);
+          await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
+            "Goblin Boss",
+          );
+        });
+
+        await test.step("a drag one square across lands one column on", async () => {
+          const at = await box(brannoc);
+          const name = (await brannoc.getAttribute("aria-label")) ?? "";
+          const [, column, row] = /column (\d+), row (\d+)/.exec(name) ?? [];
+          // One column across the tilted plane is half the diamond right and half down.
+          const start = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
+          const end = { x: start.x + at.width / 2, y: start.y + at.height / 2 };
+          await page.mouse.move(start.x, start.y);
+          await page.mouse.down();
+          await page.mouse.move(end.x, end.y, { steps: 6 });
+          await page.mouse.up();
+          await expect.poll(() => moves.length).toBe(1);
+          expect.soft(moves[0], "the square under the pointer").toEqual({
+            column: Number(column),
+            row: Number(row) - 1,
+          });
         });
       });
 
@@ -1150,19 +1332,21 @@ for (const width of WIDTHS) {
           await expect(shapes).toContainText("15 ft");
           await shapes.getByRole("button", { name: "Smaller", exact: true }).click();
           await expect(shapes).toContainText("10 ft");
-          // The dock stays between the columns with Area's controls in it.
+          // The dock stays in its corner with Area's controls in it.
           const dock = await box(tools);
           const left = await box(page.locator('[data-slot="run-hud-left"]'));
-          const panel = await box(page.locator('[data-slot="run-hud-panel"]'));
-          expect.soft(dock.x, "dock after the left column").toBeGreaterThanOrEqual(right(left));
-          expect.soft(right(dock), "dock before the panel").toBeLessThanOrEqual(panel.x);
+          expect.soft(dock.x, "dock in the left column").toBeGreaterThanOrEqual(left.x - 0.5);
+          expect
+            .soft(right(dock), "dock inside the left column")
+            .toBeLessThanOrEqual(right(left) + 0.5);
 
           await page.mouse.move(from(1, 0).x, from(1, 0).y);
           const preview = map.locator('[data-slot="board-area"][data-state="preview"]');
           await expect(preview).toBeVisible();
           const centre = await box(preview.locator('[data-square="6,4"]'));
-          expect.soft(centre.width, "a square wide").toBeCloseTo(at.width, 0);
-          expect.soft(centre.x, "on its square").toBeCloseTo(at.x + at.width, 0);
+          // Within a pixel: the template's square is stroked, the token's is not.
+          expect.soft(Math.abs(centre.width - at.width), "a square wide").toBeLessThan(1);
+          expect.soft(Math.abs(centre.x - (at.x + at.width)), "on its square").toBeLessThan(1);
           expect.soft(writes, "a preview writes nothing").toEqual([]);
 
           await page.mouse.click(from(1, 0).x, from(1, 0).y);
@@ -1176,8 +1360,10 @@ for (const width of WIDTHS) {
           const above = await box(banner);
           const under = await box(tools);
           expect.soft(above.y + above.height, "the banner over the dock").toBeLessThan(under.y);
-          expect.soft(above.x, "after the left column").toBeGreaterThanOrEqual(right(left));
-          expect.soft(right(above), "before the panel").toBeLessThanOrEqual(panel.x);
+          expect.soft(above.x, "in the left column").toBeGreaterThanOrEqual(left.x - 0.5);
+          expect
+            .soft(right(above), "inside the left column")
+            .toBeLessThanOrEqual(right(left) + 0.5);
           const clear = banner.getByRole("button", { name: "Clear" });
           const press = await box(clear);
           expect

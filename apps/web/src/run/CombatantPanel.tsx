@@ -11,13 +11,14 @@ import {
   Button,
   Card,
   CardContent,
+  HpBar,
   Icon,
   Input,
   SectionHeading,
   Toggle,
   cn,
 } from "@taverns/ui";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { apiUrl } from "../api/client";
 import { StatBlockBody } from "../bestiary/StatBlock";
 import { DrawnImage } from "../hob/DrawnImage";
@@ -746,6 +747,40 @@ export function Conditions({
   );
 }
 
+/**
+ * The canvas card's *Details*: what the target card folds away, opened by one
+ * press and left as the DM left it from one creature to the next. Unfolded
+ * (the narrow grid's whole card) it is only its children.
+ */
+function Folded({
+  folded,
+  open,
+  onOpen,
+  children,
+}: {
+  readonly folded: boolean;
+  readonly open: boolean;
+  readonly onOpen: (open: boolean) => void;
+  readonly children: ReactNode;
+}) {
+  if (!folded) return <>{children}</>;
+  return (
+    <div className="flex flex-col gap-3.5 border-t border-hairline pt-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        className="-mx-2 justify-start self-start"
+        onClick={() => onOpen(!open)}
+      >
+        <Icon name={open ? "chevron-down" : "chevron-right"} size={14} />
+        Details
+      </Button>
+      {open && children}
+    </div>
+  );
+}
+
 export function CombatantPanel({
   campaignId,
   combatant,
@@ -782,7 +817,17 @@ export function CombatantPanel({
   resources,
   multiattacks,
   onMultiattack,
+  variant = "card",
 }: {
+  /**
+   * The narrow grid's whole card, or the canvas's target card (`Encounter
+   * Canvas.dc.html`): the creature, its hit points on the bar with the damage
+   * box, death saves while they are owed, and everything else folded under
+   * *Details*. On the canvas whoever is up is the turn card's
+   * (`TurnCard.tsx`), so the caller leaves this card's turn, actions and
+   * result out for them.
+   */
+  readonly variant?: "card" | "canvas";
   /** The campaign, for a member of the Cast's glance (`CastGlance`). */
   readonly campaignId: CampaignId;
   readonly combatant: Combatant | undefined;
@@ -854,6 +899,10 @@ export function CombatantPanel({
     | {
         readonly outcome: AttackOutcome;
         readonly applied: boolean;
+        /** How much the hit sent, once it was sent. */
+        readonly sent?: number | undefined;
+        /** Take it back; absent while it cannot be. */
+        readonly onUndo?: (() => void) | undefined;
         readonly concentrationDc: number | undefined;
         /** Roll the save the hit set up, once it is sent and the target's save is written. */
         readonly onRollSave: (() => void) | undefined;
@@ -871,6 +920,7 @@ export function CombatantPanel({
   readonly onApplyResult: (amount: number) => void;
   readonly onDismissResult: () => void;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   if (combatant === undefined) {
     return (
       <Card role="region" aria-label="Selected combatant">
@@ -886,6 +936,7 @@ export function CombatantPanel({
     );
   }
 
+  const canvas = variant === "canvas";
   const creature = combatant.creatureId === null ? undefined : creatures.get(combatant.creatureId);
   const resourceList = resourceRows(combatant, creature?.statBlock);
   const subtitle = subtitleOf(combatant);
@@ -937,6 +988,9 @@ export function CombatantPanel({
           }
         />
         <div className="min-w-0 flex-1">
+          {canvas && !active && (
+            <span className="text-caption leading-snug text-muted-foreground">Target</span>
+          )}
           <div className="flex min-w-0 items-center gap-2">
             <SectionHeading as="h2" size="display" className="min-w-0 truncate font-semibold">
               {combatant.displayName}
@@ -978,6 +1032,17 @@ export function CombatantPanel({
           {menu.length > 0 && (
             <ActionsMenu label={`More for ${combatant.displayName}`} items={menu} />
           )}
+          {canvas && !following && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-control-sm text-muted-foreground"
+              aria-label="Clear target"
+              onClick={onFollow}
+            >
+              <Icon name="x" size={14} />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -991,15 +1056,49 @@ export function CombatantPanel({
       )}
 
       <CardContent className="flex flex-col gap-3.5 p-panel">
-        <div className="grid grid-cols-4 gap-1.5">
-          <Tile label="AC" value={combatant.ac === null ? "—" : String(combatant.ac)} />
-          <Tile label="HP" value={`${String(hp)}/${String(combatant.hpMax)}`} danger={hp === 0} />
-          <Tile label="Speed" value={speed === undefined ? "—" : String(speed)} />
-          <Tile
-            label="Init"
-            value={combatant.initiative === null ? "—" : String(combatant.initiative)}
-          />
-        </div>
+        {canvas ? (
+          <>
+            <div className="flex items-center gap-2">
+              <HpBar
+                fraction={combatant.hpMax <= 0 ? 0 : hp / combatant.hpMax}
+                className="min-w-0 flex-1"
+              />
+              <span
+                data-slot="target-hp"
+                className={cn(
+                  "font-mono text-mono leading-none whitespace-nowrap",
+                  hp === 0 ? "text-danger" : "text-heading",
+                )}
+              >
+                {hp}/{combatant.hpMax}
+              </span>
+              {combatant.ac !== null && (
+                <span className="font-mono text-mono leading-none whitespace-nowrap text-muted-foreground">
+                  AC {combatant.ac}
+                </span>
+              )}
+            </div>
+            {combatant.conditions.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {combatant.conditions.map((condition) => (
+                  <Badge key={condition} variant="secondary">
+                    {condition}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="grid grid-cols-4 gap-1.5">
+            <Tile label="AC" value={combatant.ac === null ? "—" : String(combatant.ac)} />
+            <Tile label="HP" value={`${String(hp)}/${String(combatant.hpMax)}`} danger={hp === 0} />
+            <Tile label="Speed" value={speed === undefined ? "—" : String(speed)} />
+            <Tile
+              label="Init"
+              value={combatant.initiative === null ? "—" : String(combatant.initiative)}
+            />
+          </div>
+        )}
 
         <HitPoints combatant={combatant} disabled={disabled} onApply={onDamage} />
 
@@ -1015,20 +1114,12 @@ export function CombatantPanel({
           />
         )}
 
-        {resourceList.length > 0 && (
-          <Resources
-            combatant={combatant}
-            rows={resourceList}
-            disabled={disabled || resources === undefined || resources.busy}
-            onSet={(patch) => resources?.onSet(patch)}
-            onRecharge={resources?.onRecharge}
-          />
-        )}
-
         {result !== undefined && (
           <AttackResultCard
             outcome={result.outcome}
             applied={result.applied}
+            sent={result.sent}
+            onUndo={result.onUndo}
             concentrationDc={result.concentrationDc}
             disabled={disabled}
             onRollSave={result.onRollSave}
@@ -1039,58 +1130,79 @@ export function CombatantPanel({
           />
         )}
 
-        {(actions.length > 0 || (active && multiattacks.length > 0)) && (
-          <div className="border-t border-hairline pt-3.5">
-            <Actions
-              name={combatant.displayName}
-              actions={actions}
-              multiattacks={multiattacks}
-              onMultiattack={onMultiattack}
-              active={active}
-              disabled={disabled}
-              targeting={targeting}
-              onAttack={onAttack}
-              onRoll={onRollAction}
+        <Folded folded={canvas} open={detailsOpen} onOpen={setDetailsOpen}>
+          {canvas && (
+            <div className="grid grid-cols-2 gap-1.5">
+              <Tile label="Speed" value={speed === undefined ? "—" : String(speed)} />
+              <Tile
+                label="Init"
+                value={combatant.initiative === null ? "—" : String(combatant.initiative)}
+              />
+            </div>
+          )}
+          {resourceList.length > 0 && (
+            <Resources
+              combatant={combatant}
+              rows={resourceList}
+              disabled={disabled || resources === undefined || resources.busy}
+              onSet={(patch) => resources?.onSet(patch)}
+              onRecharge={resources?.onRecharge}
             />
-          </div>
-        )}
+          )}
 
-        {creature !== undefined ? (
-          <div className="border-t border-hairline pt-2">
-            <StatBlockDisclosure
-              // A new creature opens folded, as the first one did.
+          {(actions.length > 0 || (active && multiattacks.length > 0)) && (
+            <div className="border-t border-hairline pt-3.5">
+              <Actions
+                name={combatant.displayName}
+                actions={actions}
+                multiattacks={multiattacks}
+                onMultiattack={onMultiattack}
+                active={active}
+                disabled={disabled}
+                targeting={targeting}
+                onAttack={onAttack}
+                onRoll={onRollAction}
+              />
+            </div>
+          )}
+
+          {creature !== undefined ? (
+            <div className="border-t border-hairline pt-2">
+              <StatBlockDisclosure
+                // A new creature opens folded, as the first one did.
+                key={combatant.id}
+                combatant={combatant}
+                creature={creature}
+                onRoll={onRoll}
+              />
+            </div>
+          ) : (
+            combatant.creatureId !== null && (
+              <p className="mb-0 border-t border-hairline pt-3.5 text-caption leading-body text-muted-foreground">
+                The bestiary entry this was seeded from is gone, or belongs to someone else. The
+                numbers above are what the fight is using — they were copied when it started.
+              </p>
+            )
+          )}
+
+          <div className="flex flex-col gap-2 border-t border-hairline pt-3.5">
+            <SectionTitle
+              title="Conditions"
+              aside={
+                combatant.conditions.length === 0
+                  ? "None"
+                  : `${String(combatant.conditions.length)} active`
+              }
+            />
+            <Conditions
+              // A new combatant is a new word being typed, not the last one's.
               key={combatant.id}
               combatant={combatant}
-              creature={creature}
-              onRoll={onRoll}
+              disabled={disabled || conditionsBusy}
+              onChange={onConditions}
             />
           </div>
-        ) : (
-          combatant.creatureId !== null && (
-            <p className="mb-0 border-t border-hairline pt-3.5 text-caption leading-body text-muted-foreground">
-              The bestiary entry this was seeded from is gone, or belongs to someone else. The
-              numbers above are what the fight is using — they were copied when it started.
-            </p>
-          )
-        )}
-
-        <div className="flex flex-col gap-2 border-t border-hairline pt-3.5">
-          <SectionTitle
-            title="Conditions"
-            aside={
-              combatant.conditions.length === 0
-                ? "None"
-                : `${String(combatant.conditions.length)} active`
-            }
-          />
-          <Conditions
-            // A new combatant is a new word being typed, not the last one's.
-            key={combatant.id}
-            combatant={combatant}
-            disabled={disabled || conditionsBusy}
-            onChange={onConditions}
-          />
-        </div>
+        </Folded>
       </CardContent>
     </Card>
   );

@@ -18,12 +18,15 @@ export function PlayerStrip({
   labels,
   selectedId,
   floating,
+  compact = false,
   onSelect,
 }: {
   readonly fight: PlayerLiveFight;
   readonly labels: ReadonlyMap<CombatantId, string>;
   readonly selectedId: CombatantId | undefined;
   readonly floating: boolean;
+  /** The canvas's ribbon (`StripFrame`'s `compact`). */
+  readonly compact?: boolean;
   readonly onSelect: (row: PlayerLiveCombatant) => void;
 }) {
   const board = fight.board;
@@ -55,6 +58,7 @@ export function PlayerStrip({
       activeId={fight.upNext?.kind === "visible" ? fight.upNext.combatantId : null}
       selectedId={selectedId}
       floating={floating}
+      compact={compact}
       empty="Nobody in this fight is on your table yet."
       onSelect={(row) => {
         const found = byId.get(row.id);

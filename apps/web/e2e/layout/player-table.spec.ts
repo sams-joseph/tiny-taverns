@@ -1,6 +1,12 @@
 import type { Locator, Page } from "@playwright/test";
 import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
+// The squares a spec measures are a flat board's: the canvas is looked at
+// straight down here, and the isometric view has a test of its own.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("taverns:run:board-view", "top"));
+});
+
 /**
  * A seated player's table (`play/PlayerTableScreen.tsx`) with the fight's map
  * shared, at every width, laid out as the DM's runner is.
@@ -160,7 +166,7 @@ for (const width of WIDTHS) {
           expect.soft(scrolls, "the window has nothing to scroll").toBe(false);
         });
 
-        await test.step("the strip across the top, your card right, your rolls left", async () => {
+        await test.step("the strip across the top, your card and rolls right, the party left", async () => {
           const stage = await box(page.locator("[data-slot=run-stage]"));
           const at = {
             header: await box(page.locator("[data-slot=run-hud-header]")),
@@ -178,10 +184,16 @@ for (const width of WIDTHS) {
           expect
             .soft(stage.x + stage.width - (at.panel.x + at.panel.width), "panel right")
             .toBeLessThan(16);
-          expect.soft(at.rolls.x - stage.x, "rolls left").toBeLessThan(16);
+          // Your rolls at the foot of the right column, under the panel.
           expect
-            .soft(at.rolls.x + at.rolls.width, "rolls clear of the panel")
-            .toBeLessThan(at.panel.x);
+            .soft(stage.x + stage.width - (at.rolls.x + at.rolls.width), "rolls right")
+            .toBeLessThan(16);
+          expect
+            .soft(at.rolls.y, "rolls under the panel")
+            .toBeGreaterThanOrEqual(at.panel.y + at.panel.height - 0.5);
+          // The party down the left.
+          const party = await box(page.getByRole("region", { name: "Party", exact: true }));
+          expect.soft(party.x - stage.x, "party left").toBeLessThan(16);
           // The board opens on the free area between the panels: your own
           // token is there to press, under none of them.
           const you = await box(await tokenOf(board, BRANNOC));

@@ -82,4 +82,19 @@ describe("the canvas view", () => {
     expect(wheelZoomFactor(-1000)).toBeCloseTo(Math.SQRT2);
     expect(wheelZoomFactor(-4)).toBeCloseTo(2 ** 0.04);
   });
+
+  it("opens on whoever is up at a readable size when the fitted board is too small to read", () => {
+    const plane = { width: 1536, height: 1024 };
+    const area = { x: 100, y: 50, width: 600, height: 400 };
+    const view = openingView(plane, area, 64, { x: 640, y: 320 });
+    expect(view.zoom * 64).toBeCloseTo(SQUARE_PX.readable);
+    // The focus lands in the middle of the area.
+    expect(640 * view.zoom + view.x).toBeCloseTo(400);
+    expect(320 * view.zoom + view.y).toBeCloseTo(250);
+    // A board that fits readably is fitted, focus or none.
+    const small = { width: 640, height: 320 };
+    expect(openingView(small, area, 64, { x: 10, y: 10 })).toEqual(
+      fitView(small, area, zoomLimits(64)),
+    );
+  });
 });

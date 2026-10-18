@@ -52,7 +52,8 @@ const server = installRunServer();
 const initiative = () => within(screen.getByRole("list", { name: "Initiative order" }));
 const rows = () => initiative().getAllByRole("button");
 const rowFor = (name: string): HTMLElement => {
-  const found = rows().find((row) => row.textContent?.includes(name));
+  // A chip's name is its accessible one: the canvas's ribbon draws only the disc.
+  const found = rows().find((row) => row.getAttribute("aria-label")?.includes(name));
   if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
 };
@@ -118,19 +119,30 @@ const damage = async (name: string, amount: string) => {
 };
 
 beforeEach(() => server.reset());
-afterEach(() => server.drop());
+afterEach(() => {
+  server.drop();
+  vi.unstubAllGlobals();
+});
 
 /**
  * Put the runner on its canvas. The canvas is chosen by a probe the stylesheet
  * displays only from `@3xl` of `main` (`RunStage.tsx`'s `useStage`), and jsdom
- * applies no stylesheet, so the probe is given the width a browser would.
+ * applies no stylesheet, so the probe is given the width a browser would. The
+ * board is looked at straight down (`view.ts`) unless a test tilts it, so its
+ * squares are where a layer's box says.
  */
-const onTheCanvas = () =>
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+const onTheCanvas = (view: "top" | "iso" = "top") => {
+  const kept = new Map<string, string>([["taverns:run:board-view", view]]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => kept.get(key) ?? null,
+    setItem: (key: string, value: string) => void kept.set(key, value),
+  });
+  return vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
     this: HTMLElement,
   ) {
     return this.dataset.slot === "run-stage-probe" ? 1024 : 0;
   });
+};
 
 /** The two layouts a fight with a board is drawn in, for what both must do alike. */
 const layouts = [
@@ -2483,25 +2495,57 @@ describe("the canvas", () => {
     expect(hud("panel")).toContainElement(
       screen.getByText("Open at the table", { selector: "h3" }),
     );
-    // The *Rolls* dock — the DM's dice, the players' tray and the log — bottom left.
+    // The *Rolls* dock — the DM's dice, the players' tray and the log — bottom right.
     expect(hud("rolls").firstElementChild).toBe(screen.getByRole("region", { name: "Rolls" }));
-    // The tool dock over it holds the board's four tools and nothing else.
+    // The party down the left, and whoever is up at the foot.
+    expect(hud("party")).toContainElement(screen.getByRole("region", { name: "Party" }));
+    expect(hud("turn")).toContainElement(
+      screen.getByRole("region", { name: "This turn of Brannoc" }),
+    );
+    // The corner holds the camera and the board's four tools, and nothing else.
+    expect(hud("corner")).toContainElement(hud("tools"));
     const tools = within(hud("tools"));
     expect(
       within(tools.getByRole("group", { name: "Tools" }))
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label")),
     ).toEqual(["Move", "Measure", "Area", "Fog"]);
-    expect(tools.getAllByRole("button")).toHaveLength(4);
+    expect(
+      within(document.querySelector<HTMLElement>("[data-slot=run-camera]")!)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label") ?? button.textContent),
+    ).toEqual([
+      "Zoom out",
+      "Zoom 100%, fit the board",
+      "Zoom in",
+      "Centre on whoever is up",
+      "Isometric",
+    ]);
     expect(tools.queryByRole("status")).toBeNull();
     expect(hud("tools")).not.toHaveTextContent("squares ·");
-    // The header keeps the fight's switches and its one peach.
-    expect(screen.getByRole("switch", { name: "Share" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
+    // The top right keeps the fight's switches; the turn card has its one peach.
+    expect(hud("controls")).toContainElement(screen.getByRole("switch", { name: "Share" }));
+    expect(hud("turn")).toContainElement(screen.getByRole("button", { name: "Next turn" }));
     // Every floating region is on the one HUD rung.
-    expect(hud("strip").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
-    for (const name of ["left", "panel"]) expect(hud(name).closest(".z-hud")).not.toBeNull();
-    expect(hud("tools").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
+    for (const name of ["strip", "left", "panel", "turn", "corner"])
+      expect(hud(name).closest(".z-hud")).not.toBeNull();
+  });
+
+  it("tilts the board on the isometric view and stands the tokens back up", async () => {
+    vi.restoreAllMocks();
+    onTheCanvas("iso");
+    await open();
+    await waitFor(() => expect(content().dataset.view).toBe("iso"));
+    expect(content().style.getPropertyValue("--tilt")).toMatch(
+      /^matrix\(0\.707107,0\.353553,-0\.707107,0\.353553,/,
+    );
+    const stand = board().querySelector<SVGElement>("[data-slot=token-stand]")!;
+    expect(stand.style.transform).toMatch(/^matrix\(/);
+    // The camera's switch looks straight down again, and the tokens lie flat.
+    await userEvent.click(screen.getByRole("button", { name: "Isometric" }));
+    await waitFor(() => expect(content().dataset.view).toBe("top"));
+    expect(content().style.getPropertyValue("--tilt")).toBe("matrix(1,0,0,1,0,0)");
+    expect(board().querySelector<SVGElement>("[data-slot=token-stand]")!.style.transform).toBe("");
   });
 
   it("takes the whole window, and lets each panel scroll itself", async () => {
@@ -2757,7 +2801,7 @@ describe("the canvas", () => {
     }
     await open();
     const ended = await screen.findByText(/came off the table/);
-    expect(hud("header")).toContainElement(ended);
+    expect(hud("notices")).toContainElement(ended);
     // Over, nothing on the board takes a tool.
     expect(within(hud("tools")).getByRole("button", { name: "Measure" })).toBeDisabled();
   });
@@ -3081,7 +3125,7 @@ describe("the board's tools", () => {
     });
     await open();
     await userEvent.click(tool("Measure"));
-    const actions = within(panel().getByRole("region", { name: "Actions of Brannoc" }));
+    const actions = within(await screen.findByRole("region", { name: "Actions of Brannoc" }));
     await userEvent.click(await actions.findByRole("button", { name: "Attack with Longsword" }));
     expect(surface()).toBeNull();
     expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
@@ -3152,9 +3196,12 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  const actions = () => within(panel().getByRole("region", { name: "Actions of Brannoc" }));
+  /** Whoever is up acts from the turn card on the canvas, and from their panel in the grid. */
+  const turnCard = () =>
+    wide ? within(screen.getByRole("region", { name: "This turn of Brannoc" })) : panel();
+  const actions = () => within(turnCard().getByRole("region", { name: "Actions of Brannoc" }));
   const result = () =>
-    within(panel().getByRole("region", { name: "Attack result, Longsword → Goblin Boss" }));
+    within(turnCard().getByRole("region", { name: "Attack result, Longsword → Goblin Boss" }));
   const banner = () => screen.queryByText("Pick a target for Longsword");
   const damages = () =>
     server.calls.filter((call) => call.method === "POST" && call.pathname.endsWith("/damage"));
@@ -3184,7 +3231,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     await waitFor(() => expect(actions().getByRole("button", { name: "Attack with Longsword" })));
   };
 
-  it("asks for a target, resolves a hit against its AC, and Apply sends the damage as a delta", async () => {
+  it("asks for a target, resolves a hit against its AC, and sends the damage as a delta at once", async () => {
     await open();
     const attack = actions().getByRole("button", { name: "Attack with Longsword" });
     // Outline, so that *Next turn* stays the screen's one peach.
@@ -3252,10 +3299,11 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
         requestId: expect.stringMatching(/:1$/),
       },
     ]);
+    // The hit applies itself: the turn's Action and the damage.
     await waitFor(() =>
       expect(
         server.calls.filter((call) => call.method !== "GET" && !call.pathname.endsWith("/rolls")),
-      ).toHaveLength(1),
+      ).toHaveLength(2),
     );
     expect(bodyOf(server, "POST", "/turn")).toEqual({
       actionUsed: true,
@@ -3263,7 +3311,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     });
     await waitFor(() =>
       expect(
-        within(panel().getByRole("region", { name: "This turn of Brannoc" })).getByRole("button", {
+        within(screen.getByRole("region", { name: "This turn of Brannoc" })).getByRole("button", {
           name: "Action",
         }),
       ).toHaveAttribute("aria-pressed", "true"),
@@ -3273,26 +3321,34 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(dock().getByText("Brannoc · Longsword → Goblin Boss")).toBeInTheDocument();
     expect(dock().getByText("d20 19 +7 = 26 vs AC 17 · 1d8+4 = 9")).toBeInTheDocument();
 
-    await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
-    await waitFor(() => expect(damages()).toHaveLength(1));
+    expect(damages()).toHaveLength(1);
     const sent = damages()[0]!;
     expect(sent.pathname).toContain(`/combatants/${goblinBoss.id}/damage`);
     expect(sentBody(0)).toEqual({ amount: 9, requestId: expect.any(String) });
-    // Once: the card stays to read, without its buttons.
+    // Once: the card says what was sent, and offers it back.
+    expect(result().getByText("9 damage applied")).toBeInTheDocument();
     expect(result().queryByRole("button", { name: "Apply 9 damage" })).toBeNull();
-    expect(result().queryByRole("button", { name: /Apply half/ })).toBeNull();
+
+    // Undo heals back what the hit took, and offers it again.
+    await userEvent.click(result().getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(damages()).toHaveLength(2));
+    expect(sentBody(1)).toEqual({ amount: -9, requestId: expect.any(String) });
+    expect(result().getByRole("button", { name: "Apply 9 damage" })).toBeInTheDocument();
     await userEvent.click(result().getByRole("button", { name: "Dismiss" }));
-    expect(panel().queryByRole("region", { name: /Attack result/ })).toBeNull();
+    expect(turnCard().queryByRole("region", { name: /Attack result/ })).toBeNull();
   });
 
-  it("sends half the damage, rounded down", async () => {
+  it("takes back all but half the damage, rounded down", async () => {
     await open();
     await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
     seed(0.9, 0.5);
     await pick("Goblin Boss");
-    await userEvent.click(result().getByRole("button", { name: "Apply half, 4 damage" }));
     await waitFor(() => expect(damages()).toHaveLength(1));
-    expect(sentBody(0)).toEqual({ amount: 4, requestId: expect.any(String) });
+    await userEvent.click(result().getByRole("button", { name: "Half instead, 4 damage" }));
+    await waitFor(() => expect(damages()).toHaveLength(2));
+    // 9 was sent; 4 is what stands, so 5 comes back.
+    expect(sentBody(1)).toEqual({ amount: -5, requestId: expect.any(String) });
+    expect(result().getByText("4 damage applied")).toBeInTheDocument();
   });
 
   it("crits on a natural 20, doubling the dice, and says so to the damage write", async () => {
@@ -3304,7 +3360,6 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("d20 20 +7 = 27 vs AC 17")).toBeInTheDocument();
     expect(result().getByText("2d8+4 [5, 3] = 12 slashing")).toBeInTheDocument();
 
-    await userEvent.click(result().getByRole("button", { name: "Apply 12 damage" }));
     await waitFor(() => expect(damages()).toHaveLength(1));
     expect(sentBody(0)).toEqual({
       amount: 12,
@@ -3357,10 +3412,13 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     // 9 damage against 8 hit points: down, and a creature at 0 owes no save.
     seed(0.9, 0.5);
     await pick("Goblin Boss");
+    await waitFor(() => expect(damages()).toHaveLength(1));
     expect(result().queryByText(/is concentrating/)).toBeNull();
 
-    await userEvent.click(result().getByRole("button", { name: "Apply half, 4 damage" }));
-    await waitFor(() => expect(damages()).toHaveLength(1));
+    // Half instead: 4 of its 8 stand, so 4 of the 8 it lost come back.
+    await userEvent.click(result().getByRole("button", { name: "Half instead, 4 damage" }));
+    await waitFor(() => expect(damages()).toHaveLength(2));
+    expect(sentBody(1)).toEqual({ amount: -4, requestId: expect.any(String) });
     expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
   });
 
@@ -3389,10 +3447,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
     seed(0.9, 0.5);
     await pick("Goblin Boss");
-    // Nothing is owed until the hit is sent.
-    expect(result().queryByRole("button", { name: "Roll Goblin Boss's Con save" })).toBeNull();
-
-    await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
+    // The hit sends itself, and the save it set up is owed.
     await waitFor(() => expect(damages()).toHaveLength(1));
     // d20 12, + 3.
     seed(0.55);
@@ -3426,7 +3481,6 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
     seed(0.9, 0.5);
     await pick("Goblin Boss");
-    await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
     await waitFor(() => expect(damages()).toHaveLength(1));
     expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
     expect(result().queryByRole("button", { name: /Con save/ })).toBeNull();
@@ -3499,9 +3553,40 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     await waitFor(() => expect(screen.queryByRole("region", { name: /Attack result/ })).toBeNull());
   });
 
+  it.runIf(wide)("resolves against the selected creature at once, target first", async () => {
+    await open();
+    // With no pick waiting, a token selects: the target card.
+    await pick("Goblin Boss");
+    expect(panel().getByText("Target")).toBeInTheDocument();
+    expect(turnCard().getByText(/Targeting Goblin Boss, AC 17/)).toBeInTheDocument();
+    seed(0.9, 0.5);
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
+    expect(banner()).toBeNull();
+    expect(result().getByText("Hit")).toBeInTheDocument();
+    await waitFor(() => expect(damages()).toHaveLength(1));
+    expect(sentBody(0)).toEqual({ amount: 9, requestId: expect.any(String) });
+    // *Clear target* hands the card back to whoever is up.
+    await userEvent.click(panel().getByRole("button", { name: "Clear target" }));
+    expect(panel().queryByText("Target")).toBeNull();
+  });
+
+  it.runIf(wide)("selects from the party rail, as from the strip", async () => {
+    await open();
+    await pick("Goblin Boss");
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "Party" })).getByRole("button", {
+        name: /^Brannoc in the party/,
+      }),
+    );
+    expect(panel().queryByText("Target")).toBeNull();
+    expect(panel().getByText("Brannoc")).toBeInTheDocument();
+  });
+
   it("rolls for a creature that is not up, to-hit and damage together, with no target", async () => {
     await open();
     await pick("Goblin Boss");
+    // On the canvas the target card folds its lines under *Details*.
+    if (wide) await userEvent.click(panel().getByRole("button", { name: "Details" }));
     const lines = within(panel().getByRole("region", { name: "Actions of Goblin Boss" }));
     expect(lines.queryByRole("button", { name: /^Attack/ })).toBeNull();
     seed(0.5);
