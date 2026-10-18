@@ -19,6 +19,7 @@ import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation, Str
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { carryPlacements } from "./Locations.js";
 import { liveMemberAccountIds } from "./Memberships.js";
 import {
   type AssistantOrigin,
@@ -158,6 +159,12 @@ export const moveToOwnContext = (
       where campaign.id = ${campaign.id}
         and campaign.group_id = ${campaign.contextId}
     `;
+    yield* carryPlacements(sql, {
+      campaignId: campaign.id,
+      creatorAccountId: campaign.creatorAccountId,
+      from: campaign.contextId,
+      to: context.id,
+    });
   });
 
 /**
@@ -608,6 +615,13 @@ export class Groups extends Context.Service<
                 if (moved.length === 0) {
                   return yield* new NotFound({ resource: "campaign", id: creator.campaign });
                 }
+                // Before the hidden context's delete cascades its placements.
+                yield* carryPlacements(sql, {
+                  campaignId: creator.campaign,
+                  creatorAccountId: creator.actor.accountId,
+                  from: creator.group,
+                  to: worldId,
+                });
 
                 // Automatic contexts contain one campaign by construction.
                 // Once it has moved, the context and its eligibility rows are
@@ -654,6 +668,12 @@ export class Groups extends Context.Service<
                 if (moved.length === 0) {
                   return yield* new NotFound({ resource: "campaign", id: creator.campaign });
                 }
+                yield* carryPlacements(sql, {
+                  campaignId: creator.campaign,
+                  creatorAccountId: creator.actor.accountId,
+                  from: creator.group,
+                  to: worldId,
+                });
 
                 return destination;
               }),

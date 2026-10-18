@@ -197,6 +197,27 @@ export const IMAGE_KINDS = {
     position: "centre",
     fit: "inside",
   } satisfies ImageKindSpec<"card" | "full">,
+  /**
+   * A place's picture: a map seen from above for a realm, a region, a
+   * settlement, a district or a dungeon, a scene for a landmark or a
+   * building — the cover's size and cost. **Never cropped**, for the battle
+   * map's reason: the places inside it are pinned at fractions of the whole
+   * picture. Every read that may see the place mints its URLs.
+   */
+  location: {
+    table: "location_image",
+    subjectColumn: "location_id",
+    root: "location-images",
+    tag: "location-image",
+    route: "/location-images",
+    size: "1536x1024",
+    variants: {
+      card: { width: 768, height: 512 },
+      full: { width: 1536, height: 1024 },
+    },
+    position: "centre",
+    fit: "inside",
+  } satisfies ImageKindSpec<"card" | "full">,
 } as const;
 
 export type ImageKind = keyof typeof IMAGE_KINDS;

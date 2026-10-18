@@ -534,6 +534,16 @@
   transition: translate var(--dur-base) var(--ease-settle);
 }
 
+/* A place's map gliding toward a pin before the map inside it opens, or back
+   out to its parent's. Named here so the viewer spells out no timing of its
+   own; the tokens zero it under reduced motion, and the viewer then opens the
+   next map at once. */
+@utility transition-zoom {
+  transition:
+    transform var(--dur-slower) var(--ease-in-out),
+    opacity var(--dur-slow) var(--ease-out);
+}
+
 @utility ring-focus {
   box-shadow: var(--ring);
 }

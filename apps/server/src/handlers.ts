@@ -5,6 +5,7 @@ import {
   type Encounter,
   Heartbeat,
   type HobAccepted,
+  locationIsMapped,
   type LiveEvent,
   type NotFound,
   PlayerLiveHeartbeat,
@@ -50,6 +51,8 @@ import { NpcTurns } from "./repo/NpcTurns.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Locations } from "./repo/Locations.js";
+import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -420,6 +423,9 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("battleMap", ({ params, query }) =>
         images.image("battleMap", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("location", ({ params, query }) =>
+        images.image("location", { ...params, e: query.e, s: query.s }),
       );
   }),
 );
@@ -641,6 +647,143 @@ const PlayerNotesLive = HttpApiBuilder.group(
     return handlers.handle("list", ({ params, query }) =>
       notes.listAsPlayer(params.campaignId, query),
     );
+  }),
+);
+
+/**
+ * A kept place starts its picture after the accept commits, as the shelf's
+ * create does. Only the top place is drawn: the places inside it start with
+ * no picture, for their owner to draw one by one (`libraryLocations.draw`),
+ * so one proposal cannot spend the day's image budget.
+ */
+const drawKeptPlace = (
+  images: (typeof HobImages)["Service"],
+  accepted: Extract<HobAccepted, { accepted: "location" }>,
+): Effect.Effect<HobAccepted, never, CurrentActor> =>
+  Effect.map(
+    images.drawLocation(
+      accepted.location,
+      accepted.descendants.filter((place) => place.parentId === accepted.location.id),
+    ),
+    (location) => ({ ...accepted, location }),
+  );
+
+/** The owner's Locations shelf: every method answers the asker's own places only. */
+const LibraryLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "libraryLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    const images = yield* HobImages;
+    return (
+      handlers
+        .handle("list", () => locations.library)
+        // A scene starts its picture after the create commits, as a campaign's
+        // cover does. A map waits for its owner's `draw`: it is drawn around
+        // the pins of the places inside it, which a new place has none of yet.
+        .handle("create", ({ payload }) =>
+          locations
+            .create(payload)
+            .pipe(
+              Effect.flatMap((location) =>
+                locationIsMapped(location.kind)
+                  ? Effect.succeed(location)
+                  : images.drawLocation(location, []),
+              ),
+            ),
+        )
+        .handle("findById", ({ params }) => locations.findById(params.locationId))
+        .handle("update", ({ params, payload }) => locations.update(params.locationId, payload))
+        .handle("remove", ({ params }) => locations.remove(params.locationId))
+        .handle("appearances", ({ params }) => locations.appearances(params.locationId))
+        .handle("draw", ({ params }) =>
+          locations
+            .forDrawing(params.locationId)
+            .pipe(
+              Effect.flatMap(({ location, children }) => images.drawLocation(location, children)),
+            ),
+        )
+    );
+  }),
+);
+
+/**
+ * A table's places, behind the creator proof: anybody else is `NotFound`
+ * before a place is read. A player reads `playerLocations`.
+ */
+const LocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "locations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.atCampaign(creator)),
+      )
+      .handle("place", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.place(creator, params.locationId)),
+      )
+      .handle("unplace", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.unplace(creator, params.locationId)),
+      )
+      .handle("reveal", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.reveal(creator, params.locationId)),
+      )
+      .handle("unreveal", ({ params }) =>
+        asDm(params.campaignId, (creator) => locations.unreveal(creator, params.locationId)),
+      );
+  }),
+);
+
+/** The places a table has revealed, as a player is told them. */
+const PlayerLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    return handlers.handle("list", ({ params }) => locations.forPlayer(params.campaignId));
+  }),
+);
+
+/**
+ * The party's travels, behind the creator proof: anybody else is `NotFound`
+ * before a move is read or made. A player reads `playerPartyTravel`.
+ */
+const PartyTravelLive = HttpApiBuilder.group(
+  TavernsApi,
+  "partyTravel",
+  Effect.fnUntraced(function* (handlers) {
+    const travel = yield* PartyTravel;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => asDm(params.campaignId, (creator) => travel.list(creator)))
+      .handle("move", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => travel.move(creator, payload.locationId)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => travel.remove(creator, params.moveId)),
+      );
+  }),
+);
+
+/** The party's travels, as a player at the table is told them. */
+const PlayerPartyTravelLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerPartyTravel",
+  Effect.fnUntraced(function* (handlers) {
+    const travel = yield* PartyTravel;
+    return handlers.handle("list", ({ params }) => travel.forPlayer(params.campaignId));
+  }),
+);
+
+/** A Shared World's atlas, for its live members. */
+const SharedWorldLocationsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "sharedWorldLocations",
+  Effect.fnUntraced(function* (handlers) {
+    const locations = yield* Locations;
+    return handlers.handle("list", ({ params }) => locations.inWorld(params.worldId));
   }),
 );
 
@@ -1172,6 +1315,7 @@ const HobLive = HttpApiBuilder.group(
     const proposals = yield* Proposals;
     const dmActors = yield* CampaignCreatorActors;
     const images = yield* HobImages;
+    const live = yield* LiveEvents;
     const drawMap = yield* drawEncounterMapOf;
 
     /**
@@ -1238,6 +1382,14 @@ const HobLive = HttpApiBuilder.group(
                   return Effect.as(drawMap(accepted.encounter), accepted);
                 case "npc":
                   return Effect.map(images.drawNpc(accepted.npc), (npc) => ({ ...accepted, npc }));
+                case "location":
+                  return drawKeptPlace(images, accepted);
+                // A kept move during an open night rings its doorbell now
+                // that the accept has committed, as the creator's own does.
+                case "partyMove":
+                  return accepted.move.sessionId === null
+                    ? Effect.succeed(accepted)
+                    : Effect.as(live.touched(accepted.move.sessionId), accepted);
                 default:
                   return Effect.succeed(accepted);
               }
@@ -1366,6 +1518,8 @@ const MeHobLive = HttpApiBuilder.group(
                   ...accepted,
                   sharedWorld,
                 }));
+              case "location":
+                return drawKeptPlace(images, accepted);
               default:
                 return Effect.succeed(accepted);
             }
@@ -1666,6 +1820,7 @@ const SharedWorldHobLive = HttpApiBuilder.group(
     const hob = yield* Hob;
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
+    const images = yield* HobImages;
 
     return handlers
       .handle("status", ({ params }) => hob.sharedWorldStatus(params.worldId))
@@ -1675,7 +1830,15 @@ const SharedWorldHobLive = HttpApiBuilder.group(
         threads.turns("sharedWorld", params.worldId, params.threadId),
       )
       .handle("accept", ({ params }) =>
-        proposals.acceptSharedWorld(params.worldId, params.threadId, params.turnId),
+        proposals
+          .acceptSharedWorld(params.worldId, params.threadId, params.turnId)
+          .pipe(
+            Effect.flatMap((accepted) =>
+              accepted.accepted === "location"
+                ? drawKeptPlace(images, accepted)
+                : Effect.succeed(accepted),
+            ),
+          ),
       )
       .handle("discard", ({ params }) =>
         threads.discard("sharedWorld", params.worldId, params.threadId, params.turnId),
@@ -1969,6 +2132,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldHistoryLive,
     SharedWorldLibraryLive,
     SharedWorldMembersLive,
+    SharedWorldLocationsLive,
+    LibraryLocationsLive,
     InvitePreviewLive,
     ImagesLive,
     UploadsLive,
@@ -1986,6 +2151,10 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     BattleMapsLive,
     PlayerEncountersLive,
     PlayerNotesLive,
+    LocationsLive,
+    PlayerLocationsLive,
+    PartyTravelLive,
+    PlayerPartyTravelLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

@@ -32,6 +32,7 @@ describe("the campaign row's collapse", () => {
     expect(tab("Overview").className).not.toMatch(/@max-\w+:hidden/);
     expect(tab("Encounters").className).not.toMatch(/@max-\w+:hidden/);
     expect(tab("Cast")).toHaveClass("@max-xl:hidden");
+    expect(tab("Locations")).toHaveClass("@max-xl:hidden");
     expect(tab("Chronicle")).toHaveClass("@max-xl:hidden");
     expect(tab("Party")).toHaveClass("@max-lg:hidden");
     expect(tab("Notes")).toHaveClass("@max-lg:hidden");
@@ -52,7 +53,7 @@ describe("the campaign row's collapse", () => {
       within(short)
         .getAllByRole("menuitem")
         .map((item) => item.textContent),
-    ).toEqual(["Cast", "Chronicle"]);
+    ).toEqual(["Cast", "Locations", "Chronicle"]);
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 
@@ -62,14 +63,20 @@ describe("the campaign row's collapse", () => {
       within(all)
         .getAllByRole("menuitem")
         .map((item) => item.textContent),
-    ).toEqual(["Party", "Cast", "Notes", "Chronicle"]);
+    ).toEqual(["Party", "Cast", "Notes", "Locations", "Chronicle"]);
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 
     await userEvent.click(narrow!);
     const menu = await screen.findByRole("menu");
     const items = within(menu).getAllByRole("menuitem");
-    expect(items.map((item) => item.textContent)).toEqual(["Party", "Cast", "Notes", "Chronicle"]);
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Party",
+      "Cast",
+      "Notes",
+      "Locations",
+      "Chronicle",
+    ]);
     expect(within(menu).getByRole("menuitem", { name: "Chronicle" })).toHaveAttribute(
       "aria-current",
       "page",

@@ -345,6 +345,31 @@ export const reads = {
   libraryNpc: (npcId: NpcId): ReadKey => key`library:npcs:${npcId}`,
 
   /**
+   * The account's own places, on the Library's Locations shelf. A place's
+   * edit or delete moves every table and world it is placed in too, so those
+   * writes name `locations` and `worldLocations` as well.
+   */
+  libraryLocations: "library:locations" as ReadKey,
+
+  /**
+   * The places at one table — the creator's `locations` and a player's
+   * `playerLocations`, which are two paths to one resource and so one key. A
+   * placement moves every table in the world, so placing names the world's
+   * key and each table's.
+   */
+  locations: (campaignId: CampaignId): ReadKey => key`locations:${campaignId}`,
+
+  /**
+   * The party's travels at one table — the creator's log and a player's,
+   * two paths to one resource. A move also reveals its place, so a move
+   * names `locations` too.
+   */
+  partyTravel: (campaignId: CampaignId): ReadKey => key`party-travel:${campaignId}`,
+
+  /** A Shared World's atlas: every place placed in it. */
+  worldLocations: (worldId: SharedWorldId): ReadKey => key`world-locations:${worldId}`,
+
+  /**
    * The summary of every Library NPC source's sheet (`library.npcSheets`): each
    * card's one stats line. The owner's alone, and a key of its own for
    * `npcSheets`' reason. Its read answers `libraryNpcs` too, since which

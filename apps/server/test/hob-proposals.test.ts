@@ -23,6 +23,8 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
+import { Locations } from "../src/repo/Locations.js";
+import { PartyTravel } from "../src/repo/PartyTravel.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -76,6 +78,8 @@ const services = Layer.mergeAll(
   CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
+  Locations.layer,
+  PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
   EncounterCreatures.layer,
@@ -105,6 +109,8 @@ const services = Layer.mergeAll(
       EncounterCreatures.layer,
       Encounters.layer,
       GroupHistory.layer,
+      Locations.layer,
+      PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
       Notes.layer,
       Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
       Acts.layer,

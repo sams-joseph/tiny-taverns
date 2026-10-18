@@ -40,6 +40,7 @@ const KIND_LABEL: { readonly [K in ImageKindName]: string } = {
   campaign: "Cover",
   sharedWorld: "Cover",
   battleMap: "Map",
+  location: "Picture",
 };
 
 /** What one file fills, said once at the top of the dialog. */
@@ -51,6 +52,8 @@ const FILLS: { readonly [S in ImageSubject]: string } = {
   sharedWorld: "The cover heads the Shared World's card and its page. Frame it below.",
   battleMap:
     "The whole picture goes under the grid, uncropped, and the grid is set across its width again.",
+  location:
+    "The whole picture is the place's map, uncropped. Pins keep their places across it, so check them after.",
 };
 
 export interface PictureActionsInput {

@@ -185,7 +185,9 @@ import {
   RuleArticleId,
   RollId,
   SpellId,
+  LocationId,
   NoteId,
+  PartyMoveId,
   PrepItemId,
   SessionId,
 } from "./Ids.js";
@@ -198,7 +200,17 @@ import {
   IssuedInvite,
 } from "./Invite.js";
 import { CampaignMember, CampaignMemberAdd, CampaignMembership } from "./Membership.js";
+import {
+  CampaignLocation,
+  Location,
+  LocationAppearance,
+  LocationCreate,
+  LocationUpdate,
+  PlayerLocation,
+  WorldLocation,
+} from "./Location.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
+import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
   Npc,
   NpcCreate,
@@ -998,6 +1010,175 @@ class SharedWorldMembersGroup extends HttpApiGroup.make("sharedWorldMembers")
   .prefix("/worlds/:worldId/members")
   .middleware(Authorization) {}
 
+/**
+ * The owner's Locations shelf: places are account-owned and top-level, like a
+ * character, so the shelf answers the asker's own and nobody else's. Another
+ * account's place is `NotFound` at every endpoint, placed in a shared world or
+ * not; a world member reads it through `sharedWorldLocations` or a campaign's
+ * `locations`, never here.
+ *
+ * `remove` takes the place's whole subtree, with every placement and reveal of
+ * any of them. `appearances` is what the confirmation lists first.
+ */
+class LibraryLocationsGroup extends HttpApiGroup.make("libraryLocations")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      success: Schema.Array(Location),
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      payload: LocationCreate,
+      success: Location,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("findById", "/:locationId", {
+      params: { locationId: LocationId },
+      success: Location,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/:locationId", {
+      params: { locationId: LocationId },
+      payload: LocationUpdate,
+      success: Location,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("remove", "/:locationId", {
+      params: { locationId: LocationId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("appearances", "/:locationId/appearances", {
+      params: { locationId: LocationId },
+      success: Schema.Array(LocationAppearance),
+      error: NotFound,
+    }),
+    /**
+     * The one draw of a place that has no picture yet: a place inside one Hob
+     * made is kept with none, so one proposal cannot spend the day's budget.
+     * A place that has a picture, is being drawn, or was drawn and taken off
+     * starts nothing; the answer says whether it is drawing now.
+     */
+    HttpApiEndpoint.post("draw", "/:locationId/draw", {
+      params: { locationId: LocationId },
+      success: Location,
+      error: NotFound,
+    }),
+  )
+  .prefix("/library/locations")
+  .middleware(Authorization) {}
+
+/**
+ * The places at a table, as its **creator** reads and arranges them: every
+ * place in the campaign's context, which is its Shared World or its hidden
+ * one. Behind the creator proof, so a player, a world member and a stranger
+ * are `NotFound`; a player reads `playerLocations`.
+ *
+ * `place` puts one of the creator's own places, with everything under it,
+ * into the campaign's context, where every campaign in that world has it;
+ * `unplace` takes the creator's own placement back out. `reveal` and
+ * `unreveal` are this table's alone. All four answer nothing: the list is
+ * re-read, because a placement moves a whole subtree.
+ */
+class LocationsGroup extends HttpApiGroup.make("locations")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(CampaignLocation),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("place", "/:locationId/placement", {
+      params: { campaignId: CampaignId, locationId: LocationId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("unplace", "/:locationId/placement", {
+      params: { campaignId: CampaignId, locationId: LocationId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("reveal", "/:locationId/reveal", {
+      params: { campaignId: CampaignId, locationId: LocationId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("unreveal", "/:locationId/reveal", {
+      params: { campaignId: CampaignId, locationId: LocationId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/locations")
+  .middleware(Authorization) {}
+
+/**
+ * Where the party is, as the record of where it has been: the campaign's
+ * travel log, newest first, behind the creator proof. The newest move is
+ * where the party stands. `move` goes to a place in the campaign's world and
+ * reveals it to the table; `remove` takes a move back, so removing the
+ * newest puts the party where it was before. A move during an open night
+ * rings the table's doorbell. A player reads `playerPartyTravel`.
+ */
+class PartyTravelGroup extends HttpApiGroup.make("partyTravel")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PartyMove),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("move", "/", {
+      params: { campaignId: CampaignId },
+      payload: PartyMoveCreate,
+      success: PartyMove,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:moveId", {
+      params: { campaignId: CampaignId, moveId: PartyMoveId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/party-travel")
+  .middleware(Authorization) {}
+
+/** The party's travels as a player at the table is told them. */
+class PlayerPartyTravelGroup extends HttpApiGroup.make("playerPartyTravel")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerPartyMove),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/player-party-travel")
+  .middleware(Authorization) {}
+
+/** The places a table has revealed, as a player is told them. */
+class PlayerLocationsGroup extends HttpApiGroup.make("playerLocations")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerLocation),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/player-locations")
+  .middleware(Authorization) {}
+
+/**
+ * A Shared World's atlas, for every live member: read only. A hidden context
+ * is `NotFound` here, as on every `/worlds` path; its places are its
+ * campaign's creator's, through `locations`.
+ */
+class SharedWorldLocationsGroup extends HttpApiGroup.make("sharedWorldLocations")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { worldId: SharedWorldId },
+      success: Schema.Array(WorldLocation),
+      error: NotFound,
+    }),
+  )
+  .prefix("/worlds/:worldId/locations")
+  .middleware(Authorization) {}
+
 /** Campaign-local invitations, governed by that campaign's creator. */
 class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
   .add(
@@ -1124,6 +1305,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** An encounter's battle map; its URLs are minted only on the creator's map reads. */
     HttpApiEndpoint.get("battleMap", "/battle-map-images/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** A place's picture; its URLs are minted on the reads that may see the place. */
+    HttpApiEndpoint.get("location", "/location-images/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
@@ -3640,6 +3830,8 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SharedWorldLibraryGroup)
   .add(SharedWorldHobGroup)
   .add(SharedWorldMembersGroup)
+  .add(SharedWorldLocationsGroup)
+  .add(LibraryLocationsGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)
   .add(CampaignInvitesGroup)
@@ -3649,6 +3841,10 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SeatPrepGroup)
   .add(NotesGroup)
   .add(PlayerNotesGroup)
+  .add(LocationsGroup)
+  .add(PlayerLocationsGroup)
+  .add(PartyTravelGroup)
+  .add(PlayerPartyTravelGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
   .add(BattleMapsGroup)

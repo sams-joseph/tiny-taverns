@@ -373,16 +373,17 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          // Moved when a roster line could name its side and a member of the
-          // Cast (`proposeEncounter`).
-          creator: "d63b3cc3eedb43d1d5628802d82a44063142133a1fba256f9347fc23ab8353c7",
-          sharedWorld: "605ead7fad5f09d1fde9b8173e608ca83ea65132b673aa65c8055af9cc1072fa",
+          // Moved when `proposeLocation` (the creator's, the Shared World's and
+          // the account's) took a layout, `x` and `y`, for the places it
+          // drafts; before that, when the creator's gained `proposePartyMove`.
+          creator: "9033fd26c610407b0a1d1116d4145bf6d4148e3df4d6b04798a0653eac65b69f",
+          sharedWorld: "77cbbc1e05e17b3a7dff267daada442e45289efd475f6ab771b68d512d0b4393",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",
           core: "5b6ccff95f0751239118a2196f51d2d918d90acdad03b01e8a96eda86ba22abd",
           coreListing: "3b51f22a3bdeab5ffd5472160933fe6011ae8707b4469790f26e9f4d80212f73",
-          account: "d232b6fa3fcef517229fcf319b13821192ee31c8cc712ccf5d0d1471790acc71",
-          accountListing: "fa3a35cfad02f9cf449d98d3d44bb9e175c2a3c51eb85a141a18b883dad62e54",
+          account: "3b1b7c7c715a4a016a14fa9ca7b3423210d838637c1463b760dbb0a0bfdee48f",
+          accountListing: "90ad3f3a3d83824e0f2883d23593ba0230b5c176fb8e43b3dd6f284bf534968e",
           // Moved when a turn could carry a line the creature says aloud.
           fight: "9c6b5cb33f80e7187d85b2e2e529bb6c96d1fb27d64911b6ba09f23bb1fb98fa",
         });

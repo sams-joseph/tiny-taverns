@@ -184,7 +184,9 @@ describeLayer("migrations", database, (it) => {
         "campaign_character",
         "campaign_character_prep",
         "campaign_image",
+        "campaign_location_reveal",
         "campaign_member",
+        "campaign_party_move",
         "campaign_story",
         "character",
         "character_advancement",
@@ -202,6 +204,7 @@ describeLayer("migrations", database, (it) => {
         "class_level",
         "combatant",
         "condition",
+        "context_location",
         "creature",
         "creature_armor_equipment",
         "creature_condition_immunity",
@@ -239,6 +242,8 @@ describeLayer("migrations", database, (it) => {
         "image_spend",
         "image_upload",
         "language",
+        "location",
+        "location_image",
         "magic_item",
         "magic_item_rarity",
         "magic_item_variant",
@@ -391,6 +396,9 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 102, name: "roll_attack_delivery" },
         { migration_id: 103, name: "roll_area" },
         { migration_id: 104, name: "sheet_action_geometry" },
+        { migration_id: 105, name: "locations" },
+        { migration_id: 106, name: "location_images" },
+        { migration_id: 107, name: "party_travel" },
       ]);
     }),
   );
@@ -505,6 +513,9 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 102, name: "roll_attack_delivery" },
         { migration_id: 103, name: "roll_area" },
         { migration_id: 104, name: "sheet_action_geometry" },
+        { migration_id: 105, name: "locations" },
+        { migration_id: 106, name: "location_images" },
+        { migration_id: 107, name: "party_travel" },
       ]);
     }),
   );

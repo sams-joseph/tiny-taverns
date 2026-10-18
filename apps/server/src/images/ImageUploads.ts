@@ -138,6 +138,12 @@ export class ImageUploads extends Context.Service<
                   "A battle map is never cropped: its grid is measured on the whole picture.",
               });
             }
+            if (payload.images.some((image) => image.kind === "location" && image.crop)) {
+              return yield* new UploadRejected({
+                message:
+                  "A place's picture is never cropped: its pins are measured on the whole picture.",
+              });
+            }
 
             const source = imageObjectKey(upload.prefix, "source");
             const object = yield* storage.get(source).pipe(

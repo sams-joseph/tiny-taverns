@@ -247,6 +247,14 @@ export type BattleMapId = typeof BattleMapId.Type;
 export const NpcId = id("NpcId");
 export type NpcId = typeof NpcId.Type;
 
+/** An account's place (`location`): top-level, put into worlds by placement. */
+export const LocationId = id("LocationId");
+export type LocationId = typeof LocationId.Type;
+
+/** One move of a party on its campaign's travel log (`campaign_party_move`). */
+export const PartyMoveId = id("PartyMoveId");
+export type PartyMoveId = typeof PartyMoveId.Type;
+
 /**
  * One conversation with an NPC, on one channel. Its own table rather than an
  * `AssistantThreadId`: an NPC conversation is not Hob's, offers no proposals,

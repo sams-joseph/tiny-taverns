@@ -28,7 +28,7 @@ Any object a person can create, Hob can also create through the creator toolkit'
 
 The maintainer's standing exceptions:
 
-- Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote). The one exception: Hob may take a monster's turn in a fight through a proposal the DM keeps, or that the DM's runner keeps on its own while the DM has that fight's autopilot on, and the server carries it out with its own dice. It still never starts a fight, adds a combatant, or rolls for a player.
+- Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote). Two exceptions: Hob may take a monster's turn in a fight through a proposal the DM keeps, or that the DM's runner keeps on its own while the DM has that fight's autopilot on, and the server carries it out with its own dice; and Hob may propose moving the party to a place at the table, which only the DM's keep makes. It still never starts a fight, adds a combatant, or rolls for a player.
 - Hob does not upload pictures; it draws them. An upload is a person's own file.
 - Rolls and ended fights are deleted only with their night.
 - Shared campaign and Shared World conversation threads may be hidden rather than hard-deleted.

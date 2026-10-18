@@ -144,10 +144,11 @@ interface NavItem {
  * account is at it** rather than from a global mode.
  *
  * The creator gets the full row — every campaign-scoped screen that exists.
- * A player gets the three screens whose player projections exist: the campaign's
+ * A player gets the four screens whose player projections exist: the campaign's
  * Overview (the participant projection the same URL renders them), Table (the
- * narrow live-fight projection), and Chronicle (whose screen reads
- * `recap.readAsPlayer` for them). *Party* and *Encounters* stay off the
+ * narrow live-fight projection), Chronicle (whose screen reads
+ * `recap.readAsPlayer` for them), and Locations (the places their table has
+ * revealed, `playerLocations`). *Party* and *Encounters* stay off the
  * player's row because their reads are behind the creator gate or answer
  * creator-only content — a control that exists and then
  * errors is worse than one that is absent. The corpora are on nobody's row:
@@ -182,6 +183,11 @@ const campaignNavFor = (
         link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
         section: "chronicle",
       },
+      {
+        label: "Locations",
+        link: { to: "/campaigns/$campaignId/locations", params: { campaignId } },
+        section: "locations",
+      },
     ];
   }
 
@@ -213,6 +219,12 @@ const campaignNavFor = (
       link: { to: "/campaigns/$campaignId/notes", params: { campaignId } },
       section: "notes",
       collapse: "lg",
+    },
+    {
+      label: "Locations",
+      link: { to: "/campaigns/$campaignId/locations", params: { campaignId } },
+      section: "locations",
+      collapse: "xl",
     },
     {
       label: "Chronicle",

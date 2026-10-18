@@ -78,7 +78,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
 
   it("carries the night and the campaign's own press on the row, on every tab", async () => {
     const where = await destinations();
-    // Overview, Encounters, Party, Cast, Notes, Chronicle.
+    // Overview, Encounters, Party, Cast, Notes, Locations, Chronicle.
     // Named so that a row that silently lost an item is a failure rather than a
     // smaller loop.
     expect(where.map((entry) => entry.label)).toEqual([
@@ -87,6 +87,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       "Party",
       "Cast",
       "Notes",
+      "Locations",
       "Chronicle",
     ]);
 
@@ -109,7 +110,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       cleanup();
     }
 
-    // One value, rendered six times — not six branches that happen to agree.
+    // One value, rendered seven times — not six branches that happen to agree.
     // `act.tsx`'s `actFor` computes the press once; a screen that decided for
     // itself is exactly what this is here to catch. And one each: the
     // Overview's *Tonight* card used to carry a second, which two peach
@@ -120,6 +121,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       { label: "Party", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Cast", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Notes", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Locations", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Chronicle", badge: "Session 12", acts: ["Start an encounter"] },
     ]);
   }, 30_000);
@@ -156,6 +158,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       { label: "Party", badges: 0, acts: ["Start session"] },
       { label: "Cast", badges: 0, acts: ["Start session"] },
       { label: "Notes", badges: 0, acts: ["Start session"] },
+      { label: "Locations", badges: 0, acts: ["Start session"] },
       { label: "Chronicle", badges: 0, acts: ["Start session"] },
     ]);
   }, 30_000);

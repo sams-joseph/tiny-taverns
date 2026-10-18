@@ -43,6 +43,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
+import { Locations } from "../src/repo/Locations.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
@@ -104,6 +105,7 @@ const services = Layer.mergeAll(
   CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
+  Locations.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   EquipmentRepo.layer,
@@ -550,6 +552,7 @@ describeLayer("hob", shared, (it) => {
           "getCreature",
           "getNpc",
           "listCreatures",
+          "listLocations",
           "listSessions",
           // Planning: an act on the Chronicle at a night the campaign has, and
           // the next night with its checklist. The creator's alone.
@@ -559,6 +562,7 @@ describeLayer("hob", shared, (it) => {
           // kept only by the creator's accept. No other toolkit has either.
           "proposeCampaignStory",
           "proposeEncounter",
+          "proposeLocation",
           "proposeNight",
           "proposeNightSummary",
           "proposeNote",
@@ -570,6 +574,7 @@ describeLayer("hob", shared, (it) => {
           // An NPC's stat sheet, built like a character's and kept only by the
           // creator's accept; `getNpc` above reads it back. No other toolkit has it.
           "proposeNpcSheet",
+          "proposePartyMove",
           "readCampaignStorySources",
           "readFight",
           // The two group-context reads — the chronicle and the accepted summary,
@@ -2049,18 +2054,21 @@ describeLayer("hob", shared, (it) => {
         "proposeBeat",
         "proposeCampaignStory",
         "proposeEncounter",
+        "proposeLocation",
         "proposeNight",
         "proposeNightSummary",
         "proposeNote",
         "proposeNpc",
         "proposeNpcAwareness",
         "proposeNpcSheet",
+        "proposePartyMove",
       ]);
       expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
       const account = Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools);
       expect(account.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLocation",
         "proposeSharedWorld",
       ]);
       // And nothing that builds is spelled another way: every remaining tool is a
@@ -2122,6 +2130,7 @@ describeLayer("hob", shared, (it) => {
         "getCreature",
         "getNpc",
         "listCreatures",
+        "listLocations",
         "listSessions",
         "proposeAct",
         "proposeBeat",
@@ -2129,6 +2138,7 @@ describeLayer("hob", shared, (it) => {
         // kept only by the creator's accept. No other toolkit has either.
         "proposeCampaignStory",
         "proposeEncounter",
+        "proposeLocation",
         "proposeNight",
         "proposeNightSummary",
         "proposeNote",
@@ -2140,6 +2150,7 @@ describeLayer("hob", shared, (it) => {
         // An NPC's stat sheet, built like a character's and kept only by the
         // creator's accept; `getNpc` above reads it back. No other toolkit has it.
         "proposeNpcSheet",
+        "proposePartyMove",
         "readCampaignStorySources",
         // The fight on the table as its creator sees it — hit points, fog and
         // a monster's options. No other toolkit has it: a player's Hob must
@@ -2192,20 +2203,24 @@ describeLayer("hob", shared, (it) => {
     });
 
     it("counts the account panel's toolkit: the core drafting one plus campaigns and worlds", () => {
-      // Outside any campaign Hob drafts the three things an account makes on its
-      // own. Campaign content needs a campaign and a Chronicle entry a world;
-      // their tools are absent here.
+      // Outside any campaign Hob drafts the four things an account makes on its
+      // own, a place for its Library among them. Campaign content needs a
+      // campaign and a Chronicle entry a world; their tools are absent here.
       expect(Object.keys(accountToolkitOver(NO_VOCABULARY, []).tools).sort()).toEqual([
+        "listLocations",
         "listStartingSpells",
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLocation",
         "proposeSharedWorld",
       ]);
       expect(Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools).sort()).toEqual([
+        "listLocations",
         "listOptions",
         "listStartingSpells",
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLocation",
         "proposeSharedWorld",
       ]);
     });

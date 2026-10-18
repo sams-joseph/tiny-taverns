@@ -4,7 +4,13 @@ import { SqlClient, type Statement } from "effect/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
 import { StorageKey } from "../storage/ObjectStorage.js";
 import { dieOnSqlError, uuidArray } from "./rows.js";
-import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./visibility.js";
+import {
+  campaignWritable,
+  groupWritable,
+  locationOwned,
+  ownCharacter,
+  rowCampaign,
+} from "./visibility.js";
 
 /**
  * Every statement about Hob-drawn images' records — one table per kind
@@ -151,6 +157,15 @@ const OWNED_SUBJECT: {
     where battle_map.id = ${subjectId}
       and ${campaignWritable(sql, actor, rowCampaign(sql, "battle_map"))}
     for update of battle_map
+  `,
+  // A place, through `locationOwned`: only its owner starts or uploads its
+  // picture, and it is billed to them — the account `location_image_subject_fkey`
+  // names. A place has no campaign, so a world member or a creator who placed
+  // nothing of theirs can never draw it.
+  location: (sql, subjectId, actor) => sql`
+    select location.id as subject_id, location.account_id from location
+    where location.id = ${subjectId} and ${locationOwned(sql, actor)}
+    for update of location
   `,
 };
 

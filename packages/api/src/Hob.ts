@@ -27,8 +27,12 @@ import {
   SharedWorldHistoryEntryId,
   SharedWorldHistorySummaryId,
   SharedWorldId,
+  LocationId,
+  PartyMoveId,
 } from "./Ids.js";
+import { Location, LocationKind, LocationPin } from "./Location.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
+import { PartyMove } from "./PartyTravel.js";
 import { NpcTurnMoment } from "./NpcTurnCheck.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
 import { OwnedCharacter } from "./Party.js";
@@ -205,7 +209,9 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
  * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
  * `sharedWorld` (the asker's new world), a `levelUp` (the next level of a
- * character the asker owns) and an `npcTurn` (a monster's turn in a fight,
+ * character the asker owns), a `location` (a place for the asker's Library,
+ * with the places inside it), a `partyMove` (the party travelling to a place
+ * at the table) and an `npcTurn` (a monster's turn in a fight,
  * which nothing keeps yet). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
@@ -215,11 +221,13 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
  * `proposeNightSummary`, `proposeNight`, `proposeAct`, `proposeEncounter`,
- * `proposeCampaignStory`, `proposeNpc` and `proposeNpcSheet`; the drafting
+ * `proposeCampaignStory`, `proposeNpc`, `proposeNpcSheet`,
+ * `proposeLocation` and `proposePartyMove`; Shared World Hob has the Chronicle's two and
+ * `proposeLocation`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
- * account's own panel has `proposeCharacter`, `proposeCampaign` and
- * `proposeSharedWorld`; the level-up composer (`HobDraftAsk.intent:
+ * account's own panel has `proposeCharacter`, `proposeCampaign`,
+ * `proposeSharedWorld` and `proposeLocation`; the level-up composer (`HobDraftAsk.intent:
  * "levelUp"`) has `proposeLevelUp` and nothing else; the fight toolkit has
  * `proposeNpcTurn`, which it files into the fight's own thread. So the halves of this
  * union are reachable from disjoint conversations: a character, a campaign, a
@@ -234,6 +242,34 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * have nowhere to go, so proposing one would be a card whose *Save* button
  * could only lie.
  */
+/** The fields every drafted place carries, at any depth. */
+const hobLocationFields = {
+  kind: LocationKind,
+  name: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  appearance: Schema.NullOr(Schema.String),
+} as const;
+
+/**
+ * A drafted place under a drafted place's child: the second level, the last.
+ * `pin` is where Hob laid it out on its parent's map, which the map is then
+ * drawn around; absent when Hob gave none, and on every draft made before
+ * Hob could.
+ */
+export const HobLocationLeaf = Schema.Struct({
+  ...hobLocationFields,
+  pin: Schema.optional(LocationPin),
+});
+export type HobLocationLeaf = typeof HobLocationLeaf.Type;
+
+/** A drafted place directly under the proposed one, with its own children. */
+export const HobLocationChild = Schema.Struct({
+  ...hobLocationFields,
+  pin: Schema.optional(LocationPin),
+  children: Schema.Array(HobLocationLeaf),
+});
+export type HobLocationChild = typeof HobLocationChild.Type;
+
 export const HobProposal = Schema.Union([
   Schema.Struct({
     target: Schema.Literal("note"),
@@ -403,13 +439,12 @@ export const HobProposal = Schema.Union([
     rationale: Schema.Array(Schema.String),
   }),
   /**
-   * A line for the Shared World's chronicle — the fifth member, and the only one
-   * offered by Shared World Hob. Accepting it writes a `group_history_entry`
+   * A line for the Shared World's chronicle — the fifth member, and one of
+   * the three Shared World Hob offers. Accepting it writes a `group_history_entry`
    * through the same repository path a member's own hand goes through,
    * with `origin = 'assistant'` and the turn on it; until then it is
    * transcript, exactly like the other four. A campaign Hob never offers one
-   * and Shared World Hob offers nothing else — which toolkit was bound is the
-   * whole of that rule.
+   * — which toolkit was bound is the whole of that rule.
    */
   Schema.Struct({
     target: Schema.Literal("sharedWorldHistory"),
@@ -594,6 +629,42 @@ export const HobProposal = Schema.Union([
     rationale: Schema.Array(Schema.String),
   }),
   /**
+   * A place for the asker's Library, with the places under it — offered by
+   * the creator's Hob at a campaign, by Shared World Hob, and by the account's
+   * own panel (`proposeLocation`).
+   *
+   * `parent` is one of the asker's own places, **resolved when the proposal
+   * is made** (the id the accept nests under; the name the card's display
+   * half), or null for a top-level place. `children` are drafted two levels
+   * deep at most. Accepting creates every place through `Locations.create`,
+   * the shelf's own, owned by the accepting credential and stamped `origin =
+   * 'assistant'` with the turn; at a campaign the new place is then placed in
+   * the campaign's world, and from Shared World Hob in that world. No reveal:
+   * a table's players see nothing until its creator reveals it.
+   */
+  Schema.Struct({
+    target: Schema.Literal("location"),
+    ...hobLocationFields,
+    notes: Schema.NullOr(Schema.String),
+    parent: Schema.NullOr(Schema.Struct({ id: LocationId, name: Schema.String })),
+    children: Schema.Array(HobLocationChild),
+  }),
+  /**
+   * The party moving to a place in the campaign's world, offered to its
+   * creator by the campaign's own Hob (`proposePartyMove`) — the maintainer's
+   * one exception besides a monster's turn to *Hob does not create live-play
+   * records*. The place is resolved when the proposal is made, against the
+   * creator's own read of the places at the table: the id is where the keep
+   * moves the party, the name the card's display half. Accepting is the
+   * creator's own move (`PartyTravel.move`), which reveals the place to the
+   * table and rings an open night's doorbell, stamped with the turn.
+   */
+  Schema.Struct({
+    target: Schema.Literal("partyMove"),
+    locationId: LocationId,
+    locationName: Schema.String,
+  }),
+  /**
    * A monster's turn in a live fight, chosen by the fight's Hob
    * (`/campaigns/:c/sessions/:s/runs/:r/combatants/:id/hob/turn`) — what it
    * does, never what came of it: no dice, no hit, no damage.
@@ -689,6 +760,10 @@ export const HobKept = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("campaign"), id: CampaignId }),
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), id: SharedWorldId }),
   Schema.Struct({ accepted: Schema.Literal("levelUp"), characterId: CharacterId }),
+  /** A party move the creator kept, on the campaign's travel log. */
+  Schema.Struct({ accepted: Schema.Literal("partyMove"), id: PartyMoveId }),
+  /** A place kept into the asker's Library: the top of what the draft made. */
+  Schema.Struct({ accepted: Schema.Literal("location"), id: LocationId }),
   /** A monster's turn, carried out in its fight (`hobFight.keep`). */
   Schema.Struct({
     accepted: Schema.Literal("npcTurn"),
@@ -1036,6 +1111,17 @@ export const HobAccepted = Schema.Union([
     owned: OwnedCharacter,
     advancement: CharacterAdvancement,
   }),
+  /** The party move a campaign's creator kept from their Hob. */
+  Schema.Struct({ accepted: Schema.Literal("partyMove"), move: PartyMove }),
+  /**
+   * The places a person kept from their Hob, in their own Library: the
+   * proposed one, and every place made under it, parents before children.
+   */
+  Schema.Struct({
+    accepted: Schema.Literal("location"),
+    location: Location,
+    descendants: Schema.Array(Location),
+  }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 
@@ -1080,6 +1166,10 @@ export const keptFrom = (accepted: HobAccepted): HobKept => {
       return { accepted: "sharedWorld", id: accepted.sharedWorld.id };
     case "levelUp":
       return { accepted: "levelUp", characterId: accepted.owned.character.id };
+    case "location":
+      return { accepted: "location", id: accepted.location.id };
+    case "partyMove":
+      return { accepted: "partyMove", id: accepted.move.id };
   }
 };
 

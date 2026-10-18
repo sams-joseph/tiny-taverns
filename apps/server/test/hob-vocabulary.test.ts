@@ -19,6 +19,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
+import { Locations } from "../src/repo/Locations.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
@@ -80,6 +81,7 @@ const services = Layer.mergeAll(
   CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
+  Locations.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   EquipmentRepo.layer,
@@ -335,6 +337,7 @@ const bare = Layer.mergeAll(
   CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
+  Locations.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   EquipmentRepo.layer,
@@ -567,11 +570,13 @@ describeLayer(
             "getCreature",
             "getNpc",
             "listCreatures",
+            "listLocations",
             "listSessions",
             "proposeAct",
             "proposeBeat",
             "proposeCampaignStory",
             "proposeEncounter",
+            "proposeLocation",
             "proposeNight",
             "proposeNightSummary",
             "proposeNote",
@@ -582,6 +587,7 @@ describeLayer(
             // Its labels are bounded free text, resolved in the handler, so the
             // toolkit still carries no vocabulary.
             "proposeNpcSheet",
+            "proposePartyMove",
             "readCampaignStorySources",
             "readFight",
             // The two group-context reads — the chronicle and the accepted summary,

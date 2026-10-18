@@ -64,6 +64,8 @@ import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Locations } from "./repo/Locations.js";
+import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -202,6 +204,7 @@ export const assistantFromConfig: Layer.Layer<
   | EquipmentRepo
   | GroupHistory
   | Groups
+  | Locations
   | HobThreads
   | NpcKnowledge
   | NpcMemories
@@ -408,7 +411,7 @@ export const hobImagesFromConfig: Layer.Layer<
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
       "Hob-drawn images are ON (character and NPC portraits with their banners, campaign and " +
-        "Shared World covers, battle maps): " +
+        "Shared World covers, battle maps, places): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
@@ -449,6 +452,7 @@ export const servicesOver = <E>(
     | EquipmentRepo
     | GroupHistory
     | Groups
+    | Locations
     | HobThreads
     | NpcKnowledge
     | NpcMemories
@@ -510,6 +514,8 @@ export const servicesOver = <E>(
   | LiveEvents
   | MagicItems
   | Memberships
+  | Locations
+  | PartyTravel
   | Notes
   | NpcAgent
   | NpcKnowledge
@@ -652,6 +658,14 @@ export const servicesOver = <E>(
     LiveEvents.layer,
     // `GET /me/campaigns` is a campaign read, so it signs covers too.
     Memberships.layer.pipe(Layer.provide(imageUrls)),
+    // Account-owned places, their placements in worlds and each table's
+    // reveals. A read signs the place's picture, so the handlers' copy is
+    // `fresh` with the signer, for `Campaigns`' reason: the bare
+    // `Locations.layer` Hob reads for `listLocations` and the accept writes
+    // through must never hold a bearer URL.
+    Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
+    // The party's travels: a move during an open night rings its doorbell.
+    PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof. An NPC read signs
@@ -789,6 +803,13 @@ export const servicesOver = <E>(
         // NPC has no portrait to sign yet, and the handler draws it after.
         Npcs.layer,
         NpcPreps.layer,
+        // A kept place goes into the keeper's Library through the shelf's own
+        // create, and into the campaign's or the world's context through the
+        // creator's or member's own placement.
+        Locations.layer,
+        // A kept party move goes through the creator's own move, which hands
+        // its doorbell back for the handler to ring after the commit.
+        PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
@@ -830,6 +851,9 @@ export const servicesOver = <E>(
         // layers the handlers already hold.
         Groups.layer,
         GroupHistory.layer,
+        // The places `listLocations` reads, and the asker's own a drafted
+        // place nests under. Reads only; the accept writes.
+        Locations.layer,
         HobThreads.layer,
         Npcs.layer,
         NpcKnowledge.layer,
@@ -909,6 +933,8 @@ export const applicationOver = <E>(
     | LiveEvents
     | MagicItems
     | Memberships
+    | Locations
+    | PartyTravel
     | Notes
     | NpcAgent
     | NpcKnowledge
