@@ -5,6 +5,7 @@ import {
   type Encounter,
   Heartbeat,
   type HobAccepted,
+  type Location,
   locationIsMapped,
   type LiveEvent,
   type NotFound,
@@ -651,22 +652,26 @@ const PlayerNotesLive = HttpApiBuilder.group(
 );
 
 /**
- * A kept place starts its picture after the accept commits, as the shelf's
- * create does. Only the top place is drawn: the places inside it start with
- * no picture, for their owner to draw one by one (`libraryLocations.draw`),
- * so one proposal cannot spend the day's image budget.
+ * The places a Hob draft made start their pictures after the accept commits,
+ * as the shelf's create does: every one of them, parents first, each map drawn
+ * around the pins Hob gave the places inside it. They share the daily budget
+ * with every other draw, and one that meets the cap records it as any draw
+ * does.
  */
 const drawKeptPlace = (
   images: (typeof HobImages)["Service"],
   accepted: Extract<HobAccepted, { accepted: "location" }>,
-): Effect.Effect<HobAccepted, never, CurrentActor> =>
-  Effect.map(
-    images.drawLocation(
-      accepted.location,
-      accepted.descendants.filter((place) => place.parentId === accepted.location.id),
-    ),
-    (location) => ({ ...accepted, location }),
-  );
+): Effect.Effect<HobAccepted, never, CurrentActor> => {
+  const inside = (parent: Location) =>
+    accepted.descendants.filter((place) => place.parentId === parent.id);
+  return Effect.gen(function* () {
+    const location = yield* images.drawLocation(accepted.location, inside(accepted.location));
+    const descendants = yield* Effect.forEach(accepted.descendants, (place) =>
+      images.drawLocation(place, inside(place)),
+    );
+    return { ...accepted, location, descendants };
+  });
+};
 
 /** The owner's Locations shelf: every method answers the asker's own places only. */
 const LibraryLocationsLive = HttpApiBuilder.group(
