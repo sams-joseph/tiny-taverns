@@ -13,6 +13,7 @@ import { aPerson, admittedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 import { testServer } from "./support/http.js";
+import { scriptedImages } from "./support/imageModel.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
@@ -26,6 +27,8 @@ import { describeLayer } from "./support/suite.js";
 const script: Array<Round> = [];
 const model = scriptedModel({ model: "scripted-locations", maxTokens: 512, rounds: script });
 
+const images = scriptedImages({ apiUrl: "https://api.openai.com/v1", model: "kept-places" });
+
 const database = migratedDatabase("taverns_test_hob_locations");
 const services = servicesOver(
   database,
@@ -34,7 +37,10 @@ const services = servicesOver(
   undefined,
   ObjectStorage.memory,
   ImageUrls.layer(Redacted.make("hob-locations-secret")),
-  HobImages.layer({ generation: Option.none(), storageOn: true }),
+  HobImages.layer({
+    generation: Option.some({ limits: { perAccountPerDay: 50, perDay: 100 }, concurrency: 2 }),
+    storageOn: true,
+  }).pipe(Layer.provide(images.layer)),
 );
 
 const application = applicationOver(services, { quiet: true }).pipe(
@@ -279,6 +285,28 @@ describeLayer("hob-locations", shared, (it) => {
             "assistant",
             "assistant",
             "assistant",
+          ]);
+
+          // Every place it made is drawn, the town around Hob's layout of the
+          // district inside it.
+          expect(kept.location.imagePending).toBe(true);
+          expect(kept.descendants.map((place) => place.imagePending)).toEqual([true, true]);
+          yield* Effect.flatMap(HobImages, (worker) => worker.idle);
+          const pictures = yield* Effect.flatMap(
+            SqlClient.SqlClient,
+            (sql) =>
+              sql<{ readonly name: string; readonly state: string; readonly guided: boolean }>`
+              select location.name, location_image.state,
+                     position('layout sketch' in location_image.prompt) > 0 as guided
+              from location join location_image on location_image.location_id = location.id
+              where location.assistant_turn_id = ${turnId}
+              order by location.name
+            `,
+          ).pipe(Effect.orDie);
+          expect(pictures).toEqual([
+            { name: "Gullport", state: "ready", guided: true },
+            { name: "The Drowned Lamb", state: "ready", guided: false },
+            { name: "The Stacks", state: "ready", guided: false },
           ]);
 
           const atTable = yield* as(jo.token, (client) =>
