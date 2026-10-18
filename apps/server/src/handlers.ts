@@ -5,6 +5,7 @@ import {
   type Encounter,
   Heartbeat,
   type HobAccepted,
+  locationIsMapped,
   type LiveEvent,
   type NotFound,
   PlayerLiveHeartbeat,
@@ -662,9 +663,7 @@ const drawKeptPlace = (
   Effect.map(
     images.drawLocation(
       accepted.location,
-      accepted.descendants
-        .filter((place) => place.parentId === accepted.location.id)
-        .map((place) => place.kind),
+      accepted.descendants.filter((place) => place.parentId === accepted.location.id),
     ),
     (location) => ({ ...accepted, location }),
   );
@@ -679,11 +678,19 @@ const LibraryLocationsLive = HttpApiBuilder.group(
     return (
       handlers
         .handle("list", () => locations.library)
-        // The picture starts after the create commits, as a campaign's cover does.
+        // A scene starts its picture after the create commits, as a campaign's
+        // cover does. A map waits for its owner's `draw`: it is drawn around
+        // the pins of the places inside it, which a new place has none of yet.
         .handle("create", ({ payload }) =>
           locations
             .create(payload)
-            .pipe(Effect.flatMap((location) => images.drawLocation(location, []))),
+            .pipe(
+              Effect.flatMap((location) =>
+                locationIsMapped(location.kind)
+                  ? Effect.succeed(location)
+                  : images.drawLocation(location, []),
+              ),
+            ),
         )
         .handle("findById", ({ params }) => locations.findById(params.locationId))
         .handle("update", ({ params, payload }) => locations.update(params.locationId, payload))
@@ -693,9 +700,7 @@ const LibraryLocationsLive = HttpApiBuilder.group(
           locations
             .forDrawing(params.locationId)
             .pipe(
-              Effect.flatMap(({ location, childKinds }) =>
-                images.drawLocation(location, childKinds),
-              ),
+              Effect.flatMap(({ location, children }) => images.drawLocation(location, children)),
             ),
         )
     );

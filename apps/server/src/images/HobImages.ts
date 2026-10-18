@@ -15,7 +15,9 @@ import {
   Location,
   locationImageHasSubject,
   locationImagePromptFor,
+  locationIsMapped,
   type LocationKind,
+  type LocationPin,
   NotFound,
   Npc,
   npcImageHasSubject,
@@ -38,6 +40,7 @@ import {
   Semaphore,
 } from "effect";
 import { HttpServerResponse } from "effect/http";
+import { layoutGuide } from "./layoutGuide.js";
 import {
   type ImageFailure,
   type ImageJob,
@@ -176,7 +179,7 @@ export class HobImages extends Context.Service<
      */
     readonly drawLocation: (
       location: Location,
-      childKinds: ReadonlyArray<LocationKind>,
+      children: ReadonlyArray<{ readonly kind: LocationKind; readonly pin: LocationPin | null }>,
     ) => Effect.Effect<Location, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
@@ -243,10 +246,29 @@ export class HobImages extends Context.Service<
           }
         };
 
-        const draw = (image: ImageModel["Service"], job: ImageJob) =>
+        /**
+         * Draw a job: over its guide when it has one (`ImageModel.edit`),
+         * falling back to a plain generation when the provider has no edits
+         * endpoint or cannot use the guide. A refusal is not retried.
+         */
+        const draw = (
+          image: ImageModel["Service"],
+          job: ImageJob,
+          guide: Effect.Effect<Uint8Array> | undefined,
+        ) =>
           Effect.gen(function* () {
             if (!(yield* records.drawing(job))) return;
-            const drawn = yield* image.generate(job.prompt, IMAGE_KINDS[job.kind].size);
+            const size = IMAGE_KINDS[job.kind].size;
+            const drawn =
+              guide === undefined
+                ? yield* image.generate(job.prompt, size)
+                : yield* Effect.flatMap(guide, (bytes) => image.edit(job.prompt, size, bytes)).pipe(
+                    Effect.catchTag("ImageProviderFailed", (failure) =>
+                      Effect.logWarning(
+                        `Image ${job.kind}/${job.id}: drawing over its guide failed (${failure.detail}); drawing it without one.`,
+                      ).pipe(Effect.andThen(image.generate(job.prompt, size))),
+                    ),
+                  );
             const rendered = yield* renderImage(job.kind, drawn.bytes);
             const files = [
               {
@@ -349,6 +371,8 @@ export class HobImages extends Context.Service<
           kind: ImageKind,
           subjectId: string,
           prompt: () => string | undefined,
+          /** A picture to draw over, for a kind that has one (`layoutGuide.ts`). */
+          guide?: Effect.Effect<Uint8Array>,
         ): Effect.Effect<boolean, never, CurrentActor> =>
           Option.match(generation, {
             onNone: () => Effect.succeed(false),
@@ -364,7 +388,7 @@ export class HobImages extends Context.Service<
                   jobs,
                   Effect.acquireUseRelease(
                     Effect.sync(() => held.add(job.id)),
-                    () => draw(image, job),
+                    () => draw(image, job, guide),
                     () => Effect.sync(() => held.delete(job.id)),
                   ),
                 );
@@ -466,25 +490,39 @@ export class HobImages extends Context.Service<
               (pending) => (pending ? new BattleMap({ ...map, imagePending: true }) : map),
             ),
 
-          drawLocation: (location, childKinds) =>
-            Effect.map(
-              start("location", location.id, () => {
-                const subject = {
-                  kind: location.kind,
-                  name: location.name,
-                  description: location.description,
-                  appearance: location.appearance,
-                  childKinds,
-                };
-                return locationImageHasSubject(subject)
-                  ? locationImagePromptFor(subject)
-                  : undefined;
-              }),
+          drawLocation: (location, children) => {
+            // The places inside it that are pinned are drawn where their pins
+            // are: a map's own kinds only, because a scene is not a plan.
+            const sites = locationIsMapped(location.kind)
+              ? children.flatMap((child) =>
+                  child.pin === null ? [] : [{ kind: child.kind, pin: child.pin }],
+                )
+              : [];
+            return Effect.map(
+              start(
+                "location",
+                location.id,
+                () => {
+                  const subject = {
+                    kind: location.kind,
+                    name: location.name,
+                    description: location.description,
+                    appearance: location.appearance,
+                    childKinds: children.map((child) => child.kind),
+                    guided: sites.length > 0,
+                  };
+                  return locationImageHasSubject(subject)
+                    ? locationImagePromptFor(subject)
+                    : undefined;
+                },
+                sites.length === 0 ? undefined : layoutGuide(sites, IMAGE_KINDS.location.size),
+              ),
               (pending) =>
                 pending
                   ? new Location({ ...location, imagePending: true, pictured: true })
                   : location,
-            ),
+            );
+          },
 
           image: (kind, request) =>
             Effect.gen(function* () {

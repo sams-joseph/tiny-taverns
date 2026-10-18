@@ -1931,6 +1931,12 @@ const locationDraftFields = {
   appearance: optionalText(LOCATION_APPEARANCE_MAX),
 } as const;
 
+/** Where a drafted place sits on its parent's map, from 0 to 1 across and down. */
+const layoutFraction = optional(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })));
+
+/** A drafted place inside the proposed one, or inside one of those: its fields and its layout. */
+const placedDraftFields = { ...locationDraftFields, x: layoutFraction, y: layoutFraction } as const;
+
 /**
  * The places this conversation can see, as Hob reads them: no owner's notes,
  * no owner's name, no reveal. `yours` is whether the asker owns the place,
@@ -1976,7 +1982,10 @@ export const ProposeLocation = Tool.make("proposeLocation", {
     "levels at most). Give each a kind and a name, a description of what a visitor finds " +
     "there (players may be shown it), and an appearance line saying what it looks like " +
     "from above, which its map will be drawn from. Put anything only the DM should know " +
-    "in notes. To put it inside a place they already have, give parentId from " +
+    "in notes. Give each place inside it x and y, from 0 to 1 across and down its parent's " +
+    "map (0, 0 the top left), laid out the way the place is: the harbour on the coast, the " +
+    "keep on the hill, the slums by the docks; the parent's map is drawn around them. To put " +
+    "it inside a place they already have, give parentId from " +
     "listLocations where yours is true; leave it out for a place that stands on its own. " +
     "Only a suggestion: nothing is made unless they keep it. Say one short line about it " +
     "and stop.",
@@ -1987,9 +1996,9 @@ export const ProposeLocation = Tool.make("proposeLocation", {
     children: optional(
       Schema.Array(
         Schema.Struct({
-          ...locationDraftFields,
+          ...placedDraftFields,
           children: optional(
-            Schema.Array(Schema.Struct(locationDraftFields)).check(
+            Schema.Array(Schema.Struct(placedDraftFields)).check(
               Schema.isMaxLength(LOCATION_CHILDREN_MAX),
             ),
           ),
@@ -2082,13 +2091,20 @@ const locationHandlerFor =
         description: blank(place.description) ?? null,
         appearance: blank(place.appearance) ?? null,
       });
+      /** Hob's layout as a pin, only when it gave both halves of one. */
+      const laidOut = (place: { readonly x?: number | null; readonly y?: number | null }) => {
+        const x = absent(place.x);
+        const y = absent(place.y);
+        return x === undefined || y === undefined ? {} : { pin: { x, y } };
+      };
       const under = (absent(children) ?? [])
         .filter((child) => child.name.trim() !== "")
         .map((child) => ({
           ...draft(child),
+          ...laidOut(child),
           children: (absent(child.children) ?? [])
             .filter((leaf) => leaf.name.trim() !== "")
-            .map(draft),
+            .map((leaf) => ({ ...draft(leaf), ...laidOut(leaf) })),
         }));
       const count = under.reduce((total, child) => total + 1 + child.children.length, 0);
       return yield* offer(

@@ -30,7 +30,7 @@ import {
   LocationId,
   PartyMoveId,
 } from "./Ids.js";
-import { Location, LocationKind } from "./Location.js";
+import { Location, LocationKind, LocationPin } from "./Location.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
 import { PartyMove } from "./PartyTravel.js";
 import { NpcTurnMoment } from "./NpcTurnCheck.js";
@@ -250,13 +250,22 @@ const hobLocationFields = {
   appearance: Schema.NullOr(Schema.String),
 } as const;
 
-/** A drafted place under a drafted place's child: the second level, the last. */
-export const HobLocationLeaf = Schema.Struct(hobLocationFields);
+/**
+ * A drafted place under a drafted place's child: the second level, the last.
+ * `pin` is where Hob laid it out on its parent's map, which the map is then
+ * drawn around; absent when Hob gave none, and on every draft made before
+ * Hob could.
+ */
+export const HobLocationLeaf = Schema.Struct({
+  ...hobLocationFields,
+  pin: Schema.optional(LocationPin),
+});
 export type HobLocationLeaf = typeof HobLocationLeaf.Type;
 
 /** A drafted place directly under the proposed one, with its own children. */
 export const HobLocationChild = Schema.Struct({
   ...hobLocationFields,
+  pin: Schema.optional(LocationPin),
   children: Schema.Array(HobLocationLeaf),
 });
 export type HobLocationChild = typeof HobLocationChild.Type;

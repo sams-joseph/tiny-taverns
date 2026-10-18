@@ -262,20 +262,25 @@ export class Locations extends Context.Service<
     readonly create: (
       payload: LocationCreate,
       from?: AssistantOrigin,
-    ) => Effect.Effect<Location, NotFound, CurrentActor>;
+    ) => Effect.Effect<Location, NotFound | Conflict, CurrentActor>;
     /** The owner's edit. A parent inside the place's own subtree is `Conflict`. */
     readonly update: (
       id: LocationId,
       patch: LocationUpdate,
     ) => Effect.Effect<Location, NotFound | Conflict, CurrentActor>;
     /**
-     * One of the owner's places and the kinds of the places directly inside
-     * it: what its picture is drawn from (`HobImages.drawLocation`).
+     * One of the owner's places and the places directly inside it, by kind
+     * and pin: what its picture is drawn from and around
+     * (`HobImages.drawLocation`).
      */
-    readonly forDrawing: (
-      id: LocationId,
-    ) => Effect.Effect<
-      { readonly location: Location; readonly childKinds: ReadonlyArray<LocationKind> },
+    readonly forDrawing: (id: LocationId) => Effect.Effect<
+      {
+        readonly location: Location;
+        readonly children: ReadonlyArray<{
+          readonly kind: LocationKind;
+          readonly pin: LocationPin | null;
+        }>;
+      },
       NotFound,
       CurrentActor
     >;
@@ -476,6 +481,11 @@ export class Locations extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 if (payload.parentId !== undefined) yield* ownOrNotFound(payload.parentId);
+                if (payload.pin !== undefined && payload.parentId === undefined) {
+                  return yield* new Conflict({
+                    message: "a place that stands on its own has no map to be pinned on",
+                  });
+                }
                 // An insert answers with its row; not getting one is a defect.
                 return yield* insert(
                   defined({
@@ -486,6 +496,9 @@ export class Locations extends Context.Service<
                     description: proseColumn(payload.description),
                     appearance: proseColumn(payload.appearance),
                     notes: proseColumn(payload.notes),
+                    ...(payload.pin === undefined
+                      ? {}
+                      : { pin_x: payload.pin.x, pin_y: payload.pin.y }),
                     ...assistantColumns(from),
                   }),
                 ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
@@ -581,11 +594,24 @@ export class Locations extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const location = yield* owned({ actor, id }).pipe(orNotFound("location", id));
-              const children = yield* sql<{ readonly kind: LocationKind }>`
-                select location.kind from location
+              const children = yield* sql<{
+                readonly kind: LocationKind;
+                readonly pin_x: number | null;
+                readonly pin_y: number | null;
+              }>`
+                select location.kind, location.pin_x, location.pin_y from location
                 where location.parent_id = ${id} and ${locationOwned(sql, actor)}
               `;
-              return { location, childKinds: children.map((child) => child.kind) };
+              return {
+                location,
+                children: children.map((child) => ({
+                  kind: child.kind,
+                  pin:
+                    child.pin_x === null || child.pin_y === null
+                      ? null
+                      : { x: child.pin_x, y: child.pin_y },
+                })),
+              };
             }),
           ),
 

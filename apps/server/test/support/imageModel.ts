@@ -38,8 +38,15 @@ export const MODERATION_TEXT =
 
 export interface ScriptedImages {
   readonly layer: Layer.Layer<ImageModel>;
-  /** Every request body, in order. */
+  /**
+   * Every request body, in order: a generation's JSON, or an edit's form
+   * fields with its `image` as the bytes' length.
+   */
   readonly requests: () => ReadonlyArray<Record<string, unknown>>;
+  /** Which endpoint each request went to, in the same order: `generations` or `edits`. */
+  readonly endpoints: () => ReadonlyArray<string>;
+  /** Every guide image an edit carried, in order. */
+  readonly guides: () => ReadonlyArray<Uint8Array>;
   /**
    * Waits until `count` requests have arrived, so a test can act on a request
    * being in flight without polling on a real clock.
@@ -63,6 +70,8 @@ export const scriptedImages = (options: {
   readonly model: string;
 }): ScriptedImages => {
   const requests: Array<Record<string, unknown>> = [];
+  const endpoints: Array<string> = [];
+  const guides: Array<Uint8Array> = [];
   const queue: Array<ImageReply> = [];
   const waiting: Array<{ readonly count: number; readonly arrived: Deferred.Deferred<void> }> = [];
 
@@ -77,8 +86,23 @@ export const scriptedImages = (options: {
     Effect.fnUntraced(function* (requestEffect) {
       const request = yield* requestEffect;
       const body = request.body;
-      if (body._tag !== "Uint8Array") throw new Error("expected a JSON request body");
-      requests.push(JSON.parse(new TextDecoder().decode(body.body)) as Record<string, unknown>);
+      endpoints.push(request.url.split("/images/")[1] ?? request.url);
+      if (body._tag === "FormData") {
+        const fields: Record<string, unknown> = {};
+        for (const [field, value] of body.formData.entries()) {
+          if (typeof value === "string") fields[field] = value;
+          else {
+            const bytes = new Uint8Array(yield* Effect.promise(() => value.arrayBuffer()));
+            guides.push(bytes);
+            fields[field] = bytes.byteLength;
+          }
+        }
+        requests.push(fields);
+      } else if (body._tag === "Uint8Array") {
+        requests.push(JSON.parse(new TextDecoder().decode(body.body)) as Record<string, unknown>);
+      } else {
+        throw new Error("expected a JSON or form request body");
+      }
       for (const waiter of waiting) {
         if (requests.length >= waiter.count) Deferred.doneUnsafe(waiter.arrived, Effect.void);
       }
@@ -108,6 +132,8 @@ export const scriptedImages = (options: {
 
   return {
     requests: () => requests,
+    endpoints: () => endpoints,
+    guides: () => guides,
     sent: (count) =>
       Effect.suspend(() => {
         if (requests.length >= count) return Effect.void;

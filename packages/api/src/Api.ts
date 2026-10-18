@@ -1028,7 +1028,7 @@ class LibraryLocationsGroup extends HttpApiGroup.make("libraryLocations")
     HttpApiEndpoint.post("create", "/", {
       payload: LocationCreate,
       success: Location,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.get("findById", "/:locationId", {
       params: { locationId: LocationId },

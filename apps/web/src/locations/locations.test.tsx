@@ -206,3 +206,14 @@ describe("the party on the map", () => {
     expect(calls("GET")).not.toContain(`/campaigns/${campaignId}/party-travel`);
   });
 });
+
+describe("laying out a map before it is drawn", () => {
+  it("gives its owner a blank canvas to put the places inside it on", async () => {
+    await at(`/library/locations/${stacksId}`);
+
+    const map = await screen.findByRole("application", { name: "Map of The Stacks" });
+    expect(map.querySelector("[data-slot=place-canvas]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Put on the map" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Draw it" })).toBeEnabled();
+  });
+});

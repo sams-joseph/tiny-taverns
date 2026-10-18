@@ -12,6 +12,7 @@ import {
   type HobProposal,
   type Location,
   type LocationKind,
+  type LocationPin,
   NotFound,
   type NpcPrepUpdate,
   type NpcSheetPut,
@@ -273,12 +274,17 @@ export class Proposals extends Context.Service<
             readonly name: string;
             readonly description: string | null;
             readonly appearance: string | null;
+            readonly pin?: LocationPin | undefined;
           }) => ({
             kind: draft.kind,
             name: draft.name,
             ...(draft.description === null ? {} : { description: draft.description }),
             ...(draft.appearance === null ? {} : { appearance: draft.appearance }),
+            ...(draft.pin === undefined ? {} : { pin: draft.pin }),
           });
+          // The top place carries no pin: Hob lays out only the places it
+          // drafted inside it, and the top one's place on its parent's map
+          // is the owner's to set.
           const location = yield* locations.create(
             {
               ...fields(proposal),

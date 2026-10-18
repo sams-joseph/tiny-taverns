@@ -101,6 +101,18 @@ export class ImageModel extends Context.Service<
       prompt: string,
       size: string,
     ) => Effect.Effect<GeneratedImage, ImageRefused | ImageProviderFailed>;
+    /**
+     * The same picture, drawn over a guide: `/images/edits` with the guide as
+     * its input image, so what is drawn follows where the guide put things
+     * (a place's map around its pins, `images/layoutGuide.ts`). A provider
+     * with no edits endpoint fails it as `ImageProviderFailed`, and the
+     * caller falls back to `generate`.
+     */
+    readonly edit: (
+      prompt: string,
+      size: string,
+      guide: Uint8Array,
+    ) => Effect.Effect<GeneratedImage, ImageRefused | ImageProviderFailed>;
   }
 >()("ImageModel") {
   static readonly layer = (
@@ -109,48 +121,67 @@ export class ImageModel extends Context.Service<
     Layer.effect(this)(
       Effect.gen(function* () {
         const client = yield* HttpClient.HttpClient;
-        const url = `${options.apiUrl.replace(/\/+$/, "")}/images/generations`;
+        const base = options.apiUrl.replace(/\/+$/, "");
         const failed = (detail: string) => new ImageProviderFailed({ detail });
+        const authorised =
+          options.apiKey === undefined
+            ? (request: HttpClientRequest.HttpClientRequest) => request
+            : HttpClientRequest.bearerToken(Redacted.value(options.apiKey));
+
+        /** Send one request and read one image out of its answer, whichever endpoint it was. */
+        const answer = (request: HttpClientRequest.HttpClientRequest) =>
+          Effect.gen(function* () {
+            const response = yield* client.execute(authorised(request)).pipe(
+              Effect.timeout(REQUEST_TIMEOUT),
+              Effect.mapError((error) => failed(`request failed: ${String(error)}`)),
+            );
+            const text = yield* response.text.pipe(
+              Effect.mapError((error) => failed(`unreadable body: ${String(error)}`)),
+            );
+
+            if (response.status < 200 || response.status >= 300) {
+              const code = Option.getOrUndefined(
+                Schema.decodeUnknownOption(Schema.fromJsonString(ProviderError))(text),
+              )?.error.code;
+              const detail = `HTTP ${String(response.status)}: ${text.slice(0, 500)}`;
+              return yield* code === "moderation_blocked"
+                ? new ImageRefused({ detail })
+                : failed(detail);
+            }
+
+            const body = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Generated))(
+              text,
+            ).pipe(Effect.mapError(() => failed("the response carried no b64_json image")));
+            const bytes = Buffer.from(body.data[0].b64_json, "base64");
+            if (bytes.byteLength === 0) return yield* failed("the image was empty");
+            return {
+              bytes: new Uint8Array(bytes),
+              inputTokens: tokens(body.usage?.input_tokens),
+              outputTokens: tokens(body.usage?.output_tokens),
+            } satisfies GeneratedImage;
+          });
 
         return {
           model: options.model,
           generate: (prompt, size) =>
-            Effect.gen(function* () {
-              const request = HttpClientRequest.post(url).pipe(
+            answer(
+              HttpClientRequest.post(`${base}/images/generations`).pipe(
                 HttpClientRequest.bodyJsonUnsafe(imageRequestBody(options, prompt, size)),
-                options.apiKey === undefined
-                  ? (request) => request
-                  : HttpClientRequest.bearerToken(Redacted.value(options.apiKey)),
-              );
-              const response = yield* client.execute(request).pipe(
-                Effect.timeout(REQUEST_TIMEOUT),
-                Effect.mapError((error) => failed(`request failed: ${String(error)}`)),
-              );
-              const text = yield* response.text.pipe(
-                Effect.mapError((error) => failed(`unreadable body: ${String(error)}`)),
-              );
-
-              if (response.status < 200 || response.status >= 300) {
-                const code = Option.getOrUndefined(
-                  Schema.decodeUnknownOption(Schema.fromJsonString(ProviderError))(text),
-                )?.error.code;
-                const detail = `HTTP ${String(response.status)}: ${text.slice(0, 500)}`;
-                return yield* code === "moderation_blocked"
-                  ? new ImageRefused({ detail })
-                  : failed(detail);
-              }
-
-              const body = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Generated))(
-                text,
-              ).pipe(Effect.mapError(() => failed("the response carried no b64_json image")));
-              const bytes = Buffer.from(body.data[0].b64_json, "base64");
-              if (bytes.byteLength === 0) return yield* failed("the image was empty");
-              return {
-                bytes: new Uint8Array(bytes),
-                inputTokens: tokens(body.usage?.input_tokens),
-                outputTokens: tokens(body.usage?.output_tokens),
-              };
-            }),
+              ),
+            ),
+          edit: (prompt, size, guide) => {
+            // The same fields as a generation, as form fields, beside the guide.
+            const form = new FormData();
+            for (const [field, value] of Object.entries(imageRequestBody(options, prompt, size))) {
+              form.append(field, String(value));
+            }
+            form.append("image", new Blob([guide], { type: "image/png" }), "guide.png");
+            return answer(
+              HttpClientRequest.post(`${base}/images/edits`).pipe(
+                HttpClientRequest.bodyFormData(form),
+              ),
+            );
+          },
         };
       }),
     );

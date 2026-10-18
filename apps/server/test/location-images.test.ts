@@ -98,7 +98,7 @@ const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(applic
 
 describeLayer("location-images", shared, (it) => {
   describe("the picture", () => {
-    it.effect("is drawn once as a place is made, as a map from what it says it looks like", () =>
+    it.effect("is drawn once, as a map from what it says it looks like, when its owner asks", () =>
       Effect.gen(function* () {
         const { jo, stranger } = yield* Fixture;
         const town = yield* as(jo.token, (client) =>
@@ -111,7 +111,12 @@ describeLayer("location-images", shared, (it) => {
             },
           }),
         );
-        expect(town).toMatchObject({ imagePending: true, pictured: true });
+        // A map waits for its owner: it is drawn around the pins inside it.
+        expect(town).toMatchObject({ imagePending: false, pictured: false });
+        const drawing = yield* as(jo.token, (client) =>
+          client.libraryLocations.draw({ params: { locationId: town.id } }),
+        );
+        expect(drawing).toMatchObject({ imagePending: true, pictured: true });
         yield* settled;
 
         const [record] = yield* recordsOf(town.id);
@@ -270,6 +275,80 @@ describeLayer("location-images", shared, (it) => {
           parentId: city.id,
           pin: { x: 0.4, y: 0.6 },
         });
+      }),
+    );
+  });
+
+  describe("a map drawn around its pins", () => {
+    it.effect("sends the pinned places as a layout sketch to draw over", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        const region = yield* as(jo.token, (client) =>
+          client.libraryLocations.create({ payload: { kind: "region", name: "The Fens" } }),
+        );
+        for (const [name, pin] of [
+          ["Reedholm", { x: 0.2, y: 0.7 }],
+          ["Saltcote", { x: 0.8, y: 0.3 }],
+        ] as const) {
+          yield* as(jo.token, (client) =>
+            client.libraryLocations.create({
+              payload: { kind: "village", name, parentId: region.id, pin },
+            }),
+          );
+        }
+        const before = images.requests().length;
+        yield* as(jo.token, (client) =>
+          client.libraryLocations.draw({ params: { locationId: region.id } }),
+        );
+        yield* settled;
+
+        expect(images.endpoints().slice(before)).toEqual(["edits"]);
+        const [request] = images.requests().slice(before);
+        expect(String(request?.["prompt"])).toContain("layout sketch");
+        expect(String(request?.["prompt"])).toContain("2 villages");
+        expect(Number(request?.["image"])).toBeGreaterThan(0);
+        expect((yield* recordsOf(region.id))[0]?.state).toBe("ready");
+      }),
+    );
+
+    it.effect("is drawn without its sketch when the provider cannot draw over one", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        const city = yield* as(jo.token, (client) =>
+          client.libraryLocations.create({ payload: { kind: "city", name: "Varnhold" } }),
+        );
+        yield* as(jo.token, (client) =>
+          client.libraryLocations.create({
+            payload: {
+              kind: "district",
+              name: "The Stacks",
+              parentId: city.id,
+              pin: { x: 0.5, y: 0.5 },
+            },
+          }),
+        );
+        const before = images.requests().length;
+        images.next({ kind: "error", status: 404 });
+        yield* as(jo.token, (client) =>
+          client.libraryLocations.draw({ params: { locationId: city.id } }),
+        );
+        yield* settled;
+
+        expect(images.endpoints().slice(before)).toEqual(["edits", "generations"]);
+        expect((yield* recordsOf(city.id))[0]?.state).toBe("ready");
+      }),
+    );
+
+    it.effect("refuses a pin on a place with no parent to stand on", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        expect(
+          yield* refusal(jo.token, (client) =>
+            client.libraryLocations.create({
+              payload: { kind: "town", name: "Nowhere", pin: { x: 0.5, y: 0.5 } },
+            }),
+          ),
+        ).toBe("Conflict");
       }),
     );
   });

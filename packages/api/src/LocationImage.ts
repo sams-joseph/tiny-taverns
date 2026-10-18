@@ -22,6 +22,9 @@ import {
  * - **The name colours it**, shown rather than written: no text is drawn.
  * - **The places already inside it**, by kind and count, never by name, so a
  *   town drawn with three districts leaves room for three.
+ * - **Guided**, when the places inside it are pinned: the request carries a
+ *   layout sketch with a mark at each pin (`ImageModel.edit`), and the prompt
+ *   says the marks are where the sites stand and that none of them may show.
  *
  * The owner's notes never go in: they are the one field no other reader sees.
  */
@@ -69,6 +72,8 @@ export interface LocationImageSubject {
   readonly appearance: string | null;
   /** The kinds of the places directly inside it, one entry per place. */
   readonly childKinds: ReadonlyArray<LocationKind>;
+  /** Whether a layout sketch of the pinned places inside it goes with the prompt. */
+  readonly guided?: boolean;
 }
 
 const clean = (text: string | null | undefined, max: number): string | undefined => {
@@ -122,6 +127,9 @@ export const locationImagePromptFor = (subject: LocationImageSubject): string =>
       ? undefined
       : `It is called ${name}; let the name shape the place, shown rather than written.`,
     mapped && inside !== "" ? `Leave clear room for the sites within it: ${inside}.` : undefined,
+    subject.guided === true
+      ? "The picture given with this request is a layout sketch: each pale round mark is where one of the sites within it stands. Draw each site in its mark's place, as its kind suggests, over the land around it, and leave no mark, circle or trace of the sketch in the picture."
+      : undefined,
     mapped ? HOUSE_ATLAS_STYLE : HOUSE_COVER_STYLE,
   ]
     .filter((part) => part !== undefined)

@@ -189,7 +189,7 @@ export function LocationMapScreen() {
                         <Button
                           variant={placing === child.id ? "secondary" : "outline"}
                           size="sm"
-                          disabled={place.image === null || busy}
+                          disabled={place.imagePending || busy}
                           onClick={() => setPlacing(placing === child.id ? undefined : child.id)}
                         >
                           <Icon name="map-pin" size={13} />

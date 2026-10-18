@@ -104,7 +104,9 @@ const aPortTown = (over: Record<string, unknown> = {}) =>
         name: "The Stacks",
         description: "Net lofts and smokehouses.",
         appearance: null,
-        children: [{ kind: "building", name: "The Drowned Lamb", description: null }],
+        x: 0.3,
+        y: 0.65,
+        children: [{ kind: "building", name: "The Drowned Lamb", description: null, x: 0.5 }],
       },
     ],
     ...over,
@@ -270,6 +272,9 @@ describeLayer("hob-locations", shared, (it) => {
             "The Stacks",
             "The Drowned Lamb",
           ]);
+          // Hob's layout is where the district stands on the town's map; half
+          // a layout is none.
+          expect(kept.descendants.map((place) => place.pin)).toEqual([{ x: 0.3, y: 0.65 }, null]);
           expect((yield* rowsFrom(turnId)).map((row) => row.origin)).toEqual([
             "assistant",
             "assistant",

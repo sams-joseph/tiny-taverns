@@ -182,6 +182,12 @@ export const LocationCreate = Schema.Struct({
   description: Schema.optional(prose(LOCATION_DESCRIPTION_MAX)),
   appearance: Schema.optional(prose(LOCATION_APPEARANCE_MAX)),
   notes: Schema.optional(prose(LOCATION_NOTES_MAX)),
+  /**
+   * Where it stands on its parent's map, which may not be drawn yet: a map is
+   * drawn around the pins of the places inside it. Only with a `parentId`;
+   * without one it is a `Conflict`.
+   */
+  pin: Schema.optional(LocationPin),
 });
 export type LocationCreate = typeof LocationCreate.Type;
 

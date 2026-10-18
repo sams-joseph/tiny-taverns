@@ -2818,12 +2818,15 @@ const offered = (turn: HobTurn): string | undefined => {
     // Read back in the tool's own words, so "add a smithy to it" redrafts the
     // place offered rather than a new one. A kept one is on listLocations.
     case "location": {
+      // Read back with its layout, so "move the docks north" redrafts it.
+      const at = (pin: { readonly x: number; readonly y: number } | undefined) =>
+        pin === undefined ? "" : ` at x ${String(pin.x)}, y ${String(pin.y)}`;
       const under = proposal.children
         .map((child) =>
           child.children.length === 0
-            ? `${child.kind} "${child.name}"`
-            : `${child.kind} "${child.name}" (${child.children
-                .map((leaf) => `${leaf.kind} "${leaf.name}"`)
+            ? `${child.kind} "${child.name}"${at(child.pin)}`
+            : `${child.kind} "${child.name}"${at(child.pin)} (${child.children
+                .map((leaf) => `${leaf.kind} "${leaf.name}"${at(leaf.pin)}`)
                 .join(", ")})`,
         )
         .join("; ");

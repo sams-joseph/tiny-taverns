@@ -38,6 +38,9 @@ interface View {
 
 const WHOLE: View = { scale: 1, x: 0, y: 0 };
 
+/** The shape a place's picture is drawn at (`kinds.ts`'s `location`), for the blank canvas. */
+const DRAWN_ASPECT = "3 / 2";
+
 /** Keep the magnified picture covering its frame, so it cannot be dragged off. */
 const clampView = (view: View, width: number, height: number): View => {
   const scale = Math.min(MAX_SCALE, Math.max(1, view.scale));
@@ -317,7 +320,10 @@ export function PlaceMap({
     </div>
   );
 
-  if (place.image === null) {
+  // With no picture, the owner still lays the places out, on a blank canvas
+  // the size the picture will be drawn: a map is drawn around its pins.
+  const canvas = place.image === null && editing !== undefined && !place.imagePending;
+  if (place.image === null && !canvas) {
     return (
       <div className="flex flex-col gap-3">
         {toolbar}
@@ -345,7 +351,10 @@ export function PlaceMap({
         className="relative aspect-(--map-aspect) w-full touch-none overflow-hidden rounded-card border border-hairline bg-surface-sunken select-none data-placing:cursor-crosshair"
         style={
           {
-            "--map-aspect": `${String(place.image.width)} / ${String(place.image.height)}`,
+            "--map-aspect":
+              place.image === null
+                ? DRAWN_ASPECT
+                : `${String(place.image.width)} / ${String(place.image.height)}`,
           } as CSSProperties
         }
         onWheel={onWheel}
@@ -365,12 +374,22 @@ export function PlaceMap({
             } as CSSProperties
           }
         >
-          <img
-            src={place.image.fullUrl}
-            alt={`The ${locationKindLabel(place.kind).toLowerCase()} ${place.name}`}
-            draggable={false}
-            className="pointer-events-none size-full"
-          />
+          {place.image === null ? (
+            <div
+              data-slot="place-canvas"
+              className="pointer-events-none flex size-full items-center justify-center p-6 text-center text-caption leading-body text-faint"
+            >
+              No picture yet. Lay out the places inside it, then draw it: the map is drawn around
+              your pins.
+            </div>
+          ) : (
+            <img
+              src={place.image.fullUrl}
+              alt={`The ${locationKindLabel(place.kind).toLowerCase()} ${place.name}`}
+              draggable={false}
+              className="pointer-events-none size-full"
+            />
+          )}
           {inside.map((child) => {
             const pin = dragged?.id === child.id ? dragged.pin : child.pin;
             if (pin === null) return null;
