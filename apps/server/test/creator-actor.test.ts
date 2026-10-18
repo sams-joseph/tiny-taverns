@@ -615,7 +615,11 @@ describeLayer("creator-actor", shared, (it) => {
       // and the check `reveal` and `unreveal` share that the place is in the
       // campaign's world. Arranging and revealing places is the creator's,
       // and a player reads `forPlayer`, ungated for `listAsPlayer`'s reason.
-      expect(gated).toBe(164);
+      // A hundred and sixty-five to sixty-nine are the party's travels:
+      // `PartyTravel.list`, `move`, `moveForAccept`, `remove`, and the record
+      // `move` and `moveForAccept` share. Moving the party is the creator's;
+      // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
+      expect(gated).toBe(169);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
@@ -929,8 +933,10 @@ describeLayer("creator-actor", shared, (it) => {
       // shelf, for `Npcs.library`'s reason — a place is in no campaign, and
       // `locationOwned` is already the owner predicate; `inWorld` and
       // `placeInWorld`, a Shared World's, whose reach is `groupReadable`; and
-      // `forPlayer`, for `Notes.listAsPlayer`'s reason.
-      expect(ungated).toBe(199);
+      // `forPlayer`, for `Notes.listAsPlayer`'s reason. The two hundredth is
+      // `PartyTravel.forPlayer`, the travel log as a player is told it, for
+      // the same reason.
+      expect(ungated).toBe(200);
     });
   });
 });

@@ -51,6 +51,7 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Locations } from "./repo/Locations.js";
+import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -740,6 +741,37 @@ const PlayerLocationsLive = HttpApiBuilder.group(
   }),
 );
 
+/**
+ * The party's travels, behind the creator proof: anybody else is `NotFound`
+ * before a move is read or made. A player reads `playerPartyTravel`.
+ */
+const PartyTravelLive = HttpApiBuilder.group(
+  TavernsApi,
+  "partyTravel",
+  Effect.fnUntraced(function* (handlers) {
+    const travel = yield* PartyTravel;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => asDm(params.campaignId, (creator) => travel.list(creator)))
+      .handle("move", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => travel.move(creator, payload.locationId)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => travel.remove(creator, params.moveId)),
+      );
+  }),
+);
+
+/** The party's travels, as a player at the table is told them. */
+const PlayerPartyTravelLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerPartyTravel",
+  Effect.fnUntraced(function* (handlers) {
+    const travel = yield* PartyTravel;
+    return handlers.handle("list", ({ params }) => travel.forPlayer(params.campaignId));
+  }),
+);
+
 /** A Shared World's atlas, for its live members. */
 const SharedWorldLocationsLive = HttpApiBuilder.group(
   TavernsApi,
@@ -1278,6 +1310,7 @@ const HobLive = HttpApiBuilder.group(
     const proposals = yield* Proposals;
     const dmActors = yield* CampaignCreatorActors;
     const images = yield* HobImages;
+    const live = yield* LiveEvents;
     const drawMap = yield* drawEncounterMapOf;
 
     /**
@@ -1346,6 +1379,12 @@ const HobLive = HttpApiBuilder.group(
                   return Effect.map(images.drawNpc(accepted.npc), (npc) => ({ ...accepted, npc }));
                 case "location":
                   return drawKeptPlace(images, accepted);
+                // A kept move during an open night rings its doorbell now
+                // that the accept has committed, as the creator's own does.
+                case "partyMove":
+                  return accepted.move.sessionId === null
+                    ? Effect.succeed(accepted)
+                    : Effect.as(live.touched(accepted.move.sessionId), accepted);
                 default:
                   return Effect.succeed(accepted);
               }
@@ -2109,6 +2148,8 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     PlayerNotesLive,
     LocationsLive,
     PlayerLocationsLive,
+    PartyTravelLive,
+    PlayerPartyTravelLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

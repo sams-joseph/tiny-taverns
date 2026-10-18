@@ -461,6 +461,9 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <LevelUpBody artifact={artifact} />;
     case "location":
       return <LocationBody artifact={artifact} />;
+    // The title is the place and the meta says what the keep does: nothing more to draw.
+    case "partyMove":
+      return null;
     default:
       return <RulesBody artifact={artifact} />;
   }
@@ -503,6 +506,7 @@ export function ArtifactCard({
   const act = artifact.kind === "act";
   const levelUp = artifact.kind === "levelUp";
   const location = artifact.kind === "location";
+  const partyMove = artifact.kind === "partyMove";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -625,7 +629,9 @@ export function ArtifactCard({
                                       ? "On the sheet"
                                       : location
                                         ? "In your Library’s places"
-                                        : "In tonight’s session"}
+                                        : partyMove
+                                          ? "The party is there"
+                                          : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -648,7 +654,8 @@ export function ArtifactCard({
                             night ||
                             act ||
                             levelUp ||
-                            location
+                            location ||
+                            partyMove
                           ? "Keep it"
                           : "Save to session"}
               </Button>

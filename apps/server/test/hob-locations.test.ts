@@ -371,4 +371,72 @@ describeLayer("hob-locations", shared, (it) => {
       }),
     );
   });
+
+  describe("a campaign's Hob and the party", () => {
+    it.effect(
+      "offers to move the party to a place at the table, and only the DM's keep moves it",
+      () =>
+        Effect.gen(function* () {
+          const { jo, pell, table, strangers } = yield* Fixture;
+          const inn = yield* as(jo.token, (client) =>
+            client.libraryLocations.create({ payload: { kind: "building", name: "The Lamb" } }),
+          );
+          yield* as(jo.token, (client) =>
+            client.locations.place({ params: { campaignId: table.id, locationId: inn.id } }),
+          );
+
+          // A place not at the table is refused to the model.
+          const refused = yield* asked(
+            jo.token,
+            (client) =>
+              client.hob.ask({
+                params: { campaignId: table.id },
+                payload: { text: "The party walks into the city." },
+              }),
+            [
+              toolCallChunks("proposePartyMove", { locationId: strangers.id }),
+              textChunks("I could not."),
+            ],
+          );
+          expect(proposedIn(refused.events)).toBeUndefined();
+          expect(JSON.stringify(refused.requests[1]?.messages)).toContain(
+            "not a place at this table",
+          );
+
+          const { events } = yield* asked(
+            jo.token,
+            (client) =>
+              client.hob.ask({
+                params: { campaignId: table.id },
+                payload: { text: "The party heads to the Lamb." },
+              }),
+            [
+              toolCallChunks("proposePartyMove", { locationId: inn.id }),
+              textChunks("Off they go."),
+            ],
+          );
+          expect(proposedIn(events)).toEqual({
+            target: "partyMove",
+            locationId: inn.id,
+            locationName: "The Lamb",
+          });
+          const { threadId, turnId } = begunIn(events);
+          expect(
+            yield* as(jo.token, (client) =>
+              client.partyTravel.list({ params: { campaignId: table.id } }),
+            ),
+          ).toEqual([]);
+
+          const kept = yield* as(jo.token, (client) =>
+            client.hob.accept({ params: { campaignId: table.id, threadId, turnId }, payload: {} }),
+          );
+          if (kept.accepted !== "partyMove") throw new Error("no move was kept");
+          expect(kept.move).toMatchObject({ locationName: "The Lamb", origin: "assistant" });
+          const told = yield* as(pell.token, (client) =>
+            client.playerPartyTravel.list({ params: { campaignId: table.id } }),
+          );
+          expect(told[0]).toMatchObject({ locationId: inn.id, locationName: "The Lamb" });
+        }),
+    );
+  });
 });

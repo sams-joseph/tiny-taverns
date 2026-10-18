@@ -44,6 +44,7 @@ export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Location.js";
 export * from "./LocationImage.js";
+export * from "./PartyTravel.js";
 export * from "./Note.js";
 export * from "./Npc.js";
 export * from "./NpcResources.js";

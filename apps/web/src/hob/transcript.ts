@@ -68,6 +68,7 @@ export const ARTIFACT_KINDS = {
   npcSheet: { icon: "shield-half", label: "NPC sheet", variant: "magic" },
   levelUp: { icon: "arrow-big-up-dash", label: "Level up", variant: "magic" },
   location: { icon: "map-pin", label: "Place", variant: "default" },
+  partyMove: { icon: "footprints", label: "Party move", variant: "secondary" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -233,6 +234,10 @@ export type HobArtifact =
       readonly appearance?: string;
       /** The places drafted inside it, each with its own, one line apiece. */
       readonly children: ReadonlyArray<string>;
+    })
+  | (ArtifactBase & {
+      /** The party travelling to a place at the table: its title is the place. */
+      readonly kind: "partyMove";
     })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
@@ -459,6 +464,14 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
                 .map((leaf) => leaf.name)
                 .join(", ")}`,
         ),
+      };
+    case "partyMove":
+      return {
+        id: turnId,
+        kind: "partyMove",
+        title: proposal.locationName,
+        meta: "Keeping it moves the party here and shows the place to the players",
+        chips: [],
       };
     case "act":
       return {

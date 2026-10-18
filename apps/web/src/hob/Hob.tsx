@@ -236,6 +236,9 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
           case "act":
           case "campaignStory":
             return navigate({ to: "/campaigns/$campaignId/chronicle", params: { campaignId } });
+          // A kept move is on the table's Locations, where the party now stands.
+          case "partyMove":
+            return navigate({ to: "/campaigns/$campaignId/locations", params: { campaignId } });
         }
       };
       // Overlaid, the panel covers the screen being opened.

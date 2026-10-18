@@ -53,6 +53,10 @@ const NOT_CONTENT = [
   // campaign's context. See 0105_locations.ts.
   "campaign_location_reveal",
   "campaign_member",
+  // The party's travel log: the table's, read by every member and written by
+  // the creator, so no dm/shared switch. It carries the provenance pair
+  // because the creator may keep a move Hob proposed. See 0107_party_travel.ts.
+  "campaign_party_move",
   "character_option_ability_bonus",
   "character_option_equipment_reference",
   "character_option_language",

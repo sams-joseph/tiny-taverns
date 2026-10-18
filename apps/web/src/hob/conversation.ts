@@ -353,11 +353,13 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                       ? [reads.acts(campaignId)]
                       : accepted.accepted === "location"
                         ? [reads.libraryLocations, reads.locations(campaignId)]
-                        : [
-                            reads.notes(campaignId),
-                            reads.encounters(campaignId),
-                            reads.story(campaignId),
-                          ],
+                        : accepted.accepted === "partyMove"
+                          ? [reads.partyTravel(campaignId), reads.locations(campaignId)]
+                          : [
+                              reads.notes(campaignId),
+                              reads.encounters(campaignId),
+                              reads.story(campaignId),
+                            ],
       };
     }
     case "sharedWorld": {

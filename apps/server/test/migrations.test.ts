@@ -186,6 +186,7 @@ describeLayer("migrations", database, (it) => {
         "campaign_image",
         "campaign_location_reveal",
         "campaign_member",
+        "campaign_party_move",
         "campaign_story",
         "character",
         "character_advancement",
@@ -397,6 +398,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 104, name: "sheet_action_geometry" },
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
+        { migration_id: 107, name: "party_travel" },
       ]);
     }),
   );
@@ -513,6 +515,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 104, name: "sheet_action_geometry" },
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
+        { migration_id: 107, name: "party_travel" },
       ]);
     }),
   );

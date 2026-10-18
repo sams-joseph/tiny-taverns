@@ -359,6 +359,13 @@ export const reads = {
    */
   locations: (campaignId: CampaignId): ReadKey => key`locations:${campaignId}`,
 
+  /**
+   * The party's travels at one table — the creator's log and a player's,
+   * two paths to one resource. A move also reveals its place, so a move
+   * names `locations` too.
+   */
+  partyTravel: (campaignId: CampaignId): ReadKey => key`party-travel:${campaignId}`,
+
   /** A Shared World's atlas: every place placed in it. */
   worldLocations: (worldId: SharedWorldId): ReadKey => key`world-locations:${worldId}`,
 

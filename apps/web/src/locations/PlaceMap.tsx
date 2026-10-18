@@ -1,5 +1,5 @@
 import type { LocationId, LocationImages, LocationKind, LocationPin } from "@taverns/api";
-import { Button, EmptyState, Icon, Loading } from "@taverns/ui";
+import { Badge, Button, EmptyState, Icon, Loading } from "@taverns/ui";
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -81,6 +81,7 @@ export function PlaceMap({
   onUp,
   upLabel,
   editing,
+  party,
 }: {
   readonly place: MapPlace;
   /** The places directly inside this one that the reader may see. */
@@ -89,6 +90,11 @@ export function PlaceMap({
   readonly onUp?: () => void;
   /** The parent's name, for the button that zooms out to it. */
   readonly upLabel?: string;
+  /**
+   * Where the party is, seen from this map: here, on this place itself, or in
+   * the place one of its pins stands for (the party may be deeper inside it).
+   */
+  readonly party?: { readonly here: true } | { readonly in: LocationId } | undefined;
   readonly editing?: {
     readonly onPin: (child: MapPlace, pin: LocationPin) => void;
     /** A place to put on the map at the next press, chosen from outside it. */
@@ -260,8 +266,16 @@ export function PlaceMap({
     }
   }, [dragged, inside]);
 
+  const partyHere = party !== undefined && "here" in party;
+  const partyIn = party !== undefined && "in" in party ? party.in : undefined;
   const toolbar = (
     <div className="flex flex-wrap items-center gap-1.5">
+      {partyHere && (
+        <Badge variant="secondary">
+          <Icon name="users" size={12} />
+          The party is here
+        </Badge>
+      )}
       {onUp !== undefined && (
         <Button variant="outline" size="sm" onClick={onUp}>
           <Icon name="arrow-up" size={14} />
@@ -371,6 +385,7 @@ export function PlaceMap({
                     : `${child.name}: drag to move, press to open`
                 }
                 data-slot="place-pin"
+                data-party={child.id === partyIn ? "" : undefined}
                 className="absolute top-(--pin-y) left-(--pin-x) flex origin-bottom [transform:translate(-50%,-100%)_scale(var(--unzoom))] flex-col items-center gap-0.5 outline-none focus-visible:ring-focus"
                 style={
                   {
@@ -390,6 +405,12 @@ export function PlaceMap({
                 <span className="rounded-pill border border-strong bg-surface-raised px-2 py-0.5 text-caption leading-none font-semibold whitespace-nowrap text-heading">
                   {child.name}
                 </span>
+                {child.id === partyIn && (
+                  <span className="flex items-center gap-1 rounded-pill bg-accent px-2 py-0.5 text-caption leading-none font-semibold text-accent-foreground">
+                    <Icon name="users" size={11} />
+                    Party
+                  </span>
+                )}
                 <Icon name="map-pin" size={22} className="text-accent" />
               </div>
             );

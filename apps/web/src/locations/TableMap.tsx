@@ -19,10 +19,13 @@ export function TableMap({
   campaignId,
   places,
   placeId,
+  partyAt,
 }: {
   readonly campaignId: CampaignId;
   readonly places: ReadonlyArray<TablePlace>;
   readonly placeId: LocationId;
+  /** Where the party is, when it is at a place this reader may see. */
+  readonly partyAt?: LocationId | undefined;
 }) {
   const navigate = useNavigate();
   const place = places.find((candidate) => candidate.id === placeId);
@@ -38,6 +41,23 @@ export function TableMap({
     ancestors.unshift(parent);
   }
   const up = ancestors.at(-1);
+
+  // The party, seen from this map: on this place, or in one of its pins'.
+  const partyChain: Array<LocationId> = [];
+  for (
+    let at = partyAt === undefined ? undefined : byId.get(partyAt);
+    at !== undefined && !partyChain.includes(at.id);
+    at = at.parentId === null ? undefined : byId.get(at.parentId)
+  ) {
+    partyChain.unshift(at.id);
+  }
+  const step = partyChain.indexOf(place.id);
+  const party =
+    step === -1
+      ? undefined
+      : step === partyChain.length - 1
+        ? ({ here: true } as const)
+        : { in: partyChain[step + 1]! };
   const open = (id: LocationId | undefined) =>
     void navigate({
       to: "/campaigns/$campaignId/locations",
@@ -79,6 +99,7 @@ export function TableMap({
         onEnter={(child) => open(child.id)}
         onUp={() => open(up?.id)}
         upLabel={up?.name ?? "every place"}
+        party={party}
       />
     </section>
   );

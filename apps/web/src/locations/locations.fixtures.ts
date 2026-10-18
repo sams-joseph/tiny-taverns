@@ -120,6 +120,28 @@ export const playerPlaces = [
   },
 ] as const;
 
+/** The party went to Gullport and on to The Stacks, where it is now. */
+export const partyMoves = [
+  {
+    id: "6c0c0000-0000-4000-8000-0000000000b2",
+    locationId: stacksId,
+    locationName: "The Stacks",
+    sessionId: null,
+    movedAt: "2026-10-02T20:00:00.000Z",
+    origin: "authored",
+    assistantTurnId: null,
+  },
+  {
+    id: "6c0c0000-0000-4000-8000-0000000000b1",
+    locationId: gullportId,
+    locationName: "Gullport",
+    sessionId: null,
+    movedAt: "2026-10-02T19:00:00.000Z",
+    origin: "authored",
+    assistantTurnId: null,
+  },
+] as const;
+
 /** Every location read the fixture wire answers. */
 export const fullLocations = (): ReadonlyArray<
   readonly [string, { status: number; body: unknown }]
@@ -127,6 +149,20 @@ export const fullLocations = (): ReadonlyArray<
   ["GET /library/locations", { status: 200, body: libraryShelf }],
   [`GET /campaigns/${campaignId}/locations`, { status: 200, body: tablePlaces }],
   [`GET /campaigns/${campaignId}/player-locations`, { status: 200, body: playerPlaces }],
+  [`GET /campaigns/${campaignId}/party-travel`, { status: 200, body: partyMoves }],
+  [
+    `GET /campaigns/${campaignId}/player-party-travel`,
+    {
+      status: 200,
+      // The Stacks is not revealed to the player, so its id does not reach them.
+      body: partyMoves.map(({ id, locationName, movedAt }) => ({
+        id,
+        locationId: null,
+        locationName,
+        movedAt,
+      })),
+    },
+  ],
   [
     `GET /worlds/${worldId}/locations`,
     { status: 200, body: tablePlaces.map(({ revealed: _revealed, ...place }) => place) },

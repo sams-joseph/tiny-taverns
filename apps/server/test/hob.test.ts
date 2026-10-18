@@ -574,6 +574,7 @@ describeLayer("hob", shared, (it) => {
           // An NPC's stat sheet, built like a character's and kept only by the
           // creator's accept; `getNpc` above reads it back. No other toolkit has it.
           "proposeNpcSheet",
+          "proposePartyMove",
           "readCampaignStorySources",
           "readFight",
           // The two group-context reads — the chronicle and the accepted summary,
@@ -2060,6 +2061,7 @@ describeLayer("hob", shared, (it) => {
         "proposeNpc",
         "proposeNpcAwareness",
         "proposeNpcSheet",
+        "proposePartyMove",
       ]);
       expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
       const account = Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools);
@@ -2148,6 +2150,7 @@ describeLayer("hob", shared, (it) => {
         // An NPC's stat sheet, built like a character's and kept only by the
         // creator's accept; `getNpc` above reads it back. No other toolkit has it.
         "proposeNpcSheet",
+        "proposePartyMove",
         "readCampaignStorySources",
         // The fight on the table as its creator sees it — hit points, fog and
         // a monster's options. No other toolkit has it: a player's Hob must

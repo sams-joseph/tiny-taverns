@@ -369,6 +369,9 @@ describe("the API declaration", () => {
       // account-owned character. It replaced the campaign-scoped `characters`
       // group when the continuity decision made the character top-level.
       "party",
+      // The party's travels on the campaign's map: the creator's log and
+      // moves, and a player's narrow read of it.
+      "partyTravel",
       // A person's own picture of something they made: the upload ticket, its
       // apply and the remove, each the subject owner's alone.
       "pictures",
@@ -382,6 +385,7 @@ describe("the API declaration", () => {
       // and an attachment only to an encounter they may read. `notes` is the
       // creator's.
       "playerNotes",
+      "playerPartyTravel",
       "prep",
       "recap",
       "rolls",

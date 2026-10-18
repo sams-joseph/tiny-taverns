@@ -373,9 +373,10 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          // Moved when the creator's, Shared World's and account's toolkits
-          // gained `listLocations` and `proposeLocation`.
-          creator: "6b2ad8359b273f6d89ac890f762963872f74ed98e42f3d4ef1a9ba44d9e53eec",
+          // Moved when the creator's toolkit gained `proposePartyMove`, after
+          // it, the Shared World's and the account's gained `listLocations`
+          // and `proposeLocation`.
+          creator: "225b1466492642c2698836457c0140730bf31cf554dc09cdb58a63df81697334",
           sharedWorld: "5fe760730682de2500fc209c0511d462ddca5dbe402610637c6334c4d0abacf1",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",

@@ -28,6 +28,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { admitToGroup, Groups } from "../src/repo/Groups.js";
 import { Locations } from "../src/repo/Locations.js";
+import { PartyTravel } from "../src/repo/PartyTravel.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
@@ -75,6 +76,7 @@ const services = Layer.mergeAll(
   Encounters.layer,
   GroupHistory.layer,
   Locations.layer,
+  PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
   Groups.layer,
   HobThreads.layer,
   Invites.layer,
@@ -100,6 +102,7 @@ const services = Layer.mergeAll(
       Encounters.layer,
       GroupHistory.layer,
       Locations.layer,
+      PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
       Notes.layer,
       Sessions.layer.pipe(Layer.provide(live)),
       Acts.layer,

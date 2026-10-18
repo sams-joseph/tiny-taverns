@@ -187,6 +187,7 @@ import {
   SpellId,
   LocationId,
   NoteId,
+  PartyMoveId,
   PrepItemId,
   SessionId,
 } from "./Ids.js";
@@ -209,6 +210,7 @@ import {
   WorldLocation,
 } from "./Location.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
+import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
   Npc,
   NpcCreate,
@@ -1105,6 +1107,48 @@ class LocationsGroup extends HttpApiGroup.make("locations")
     }),
   )
   .prefix("/campaigns/:campaignId/locations")
+  .middleware(Authorization) {}
+
+/**
+ * Where the party is, as the record of where it has been: the campaign's
+ * travel log, newest first, behind the creator proof. The newest move is
+ * where the party stands. `move` goes to a place in the campaign's world and
+ * reveals it to the table; `remove` takes a move back, so removing the
+ * newest puts the party where it was before. A move during an open night
+ * rings the table's doorbell. A player reads `playerPartyTravel`.
+ */
+class PartyTravelGroup extends HttpApiGroup.make("partyTravel")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PartyMove),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("move", "/", {
+      params: { campaignId: CampaignId },
+      payload: PartyMoveCreate,
+      success: PartyMove,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:moveId", {
+      params: { campaignId: CampaignId, moveId: PartyMoveId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/party-travel")
+  .middleware(Authorization) {}
+
+/** The party's travels as a player at the table is told them. */
+class PlayerPartyTravelGroup extends HttpApiGroup.make("playerPartyTravel")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerPartyMove),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/player-party-travel")
   .middleware(Authorization) {}
 
 /** The places a table has revealed, as a player is told them. */
@@ -3799,6 +3843,8 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PlayerNotesGroup)
   .add(LocationsGroup)
   .add(PlayerLocationsGroup)
+  .add(PartyTravelGroup)
+  .add(PlayerPartyTravelGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
   .add(BattleMapsGroup)

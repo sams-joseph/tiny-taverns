@@ -65,6 +65,7 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Locations } from "./repo/Locations.js";
+import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
@@ -514,6 +515,7 @@ export const servicesOver = <E>(
   | MagicItems
   | Memberships
   | Locations
+  | PartyTravel
   | Notes
   | NpcAgent
   | NpcKnowledge
@@ -662,6 +664,8 @@ export const servicesOver = <E>(
     // `Locations.layer` Hob reads for `listLocations` and the accept writes
     // through must never hold a bearer URL.
     Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
+    // The party's travels: a move during an open night rings its doorbell.
+    PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof. An NPC read signs
@@ -803,6 +807,9 @@ export const servicesOver = <E>(
         // create, and into the campaign's or the world's context through the
         // creator's or member's own placement.
         Locations.layer,
+        // A kept party move goes through the creator's own move, which hands
+        // its doorbell back for the handler to ring after the commit.
+        PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
@@ -927,6 +934,7 @@ export const applicationOver = <E>(
     | MagicItems
     | Memberships
     | Locations
+    | PartyTravel
     | Notes
     | NpcAgent
     | NpcKnowledge

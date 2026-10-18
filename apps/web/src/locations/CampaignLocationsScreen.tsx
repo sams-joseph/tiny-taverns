@@ -20,9 +20,10 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { SaveFailure } from "../ui/form";
-import { campaignLocationsAtom, libraryLocationsAtom } from "./load";
+import { libraryLocationsAtom, tableAtlasAtom } from "./load";
 import { PlaceTree } from "./PlaceTree";
 import { TableMap } from "./TableMap";
+import { TravelLog } from "./TravelLog";
 
 /**
  * A table's places, as its creator arranges them: every place in the
@@ -48,6 +49,13 @@ export function CampaignLocationsScreen() {
           : client.locations.unreveal({ params: { campaignId, locationId: place.id } }),
       [reads.locations(campaignId)],
     );
+  const moveParty = (place: CampaignLocation) =>
+    void submit(
+      (client) =>
+        client.partyTravel.move({ params: { campaignId }, payload: { locationId: place.id } }),
+      // The move reveals the place too.
+      [reads.partyTravel(campaignId), reads.locations(campaignId)],
+    );
   const takeOut = (place: CampaignLocation, worldId: SharedWorldId) =>
     void submit(
       (client) => client.locations.unplace({ params: { campaignId, locationId: place.id } }),
@@ -60,10 +68,15 @@ export function CampaignLocationsScreen() {
       campaignId={campaignId}
       title="Locations"
       centred
-      extra={campaignLocationsAtom(campaignId)}
-      subtitle={({ extra }) => {
-        const shown = extra.filter((place) => place.revealed).length;
-        return `${String(extra.length)} ${extra.length === 1 ? "place" : "places"} · ${String(shown)} shown to players`;
+      extra={tableAtlasAtom(campaignId)}
+      subtitle={({ extra: { places, moves } }) => {
+        const shown = places.filter((place) => place.revealed).length;
+        const at = moves[0];
+        return [
+          `${String(places.length)} ${places.length === 1 ? "place" : "places"}`,
+          `${String(shown)} shown to players`,
+          ...(at === undefined ? [] : [`the party is at ${at.locationName}`]),
+        ].join(" · ");
       }}
       actions={() => (
         <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
@@ -72,7 +85,7 @@ export function CampaignLocationsScreen() {
         </Button>
       )}
     >
-      {({ view, extra }) => (
+      {({ view, extra: { places: extra, moves } }) => (
         <>
           {failure !== undefined && (
             <div className="mb-4">
@@ -81,7 +94,12 @@ export function CampaignLocationsScreen() {
           )}
           {open !== undefined && (
             <div className="mb-6">
-              <TableMap campaignId={campaignId} places={extra} placeId={open} />
+              <TableMap
+                campaignId={campaignId}
+                places={extra}
+                placeId={open}
+                partyAt={moves[0]?.locationId ?? undefined}
+              />
             </div>
           )}
           {extra.length === 0 ? (
@@ -122,6 +140,17 @@ export function CampaignLocationsScreen() {
                     <Icon name={place.revealed ? "eye" : "eye-off"} size={13} />
                     {place.revealed ? "Shown to players" : "Hidden"}
                   </Toggle>
+                  {moves[0]?.locationId !== place.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => moveParty(place)}
+                    >
+                      <Icon name="users" size={13} />
+                      Move the party here
+                    </Button>
+                  )}
                   {place.mine && place.placed && (
                     <Button
                       variant="ghost"
@@ -136,6 +165,9 @@ export function CampaignLocationsScreen() {
               )}
             />
           )}
+          <div className="mt-6">
+            <TravelLog campaignId={campaignId} moves={moves} canTakeBack />
+          </div>
           {adding && (
             <AddFromLibraryDialog
               campaignId={campaignId}

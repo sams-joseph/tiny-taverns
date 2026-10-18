@@ -11,7 +11,7 @@ import {
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
-import { gullportId, libraryShelf, stacksId } from "./locations.fixtures";
+import { gullportId, lambId, libraryShelf, partyMoves, stacksId } from "./locations.fixtures";
 
 /**
  * Places on screen: the creator's tree with this table's reveals and their
@@ -156,5 +156,53 @@ describe("a place's map", () => {
     await waitFor(() => expect(globalThis.location.search).toBe(`?place=${stacksId}`));
     // The Stacks has no picture yet, and says so where its map would be.
     await screen.findByText("No picture yet");
+  });
+});
+
+describe("the party on the map", () => {
+  it("is marked on the pin it stands in, and the creator moves it to another place", async () => {
+    server.routes.set(`POST /campaigns/${campaignId}/party-travel`, {
+      status: 200,
+      body: { ...partyMoves[0], id: "6c0c0000-0000-4000-8000-0000000000b3", locationId: lambId },
+    });
+    await at(`/campaigns/${campaignId}/locations?place=${gullportId}`);
+
+    const map = await screen.findByRole("application", { name: "Map of Gullport" });
+    expect(
+      within(map)
+        .getByRole("button", { name: /The Stacks/ })
+        .hasAttribute("data-party"),
+    ).toBe(true);
+    const log = screen.getByRole("region", { name: "Where the party has been" });
+    expect(within(log).getAllByRole("listitem")[0]?.textContent).toContain("The Stacks");
+
+    const tree = screen.getByRole("list", { name: "Places at this table" });
+    const lambRow = within(tree).getByText("The Drowned Lamb").closest("[data-slot=place-row]")!;
+    await userEvent.click(
+      within(lambRow as HTMLElement).getByRole("button", { name: "Move the party here" }),
+    );
+    await waitFor(() =>
+      expect(
+        server.calls
+          .filter((call) => call.method === "POST")
+          .map((call) => [call.pathname, call.body]),
+      ).toEqual([
+        [`/campaigns/${campaignId}/party-travel`, JSON.stringify({ locationId: lambId })],
+      ]),
+    );
+  });
+
+  it("tells a player where the party is, without naming a place they were not shown", async () => {
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, relation: "player", sharedWorld, joinedAt: "2026-09-01T12:00:00.000Z" }],
+    });
+    await at(`/campaigns/${campaignId}/locations`);
+
+    const log = await screen.findByRole("region", { name: "Where the party has been" });
+    expect(within(log).getAllByRole("listitem")[0]?.textContent).toContain("The Stacks");
+    expect(within(log).queryAllByRole("link")).toEqual([]);
+    expect(within(log).queryByRole("button", { name: /Take back/ })).toBeNull();
+    expect(calls("GET")).not.toContain(`/campaigns/${campaignId}/party-travel`);
   });
 });

@@ -28,9 +28,11 @@ import {
   SharedWorldHistorySummaryId,
   SharedWorldId,
   LocationId,
+  PartyMoveId,
 } from "./Ids.js";
 import { Location, LocationKind } from "./Location.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
+import { PartyMove } from "./PartyTravel.js";
 import { NpcTurnMoment } from "./NpcTurnCheck.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
 import { OwnedCharacter } from "./Party.js";
@@ -208,7 +210,8 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
  * `sharedWorld` (the asker's new world), a `levelUp` (the next level of a
  * character the asker owns), a `location` (a place for the asker's Library,
- * with the places inside it) and an `npcTurn` (a monster's turn in a fight,
+ * with the places inside it), a `partyMove` (the party travelling to a place
+ * at the table) and an `npcTurn` (a monster's turn in a fight,
  * which nothing keeps yet). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
@@ -218,8 +221,8 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
  * `proposeNightSummary`, `proposeNight`, `proposeAct`, `proposeEncounter`,
- * `proposeCampaignStory`, `proposeNpc`, `proposeNpcSheet` and
- * `proposeLocation`; Shared World Hob has the Chronicle's two and
+ * `proposeCampaignStory`, `proposeNpc`, `proposeNpcSheet`,
+ * `proposeLocation` and `proposePartyMove`; Shared World Hob has the Chronicle's two and
  * `proposeLocation`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
@@ -638,6 +641,21 @@ export const HobProposal = Schema.Union([
     children: Schema.Array(HobLocationChild),
   }),
   /**
+   * The party moving to a place in the campaign's world, offered to its
+   * creator by the campaign's own Hob (`proposePartyMove`) — the maintainer's
+   * one exception besides a monster's turn to *Hob does not create live-play
+   * records*. The place is resolved when the proposal is made, against the
+   * creator's own read of the places at the table: the id is where the keep
+   * moves the party, the name the card's display half. Accepting is the
+   * creator's own move (`PartyTravel.move`), which reveals the place to the
+   * table and rings an open night's doorbell, stamped with the turn.
+   */
+  Schema.Struct({
+    target: Schema.Literal("partyMove"),
+    locationId: LocationId,
+    locationName: Schema.String,
+  }),
+  /**
    * A monster's turn in a live fight, chosen by the fight's Hob
    * (`/campaigns/:c/sessions/:s/runs/:r/combatants/:id/hob/turn`) — what it
    * does, never what came of it: no dice, no hit, no damage.
@@ -733,6 +751,8 @@ export const HobKept = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("campaign"), id: CampaignId }),
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), id: SharedWorldId }),
   Schema.Struct({ accepted: Schema.Literal("levelUp"), characterId: CharacterId }),
+  /** A party move the creator kept, on the campaign's travel log. */
+  Schema.Struct({ accepted: Schema.Literal("partyMove"), id: PartyMoveId }),
   /** A place kept into the asker's Library: the top of what the draft made. */
   Schema.Struct({ accepted: Schema.Literal("location"), id: LocationId }),
   /** A monster's turn, carried out in its fight (`hobFight.keep`). */
@@ -1082,6 +1102,8 @@ export const HobAccepted = Schema.Union([
     owned: OwnedCharacter,
     advancement: CharacterAdvancement,
   }),
+  /** The party move a campaign's creator kept from their Hob. */
+  Schema.Struct({ accepted: Schema.Literal("partyMove"), move: PartyMove }),
   /**
    * The places a person kept from their Hob, in their own Library: the
    * proposed one, and every place made under it, parents before children.
@@ -1137,6 +1159,8 @@ export const keptFrom = (accepted: HobAccepted): HobKept => {
       return { accepted: "levelUp", characterId: accepted.owned.character.id };
     case "location":
       return { accepted: "location", id: accepted.location.id };
+    case "partyMove":
+      return { accepted: "partyMove", id: accepted.move.id };
   }
 };
 

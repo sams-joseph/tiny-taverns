@@ -97,6 +97,10 @@ A night keeps two things beside its detail (`0070_session_entry.ts`). `session.s
 
 `location` nests by `(parent_id, account_id) → location (id, account_id) on delete cascade`, so a child is always its parent's owner's and deleting a place deletes its subtree without reaching anybody else's place; the placements and reveals of every place in it cascade too. A cycle is refused by `Locations.update` under a per-account advisory lock, because two re-parents racing could each pass the check. A placement's placer is the place's owner (`context_location_owner_fkey`) and a live member of the context (the `0001` eligibility idiom), so a revoked membership must remove its placements in the same transaction. Placements belong to the context, not to a campaign: the context moves carry the creator's own along (`carryPlacements` in `repo/Locations.ts`), and a world keeps a member's places while they are a member. A place kept from a Hob thread outlives the thread, so its turn key is `set null`, as `character`'s is. A pin (`pin_x`, `pin_y`) is a point on the parent's picture, so it needs a parent (`location_pin_shape`) and a re-parent clears it.
 
+## The party's travels
+
+`campaign_party_move` (`0107`) is the only record of where a party is: the newest row, with no position column beside it to disagree. A move keeps its place's name, so a deleted place (`set null`) still reads on the log, and its night by `(session_id, campaign_id)`, cleared alone when the night is deleted. A move reveals its place to the table in the same transaction, and a move or a take-back during an open night appends a shared `party-moved` event so a player's map re-reads.
+
 ## The migration ledger
 
 - Forward only. `effect/sql/Migrator` has no down concept; a mistake is a new migration.

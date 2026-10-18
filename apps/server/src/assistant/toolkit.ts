@@ -2004,6 +2004,24 @@ export const ProposeLocation = Tool.make("proposeLocation", {
 
 type LocationDraft = Tool.Parameters<typeof ProposeLocation>;
 
+/**
+ * `proposePartyMove`: the party travelling to a place at the table — the
+ * creator's toolkit alone, and the maintainer's one exception besides a
+ * monster's turn to *Hob does not create live-play records*. It offers; only
+ * the creator's keep moves the party (`PartyTravel.moveForAccept`).
+ */
+export const ProposePartyMove = Tool.make("proposePartyMove", {
+  description:
+    "Offer the DM to move the party to a place on the campaign's map — when the DM says " +
+    "the party travels, arrives somewhere or has moved. Take the locationId from " +
+    "listLocations. Moving the party shows that place to the players. Only a suggestion: " +
+    "nothing moves unless the DM keeps it. Say one short line about it and stop.",
+  parameters: Schema.Struct({ locationId: LocationId }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
 /** What `listLocations` answers, from any of the three reads it is bound to. */
 const locationReads = (
   places: ReadonlyArray<{
@@ -2163,6 +2181,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeNpcSheet,
     ListLocations,
     ProposeLocation,
+    ProposePartyMove,
     ReadFight,
     SpendCharacterResource,
   );
@@ -2203,6 +2222,9 @@ export const HobToolkit = Toolkit.make(
   // Library, placed in that world when kept.
   ListLocations,
   ProposeLocation,
+  // The party travelling to one of those places: the creator's alone, a
+  // proposal the creator keeps (the maintainer's exception for live play).
+  ProposePartyMove,
   // The fight on the table, read: the creator's alone, as every runner read is.
   ReadFight,
 );
@@ -3085,6 +3107,22 @@ export const dmHandlersFor = (
     // The places in the campaign's world, through the creator's own read.
     listLocations: () => Effect.map(repositories.locations.atCampaign(dm), locationReads),
     proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
+    proposePartyMove: ({ locationId }) =>
+      Effect.gen(function* () {
+        const place = (yield* repositories.locations.atCampaign(dm)).find(
+          (candidate) => candidate.id === locationId,
+        );
+        if (place === undefined) {
+          return yield* new Conflict({
+            message: "that locationId is not a place at this table — take one from listLocations",
+          });
+        }
+        return yield* offer(
+          { target: "partyMove", locationId: place.id, locationName: place.name },
+          `Offered the DM to move the party to ${place.name}. Nothing moves unless they ` +
+            "keep it; say one short line about it and stop.",
+        );
+      }),
     getNpc: ({ npcId }) =>
       Effect.gen(function* () {
         const npc = yield* repositories.npcs.findById(dm, npcId);

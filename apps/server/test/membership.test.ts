@@ -1065,6 +1065,10 @@ describeLayer("membership", shared, (it) => {
               -- A place's picture is read only as a field of the place,
               -- through the place's own shipped reads.
               'location_image',
+              -- The party's travel log is read only through the creator's
+              -- and a player's travel reads; a stranger's refusal is covered
+              -- in party-travel.test.ts.
+              'campaign_party_move',
               'campaign_member',
               -- A banner is read only as a field of the character, beside its
               -- portrait, through the character's own shipped reads.

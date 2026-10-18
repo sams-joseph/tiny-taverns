@@ -107,6 +107,12 @@ export const SessionEventKind = Schema.Literals([
   "beat-added",
   /** A browser roll was persisted; consumers re-read `character_roll`, never this payload. */
   "roll-made",
+  /**
+   * The party moved to another place on the campaign's map, or a move was
+   * taken back. A doorbell only, like every kind: the payload carries the
+   * place's name, and a player's map re-reads the travel log.
+   */
+  "party-moved",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

@@ -30,6 +30,7 @@ import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { Groups } from "./Groups.js";
 import { Locations } from "./Locations.js";
+import { PartyTravel } from "./PartyTravel.js";
 import { discardedConflict, lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import { NpcPreps } from "./NpcPrep.js";
@@ -254,6 +255,7 @@ export class Proposals extends Context.Service<
       const acts = yield* Acts;
       const advancement = yield* Advancement;
       const locations = yield* Locations;
+      const travel = yield* PartyTravel;
 
       /**
        * A drafted place and everything under it, made through the shelf's own
@@ -515,6 +517,17 @@ export class Proposals extends Context.Service<
                 yield* locations.place(creator, kept.location.id);
               }
               return kept;
+            });
+
+          case "partyMove":
+            // The creator's own move, behind the proof the accept asks for
+            // again: a place taken out of the world since the offer is its
+            // `NotFound`. Inside the accept's transaction, so its doorbell is
+            // rung by the handler once the accept has committed.
+            return Effect.gen(function* () {
+              const creator = yield* creators.of(campaignId);
+              const { move } = yield* travel.moveForAccept(creator, proposal.locationId, from);
+              return { accepted: "partyMove" as const, move };
             });
 
           case "campaign":

@@ -587,6 +587,7 @@ describeLayer(
             // Its labels are bounded free text, resolved in the handler, so the
             // toolkit still carries no vocabulary.
             "proposeNpcSheet",
+            "proposePartyMove",
             "readCampaignStorySources",
             "readFight",
             // The two group-context reads — the chronicle and the accepted summary,

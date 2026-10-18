@@ -2238,6 +2238,8 @@ const dmPrompt = (
     "offer it with proposeLocation, with the places inside it when they asked for them.",
     "listLocations shows the places in this campaign's world; a new place can only go",
     "inside one that is the DM's own.",
+    "When the DM says the party travels to, arrives at or has moved to one of those places,",
+    "offer the move with proposePartyMove.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
     "offer it rather than asking permission first. Offer one thing at a time, and once",
     "the tool says it offered it, say one short line about it: the DM is already looking at it.",
@@ -2838,6 +2840,8 @@ const offered = (turn: HobTurn): string | undefined => {
         parts.length === 0 ? "" : `: ${parts.join("; ")}`
       }]`;
     }
+    case "partyMove":
+      return `[You offered the DM to move the party to "${proposal.locationName}" (locationId ${proposal.locationId}) — ${kept}]`;
     case "nightSummary":
       return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;
     case "sharedWorldHistory":
