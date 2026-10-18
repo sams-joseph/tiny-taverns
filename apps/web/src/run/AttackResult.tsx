@@ -35,10 +35,15 @@ export function TargetBanner({
 
 /**
  * What the attack came to: the verdict, the d20 against the AC, each damage
- * die, the save a concentrating target owes, and *Apply* / *Half* / *Dismiss*.
- * *Apply* and *Half* send the damage through the panel's own write, once; the
- * card stays, without them, until it is dismissed or the turn moves. Once the
- * damage is sent, *Roll save* rolls the target's Con save into the DM's dice.
+ * die, the save a concentrating target owes, and what was done with the damage.
+ *
+ * A hit applies itself (the maintainer's call of 2026-10-17, from `Encounter
+ * Canvas.dc.html`): the runner sends the damage as it resolves, and the card
+ * says what was sent with *Undo*, which heals back what the target lost, and
+ * *Half instead* for a target that resists. Undone, or never sent, it offers
+ * *Apply* / *Half*. Once the damage is sent, *Roll save* rolls the target's
+ * Con save into the DM's dice. The card stays until it is dismissed or the
+ * turn moves.
  */
 export function AttackResultCard({
   outcome,
@@ -50,10 +55,16 @@ export function AttackResultCard({
   onDismiss,
   range,
   next,
+  sent,
+  onUndo,
 }: {
   readonly outcome: AttackOutcome;
   /** The damage was sent, whole or halved. */
   readonly applied: boolean;
+  /** How much was sent, once it was. */
+  readonly sent?: number | undefined;
+  /** Take back what was sent; absent while it cannot be. */
+  readonly onUndo?: (() => void) | undefined;
   /** The save a concentrating target owes for what was, or would be, sent. */
   readonly concentrationDc: number | undefined;
   /** The fight is over or a dialog holds the screen. */
@@ -129,7 +140,33 @@ export function AttackResultCard({
           )}
         </div>
       )}
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {landed && applied && sent !== undefined && (
+          <>
+            <span
+              data-slot="attack-sent"
+              className="text-caption leading-snug font-medium text-danger-ink"
+            >
+              {sent} damage applied
+            </span>
+            {onUndo !== undefined && (
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={onUndo}>
+                Undo
+              </Button>
+            )}
+            {onUndo !== undefined && sent === outcome.amount && outcome.amount >= 2 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Half instead, ${String(Math.floor(outcome.amount / 2))} damage`}
+                disabled={disabled}
+                onClick={() => onApply(Math.floor(outcome.amount / 2))}
+              >
+                Half instead
+              </Button>
+            )}
+          </>
+        )}
         {landed && outcome.amount > 0 && !applied && (
           <>
             <Button

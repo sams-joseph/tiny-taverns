@@ -2,6 +2,8 @@ import { battleMapPlane, cellRect } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { DrawnBoard } from "../BoardTools";
+import { useBoardViewOf } from "../boardFrame";
+import { uprightTransform } from "../view";
 import { percentOf } from "../tokens";
 import type { Playing } from "../useBoardEffects";
 import { animates, choreo } from "./motion";
@@ -42,6 +44,7 @@ export function NumberFx({
   readonly onEnd: () => void;
 }) {
   const plane = battleMapPlane(board, board.image);
+  const upright = uprightTransform(useBoardViewOf());
   const hurt = change.kind === "hurt";
   const motes = useMemo(
     () => scatter({ x: 20, y: 26 }, hurt ? 0 : 8, 22, 1.6, seeded(seed), -Math.PI / 2, 1.2),
@@ -98,7 +101,12 @@ export function NumberFx({
       // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
       style={percentOf(cellRect(board, change.at), plane)}
     >
-      <svg viewBox="0 0 40 40" className="size-full overflow-visible">
+      <svg
+        viewBox="0 0 40 40"
+        className="size-full origin-center overflow-visible"
+        // eslint-disable-next-line shadcn/no-inline-styles -- the inverse of the board's tilt, so the number stands up; computed from the view.
+        style={upright === undefined ? undefined : { transform: upright }}
+      >
         <circle
           ref={glow}
           cx={20}

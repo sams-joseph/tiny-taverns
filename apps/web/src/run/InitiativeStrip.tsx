@@ -64,7 +64,10 @@ export function InitiativeStrip({
   onAdd,
   onReroll,
   outOfRange,
+  compact = false,
 }: {
+  /** The canvas's ribbon (`StripFrame`'s `compact`). */
+  readonly compact?: boolean;
   /**
    * While a target is picked: who the line's reach and range leave out
    * (`run/options.ts`), faded and said in the chip's name, still pickable.
@@ -124,6 +127,7 @@ export function InitiativeStrip({
       activeId={run.activeCombatantId}
       selectedId={selectedId}
       floating={floating}
+      compact={compact}
       empty="Nobody is in the order. Add whoever is at the table, or end the fight and start one with a roster."
       onSelect={(row) => {
         const combatant = byId.get(row.id);
@@ -140,7 +144,7 @@ export function InitiativeStrip({
                 aria-label="Add combatant"
                 disabled={disabled}
                 onClick={onAdd}
-                className="h-13 w-9 border-dashed"
+                className={cn("w-9 border-dashed", compact ? "h-12" : "h-13")}
               >
                 <Icon name="plus" size={16} />
               </Button>
@@ -151,7 +155,13 @@ export function InitiativeStrip({
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="More about the order"
-            render={<Button variant="ghost" size="icon" className="h-13 w-9" />}
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("w-9", compact ? "h-12" : "h-13")}
+              />
+            }
           >
             <Icon name="ellipsis" size={16} className="pointer-events-none" />
           </DropdownMenuTrigger>
@@ -215,6 +225,12 @@ export interface StripRow {
  * The strip itself: the round, boxed, then a chip per row in the order given,
  * with whatever the caller adds at its end (the DM's *Add* and menu). Read-only
  * but for selection, so a player's table draws the same strip as the DM's.
+ *
+ * **Compact** is the canvas's ribbon (`Encounter Canvas.dc.html`): a disc per
+ * row with its initiative under it, whoever is up first and larger, and the
+ * order read on from them — the server's order turned, never re-sorted — with
+ * the next round's mark where it comes back round. The name, the numbers and
+ * the conditions are the disc's tooltip and accessible name, as a chip's are.
  */
 export function StripFrame({
   round,
@@ -223,6 +239,7 @@ export function StripFrame({
   activeId,
   selectedId,
   floating,
+  compact = false,
   empty,
   onSelect,
   children,
@@ -233,6 +250,8 @@ export function StripFrame({
   readonly activeId: CombatantId | null;
   readonly selectedId: CombatantId | undefined;
   readonly floating: boolean;
+  /** The canvas's ribbon of discs, from whoever is up. */
+  readonly compact?: boolean;
   /** What an empty order says. */
   readonly empty: string;
   readonly onSelect: (row: StripRow) => void;
@@ -254,15 +273,29 @@ export function StripFrame({
     strip.scrollLeft += event.deltaY * wheelUnit(event);
   };
 
+  // The ribbon reads on from whoever is up; the round turns where the
+  // server's first row comes round again.
+  const upAt = compact ? rows.findIndex((row) => row.id === activeId) : -1;
+  const shown = upAt <= 0 ? rows : [...rows.slice(upAt), ...rows.slice(0, upAt)];
+
   return (
     <section
       aria-label="Initiative"
       data-slot="initiative-strip"
-      className="flex min-w-0 items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3"
+      data-compact={compact ? "" : undefined}
+      className={cn(
+        "flex min-w-0 items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3",
+        compact && "max-w-full",
+      )}
     >
       <div
         data-slot="initiative-round"
-        className="flex h-13 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-hairline bg-surface-sunken"
+        className={cn(
+          "flex shrink-0 flex-col items-center justify-center gap-0.5",
+          compact
+            ? "h-12 w-12 border-r border-hairline pr-2"
+            : "h-13 w-14 rounded-md border border-hairline bg-surface-sunken",
+        )}
       >
         <span className="text-caption leading-none text-muted-foreground">Round</span>
         <span className="text-title leading-none font-semibold text-heading">{round}</span>
@@ -277,15 +310,36 @@ export function StripFrame({
           ref={scroller}
           aria-label="Initiative order"
           onWheel={walk}
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]"
+          className={cn(
+            "flex min-w-0 items-center overflow-x-auto [scrollbar-width:none]",
+            compact ? "gap-1" : "flex-1 gap-1.5",
+          )}
         >
-          {rows.map((row) => (
-            <li key={row.id} className="flex min-w-38 max-w-44 flex-1 basis-0">
+          {shown.map((row, index) => (
+            <li
+              key={row.id}
+              className={cn(
+                compact
+                  ? "flex shrink-0 items-center gap-1"
+                  : "flex min-w-38 max-w-44 flex-1 basis-0",
+              )}
+            >
+              {compact && index > 0 && row.id === rows[0]?.id && (
+                <span
+                  aria-hidden="true"
+                  data-slot="initiative-wrap"
+                  className="flex h-12 flex-col items-center justify-center gap-1 px-1"
+                >
+                  <span className="h-7 w-px bg-strong" />
+                  <span className="font-mono text-micro leading-none text-faint">R{round + 1}</span>
+                </span>
+              )}
               <StripChip
                 row={row}
                 label={labels.get(row.id) ?? "?"}
                 active={row.id === activeId}
                 selected={row.id === selectedId}
+                compact={compact}
                 onSelect={() => onSelect(row)}
               />
             </li>
@@ -303,12 +357,14 @@ function StripChip({
   label,
   active,
   selected,
+  compact,
   onSelect,
 }: {
   readonly row: StripRow;
   readonly label: string;
   readonly active: boolean;
   readonly selected: boolean;
+  readonly compact: boolean;
   readonly onSelect: () => void;
 }) {
   const { out, hidden, unplaced, health, outOfRange = false } = row;
@@ -329,7 +385,46 @@ function StripChip({
     .filter((part) => part !== undefined)
     .join(", ");
 
-  const chip = (
+  const chip = compact ? (
+    <button
+      type="button"
+      data-combatant={row.id}
+      aria-label={name}
+      aria-pressed={selected}
+      aria-current={active ? "step" : undefined}
+      onClick={onSelect}
+      onFocus={(event) => reveal(event.currentTarget)}
+      data-range={outOfRange ? "out" : undefined}
+      className={cn(
+        "flex w-13 cursor-pointer flex-col items-center gap-1 rounded-md py-0.5",
+        "transition-control outline-none focus-visible:ring-focus hover:bg-surface-raised",
+        out && "opacity-45",
+        outOfRange && "opacity-60",
+      )}
+    >
+      <span className="flex h-12 items-center justify-center">
+        <StripDisc
+          label={label}
+          party={row.party}
+          hidden={hidden}
+          conditions={row.conditions.length}
+          portrait={row.portrait}
+          size={active ? "up" : "ribbon"}
+          ring={active ? "active" : selected ? "selected" : undefined}
+          dashed={outOfRange}
+        />
+      </span>
+      <span
+        className={cn(
+          "font-mono text-micro leading-none",
+          active ? "text-accent-ink" : "text-muted-foreground",
+          out && "line-through",
+        )}
+      >
+        {row.initiative ?? "—"}
+      </span>
+    </button>
+  ) : (
     <button
       type="button"
       data-combatant={row.id}
@@ -464,22 +559,40 @@ function StripDisc({
   hidden,
   conditions,
   portrait,
+  size = "chip",
+  ring,
+  dashed = false,
 }: {
   readonly label: string;
   readonly party: boolean;
   readonly hidden: boolean;
   readonly conditions: number;
   readonly portrait: string | undefined;
+  /** A chip's small disc, the ribbon's, or the ribbon's for whoever is up. */
+  readonly size?: "chip" | "ribbon" | "up";
+  /** The ribbon rings whoever is up in peach and the selection in the heading colour. */
+  readonly ring?: "active" | "selected" | undefined;
+  /** Beyond the reach of the line whose target is being picked. */
+  readonly dashed?: boolean;
 }) {
   return (
     <span aria-hidden="true" className="relative shrink-0">
       <span
         data-slot="strip-disc"
         className={cn(
-          "relative flex size-7 items-center justify-center overflow-hidden rounded-full border-2 bg-surface-raised",
-          "text-micro leading-none font-semibold text-heading",
-          party ? "border-info" : "border-danger",
-          hidden ? "border-dashed" : "border-solid",
+          "relative flex items-center justify-center overflow-hidden rounded-full border-2 bg-surface-raised",
+          "leading-none font-semibold text-heading",
+          size === "chip" && "size-7 text-micro",
+          size === "ribbon" && "size-9 text-label-s",
+          size === "up" && "size-12 text-label shadow-glow-accent",
+          ring === "active"
+            ? "border-accent"
+            : ring === "selected"
+              ? "border-heading"
+              : party
+                ? "border-info"
+                : "border-danger",
+          hidden || dashed ? "border-dashed" : "border-solid",
         )}
       >
         {label}

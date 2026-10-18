@@ -1,5 +1,6 @@
 import type {
   ActionArea,
+  ActionCost,
   CharacterSheet,
   CreatureFeature,
   NpcAttack,
@@ -51,6 +52,8 @@ export interface ActionLine {
    * comes from its option instead.
    */
   readonly area?: ActionArea;
+  /** What it costs, when the block's section or the sheet's line says. */
+  readonly cost?: ActionCost;
 }
 
 /** `+7`, `-1`, `+0`. */
@@ -73,6 +76,7 @@ const rolls = (line: ActionLine): boolean =>
 const fromFeature =
   (section: string) =>
   (feature: CreatureFeature): ActionLine => ({
+    ...(section === "action" || section === "bonus" ? { cost: section } : {}),
     key: `${section}:${feature.name}`,
     name: feature.name,
     toHit: feature.attackBonus,
@@ -119,6 +123,7 @@ const fromSheet = (action: SheetAction): ActionLine => {
       ...(action.spellAttack === undefined ? {} : { spell: action.spellAttack }),
     },
     ...(action.area === undefined ? {} : { area: action.area }),
+    ...(action.cost === undefined ? {} : { cost: action.cost }),
   };
 };
 

@@ -30,13 +30,17 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { deathSaveWrites, setOwnDeathSaves } from "../characters/write";
-import { type ActionLine, actionsOf } from "../run/actions";
-import { rollActionThrows } from "../run/attack";
+import { type ActionLine, actionDetail, actionsOf } from "../run/actions";
+import { attacks, rollActionThrows, rolls as rollsDice } from "../run/attack";
+import { TargetBanner } from "../run/AttackResult";
+import { PartyRail, type RailRow } from "../run/PartyRail";
 import { actsOfTable } from "../run/effects";
 import { useEscapeAway } from "../run/escape";
 import { bandOfLine, deliveryFor } from "../run/options";
 import { RunLayout } from "../run/RunLayout";
+import { CanvasTitle } from "../run/CanvasTitle";
 import { RunStage } from "../run/RunStage";
+import { TurnCard, type TurnTile } from "../run/TurnCard";
 import { useStage } from "../run/stage";
 import { feetLeft, type TurnTicks } from "../run/turn";
 import { useFullscreen } from "../shell/slots";
@@ -47,7 +51,7 @@ import { PlayerBattleMap, PlayerBoardStage, type PlayerBoardProps } from "./Play
 import { TableRowCard, YourCard } from "./PlayerCard";
 import { PlayerStrip } from "./PlayerStrip";
 import { SceneOnTheTable } from "./SceneOnTheTable";
-import { tableLabels } from "./tableRows";
+import { tableLabels, tableRowState } from "./tableRows";
 import { usePlayerTableStream } from "./tableStream";
 import {
   ReadAloud,
@@ -225,8 +229,11 @@ export function PlayerTableScreen() {
    * resolved by the server against the AC you are never told.
    */
   const aimAt = (row: PlayerLiveCombatant) => {
-    const line = aiming;
-    if (line === undefined || you === undefined || row.combatantId === you.combatantId) return;
+    if (aiming !== undefined) aimWith(aiming, row);
+  };
+  /** A line at a creature: from the turn card, target first, or once aimed. */
+  const aimWith = (line: ActionLine, row: PlayerLiveCombatant) => {
+    if (you === undefined || row.combatantId === you.combatantId) return;
     const board = fight?.board ?? null;
     const at = (id: CombatantId) =>
       board?.tokens.find((token) => token.combatantId === id)?.position;
@@ -283,6 +290,7 @@ export function PlayerTableScreen() {
         };
   const canvas = stage.wide === true && boardProps !== undefined;
 
+  const turnCardShown = canvas && yourTurn && you !== undefined;
   const card =
     selected !== undefined && selected.kind !== "you" ? (
       <TableRowCard
@@ -297,8 +305,9 @@ export function PlayerTableScreen() {
         you={you}
         label={you === undefined ? "?" : (labels.get(you.combatantId) ?? "?")}
         speed={speed}
-        actions={actions}
-        turns={turns}
+        // On the canvas your turn is the turn card's (`run/TurnCard.tsx`).
+        actions={turnCardShown ? [] : actions}
+        turns={turns && !turnCardShown}
         yourTurn={yourTurn}
         busy={turnWrite.busy || savesWrite.busy}
         onTick={tick}
@@ -342,9 +351,97 @@ export function PlayerTableScreen() {
         labels={labels}
         selectedId={selectedId}
         floating={canvas}
+        compact={canvas}
         onSelect={pick}
       />
     );
+
+  const partyRail = fight !== null && fight.mode === "combat" && (
+    <PartyRail
+      rows={fight.order.flatMap((row): ReadonlyArray<RailRow> =>
+        row.kind === "npc"
+          ? []
+          : [
+              {
+                id: row.combatantId,
+                displayName: row.displayName,
+                subtitle:
+                  [row.subtitle, row.kind === "ally" ? row.playerName : null]
+                    .filter((part): part is string => part !== null && part !== "")
+                    .join(" · ") || undefined,
+                ac: row.kind === "you" ? row.ac : null,
+                health: { hp: row.hpCurrent, max: row.hpMax },
+                conditions: row.conditions,
+                out: tableRowState(row).out,
+              },
+            ],
+      )}
+      activeId={upNextId ?? null}
+      selectedId={selectedId}
+      onSelect={(id) => {
+        const row = fight.order.find((candidate) => candidate.combatantId === id);
+        if (row !== undefined) pick(row);
+      }}
+    />
+  );
+
+  /** Whoever you picked, other than you: your attack's target, target first. */
+  const aimTarget = selected !== undefined && selected.kind !== "you" ? selected : undefined;
+  const turnCard =
+    turnCardShown && you !== undefined ? (
+      <TurnCard
+        name={you.displayName}
+        label={labels.get(you.combatantId) ?? "?"}
+        portrait={you.portrait === null ? undefined : you.portrait.thumbUrl}
+        subtitle={you.subtitle ?? undefined}
+        subtitleSerif={false}
+        health={{ hp: you.hpCurrent, max: you.hpMax }}
+        ac={you.ac}
+        spent={you}
+        speed={speed}
+        ticksDisabled={turnWrite.busy}
+        onTick={tick}
+        tiles={actions.flatMap((line): ReadonlyArray<TurnTile> => {
+          const common = {
+            key: line.key,
+            name: line.name,
+            detail: actionDetail(line),
+            cost: line.cost,
+          };
+          return canAim && attacks(line)
+            ? [
+                {
+                  ...common,
+                  kind: "attack",
+                  label: `Attack with ${line.name}`,
+                  pressed: aiming?.key === line.key,
+                  onPress: () => {
+                    if (aimTarget !== undefined) aimWith(line, aimTarget);
+                    else setAiming(line);
+                  },
+                },
+              ]
+            : rollsDice(line)
+              ? [
+                  {
+                    ...common,
+                    kind: "roll",
+                    label: `Roll ${line.name}`,
+                    onPress: () => rollAction(line),
+                  },
+                ]
+              : [];
+        })}
+        tilesDisabled={false}
+        hint={
+          aiming !== undefined
+            ? `Pick a target for ${aiming.name}.`
+            : aimTarget !== undefined
+              ? `Targeting ${aimTarget.displayName}. The DM tells you whether it lands.`
+              : "Pick a creature to target it, then an attack. Drag your token to move."
+        }
+      />
+    ) : null;
 
   const panel = (
     <>
@@ -389,25 +486,26 @@ export function PlayerTableScreen() {
     canvas && view !== undefined && table !== undefined && table !== null && fight !== null;
   useFullscreen(onCanvas);
 
+  const headerTitle = view?.campaign.name ?? "The table";
+  const headerSubtitle =
+    table === undefined
+      ? undefined
+      : table === null
+        ? "No shared live table for one of your seats."
+        : `Session ${String(table.sessionNumber)}${
+            fight === null
+              ? " · nothing on the table"
+              : fight.mode !== "combat"
+                ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
+                : fight.phase === "initiative"
+                  ? " · rolling initiative"
+                  : ` · round ${String(fight.round)}`
+          }`;
   const header = (
     <TopBar
       framed
-      title={view?.campaign.name ?? "The table"}
-      subtitle={
-        table === undefined
-          ? undefined
-          : table === null
-            ? "No shared live table for one of your seats."
-            : `Session ${String(table.sessionNumber)}${
-                fight === null
-                  ? " · nothing on the table"
-                  : fight.mode !== "combat"
-                    ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
-                    : fight.phase === "initiative"
-                      ? " · rolling initiative"
-                      : ` · round ${String(fight.round)}`
-              }`
-      }
+      title={headerTitle}
+      {...(headerSubtitle !== undefined && { subtitle: headerSubtitle })}
     >
       <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
         Overview
@@ -460,15 +558,24 @@ export function PlayerTableScreen() {
             </>
           ) : onCanvas && boardProps !== undefined ? (
             <RunStage
-              header={
-                <>
-                  {header}
-                  {notice}
-                </>
+              title={
+                <CanvasTitle
+                  back={{ to: "/campaigns/$campaignId", params: { campaignId } }}
+                  title={headerTitle}
+                  subtitle={headerSubtitle}
+                />
               }
               strip={strip}
+              controls={null}
+              notices={notice}
               rolling={yourInitiative}
-              banner={undefined}
+              party={partyRail || null}
+              turn={turnCard}
+              banner={
+                aiming === undefined ? undefined : (
+                  <TargetBanner action={aiming.name} onCancel={() => setAiming(undefined)} />
+                )
+              }
               panel={
                 <>
                   {panel}

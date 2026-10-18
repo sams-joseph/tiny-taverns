@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   Archive,
   ArrowBigUpDash,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
@@ -51,6 +52,7 @@ import {
   Keyboard,
   Layers,
   Link,
+  LocateFixed,
   ListChecks,
   LoaderCircle,
   Lock,
@@ -84,6 +86,7 @@ import {
   Snowflake,
   Sparkles,
   Star,
+  Sword,
   Swords,
   Trash2,
   TrendingUp,
@@ -168,10 +171,15 @@ import {
  * (Measure), `circle-dashed` (Area) and `cloud` (Fog). It also draws `monitor`
  * on a *Player view* toggle; that toggle was dropped, so the glyph is not here
  * until something draws it.
+ *
+ * Its successor, `Encounter Canvas.dc.html`, adds three: `arrow-left` (the
+ * title's way back), `locate-fixed` (the camera's *Centre on whoever is up*)
+ * and `sword` (an attack tile on the turn card).
  */
 export const icons = {
   archive: Archive,
   "arrow-big-up-dash": ArrowBigUpDash,
+  "arrow-left": ArrowLeft,
   "arrow-right": ArrowRight,
   "arrow-up": ArrowUp,
   "arrow-up-down": ArrowUpDown,
@@ -223,6 +231,7 @@ export const icons = {
   keyboard: Keyboard,
   layers: Layers,
   link: Link,
+  "locate-fixed": LocateFixed,
   "list-checks": ListChecks,
   "loader-circle": LoaderCircle,
   lock: Lock,
@@ -256,6 +265,7 @@ export const icons = {
   snowflake: Snowflake,
   sparkles: Sparkles,
   star: Star,
+  sword: Sword,
   swords: Swords,
   "trash-2": Trash2,
   "trending-up": TrendingUp,

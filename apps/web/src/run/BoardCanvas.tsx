@@ -3,6 +3,7 @@ import {
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,6 +11,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { type BoardFrame, BoardFrameContext } from "./boardFrame";
+import {
+  type BoardView,
+  applyLinear,
+  boundsUnder,
+  cssMatrix,
+  invertLinear,
+  linearOf,
+} from "./view";
 import {
   type CanvasView,
   keepInView,
@@ -38,21 +48,50 @@ import {
  * a scroller to the browser, and focusing a token past its edge (the arrow
  * keys walk one) would scroll it and slide the board out from under the view.
  *
- * The board is drawn at its plane's own size and scaled by one CSS transform,
- * so `RunTokens`' percentages and its click-to-square arithmetic hold at every
- * zoom (`getBoundingClientRect` answers the transformed box).
+ * The board is drawn at its plane's own size and placed by one CSS transform:
+ * the view's tilt (`view.ts`, none looking straight down), then the pan and
+ * zoom, which `canvas.ts` works out over the box the tilted plane fills. So
+ * `RunTokens`' percentages hold at every zoom and either view, and a point on
+ * the screen lands on the plane through the inverse of that one transform
+ * (`BoardFrame`, which the layers inside ask through `usePlanePoint`).
  *
- * Until the DM pans or zooms, the view follows the canvas as it resizes
- * (`openingView`, in the part no panel covers); after that it is theirs.
+ * Until the DM pans or zooms, the view follows the canvas as it resizes, and
+ * whoever is up when it is given one (`openingView`, in the part no panel
+ * covers); after that it is theirs.
  */
 
 /** A pointer that moved less than this is a press, not a drag. */
 const DRAG_PX = 4;
 
+/** One press of the camera's *Zoom in* or *Zoom out*. */
+const ZOOM_STEP = 1.25;
+
+/**
+ * The camera, for the buttons that drive it (`CameraBar.tsx`) and whoever
+ * follows the turn: the zoom against the opening view, and points of the
+ * board's plane to centre or bring into the free area.
+ */
+export interface Camera {
+  /** The zoom as a share of the view the canvas opened on. */
+  readonly scale: number;
+  readonly zoomIn: () => void;
+  readonly zoomOut: () => void;
+  /** Back to the opening view. */
+  readonly fit: () => void;
+  /** Centre a point of the plane in the free area. */
+  readonly centre: (point: { readonly x: number; readonly y: number }) => void;
+  /** Centre it only when it is outside the free area. */
+  readonly reveal: (point: { readonly x: number; readonly y: number }) => void;
+}
+
 export function BoardCanvas({
   plane: { width, height },
   cellPx,
   freeArea,
+  view: look = "top",
+  focus,
+  camera: cameraRef,
+  controls,
   children,
 }: {
   readonly plane: PictureSize;
@@ -60,14 +99,36 @@ export function BoardCanvas({
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
   readonly freeArea: (canvas: DOMRect) => PictureRect;
+  /** Straight down, or tilted (`view.ts`). */
+  readonly view?: BoardView;
+  /** What the view opens on until the DM moves it (`openingView`): whoever is up, in the plane's units. */
+  readonly focus?: { readonly x: number; readonly y: number } | undefined;
+  /** Where the camera is handed to whoever drives it from outside the canvas. */
+  readonly camera?: RefObject<Camera | null>;
+  /** The camera's own buttons, drawn beside the canvas rather than on it. */
+  readonly controls?: (camera: Camera) => ReactNode;
   /** The board, drawn at the plane's size. */
   readonly children: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   /** The free area as the canvas was last measured: what the view opens into. */
   const [opening, setOpening] = useState<PictureRect>();
   const [chosen, setChosen] = useState<CanvasView>();
-  const plane = useMemo<PictureSize>(() => ({ width, height }), [width, height]);
+  // The tilt and the box the tilted plane fills: the canvas's arithmetic works
+  // over that box, as it worked over the flat plane.
+  const tilt = linearOf(look);
+  const flat = useMemo(() => boundsUnder(tilt, { width, height }), [tilt, width, height]);
+  const plane = useMemo<PictureSize>(
+    () => ({ width: flat.width, height: flat.height }),
+    [flat.width, flat.height],
+  );
+  // A new view is a new board to open on.
+  const [lookOpened, setLookOpened] = useState(look);
+  if (lookOpened !== look) {
+    setLookOpened(look);
+    setChosen(undefined);
+  }
   const limits = useMemo(() => zoomLimits(cellPx), [cellPx]);
   const free = useRef(freeArea);
   free.current = freeArea;
@@ -92,9 +153,18 @@ export function BoardCanvas({
     return () => observer.disconnect();
   }, [area]);
 
-  const view: CanvasView =
-    chosen ??
-    (opening === undefined ? { x: 0, y: 0, zoom: 1 } : openingView(plane, opening, cellPx));
+  const focusOnFlat =
+    focus === undefined
+      ? undefined
+      : (() => {
+          const tilted = applyLinear(tilt, focus);
+          return { x: tilted.x - flat.x, y: tilted.y - flat.y };
+        })();
+  const opened =
+    opening === undefined
+      ? { x: 0, y: 0, zoom: 1 }
+      : openingView(plane, opening, cellPx, focusOnFlat);
+  const view: CanvasView = chosen ?? opened;
   // The latest view, for the handlers below, which are bound once.
   const current = useRef(view);
   current.current = view;
@@ -208,37 +278,103 @@ export function BoardCanvas({
     }
   };
 
+  /** A point of the plane, on the canvas. */
+  const onCanvas = (point: { readonly x: number; readonly y: number }, at: CanvasView) => {
+    const tilted = applyLinear(tilt, point);
+    return {
+      x: (tilted.x - flat.x) * at.zoom + at.x,
+      y: (tilted.y - flat.y) * at.zoom + at.y,
+    };
+  };
+  const centreIn = (point: { readonly x: number; readonly y: number }) => {
+    const clear = area();
+    if (clear === undefined) return;
+    const now = current.current;
+    const at = onCanvas(point, now);
+    settle({
+      ...now,
+      x: now.x + clear.x + clear.width / 2 - at.x,
+      y: now.y + clear.y + clear.height / 2 - at.y,
+    });
+  };
+  const camera: Camera = {
+    scale: view.zoom / opened.zoom,
+    zoomIn: () => zoomBy(ZOOM_STEP, centreOfFree()),
+    zoomOut: () => zoomBy(1 / ZOOM_STEP, centreOfFree()),
+    fit: () => setChosen(undefined),
+    centre: centreIn,
+    reveal: (point) => {
+      const clear = area();
+      if (clear === undefined) return;
+      const at = onCanvas(point, current.current);
+      const inside =
+        at.x >= clear.x &&
+        at.x <= clear.x + clear.width &&
+        at.y >= clear.y &&
+        at.y <= clear.y + clear.height;
+      if (!inside) centreIn(point);
+    },
+  };
+  function centreOfFree() {
+    const clear = area();
+    return clear === undefined
+      ? undefined
+      : { x: clear.x + clear.width / 2, y: clear.y + clear.height / 2 };
+  }
+  if (cameraRef !== undefined) cameraRef.current = camera;
+
+  const untilt = invertLinear(tilt);
+  const frame: BoardFrame = {
+    view: look,
+    root: () => content.current,
+    toContent: (clientX, clientY) => {
+      const box = viewport.current?.getBoundingClientRect();
+      if (box === undefined) return undefined;
+      const now = current.current;
+      return applyLinear(untilt, {
+        x: (clientX - box.left - now.x) / now.zoom + flat.x,
+        y: (clientY - box.top - now.y) / now.zoom + flat.y,
+      });
+    },
+  };
+
   return (
-    <div
-      ref={viewport}
-      data-slot="board-canvas"
-      className="absolute inset-0 cursor-grab touch-none overflow-clip select-none active:cursor-grabbing"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onClickCapture={(event) => {
-        // A click with no press behind it is the keyboard, never a drag's.
-        if (!swallowClick.current || event.detail === 0) return;
-        swallowClick.current = false;
-        event.stopPropagation();
-        event.preventDefault();
-      }}
-    >
+    <BoardFrameContext.Provider value={frame}>
       <div
-        data-slot="board-canvas-content"
-        className="absolute top-0 left-0 w-(--board-w) origin-top-left [transform:translate(var(--pan-x),var(--pan-y))_scale(var(--zoom))]"
-        style={
-          {
-            "--board-w": `${String(plane.width)}px`,
-            "--pan-x": `${String(view.x)}px`,
-            "--pan-y": `${String(view.y)}px`,
-            "--zoom": String(view.zoom),
-          } as CSSProperties
-        }
+        ref={viewport}
+        data-slot="board-canvas"
+        className="absolute inset-0 cursor-grab touch-none overflow-clip select-none active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onClickCapture={(event) => {
+          // A click with no press behind it is the keyboard, never a drag's.
+          if (!swallowClick.current || event.detail === 0) return;
+          swallowClick.current = false;
+          event.stopPropagation();
+          event.preventDefault();
+        }}
       >
-        {children}
+        <div
+          ref={content}
+          data-slot="board-canvas-content"
+          data-view={look}
+          className="absolute top-0 left-0 w-(--board-w) origin-top-left [transform:translate(var(--pan-x),var(--pan-y))_scale(var(--zoom))_var(--tilt)]"
+          style={
+            {
+              "--board-w": `${String(width)}px`,
+              "--pan-x": `${String(view.x)}px`,
+              "--pan-y": `${String(view.y)}px`,
+              "--zoom": String(view.zoom),
+              "--tilt": cssMatrix(tilt, -flat.x, -flat.y),
+            } as CSSProperties
+          }
+        >
+          {children}
+        </div>
       </div>
-    </div>
+      {controls?.(camera)}
+    </BoardFrameContext.Provider>
   );
 }

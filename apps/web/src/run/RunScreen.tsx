@@ -13,10 +13,9 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
-import { attackModeAt, rollFace, saveModifier, walkingFeet } from "@taverns/api";
+import { attackLands, attackModeAt, rollFace, saveModifier, walkingFeet } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
-  BackLink,
   Badge,
   Button,
   Icon,
@@ -41,17 +40,20 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
-import { actionsOf, type ActionLine } from "./actions";
+import { actionDetail, actionsOf, type ActionLine } from "./actions";
 import {
   attackThrows,
   concentrationSave,
   concentrationThrow,
   resolveAttack,
+  attacks,
   rollActionThrows,
+  rolls,
   type AttackOutcome,
 } from "./attack";
-import { TargetBanner } from "./AttackResult";
+import { AttackResultCard, TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
+import { CanvasTitle } from "./CanvasTitle";
 import { CombatantPanel } from "./CombatantPanel";
 import { autopilotDriverId, useAutopilot } from "../hob/autopilot";
 import { useHobAvailable } from "../hob/fightTurn";
@@ -81,11 +83,15 @@ import {
   rollsAtom,
   runBoardAtom,
   runViewAtom,
+  outOfTheFight,
   rollingLine,
+  subtitleOf,
   upLine,
   type RunPath,
 } from "./load";
+import { PartyRail } from "./PartyRail";
 import { RollsDock } from "./RollsDock";
+import { TurnCard, type TurnTile } from "./TurnCard";
 import { dockLines } from "./rollsLog";
 import { actsOf, actsOfRolls } from "./effects";
 import { SessionLog } from "./SessionLog";
@@ -1254,27 +1260,35 @@ export function RunScreen() {
     return true;
   };
 
-  /** The waiting attack against whoever was picked; the attacker itself is no target, and picks nothing. */
-  const strike = (combatant: Combatant) => {
-    if (picking === undefined) return;
-    const attacker = state?.combatants.find((row) => row.id === picking.attackerId);
-    if (attacker === undefined || combatant.id === attacker.id || dice.file === undefined) return;
+  /**
+   * An attack resolved against a target, by the rule the server resolves a
+   * Hob-run monster's with (`resolveAttack`), filed with the DM's dice. A hit
+   * applies itself at once (the maintainer's call of 2026-10-17): the result
+   * card says what was sent, with *Undo* and *Half instead*. The attacker
+   * itself is no target.
+   */
+  const resolveOn = (attacker: Combatant, line: ActionLine, combatant: Combatant) => {
+    if (combatant.id === attacker.id || dice.file === undefined) return;
+    const options =
+      optionsSource === undefined ? undefined : rangeOptionsFor(optionsSource, attacker);
+    const out = outOfRangeFor(options, line);
+    const long = longRangeFor(options, line);
     const outcome = resolveAttack({
       attacker: attacker.displayName,
-      line: picking.line,
+      line,
       target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
-      mode: attackModeAt(marks?.long.has(combatant.id) === true ? "long" : undefined),
+      mode: attackModeAt(long.has(combatant.id) ? "long" : undefined),
     });
     dice.file(
       attackThrows(outcome, {
         attackerId: attacker.id,
         targetId: combatant.id,
         delivery: deliveryFor(
-          pickOptions,
-          picking.line,
+          options,
+          line,
           combatant.id,
           bandOfLine(
-            picking.line,
+            line,
             attacker.position,
             combatant.position,
             boardRead == null
@@ -1288,21 +1302,69 @@ export function RunScreen() {
       }),
     );
     setTargeting(undefined);
+    const hit = attackLands(outcome.verdict) && outcome.amount > 0;
+    const hpBefore = controller.hpOf(combatant);
     setAttack({
       attackerId: attacker.id,
       targetId: combatant.id,
       outcome,
-      range: marks?.out.has(combatant.id)
-        ? "out"
-        : marks?.long.has(combatant.id)
-          ? "long"
-          : undefined,
-      applied: undefined,
+      range: out.has(combatant.id) ? "out" : long.has(combatant.id) ? "long" : undefined,
+      applied: hit ? { amount: outcome.amount, hpBefore } : undefined,
       saveRolled: false,
     });
     // A swing on its own turn is its action (`attackSpends`); off it, a
     // reaction is the DM's to tick.
     turnTicks.spendAction(attacker);
+    if (hit) {
+      void damage(combatant, outcome.amount, outcome.verdict === "critical").then((landed) => {
+        if (!landed)
+          setAttack((now) =>
+            now !== undefined && now.outcome === outcome ? { ...now, applied: undefined } : now,
+          );
+      });
+    }
+  };
+
+  /** The waiting attack against whoever was picked. */
+  const strike = (combatant: Combatant) => {
+    if (picking === undefined) return;
+    const attacker = state?.combatants.find((row) => row.id === picking.attackerId);
+    if (attacker !== undefined) resolveOn(attacker, picking.line, combatant);
+  };
+
+  /**
+   * Whoever is up attacks with a line: at the selected creature at once when
+   * one other than the attacker is selected (target first, as `Encounter
+   * Canvas.dc.html` has it), otherwise by asking for a target.
+   */
+  const beginAttack = (attacker: Combatant, line: ActionLine) => {
+    setAttack(undefined);
+    const target = selected !== undefined && selected.id !== attacker.id ? selected : undefined;
+    if (target !== undefined) resolveOn(attacker, line, target);
+    else setTargeting({ attackerId: attacker.id, line });
+  };
+
+  /** A line with no target, to-hit and damage together, into the dock. */
+  const rollLine = (combatant: Combatant, line: ActionLine) =>
+    dice.file?.(
+      rollActionThrows({
+        attacker: combatant.displayName,
+        attackerId: combatant.id,
+        line,
+        area: areaFor(
+          optionsSource === undefined ? undefined : rangeOptionsFor(optionsSource, combatant),
+          line,
+          boardRead?.area,
+        ),
+      }),
+    );
+
+  /** A multiattack, strike by strike: the first now, each next from its result card. */
+  const runMultiattack = (attacker: Combatant, run: MultiattackRun) => {
+    const [first] = run.strikes;
+    if (first === undefined) return;
+    setSequence({ attackerId: attacker.id, run, next: 1 });
+    beginAttack(attacker, first);
   };
 
   /** A row of the order: the attack's target while one is picked, otherwise the creature the panel shows. */
@@ -1312,9 +1374,9 @@ export function RunScreen() {
   };
 
   /**
-   * The result card's *Apply* or *Half*: the existing damage delta, once, with
-   * the critical flag a natural 20 carries. A refused write puts the buttons
-   * back with the hit points.
+   * The result card's *Apply*, *Half* or *Half instead*: the damage delta that
+   * brings what the target lost to what the DM chose, with the critical flag a
+   * natural 20 carries. A refused write puts the card back as it was.
    */
   const applyAttack = async (amount: number) => {
     if (attack === undefined) return;
@@ -1327,9 +1389,33 @@ export function RunScreen() {
       });
       return;
     }
-    setAttack({ ...attack, applied: { amount, hpBefore: controller.hpOf(target) } });
-    const landed = await damage(target, amount, attack.outcome.verdict === "critical");
-    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: undefined }));
+    const before = attack.applied;
+    const hpBefore = before?.hpBefore ?? controller.hpOf(target);
+    const delta =
+      before === undefined
+        ? amount
+        : Math.min(amount, hpBefore) - Math.min(before.amount, before.hpBefore);
+    setAttack({ ...attack, applied: { amount, hpBefore } });
+    if (delta === 0) return;
+    const landed = await damage(target, delta, delta > 0 && attack.outcome.verdict === "critical");
+    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: before }));
+  };
+
+  /**
+   * The result card's *Undo*: heals back what the hit took, which is what was
+   * sent less what the target did not have. Offered only for a target that
+   * had hit points to lose, since a hit at zero is a death-save failure no
+   * heal takes back.
+   */
+  const undoAttack = async () => {
+    if (attack?.applied === undefined) return;
+    const target = state?.combatants.find((row) => row.id === attack.targetId);
+    if (target === undefined) return;
+    const before = attack.applied;
+    const lost = Math.min(before.amount, before.hpBefore);
+    setAttack({ ...attack, applied: undefined, saveRolled: false });
+    const landed = await damage(target, -lost, false);
+    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: before }));
   };
 
   /** The concentration save the attack's hit set up, filed with the DM's dice; once per hit. */
@@ -1646,6 +1732,7 @@ export function RunScreen() {
         selectedId={selected?.id}
         board={boardResource.state === "ready" && boardResource.value !== null}
         floating={canvas}
+        compact={canvas}
         disabled={frozen}
         outOfRange={marks?.out}
         onSelect={choose}
@@ -1675,6 +1762,11 @@ export function RunScreen() {
   const result = attack && {
     outcome: attack.outcome,
     applied: attack.applied !== undefined,
+    sent: attack.applied?.amount,
+    onUndo:
+      attack.applied !== undefined && attack.applied.hpBefore > 0
+        ? () => void undoAttack()
+        : undefined,
     concentrationDc: owed,
     onRollSave:
       file !== undefined &&
@@ -1693,38 +1785,38 @@ export function RunScreen() {
       return {
         label: `Next: ${line.name} (${String(sequence.next + 1)} of ${String(sequence.run.strikes.length)})`,
         onNext: () => {
-          setAttack(undefined);
-          setTargeting({ attackerId: attack.attackerId, line });
+          const attacker = state?.combatants.find((row) => row.id === attack.attackerId);
           setSequence({ ...sequence, next: sequence.next + 1 });
+          if (attacker !== undefined) beginAttack(attacker, line);
         },
       };
     })(),
   };
+  // On the canvas whoever is up is the turn card's (`TurnCard.tsx`), so the
+  // panel is the target's, or the up creature's details without its turn.
+  const turnShown = canvas && state !== undefined && !over && !rolling && active !== undefined;
+  const selectedIsTurn = turnShown && selected !== undefined && selected.id === active?.id;
   const card = state !== undefined && view !== undefined && (
     <>
       <CombatantPanel
+        variant={canvas ? "canvas" : "card"}
         campaignId={path.campaignId}
         combatant={selected}
         hp={selected === undefined ? 0 : controller.hpOf(selected)}
         label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
         speed={selected === undefined ? undefined : speedOf(selected)}
-        actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
-        multiattacks={selected === undefined ? [] : multiattacksOf(selectedOptions)}
+        // On the canvas whoever is up acts from the turn card.
+        actions={selected === undefined || selectedIsTurn ? [] : actionsOf(sourceOf(selected))}
+        multiattacks={
+          selected === undefined || selectedIsTurn ? [] : multiattacksOf(selectedOptions)
+        }
         onMultiattack={
-          file === undefined
-            ? undefined
-            : (run) => {
-                const [first] = run.strikes;
-                if (selected === undefined || first === undefined) return;
-                setAttack(undefined);
-                setSequence({ attackerId: selected.id, run, next: 1 });
-                setTargeting({ attackerId: selected.id, line: first });
-              }
+          file === undefined ? undefined : (run) => selected && runMultiattack(selected, run)
         }
         creatures={view.creatures}
         active={selected !== undefined && selected.id === state.run.activeCombatantId}
         turn={
-          selected !== undefined && !over && isUp(selected, state.run)
+          selected !== undefined && !over && !selectedIsTurn && isUp(selected, state.run)
             ? {
                 busy: turnTicks.busy,
                 onTick: (ticks) => void turnTicks.tick(selected, ticks),
@@ -1781,6 +1873,7 @@ export function RunScreen() {
         }
         result={
           attack !== undefined &&
+          !turnShown &&
           attack.attackerId === selected?.id &&
           attack.attackerId === active?.id
             ? result
@@ -1791,30 +1884,14 @@ export function RunScreen() {
             ? undefined
             : (line) => {
                 if (selected === undefined) return;
-                setAttack(undefined);
                 setSequence(undefined);
-                setTargeting({ attackerId: selected.id, line });
+                beginAttack(selected, line);
               }
         }
         onRollAction={
           file === undefined
             ? undefined
-            : (line) =>
-                selected !== undefined &&
-                file(
-                  rollActionThrows({
-                    attacker: selected.displayName,
-                    attackerId: selected.id,
-                    line,
-                    area: areaFor(
-                      optionsSource === undefined
-                        ? undefined
-                        : rangeOptionsFor(optionsSource, selected),
-                      line,
-                      boardRead?.area,
-                    ),
-                  }),
-                )
+            : (line) => selected !== undefined && rollLine(selected, line)
         }
         onApplyResult={(amount) => void applyAttack(amount)}
         onDismissResult={() => {
@@ -1878,6 +1955,146 @@ export function RunScreen() {
       dice={dice}
     />
   );
+  const partyRail = state !== undefined && (
+    <PartyRail
+      rows={state.combatants
+        .filter((combatant) => combatant.side === "party")
+        .map((combatant) => {
+          const hp = controller.hpOf(combatant);
+          return {
+            id: combatant.id,
+            displayName: combatant.displayName,
+            subtitle: subtitleOf(combatant),
+            ac: combatant.ac,
+            health: { hp, max: combatant.hpMax },
+            conditions: combatant.conditions,
+            out: outOfTheFight(combatant, hp),
+          };
+        })}
+      activeId={state.run.activeCombatantId}
+      selectedId={selected?.id}
+      outOfRange={marks?.out}
+      onSelect={(id) => {
+        const combatant = state.combatants.find((row) => row.id === id);
+        if (combatant !== undefined) choose(combatant);
+      }}
+    />
+  );
+
+  /** *Next turn*: the header's off the canvas, the turn card's on it. */
+  const nextTurn = !rolling && scene === undefined && (
+    // No key advances the turn: the table's own call (D13), so a stray key
+    // press mid-fight never moves the marker.
+    <Button
+      size="sm"
+      disabled={turn.busy || (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")}
+      onClick={() => {
+        // Autopilot takes the legendary actions due first.
+        if (driving && pilot.endTurn()) return;
+        void advance();
+      }}
+    >
+      {turn.busy ? "Advancing…" : "Next turn"}
+      <Icon name="chevron-right" size={14} />
+    </Button>
+  );
+
+  const resultCard = result !== undefined && (
+    <AttackResultCard
+      outcome={result.outcome}
+      applied={result.applied}
+      sent={result.sent}
+      onUndo={result.onUndo}
+      concentrationDc={result.concentrationDc}
+      disabled={frozen}
+      onRollSave={result.onRollSave}
+      range={result.range}
+      next={result.next}
+      onApply={(amount) => void applyAttack(amount)}
+      onDismiss={() => {
+        setAttack(undefined);
+        setSequence(undefined);
+      }}
+    />
+  );
+  const target =
+    selected !== undefined && active !== undefined && selected.id !== active.id
+      ? selected
+      : undefined;
+  const turnCard =
+    turnShown && active !== undefined ? (
+      <TurnCard
+        name={active.displayName}
+        label={labels.get(active.id) ?? ""}
+        portrait={
+          active.kind === "pc" && active.portrait !== null ? active.portrait.thumbUrl : undefined
+        }
+        subtitle={subtitleOf(active)}
+        subtitleSerif={active.kind !== "pc"}
+        health={{ hp: controller.hpOf(active), max: active.hpMax }}
+        ac={active.ac}
+        spent={active}
+        speed={speedOf(active)}
+        ticksDisabled={frozen || turnTicks.busy}
+        onTick={(ticks) => void turnTicks.tick(active, ticks)}
+        tiles={[
+          ...multiattacksOf(
+            optionsSource === undefined ? undefined : runOptionsFor(optionsSource, active),
+          ).map((run): TurnTile => ({
+            key: run.id,
+            name: run.name,
+            detail: run.summary,
+            cost: "action",
+            kind: "multiattack",
+            label: `${run.name}: ${run.summary}`,
+            pressed: picking !== undefined && sequence?.run.id === run.id,
+            onPress: () => runMultiattack(active, run),
+          })),
+          ...actionsOf(sourceOf(active)).flatMap((line): ReadonlyArray<TurnTile> => {
+            const common = {
+              key: line.key,
+              name: line.name,
+              detail: actionDetail(line),
+              cost: line.cost,
+            };
+            if (attacks(line))
+              return [
+                {
+                  ...common,
+                  kind: "attack",
+                  label: `Attack with ${line.name}`,
+                  pressed: picking?.line.key === line.key && sequence === undefined,
+                  onPress: () => {
+                    setSequence(undefined);
+                    beginAttack(active, line);
+                  },
+                },
+              ];
+            if (rolls(line))
+              return [
+                {
+                  ...common,
+                  kind: "roll",
+                  label: `Roll ${line.name}`,
+                  onPress: () => rollLine(active, line),
+                },
+              ];
+            return [];
+          }),
+        ]}
+        tilesDisabled={frozen || file === undefined}
+        result={attack?.attackerId === active.id ? resultCard : undefined}
+        hint={
+          picking !== undefined
+            ? `Pick a target for ${picking.line.name}: a token, a name in the order or the party.`
+            : target !== undefined
+              ? `Targeting ${target.displayName}${target.ac === null ? "" : `, AC ${String(target.ac)}`}. An attack resolves against them.`
+              : "Select a creature to make it the target, or pick an attack and then its target. Drag a token to move it."
+        }
+        action={nextTurn}
+      />
+    ) : null;
+
   const boardProps: RunBoardProps | undefined =
     state === undefined || view === undefined
       ? undefined
@@ -1915,40 +2132,26 @@ export function RunScreen() {
   const onCanvas = canvas && state !== undefined && view !== undefined && boardProps !== undefined;
   useFullscreen(onCanvas);
 
-  const header = (
-    <TopBar
-      framed
-      title={state?.run.encounterName ?? "The fight"}
-      {...(state !== undefined &&
-        scene !== undefined && {
-          badge: <Badge variant="secondary">{sceneBadge(scene)}</Badge>,
-          ...(over
-            ? { subtitle: `This ${sceneNoun(scene)} is over` }
-            : sceneResource.state === "ready" &&
-              sceneResource.value !== null && {
-                subtitle: sceneUpLine(scene, sceneResource.value),
-              }),
-        })}
-      {...(state !== undefined &&
-        scene === undefined && {
-          badge: (
-            <Badge variant="secondary">
-              {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
-            </Badge>
-          ),
-          subtitle: over
-            ? "This fight is over"
-            : rolling
-              ? rollingLine(state.combatants)
-              : upLine(state.combatants, state.run.activeCombatantId),
-        })}
-    >
-      {onCanvas && (
-        // The nav rows are put away while the canvas holds the window, so the
-        // way back is the header's.
-        <BackLink render={<Link {...back} />}>Overview</BackLink>
-      )}
-      {onCanvas && hobAvailable === true && showHob !== undefined && (
+  const title = state?.run.encounterName ?? "The fight";
+  const subtitle =
+    state === undefined
+      ? undefined
+      : scene !== undefined
+        ? over
+          ? `This ${sceneNoun(scene)} is over`
+          : sceneResource.state === "ready" && sceneResource.value !== null
+            ? sceneUpLine(scene, sceneResource.value)
+            : undefined
+        : over
+          ? "This fight is over"
+          : rolling
+            ? rollingLine(state.combatants)
+            : upLine(state.combatants, state.run.activeCombatantId);
+
+  /** The switches over what the table sees, and the way out of the fight: the header's, or the canvas's top right. */
+  const controls = (inHeader: boolean) => (
+    <>
+      {!inHeader && hobAvailable === true && showHob !== undefined && (
         // The nav's *Ask Hob* is put away with it; ⌘K still reaches the panel.
         <Button variant="outline" size="sm" onClick={showHob}>
           Ask Hob
@@ -2001,25 +2204,9 @@ export function RunScreen() {
             </span>
           )}
           {/* While rolling, the round's one start is the panel's *Start
-            round N*, so the bar carries no second peach button. */}
-          {!rolling && scene === undefined && (
-            // No key advances the turn: the table's own call (D13), so a
-            // stray key press mid-fight never moves the marker.
-            <Button
-              size="sm"
-              disabled={
-                turn.busy || (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")
-              }
-              onClick={() => {
-                // Autopilot takes the legendary actions due first.
-                if (driving && pilot.endTurn()) return;
-                void advance();
-              }}
-            >
-              {turn.busy ? "Advancing…" : "Next turn"}
-              <Icon name="chevron-right" size={14} />
-            </Button>
-          )}
+            round N*, so the bar carries no second peach button; on the
+            canvas *Next turn* is the turn card's. */}
+          {inHeader && nextTurn}
           <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
             End
           </Button>
@@ -2030,7 +2217,43 @@ export function RunScreen() {
           Back to the campaign
         </Button>
       )}
+    </>
+  );
+
+  const header = (
+    <TopBar
+      framed
+      title={title}
+      {...(subtitle !== undefined && { subtitle })}
+      {...(state !== undefined && {
+        badge: (
+          <Badge variant="secondary">
+            {scene !== undefined
+              ? sceneBadge(scene)
+              : rolling && !over
+                ? "Initiative"
+                : `Round ${String(state.run.round)}`}
+          </Badge>
+        ),
+      })}
+    >
+      {controls(true)}
     </TopBar>
+  );
+
+  const canvasTitle = (
+    <CanvasTitle
+      back={back}
+      title={title}
+      subtitle={[
+        view === undefined
+          ? undefined
+          : `${view.campaign.name} · Session ${String(view.session.number)}`,
+        subtitle,
+      ]
+        .filter((part) => part !== undefined)
+        .join(" · ")}
+    />
   );
 
   /** The lines under the header: an ended fight, the autopilot, a fight that fell behind. */
@@ -2118,14 +2341,13 @@ export function RunScreen() {
               />
             ) : onCanvas ? (
               <RunStage
-                header={
-                  <>
-                    {header}
-                    {notices}
-                  </>
-                }
+                title={canvasTitle}
                 strip={strip}
+                controls={controls(false)}
+                notices={notices}
                 rolling={rollPanel}
+                party={partyRail || null}
+                turn={turnCard}
                 banner={banner}
                 panel={
                   <>

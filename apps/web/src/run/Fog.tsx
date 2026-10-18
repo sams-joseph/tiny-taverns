@@ -5,6 +5,7 @@ import {
   battleMapPlane,
   squareAt,
 } from "@taverns/api";
+import { usePlanePoint } from "./boardFrame";
 import { Button, cn } from "@taverns/ui";
 import { type PointerEvent, useRef, useState } from "react";
 import { fogOutline, squareKey } from "./fog";
@@ -84,13 +85,10 @@ export function FogBrush({
   const painting = useRef<{ readonly pointerId: number; last: BoardSquare } | undefined>(undefined);
   const [hover, setHover] = useState<BoardSquare>();
 
+  const planePoint = usePlanePoint(layer, plane);
   const squareUnder = (event: PointerEvent<HTMLDivElement>): BoardSquare | undefined => {
-    const box = layer.current?.getBoundingClientRect();
-    if (box === undefined || box.width === 0 || box.height === 0) return undefined;
-    return squareAt(board, {
-      x: ((event.clientX - box.left) / box.width) * plane.width,
-      y: ((event.clientY - box.top) / box.height) * plane.height,
-    });
+    const point = planePoint(event.clientX, event.clientY);
+    return point === undefined ? undefined : squareAt(board, point);
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {

@@ -15,7 +15,7 @@ export const HEIGHT = 900;
 
 /** What the screen is ready on: its header, or the heading an Overview's hero draws. */
 const READY =
-  '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="overview-hero"] h1';
+  '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="overview-hero"] h1, [data-slot="run-hud-title"] h1';
 
 /**
  * The page is signed in by the stub server's stand-in session
