@@ -15,11 +15,8 @@ import { DrawnImage } from "../hob/DrawnImage";
  * units of its `viewBox`), so nothing here restates a measurement.
  *
  * It is two layers. The **base** lies on the board: a ring and a wash in the
- * side's colour (peach, glowing, for whoever is up), which tilts with the
- * floor in the isometric view and so reads as an ellipse there. The **stand**
- * is the disc, its badges, the hit-point bar and the name, turned back upright
- * by `upright` (`view.ts`) so it faces the DM however the floor is turned, and
- * raised off the base while the board is tilted.
+ * side's colour (peach, glowing, for whoever is up). The **stand** is the
+ * disc, its badges, the hit-point bar and the name, standing over it.
  *
  * - **active**, the one whose turn it is: a peach ring outside the disc, with
  *   the board's colour between them, and a peach base.
@@ -40,7 +37,7 @@ import { DrawnImage } from "../hob/DrawnImage";
  *
  * ### Standing on the board
  *
- * Looking straight down, the disc stands a little off the map, over a shadow
+ * The disc stands a little off the map, over a shadow
  * cast down and to the right (the board's 2.5D): the one whose turn it is
  * rises a step, one being dragged rises two, and its shadow falls further
  * away and fainter as it does. A token that moves hops (`hop`): its disc lifts
@@ -62,7 +59,6 @@ export function TokenFace({
   name,
   lifted,
   hop,
-  upright,
 }: {
   /** The party's colour rather than everyone else's. */
   readonly party: boolean;
@@ -83,11 +79,8 @@ export function TokenFace({
   readonly lifted?: "turn" | "held" | undefined;
   /** Flips each time it moves, which restarts the hop; never moved, no hop. */
   readonly hop?: "a" | "b" | undefined;
-  /** The transform that stands the stand upright on a tilted board (`uprightTransform`); absent looking straight down. */
-  readonly upright?: string | undefined;
 }) {
   const ringed = active || selected;
-  const tilted = upright !== undefined;
   return (
     <span
       data-slot="token-face"
@@ -113,177 +106,161 @@ export function TokenFace({
                 : "fill-danger/15 stroke-danger",
           )}
         />
-        {!tilted && (
-          <circle
-            cx={20}
-            cy={20}
-            r={15}
-            data-slot="token-shadow"
-            className={cn(
-              "fill-scrim transition-[translate,opacity] duration-(--dur-fast) ease-out",
-              lifted === "held"
-                ? "translate-x-2 translate-y-3.5 opacity-50"
-                : lifted === "turn"
-                  ? "translate-x-1.5 translate-y-2.5 opacity-75"
-                  : "translate-x-1 translate-y-1.5 opacity-90",
-            )}
-          />
-        )}
+        <circle
+          cx={20}
+          cy={20}
+          r={15}
+          data-slot="token-shadow"
+          className={cn(
+            "fill-scrim transition-[translate,opacity] duration-(--dur-fast) ease-out",
+            lifted === "held"
+              ? "translate-x-2 translate-y-3.5 opacity-50"
+              : lifted === "turn"
+                ? "translate-x-1.5 translate-y-2.5 opacity-75"
+                : "translate-x-1 translate-y-1.5 opacity-90",
+          )}
+        />
       </svg>
       <svg
         viewBox="0 0 40 40"
         data-slot="token-stand"
-        className="absolute inset-0 size-full origin-center overflow-visible"
-        // eslint-disable-next-line shadcn/no-inline-styles -- the inverse of the board's tilt, computed from the view; no class can carry it.
-        style={upright === undefined ? undefined : { transform: upright }}
+        className="absolute inset-0 size-full overflow-visible"
       >
-        {/* Tilted, the disc stands on its base rather than lying in it. */}
-        <g className={cn(tilted && "-translate-y-3.5")}>
-          <g
-            data-slot="token-disc"
-            data-hop={hop}
-            className={cn(
-              "transition-[translate] duration-(--dur-fast) ease-out",
-              lifted === "held" ? "-translate-y-2" : lifted === "turn" && "-translate-y-1",
-              hop === "a" && "animate-token-hop-a",
-              hop === "b" && "animate-token-hop-b",
+        <g
+          data-slot="token-disc"
+          data-hop={hop}
+          className={cn(
+            "transition-[translate] duration-(--dur-fast) ease-out",
+            lifted === "held" ? "-translate-y-2" : lifted === "turn" && "-translate-y-1",
+            hop === "a" && "animate-token-hop-a",
+            hop === "b" && "animate-token-hop-b",
+          )}
+        >
+          {/* What a blow does to it (`fx/stage.ts`): knocked back and flashed white. */}
+          <g data-slot="token-recoil">
+            {ringed && (
+              <>
+                <circle
+                  cx={20}
+                  cy={20}
+                  r={17}
+                  fill="none"
+                  strokeWidth={2}
+                  className="stroke-surface-page"
+                />
+                <circle
+                  cx={20}
+                  cy={20}
+                  r={19}
+                  fill="none"
+                  strokeWidth={2}
+                  data-ring={active ? "active" : "selected"}
+                  className={active ? "stroke-accent" : "stroke-heading"}
+                />
+              </>
             )}
-          >
-            {/* What a blow does to it (`fx/stage.ts`): knocked back and flashed white. */}
-            <g data-slot="token-recoil">
-              {tilted && (
-                <ellipse cx={20} cy={36} rx={13} ry={3} className="fill-scrim opacity-80" />
+            {/* The ink every shape on the board is drawn in. */}
+            <circle
+              cx={20}
+              cy={20}
+              r={16.5}
+              strokeWidth={1.5}
+              fill="none"
+              className="stroke-fx-ink"
+            />
+            <circle
+              cx={20}
+              cy={20}
+              r={15}
+              strokeWidth={2}
+              strokeDasharray={hidden ? "4 3" : undefined}
+              data-ring={hidden ? "hidden" : undefined}
+              className={cn("fill-surface-raised", party ? "stroke-info" : "stroke-danger")}
+            />
+            <text
+              x={20}
+              y={20}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className={cn(
+                "fill-heading font-sans text-label-s font-semibold",
+                struck && "line-through",
               )}
-              {ringed && (
-                <>
-                  <circle
-                    cx={20}
-                    cy={20}
-                    r={17}
-                    fill="none"
-                    strokeWidth={2}
-                    className="stroke-surface-page"
-                  />
-                  <circle
-                    cx={20}
-                    cy={20}
-                    r={19}
-                    fill="none"
-                    strokeWidth={2}
-                    data-ring={active ? "active" : "selected"}
-                    className={active ? "stroke-accent" : "stroke-heading"}
-                  />
-                </>
-              )}
-              {/* The ink every shape on the board is drawn in. */}
-              <circle
-                cx={20}
-                cy={20}
-                r={16.5}
-                strokeWidth={1.5}
-                fill="none"
-                className="stroke-fx-ink"
-              />
-              <circle
-                cx={20}
-                cy={20}
-                r={15}
-                strokeWidth={2}
-                strokeDasharray={hidden ? "4 3" : undefined}
-                data-ring={hidden ? "hidden" : undefined}
+            >
+              {label}
+            </text>
+            {portrait !== undefined && (
+              <foreignObject x={6} y={6} width={28} height={28}>
+                <div
+                  data-slot="token-portrait"
+                  className="relative size-full overflow-hidden rounded-full"
+                >
+                  <DrawnImage src={apiUrl(portrait)} className="object-top" />
+                </div>
+              </foreignObject>
+            )}
+            {/* A hard rim of light from the top left. */}
+            <path
+              d="M 6.5 22 A 13.5 13.5 0 0 1 18 6.6"
+              fill="none"
+              strokeWidth={1.2}
+              strokeLinecap="round"
+              className="stroke-fx-radiant-core opacity-70"
+            />
+            <circle
+              data-slot="token-flash"
+              cx={20}
+              cy={20}
+              r={15}
+              opacity={0}
+              className="fill-fx-radiant-core"
+            />
+            {/* The side's mark on the disc's foot: a shield for the party, a skull for everyone else. */}
+            <foreignObject x={27} y={27} width={11} height={11}>
+              <span
+                data-slot="token-side"
                 className={cn(
-                  "fill-surface-raised",
-                  party ? "stroke-info" : "stroke-danger",
-                  // Tilted, the disc stands off its square: it takes the
-                  // token's press too, which reaches the token's button.
-                  tilted && "pointer-events-auto",
-                )}
-              />
-              <text
-                x={20}
-                y={20}
-                textAnchor="middle"
-                dominantBaseline="central"
-                className={cn(
-                  "fill-heading font-sans text-label-s font-semibold",
-                  struck && "line-through",
+                  "flex size-full items-center justify-center rounded-full border border-strong bg-surface-sunken",
+                  party ? "text-info" : "text-danger",
                 )}
               >
-                {label}
-              </text>
-              {portrait !== undefined && (
-                <foreignObject x={6} y={6} width={28} height={28}>
-                  <div
-                    data-slot="token-portrait"
-                    className="relative size-full overflow-hidden rounded-full"
+                <Icon name={party ? "shield" : "skull"} size={7} />
+              </span>
+            </foreignObject>
+            {conditions > 0 && (
+              <foreignObject x={2} y={-2} width={40} height={15}>
+                <div className="flex h-full justify-end">
+                  <span
+                    data-slot="token-conditions"
+                    className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
                   >
-                    <DrawnImage src={apiUrl(portrait)} className="object-top" />
-                  </div>
-                </foreignObject>
-              )}
-              {/* A hard rim of light from the top left. */}
-              <path
-                d="M 6.5 22 A 13.5 13.5 0 0 1 18 6.6"
-                fill="none"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                className="stroke-fx-radiant-core opacity-70"
-              />
-              <circle
-                data-slot="token-flash"
-                cx={20}
-                cy={20}
-                r={15}
-                opacity={0}
-                className="fill-fx-radiant-core"
-              />
-              {/* The side's mark on the disc's foot: a shield for the party, a skull for everyone else. */}
-              <foreignObject x={27} y={27} width={11} height={11}>
-                <span
-                  data-slot="token-side"
-                  className={cn(
-                    "flex size-full items-center justify-center rounded-full border border-strong bg-surface-sunken",
-                    party ? "text-info" : "text-danger",
-                  )}
-                >
-                  <Icon name={party ? "shield" : "skull"} size={7} />
-                </span>
+                    {conditions}
+                  </span>
+                </div>
               </foreignObject>
-              {conditions > 0 && (
-                <foreignObject x={2} y={-2} width={40} height={15}>
-                  <div className="flex h-full justify-end">
-                    <span
-                      data-slot="token-conditions"
-                      className="flex h-full min-w-3.75 items-center justify-center rounded-pill bg-magic px-0.75 font-mono text-micro leading-none font-semibold text-on-solid"
-                    >
-                      {conditions}
-                    </span>
-                  </div>
-                </foreignObject>
-              )}
-            </g>
+            )}
           </g>
-          {health !== undefined && (
-            <foreignObject x={8} y={-4} width={24} height={3}>
-              <HpBar fraction={health} className="h-full" />
-            </foreignObject>
-          )}
-          {name !== undefined && (
-            <foreignObject x={-100} y={health === undefined ? -22 : -26} width={240} height={20}>
-              <div className="flex h-full items-end justify-center">
-                <span
-                  data-slot="token-name"
-                  className={cn(
-                    "rounded-xs border bg-surface-sunken px-1.5 py-0.5 font-sans text-micro leading-snug font-medium whitespace-nowrap text-heading",
-                    active ? "border-accent" : "border-hairline",
-                  )}
-                >
-                  {name}
-                </span>
-              </div>
-            </foreignObject>
-          )}
         </g>
+        {health !== undefined && (
+          <foreignObject x={8} y={-4} width={24} height={3}>
+            <HpBar fraction={health} className="h-full" />
+          </foreignObject>
+        )}
+        {name !== undefined && (
+          <foreignObject x={-100} y={health === undefined ? -22 : -26} width={240} height={20}>
+            <div className="flex h-full items-end justify-center">
+              <span
+                data-slot="token-name"
+                className={cn(
+                  "rounded-xs border bg-surface-sunken px-1.5 py-0.5 font-sans text-micro leading-snug font-medium whitespace-nowrap text-heading",
+                  active ? "border-accent" : "border-hairline",
+                )}
+              >
+                {name}
+              </span>
+            </div>
+          </foreignObject>
+        )}
       </svg>
     </span>
   );

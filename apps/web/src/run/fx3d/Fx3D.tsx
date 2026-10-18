@@ -4,25 +4,20 @@ import type { DrawnBoard } from "../BoardTools";
 import type { BoardStage } from "../fx/stage";
 import type { Playing } from "../useBoardEffects";
 import type { FxEngine } from "./engine";
-import { useBoardViewOf } from "../boardFrame";
-import { type BoardView, screenUpOnPlane } from "../view";
-import { type GridOnPlane, LIFT } from "./projection";
+import type { GridOnPlane } from "./projection";
 
 type Stage3d = typeof import("./stage3d");
 
 /** The board's grid on its plane, as the effects' camera needs it. */
-const gridOf = (board: DrawnBoard, view: BoardView): GridOnPlane => {
+const gridOf = (board: DrawnBoard): GridOnPlane => {
   const plane = battleMapPlane(board, board.image);
   const first = cellRect(board, { column: 0, row: 0 });
-  const up = screenUpOnPlane(view);
   return {
     planeWidth: plane.width,
     planeHeight: plane.height,
     originX: first.x,
     originY: first.y,
     cell: first.width,
-    // Tilted, a height rises up the screen, not up the plane (`view.ts`).
-    ...(view === "iso" ? { lift: { x: up.x * LIFT, y: up.y * LIFT }, across: 1 } : {}),
   };
 };
 
@@ -53,10 +48,7 @@ export function Fx3D({
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<FxEngine | null>(null);
   const started = useRef(new Set<number>());
-  const view = useBoardViewOf();
-  const grid = gridOf(board, view);
-  const viewRef = useRef(view);
-  viewRef.current = view;
+  const grid = gridOf(board);
   const gridKey = JSON.stringify(grid);
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -77,11 +69,7 @@ export function Fx3D({
       .then((loaded) => {
         if (!alive) return;
         lib.current = loaded;
-        engine.current = new loaded.FxEngine({
-          host: at,
-          grid: gridOf(boardRef.current, viewRef.current),
-          stage,
-        });
+        engine.current = new loaded.FxEngine({ host: at, grid: gridOf(boardRef.current), stage });
         canvas = engine.current.renderer.domElement;
         canvas.addEventListener("webglcontextlost", lost);
         setReady(true);

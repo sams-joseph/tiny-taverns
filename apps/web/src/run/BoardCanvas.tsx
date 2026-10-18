@@ -11,15 +11,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { type BoardFrame, BoardFrameContext } from "./boardFrame";
-import {
-  type BoardView,
-  applyLinear,
-  boundsUnder,
-  cssMatrix,
-  invertLinear,
-  linearOf,
-} from "./view";
 import {
   type CanvasView,
   keepInView,
@@ -48,12 +39,9 @@ import {
  * a scroller to the browser, and focusing a token past its edge (the arrow
  * keys walk one) would scroll it and slide the board out from under the view.
  *
- * The board is drawn at its plane's own size and placed by one CSS transform:
- * the view's tilt (`view.ts`, none looking straight down), then the pan and
- * zoom, which `canvas.ts` works out over the box the tilted plane fills. So
- * `RunTokens`' percentages hold at every zoom and either view, and a point on
- * the screen lands on the plane through the inverse of that one transform
- * (`BoardFrame`, which the layers inside ask through `usePlanePoint`).
+ * The board is drawn at its plane's own size and scaled by one CSS transform,
+ * so `RunTokens`' percentages and its click-to-square arithmetic hold at every
+ * zoom (`getBoundingClientRect` answers the transformed box).
  *
  * Until the DM pans or zooms, the view follows the canvas as it resizes, and
  * whoever is up when it is given one (`openingView`, in the part no panel
@@ -88,7 +76,6 @@ export function BoardCanvas({
   plane: { width, height },
   cellPx,
   freeArea,
-  view: look = "top",
   focus,
   camera: cameraRef,
   controls,
@@ -99,8 +86,6 @@ export function BoardCanvas({
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
   readonly freeArea: (canvas: DOMRect) => PictureRect;
-  /** Straight down, or tilted (`view.ts`). */
-  readonly view?: BoardView;
   /** What the view opens on until the DM moves it (`openingView`): whoever is up, in the plane's units. */
   readonly focus?: { readonly x: number; readonly y: number } | undefined;
   /** Where the camera is handed to whoever drives it from outside the canvas. */
@@ -111,24 +96,10 @@ export function BoardCanvas({
   readonly children: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
-  const content = useRef<HTMLDivElement>(null);
   /** The free area as the canvas was last measured: what the view opens into. */
   const [opening, setOpening] = useState<PictureRect>();
   const [chosen, setChosen] = useState<CanvasView>();
-  // The tilt and the box the tilted plane fills: the canvas's arithmetic works
-  // over that box, as it worked over the flat plane.
-  const tilt = linearOf(look);
-  const flat = useMemo(() => boundsUnder(tilt, { width, height }), [tilt, width, height]);
-  const plane = useMemo<PictureSize>(
-    () => ({ width: flat.width, height: flat.height }),
-    [flat.width, flat.height],
-  );
-  // A new view is a new board to open on.
-  const [lookOpened, setLookOpened] = useState(look);
-  if (lookOpened !== look) {
-    setLookOpened(look);
-    setChosen(undefined);
-  }
+  const plane = useMemo<PictureSize>(() => ({ width, height }), [width, height]);
   const limits = useMemo(() => zoomLimits(cellPx), [cellPx]);
   const free = useRef(freeArea);
   free.current = freeArea;
@@ -153,17 +124,8 @@ export function BoardCanvas({
     return () => observer.disconnect();
   }, [area]);
 
-  const focusOnFlat =
-    focus === undefined
-      ? undefined
-      : (() => {
-          const tilted = applyLinear(tilt, focus);
-          return { x: tilted.x - flat.x, y: tilted.y - flat.y };
-        })();
   const opened =
-    opening === undefined
-      ? { x: 0, y: 0, zoom: 1 }
-      : openingView(plane, opening, cellPx, focusOnFlat);
+    opening === undefined ? { x: 0, y: 0, zoom: 1 } : openingView(plane, opening, cellPx, focus);
   const view: CanvasView = chosen ?? opened;
   // The latest view, for the handlers below, which are bound once.
   const current = useRef(view);
@@ -279,13 +241,10 @@ export function BoardCanvas({
   };
 
   /** A point of the plane, on the canvas. */
-  const onCanvas = (point: { readonly x: number; readonly y: number }, at: CanvasView) => {
-    const tilted = applyLinear(tilt, point);
-    return {
-      x: (tilted.x - flat.x) * at.zoom + at.x,
-      y: (tilted.y - flat.y) * at.zoom + at.y,
-    };
-  };
+  const onCanvas = (point: { readonly x: number; readonly y: number }, at: CanvasView) => ({
+    x: point.x * at.zoom + at.x,
+    y: point.y * at.zoom + at.y,
+  });
   const centreIn = (point: { readonly x: number; readonly y: number }) => {
     const clear = area();
     if (clear === undefined) return;
@@ -323,23 +282,8 @@ export function BoardCanvas({
   }
   if (cameraRef !== undefined) cameraRef.current = camera;
 
-  const untilt = invertLinear(tilt);
-  const frame: BoardFrame = {
-    view: look,
-    root: () => content.current,
-    toContent: (clientX, clientY) => {
-      const box = viewport.current?.getBoundingClientRect();
-      if (box === undefined) return undefined;
-      const now = current.current;
-      return applyLinear(untilt, {
-        x: (clientX - box.left - now.x) / now.zoom + flat.x,
-        y: (clientY - box.top - now.y) / now.zoom + flat.y,
-      });
-    },
-  };
-
   return (
-    <BoardFrameContext.Provider value={frame}>
+    <>
       <div
         ref={viewport}
         data-slot="board-canvas"
@@ -357,17 +301,14 @@ export function BoardCanvas({
         }}
       >
         <div
-          ref={content}
           data-slot="board-canvas-content"
-          data-view={look}
-          className="absolute top-0 left-0 w-(--board-w) origin-top-left [transform:translate(var(--pan-x),var(--pan-y))_scale(var(--zoom))_var(--tilt)]"
+          className="absolute top-0 left-0 w-(--board-w) origin-top-left [transform:translate(var(--pan-x),var(--pan-y))_scale(var(--zoom))]"
           style={
             {
               "--board-w": `${String(width)}px`,
               "--pan-x": `${String(view.x)}px`,
               "--pan-y": `${String(view.y)}px`,
               "--zoom": String(view.zoom),
-              "--tilt": cssMatrix(tilt, -flat.x, -flat.y),
             } as CSSProperties
           }
         >
@@ -375,6 +316,6 @@ export function BoardCanvas({
         </div>
       </div>
       {controls?.(camera)}
-    </BoardFrameContext.Provider>
+    </>
   );
 }

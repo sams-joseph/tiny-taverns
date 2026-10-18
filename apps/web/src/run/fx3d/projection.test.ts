@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { ISOMETRIC, applyLinear, screenUpOnPlane } from "../view";
 import { LIFT, projectionRows, toPlane } from "./projection";
 
 const grid = { planeWidth: 1536, planeHeight: 1024, originX: 10, originY: 20, cell: 64 };
@@ -33,13 +32,5 @@ describe("the effects' projection", () => {
   it("draws higher in front, then nearer the bottom of the board", () => {
     expect(project({ x: 1, y: 1, z: 3 }).depth).toBeLessThan(project({ x: 1, y: 0, z: 3 }).depth);
     expect(project({ x: 1, y: 0, z: 4 }).depth).toBeLessThan(project({ x: 1, y: 0, z: 3 }).depth);
-  });
-
-  it("lifts a height straight up the screen once the plane is tilted", () => {
-    const tilted = { ...grid, lift: screenUpOnPlane("iso"), across: 1 };
-    const foot = applyLinear(ISOMETRIC, toPlane(tilted, { x: 3.5, y: 0, z: 2.5 }));
-    const head = applyLinear(ISOMETRIC, toPlane(tilted, { x: 3.5, y: 2, z: 2.5 }));
-    expect(head.x).toBeCloseTo(foot.x);
-    expect(head.y).toBeLessThan(foot.y);
   });
 });

@@ -127,22 +127,14 @@ afterEach(() => {
 /**
  * Put the runner on its canvas. The canvas is chosen by a probe the stylesheet
  * displays only from `@3xl` of `main` (`RunStage.tsx`'s `useStage`), and jsdom
- * applies no stylesheet, so the probe is given the width a browser would. The
- * board is looked at straight down (`view.ts`) unless a test tilts it, so its
- * squares are where a layer's box says.
+ * applies no stylesheet, so the probe is given the width a browser would.
  */
-const onTheCanvas = (view: "top" | "iso" = "top") => {
-  const kept = new Map<string, string>([["taverns:run:board-view", view]]);
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => kept.get(key) ?? null,
-    setItem: (key: string, value: string) => void kept.set(key, value),
-  });
-  return vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+const onTheCanvas = () =>
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
     this: HTMLElement,
   ) {
     return this.dataset.slot === "run-stage-probe" ? 1024 : 0;
   });
-};
 
 /** The two layouts a fight with a board is drawn in, for what both must do alike. */
 const layouts = [
@@ -2514,13 +2506,7 @@ describe("the canvas", () => {
       within(document.querySelector<HTMLElement>("[data-slot=run-camera]")!)
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label") ?? button.textContent),
-    ).toEqual([
-      "Zoom out",
-      "Zoom 100%, fit the board",
-      "Zoom in",
-      "Centre on whoever is up",
-      "Isometric",
-    ]);
+    ).toEqual(["Zoom out", "Zoom 100%, fit the board", "Zoom in", "Centre on whoever is up"]);
     expect(tools.queryByRole("status")).toBeNull();
     expect(hud("tools")).not.toHaveTextContent("squares ·");
     // The top right keeps the fight's switches; the turn card has its one peach.
@@ -2529,23 +2515,6 @@ describe("the canvas", () => {
     // Every floating region is on the one HUD rung.
     for (const name of ["strip", "left", "panel", "turn", "corner"])
       expect(hud(name).closest(".z-hud")).not.toBeNull();
-  });
-
-  it("tilts the board on the isometric view and stands the tokens back up", async () => {
-    vi.restoreAllMocks();
-    onTheCanvas("iso");
-    await open();
-    await waitFor(() => expect(content().dataset.view).toBe("iso"));
-    expect(content().style.getPropertyValue("--tilt")).toMatch(
-      /^matrix\(0\.707107,0\.353553,-0\.707107,0\.353553,/,
-    );
-    const stand = board().querySelector<SVGElement>("[data-slot=token-stand]")!;
-    expect(stand.style.transform).toMatch(/^matrix\(/);
-    // The camera's switch looks straight down again, and the tokens lie flat.
-    await userEvent.click(screen.getByRole("button", { name: "Isometric" }));
-    await waitFor(() => expect(content().dataset.view).toBe("top"));
-    expect(content().style.getPropertyValue("--tilt")).toBe("matrix(1,0,0,1,0,0)");
-    expect(board().querySelector<SVGElement>("[data-slot=token-stand]")!.style.transform).toBe("");
   });
 
   it("takes the whole window, and lets each panel scroll itself", async () => {
