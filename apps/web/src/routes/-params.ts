@@ -78,6 +78,7 @@ export const characterIdParam = pathId("characterId", CharacterId);
 export const seatIdParam = pathId("seatId", CampaignCharacterId);
 export const encounterIdParam = pathId("encounterId", EncounterId);
 export const npcIdParam = pathId("npcId", NpcId);
+export const locationIdParam = pathId("locationId", LocationId);
 
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
@@ -113,6 +114,7 @@ export const tokenParam = {
 
 export const encounterSearch = searchId("encounter", EncounterId);
 export const locationSearch = searchId("location", LocationId);
+export const placeSearch = searchId("place", LocationId);
 export const noteSearch = searchId("note", NoteId);
 export const npcSearch = searchId("npc", NpcId);
 export const sessionSearch = searchId("session", SessionId);

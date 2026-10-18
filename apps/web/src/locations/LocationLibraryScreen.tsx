@@ -1,5 +1,5 @@
 import type { Location, LocationId } from "@taverns/api";
-import { useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { Button, EmptyState, Icon, Loading } from "@taverns/ui";
 import { useMemo, useState } from "react";
 import { useApiAtom } from "../api/atoms";
@@ -37,7 +37,8 @@ type Editing =
  */
 export function LocationLibraryScreen() {
   const filter = useFilterQuery([]);
-  const { location: named } = useSearch({ from: "/_shell/library/locations" });
+  // `strict: false`: the shelf is also what a half-typed place link lands on.
+  const named = useSearch({ strict: false }).location;
   const [resource, reload] = useApiAtom(libraryLocationsAtom);
   const [editing, setEditing] = useState<Editing | undefined>();
   const [deleting, setDeleting] = useState<Location | undefined>();
@@ -95,6 +96,15 @@ export function LocationLibraryScreen() {
                 label="Your places"
                 places={shown}
                 highlight={named}
+                name={(place) => (
+                  <Link
+                    to="/library/locations/$locationId"
+                    params={{ locationId: place.id }}
+                    className="hover:underline"
+                  >
+                    {place.name}
+                  </Link>
+                )}
                 actions={(place) => (
                   <>
                     <Button

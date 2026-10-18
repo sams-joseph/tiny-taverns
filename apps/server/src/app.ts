@@ -410,7 +410,7 @@ export const hobImagesFromConfig: Layer.Layer<
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
       "Hob-drawn images are ON (character and NPC portraits with their banners, campaign and " +
-        "Shared World covers, battle maps): " +
+        "Shared World covers, battle maps, places): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
@@ -657,8 +657,11 @@ export const servicesOver = <E>(
     // `GET /me/campaigns` is a campaign read, so it signs covers too.
     Memberships.layer.pipe(Layer.provide(imageUrls)),
     // Account-owned places, their placements in worlds and each table's
-    // reveals. Hob reads it for `listLocations`; the accept writes through it.
-    Locations.layer,
+    // reveals. A read signs the place's picture, so the handlers' copy is
+    // `fresh` with the signer, for `Campaigns`' reason: the bare
+    // `Locations.layer` Hob reads for `listLocations` and the accept writes
+    // through must never hold a bearer URL.
+    Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof. An NPC read signs

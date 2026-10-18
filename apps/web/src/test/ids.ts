@@ -31,3 +31,9 @@ export const hobThreadId = "2b1f2a1e-0000-4000-8000-00000000b0b1";
 export const hobTurnId = "2b1f2a1e-0000-4000-8000-00000000b0b2";
 /** An older conversation `creator-hob-threads` lists beside it. */
 export const olderHobThreadId = "2b1f2a1e-0000-4000-8000-00000000b0b3";
+
+/** The fixture shelf's places (`locations/locations.fixtures.ts`). */
+export const gullportId = "6c0c0000-0000-4000-8000-000000000001";
+export const stacksId = "6c0c0000-0000-4000-8000-000000000002";
+export const lambId = "6c0c0000-0000-4000-8000-000000000003";
+export const marshId = "6c0c0000-0000-4000-8000-000000000004";

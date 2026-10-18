@@ -7,6 +7,7 @@ import { Schema } from "effect";
 import { SHELVES } from "../library/shelves";
 import type { routeTree } from "../routeTree.gen";
 import { renderAt } from "../test/renderRoute";
+import { gullportId } from "../locations/locations.fixtures";
 
 /**
  * The bar, under the group architecture: one global row for every account, and
@@ -40,6 +41,7 @@ const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
 const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
 const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
+const locationId = gullportId;
 
 /**
  * Every route there is, and the URL that reaches it. Exhaustive by type, so a
@@ -74,7 +76,9 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/library/npcs/": "/library/npcs",
   "/_shell/library/npcs/$npcId": `/library/npcs/${npcId}`,
   "/_shell/library/npcs/$": "/library/npcs/not-a-uuid",
-  "/_shell/library/locations": "/library/locations",
+  "/_shell/library/locations/": "/library/locations",
+  "/_shell/library/locations/$locationId": `/library/locations/${locationId}`,
+  "/_shell/library/locations/$": "/library/locations/not-a-uuid",
   "/_shell/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/_shell/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/_shell/campaigns/$campaignId/encounters/": `/campaigns/${campaignId}/encounters`,

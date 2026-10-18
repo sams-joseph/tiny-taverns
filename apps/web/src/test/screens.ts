@@ -2,6 +2,7 @@ import {
   brannocId,
   campaignId,
   encounterId,
+  gullportId,
   npcId,
   runId,
   seatId,
@@ -48,7 +49,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The thirty-nine screens. */
+/** The forty-one screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -94,6 +95,12 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "library-npcs", scenario: "creator", path: "/library/npcs" },
   { name: "library-npc", scenario: "creator", path: `/library/npcs/${sourceNpcId}` },
   { name: "library-locations", scenario: "creator", path: "/library/locations" },
+  {
+    name: "library-location",
+    scenario: "creator",
+    path: `/library/locations/${gullportId}`,
+  },
+  { name: "locations-map", scenario: "creator", path: `${c}/locations?place=${gullportId}` },
   { name: "characters", scenario: "player", path: "/characters" },
   { name: "sheet", scenario: "player", path: `/characters/${brannocId}` },
   { name: "player-overview", scenario: "player", path: c },

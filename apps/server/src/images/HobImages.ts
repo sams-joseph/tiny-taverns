@@ -12,6 +12,10 @@ import {
   HOUSE_COVER_STYLE,
   HOUSE_MAP_STYLE,
   HOUSE_PORTRAIT_STYLE,
+  Location,
+  locationImageHasSubject,
+  locationImagePromptFor,
+  type LocationKind,
   NotFound,
   Npc,
   npcImageHasSubject,
@@ -162,6 +166,18 @@ export class HobImages extends Context.Service<
       encounter: Pick<Encounter, "name" | "tags">,
       creatureTypes: ReadonlyArray<string>,
     ) => Effect.Effect<BattleMap, never, CurrentActor>;
+    /**
+     * The same for a place's picture: a map of a realm, a region, a settlement,
+     * a district or a dungeon, a scene of a landmark or a building, drawn from
+     * its appearance line or description, its name and the kinds of the places
+     * directly inside it (`locationImagePromptFor`), never the owner's notes:
+     * `imagePending` (and `pictured`) when a draw started. A place that has a
+     * picture record starts none.
+     */
+    readonly drawLocation: (
+      location: Location,
+      childKinds: ReadonlyArray<LocationKind>,
+    ) => Effect.Effect<Location, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
       kind: ImageKind,
@@ -448,6 +464,26 @@ export class HobImages extends Context.Service<
                   : undefined;
               }),
               (pending) => (pending ? new BattleMap({ ...map, imagePending: true }) : map),
+            ),
+
+          drawLocation: (location, childKinds) =>
+            Effect.map(
+              start("location", location.id, () => {
+                const subject = {
+                  kind: location.kind,
+                  name: location.name,
+                  description: location.description,
+                  appearance: location.appearance,
+                  childKinds,
+                };
+                return locationImageHasSubject(subject)
+                  ? locationImagePromptFor(subject)
+                  : undefined;
+              }),
+              (pending) =>
+                pending
+                  ? new Location({ ...location, imagePending: true, pictured: true })
+                  : location,
             ),
 
           image: (kind, request) =>

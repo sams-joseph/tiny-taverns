@@ -242,6 +242,7 @@ describeLayer("migrations", database, (it) => {
         "image_upload",
         "language",
         "location",
+        "location_image",
         "magic_item",
         "magic_item_rarity",
         "magic_item_variant",
@@ -395,6 +396,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 103, name: "roll_area" },
         { migration_id: 104, name: "sheet_action_geometry" },
         { migration_id: 105, name: "locations" },
+        { migration_id: 106, name: "location_images" },
       ]);
     }),
   );
@@ -510,6 +512,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 103, name: "roll_area" },
         { migration_id: 104, name: "sheet_action_geometry" },
         { migration_id: 105, name: "locations" },
+        { migration_id: 106, name: "location_images" },
       ]);
     }),
   );

@@ -161,6 +161,7 @@ describe("the API declaration", () => {
       "images.npc",
       "images.npcBanner",
       "images.battleMap",
+      "images.location",
       "uploads.receive",
     ]);
   });

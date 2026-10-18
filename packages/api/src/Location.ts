@@ -29,6 +29,41 @@ export const LOCATION_APPEARANCE_MAX = 400;
 export const LOCATION_NOTES_MAX = 4000;
 
 /**
+ * Where a place stands on its parent's picture: fractions of that picture's
+ * width and height, from its top-left corner, so a pin survives a picture of
+ * any size. Only a place with a parent has one.
+ */
+export const LocationPin = Schema.Struct({
+  x: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
+  y: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
+});
+export type LocationPin = typeof LocationPin.Type;
+
+/**
+ * A place's picture: a map seen from above for a realm, a region, a
+ * settlement, a district or a dungeon, a scene for a landmark or a building.
+ * Its whole size, uncropped, because the pins are fractions of it. Minted on
+ * every read that may see the place, and on no other.
+ */
+export class LocationImages extends Schema.Class<LocationImages>("LocationImages")({
+  /** At most 768 × 512, for a card. */
+  cardUrl: Schema.String,
+  /** At most 1536 × 1024, the drawn size, for the map. */
+  fullUrl: Schema.String,
+  width: Schema.Int,
+  height: Schema.Int,
+}) {}
+
+/** The picture fields every read of a place carries. */
+const pictureFields = {
+  pin: Schema.NullOr(LocationPin),
+  /** `null` while there is no picture ready to show. */
+  image: Schema.NullOr(LocationImages),
+  /** Hob is drawing its picture now. */
+  imagePending: Schema.Boolean,
+} as const;
+
+/**
  * A place, as its **owner** reads it, on the Library's Locations shelf.
  *
  * Account-owned and top-level, like a character: a location is in no campaign
@@ -49,6 +84,13 @@ export class Location extends Schema.Class<Location>("Location")({
   description: Schema.NullOr(Schema.String),
   appearance: Schema.NullOr(Schema.String),
   notes: Schema.NullOr(Schema.String),
+  ...pictureFields,
+  /**
+   * Whether the place has ever had a picture record — drawn, drawing,
+   * uploaded, failed or taken off. Only a place with none can be drawn
+   * (`libraryLocations.draw`): a picture is drawn once.
+   */
+  pictured: Schema.Boolean,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -73,6 +115,7 @@ export const worldLocationFields = {
   ownerName: Schema.String,
   mine: Schema.Boolean,
   placed: Schema.Boolean,
+  ...pictureFields,
 } as const;
 
 export class WorldLocation extends Schema.Class<WorldLocation>("WorldLocation")(
@@ -101,6 +144,8 @@ export class PlayerLocation extends Schema.Class<PlayerLocation>("PlayerLocation
   kind: LocationKind,
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
+  /** `pin` is set only when the parent is revealed too, as `parentId` is. */
+  ...pictureFields,
 }) {}
 
 /** One campaign a place appears at, for the delete confirmation. */
@@ -152,5 +197,11 @@ export const LocationUpdate = Schema.Struct({
   description: Schema.optional(Schema.NullOr(prose(LOCATION_DESCRIPTION_MAX))),
   appearance: Schema.optional(Schema.NullOr(prose(LOCATION_APPEARANCE_MAX))),
   notes: Schema.optional(Schema.NullOr(prose(LOCATION_NOTES_MAX))),
+  /**
+   * Where it stands on its parent's picture; `null` takes it off. A place
+   * with no parent refuses one with a `Conflict`. A new parent clears the pin
+   * unless this sets one too.
+   */
+  pin: Schema.optional(Schema.NullOr(LocationPin)),
 });
 export type LocationUpdate = typeof LocationUpdate.Type;

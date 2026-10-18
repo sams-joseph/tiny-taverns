@@ -24,10 +24,13 @@ export function PlaceTree<A extends Place>({
   label,
   actions,
   aside,
+  name,
   highlight,
 }: {
   readonly places: ReadonlyArray<A>;
   readonly label: string;
+  /** The place's name as the row draws it, when it is a link somewhere. */
+  readonly name?: (place: A) => ReactNode;
   readonly actions?: (place: A) => ReactNode;
   readonly aside?: (place: A) => ReactNode;
   /** A place to mark, the one a link named. */
@@ -41,6 +44,7 @@ export function PlaceTree<A extends Place>({
           node={node}
           actions={actions}
           aside={aside}
+          name={name}
           highlight={highlight}
         />
       ))}
@@ -52,11 +56,13 @@ function PlaceBranch<A extends Place>({
   node,
   actions,
   aside,
+  name,
   highlight,
 }: {
   readonly node: PlaceNode<A>;
   readonly actions: ((place: A) => ReactNode) | undefined;
   readonly aside: ((place: A) => ReactNode) | undefined;
+  readonly name: ((place: A) => ReactNode) | undefined;
   readonly highlight: LocationId | undefined;
 }) {
   const { place, children } = node;
@@ -71,7 +77,7 @@ function PlaceBranch<A extends Place>({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="min-w-0 truncate text-body leading-snug font-semibold text-heading">
-              {place.name}
+              {name === undefined ? place.name : name(place)}
             </span>
             <Badge variant="outline">{locationKindLabel(place.kind)}</Badge>
           </div>
@@ -96,6 +102,7 @@ function PlaceBranch<A extends Place>({
               node={child}
               actions={actions}
               aside={aside}
+              name={name}
               highlight={highlight}
             />
           ))}

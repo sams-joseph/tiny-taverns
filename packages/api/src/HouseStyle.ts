@@ -7,11 +7,12 @@
  * delivery answers it. The words describe the look's qualities and name no
  * game or studio, so a model draws the qualities rather than imitating a work.
  *
- * **One style, four framings.** The palette and the rules are the same words for
+ * **One style, five framings.** The palette and the rules are the same words for
  * every kind of image; what differs is only the framing the place it shows
  * needs — a bust on a plate for a character or an NPC, the same figure across a
  * card's wide band, a wide scene under a card for a campaign or a Shared World,
- * a board seen from above for an encounter's battle map. Each framing is a whole style string, so a prompt builder appends
+ * a board seen from above for an encounter's battle map, and a whole place seen
+ * from above for a realm's, a region's or a town's map. Each framing is a whole style string, so a prompt builder appends
  * one constant and never assembles the style itself.
  */
 
@@ -50,3 +51,11 @@ export const HOUSE_COVER_STYLE = `${HOUSE_PALETTE} Wide landscape composition, a
  * DM cannot move.
  */
 export const HOUSE_MAP_STYLE = `${HOUSE_PALETTE} A top-down view from directly overhead, flat like a floor plan: no perspective, no horizon, no sky. No grid, no grid lines, no squares marked on the ground. No people, no creatures, no tokens: the ground is empty and ready for play. Readable for play: walls, obstacles and open ground clearly told apart, light pooled warm from torches, braziers or glowing hazards against deep shadow but never so dark the ground is lost, the playable ground running to the edges. ${HOUSE_RULES}`;
+
+/**
+ * A place's map: a realm, a region, a settlement or a dungeon seen from
+ * directly above at the scale of the whole place, like a page of an atlas —
+ * not a battle board. The app pins the places inside it over the picture, so
+ * nothing is labelled and the places that matter are left room.
+ */
+export const HOUSE_ATLAS_STYLE = `${HOUSE_PALETTE} An illustrated map of the whole place seen from directly overhead, like a page of a hand-inked atlas: no perspective, no horizon, no sky. Terrain, water, roads and buildings drawn at the scale of the place, clearly told apart. No labels, no names, no compass rose, no legend, no border, no grid. No people, no creatures. Distinct sites spread across the picture with open ground around them, nothing important at the very edges. ${HOUSE_RULES}`;

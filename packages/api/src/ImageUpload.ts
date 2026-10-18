@@ -31,6 +31,7 @@ export const ImageSubject = Schema.Literals([
   "campaign",
   "sharedWorld",
   "battleMap",
+  "location",
 ]);
 export type ImageSubject = typeof ImageSubject.Type;
 
@@ -43,6 +44,7 @@ export const ImageKindName = Schema.Literals([
   "campaign",
   "sharedWorld",
   "battleMap",
+  "location",
 ]);
 export type ImageKindName = typeof ImageKindName.Type;
 
@@ -55,6 +57,7 @@ export const IMAGE_KINDS_OF_SUBJECT: {
   campaign: ["campaign"],
   sharedWorld: ["sharedWorld"],
   battleMap: ["battleMap"],
+  location: ["location"],
 };
 
 /**
@@ -72,6 +75,7 @@ export const IMAGE_ASPECT: { readonly [K in ImageKindName]: number | null } = {
   campaign: 3 / 2,
   sharedWorld: 3 / 2,
   battleMap: null,
+  location: null,
 };
 
 const fraction = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }));

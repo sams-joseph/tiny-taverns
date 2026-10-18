@@ -1049,6 +1049,17 @@ class LibraryLocationsGroup extends HttpApiGroup.make("libraryLocations")
       success: Schema.Array(LocationAppearance),
       error: NotFound,
     }),
+    /**
+     * The one draw of a place that has no picture yet: a place inside one Hob
+     * made is kept with none, so one proposal cannot spend the day's budget.
+     * A place that has a picture, is being drawn, or was drawn and taken off
+     * starts nothing; the answer says whether it is drawing now.
+     */
+    HttpApiEndpoint.post("draw", "/:locationId/draw", {
+      params: { locationId: LocationId },
+      success: Location,
+      error: NotFound,
+    }),
   )
   .prefix("/library/locations")
   .middleware(Authorization) {}
@@ -1250,6 +1261,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** An encounter's battle map; its URLs are minted only on the creator's map reads. */
     HttpApiEndpoint.get("battleMap", "/battle-map-images/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** A place's picture; its URLs are minted on the reads that may see the place. */
+    HttpApiEndpoint.get("location", "/location-images/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),

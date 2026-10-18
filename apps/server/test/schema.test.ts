@@ -136,6 +136,9 @@ const NOT_CONTENT = [
   // switch. It carries the provenance pair because a person may keep a Hob
   // draft of one. See 0105_locations.ts.
   "location",
+  // A place's picture: who may see it is exactly who may read the place,
+  // through the place's own reads. See 0106_location_images.ts.
+  "location_image",
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",

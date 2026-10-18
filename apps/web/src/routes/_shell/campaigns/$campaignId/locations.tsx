@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { placeSearch } from "../../../-params";
 import { LocationsRouteScreen } from "../../../../locations/LocationsRoute";
 
 /**
@@ -7,6 +8,11 @@ import { LocationsRouteScreen } from "../../../../locations/LocationsRoute";
  * per campaign, as the Chronicle is.
  */
 export const Route = createFileRoute("/_shell/campaigns/$campaignId/locations")({
+  /**
+   * Which place's map is open, so zooming in and out is history and a link.
+   * A bad id, or one this reader cannot see, opens no map.
+   */
+  validateSearch: placeSearch,
   component: LocationsRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });

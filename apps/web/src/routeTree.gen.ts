@@ -22,7 +22,6 @@ import { Route as ShellCharactersNewRouteImport } from "./routes/_shell/characte
 import { Route as ShellLibraryIndexRouteImport } from "./routes/_shell/library/index";
 import { Route as ShellLibraryCompendiumRouteImport } from "./routes/_shell/library/compendium";
 import { Route as ShellLibraryEquipmentRouteImport } from "./routes/_shell/library/equipment";
-import { Route as ShellLibraryLocationsRouteImport } from "./routes/_shell/library/locations";
 import { Route as ShellLibraryMagicItemsRouteImport } from "./routes/_shell/library/magic-items";
 import { Route as ShellLibraryRulesRouteImport } from "./routes/_shell/library/rules";
 import { Route as ShellLibrarySpellsRouteImport } from "./routes/_shell/library/spells";
@@ -35,6 +34,9 @@ import { Route as ShellCampaignsCampaignIdChronicleRouteImport } from "./routes/
 import { Route as ShellCampaignsCampaignIdLocationsRouteImport } from "./routes/_shell/campaigns/$campaignId/locations";
 import { Route as ShellCampaignsCampaignIdNotesRouteImport } from "./routes/_shell/campaigns/$campaignId/notes";
 import { Route as ShellCampaignsCampaignIdTableRouteImport } from "./routes/_shell/campaigns/$campaignId/table";
+import { Route as ShellLibraryLocationsIndexRouteImport } from "./routes/_shell/library/locations/index";
+import { Route as ShellLibraryLocationsSplatRouteImport } from "./routes/_shell/library/locations/$";
+import { Route as ShellLibraryLocationsLocationIdRouteImport } from "./routes/_shell/library/locations/$locationId";
 import { Route as ShellLibraryNpcsIndexRouteImport } from "./routes/_shell/library/npcs/index";
 import { Route as ShellLibraryNpcsSplatRouteImport } from "./routes/_shell/library/npcs/$";
 import { Route as ShellLibraryNpcsNpcIdRouteImport } from "./routes/_shell/library/npcs/$npcId";
@@ -124,11 +126,6 @@ const ShellLibraryEquipmentRoute = ShellLibraryEquipmentRouteImport.update({
   path: "/library/equipment",
   getParentRoute: () => ShellRoute,
 } as any);
-const ShellLibraryLocationsRoute = ShellLibraryLocationsRouteImport.update({
-  id: "/library/locations",
-  path: "/library/locations",
-  getParentRoute: () => ShellRoute,
-} as any);
 const ShellLibraryMagicItemsRoute = ShellLibraryMagicItemsRouteImport.update({
   id: "/library/magic-items",
   path: "/library/magic-items",
@@ -194,6 +191,24 @@ const ShellCampaignsCampaignIdTableRoute =
     id: "/table",
     path: "/table",
     getParentRoute: () => ShellCampaignsCampaignIdRouteRoute,
+  } as any);
+const ShellLibraryLocationsIndexRoute =
+  ShellLibraryLocationsIndexRouteImport.update({
+    id: "/library/locations/",
+    path: "/library/locations/",
+    getParentRoute: () => ShellRoute,
+  } as any);
+const ShellLibraryLocationsSplatRoute =
+  ShellLibraryLocationsSplatRouteImport.update({
+    id: "/library/locations/$",
+    path: "/library/locations/$",
+    getParentRoute: () => ShellRoute,
+  } as any);
+const ShellLibraryLocationsLocationIdRoute =
+  ShellLibraryLocationsLocationIdRouteImport.update({
+    id: "/library/locations/$locationId",
+    path: "/library/locations/$locationId",
+    getParentRoute: () => ShellRoute,
   } as any);
 const ShellLibraryNpcsIndexRoute = ShellLibraryNpcsIndexRouteImport.update({
   id: "/library/npcs/",
@@ -342,7 +357,6 @@ export interface FileRoutesByFullPath {
   "/characters/new": typeof ShellCharactersNewRoute;
   "/library/compendium": typeof ShellLibraryCompendiumRoute;
   "/library/equipment": typeof ShellLibraryEquipmentRoute;
-  "/library/locations": typeof ShellLibraryLocationsRoute;
   "/library/magic-items": typeof ShellLibraryMagicItemsRoute;
   "/library/rules": typeof ShellLibraryRulesRoute;
   "/library/spells": typeof ShellLibrarySpellsRoute;
@@ -356,10 +370,13 @@ export interface FileRoutesByFullPath {
   "/campaigns/$campaignId/locations": typeof ShellCampaignsCampaignIdLocationsRoute;
   "/campaigns/$campaignId/notes": typeof ShellCampaignsCampaignIdNotesRoute;
   "/campaigns/$campaignId/table": typeof ShellCampaignsCampaignIdTableRoute;
+  "/library/locations/$": typeof ShellLibraryLocationsSplatRoute;
+  "/library/locations/$locationId": typeof ShellLibraryLocationsLocationIdRoute;
   "/library/npcs/$": typeof ShellLibraryNpcsSplatRoute;
   "/library/npcs/$npcId": typeof ShellLibraryNpcsNpcIdRoute;
   "/worlds/$worldId/chronicle": typeof ShellWorldsWorldIdChronicleRoute;
   "/campaigns/$campaignId/": typeof ShellCampaignsCampaignIdIndexRoute;
+  "/library/locations/": typeof ShellLibraryLocationsIndexRoute;
   "/library/npcs/": typeof ShellLibraryNpcsIndexRoute;
   "/worlds/$worldId/": typeof ShellWorldsWorldIdIndexRoute;
   "/campaigns/$campaignId/cast/$npcId": typeof ShellCampaignsCampaignIdCastNpcIdRouteRouteWithChildren;
@@ -389,7 +406,6 @@ export interface FileRoutesByTo {
   "/characters/new": typeof ShellCharactersNewRoute;
   "/library/compendium": typeof ShellLibraryCompendiumRoute;
   "/library/equipment": typeof ShellLibraryEquipmentRoute;
-  "/library/locations": typeof ShellLibraryLocationsRoute;
   "/library/magic-items": typeof ShellLibraryMagicItemsRoute;
   "/library/rules": typeof ShellLibraryRulesRoute;
   "/library/spells": typeof ShellLibrarySpellsRoute;
@@ -403,10 +419,13 @@ export interface FileRoutesByTo {
   "/campaigns/$campaignId/locations": typeof ShellCampaignsCampaignIdLocationsRoute;
   "/campaigns/$campaignId/notes": typeof ShellCampaignsCampaignIdNotesRoute;
   "/campaigns/$campaignId/table": typeof ShellCampaignsCampaignIdTableRoute;
+  "/library/locations/$": typeof ShellLibraryLocationsSplatRoute;
+  "/library/locations/$locationId": typeof ShellLibraryLocationsLocationIdRoute;
   "/library/npcs/$": typeof ShellLibraryNpcsSplatRoute;
   "/library/npcs/$npcId": typeof ShellLibraryNpcsNpcIdRoute;
   "/worlds/$worldId/chronicle": typeof ShellWorldsWorldIdChronicleRoute;
   "/campaigns/$campaignId": typeof ShellCampaignsCampaignIdIndexRoute;
+  "/library/locations": typeof ShellLibraryLocationsIndexRoute;
   "/library/npcs": typeof ShellLibraryNpcsIndexRoute;
   "/worlds/$worldId": typeof ShellWorldsWorldIdIndexRoute;
   "/campaigns/$campaignId/cast/$": typeof ShellCampaignsCampaignIdCastSplatRoute;
@@ -439,7 +458,6 @@ export interface FileRoutesById {
   "/_shell/characters/new": typeof ShellCharactersNewRoute;
   "/_shell/library/compendium": typeof ShellLibraryCompendiumRoute;
   "/_shell/library/equipment": typeof ShellLibraryEquipmentRoute;
-  "/_shell/library/locations": typeof ShellLibraryLocationsRoute;
   "/_shell/library/magic-items": typeof ShellLibraryMagicItemsRoute;
   "/_shell/library/rules": typeof ShellLibraryRulesRoute;
   "/_shell/library/spells": typeof ShellLibrarySpellsRoute;
@@ -453,10 +471,13 @@ export interface FileRoutesById {
   "/_shell/campaigns/$campaignId/locations": typeof ShellCampaignsCampaignIdLocationsRoute;
   "/_shell/campaigns/$campaignId/notes": typeof ShellCampaignsCampaignIdNotesRoute;
   "/_shell/campaigns/$campaignId/table": typeof ShellCampaignsCampaignIdTableRoute;
+  "/_shell/library/locations/$": typeof ShellLibraryLocationsSplatRoute;
+  "/_shell/library/locations/$locationId": typeof ShellLibraryLocationsLocationIdRoute;
   "/_shell/library/npcs/$": typeof ShellLibraryNpcsSplatRoute;
   "/_shell/library/npcs/$npcId": typeof ShellLibraryNpcsNpcIdRoute;
   "/_shell/worlds/$worldId/chronicle": typeof ShellWorldsWorldIdChronicleRoute;
   "/_shell/campaigns/$campaignId/": typeof ShellCampaignsCampaignIdIndexRoute;
+  "/_shell/library/locations/": typeof ShellLibraryLocationsIndexRoute;
   "/_shell/library/npcs/": typeof ShellLibraryNpcsIndexRoute;
   "/_shell/worlds/$worldId/": typeof ShellWorldsWorldIdIndexRoute;
   "/_shell/campaigns/$campaignId/cast/$npcId": typeof ShellCampaignsCampaignIdCastNpcIdRouteRouteWithChildren;
@@ -490,7 +511,6 @@ export interface FileRouteTypes {
     | "/characters/new"
     | "/library/compendium"
     | "/library/equipment"
-    | "/library/locations"
     | "/library/magic-items"
     | "/library/rules"
     | "/library/spells"
@@ -504,10 +524,13 @@ export interface FileRouteTypes {
     | "/campaigns/$campaignId/locations"
     | "/campaigns/$campaignId/notes"
     | "/campaigns/$campaignId/table"
+    | "/library/locations/$"
+    | "/library/locations/$locationId"
     | "/library/npcs/$"
     | "/library/npcs/$npcId"
     | "/worlds/$worldId/chronicle"
     | "/campaigns/$campaignId/"
+    | "/library/locations/"
     | "/library/npcs/"
     | "/worlds/$worldId/"
     | "/campaigns/$campaignId/cast/$npcId"
@@ -537,7 +560,6 @@ export interface FileRouteTypes {
     | "/characters/new"
     | "/library/compendium"
     | "/library/equipment"
-    | "/library/locations"
     | "/library/magic-items"
     | "/library/rules"
     | "/library/spells"
@@ -551,10 +573,13 @@ export interface FileRouteTypes {
     | "/campaigns/$campaignId/locations"
     | "/campaigns/$campaignId/notes"
     | "/campaigns/$campaignId/table"
+    | "/library/locations/$"
+    | "/library/locations/$locationId"
     | "/library/npcs/$"
     | "/library/npcs/$npcId"
     | "/worlds/$worldId/chronicle"
     | "/campaigns/$campaignId"
+    | "/library/locations"
     | "/library/npcs"
     | "/worlds/$worldId"
     | "/campaigns/$campaignId/cast/$"
@@ -586,7 +611,6 @@ export interface FileRouteTypes {
     | "/_shell/characters/new"
     | "/_shell/library/compendium"
     | "/_shell/library/equipment"
-    | "/_shell/library/locations"
     | "/_shell/library/magic-items"
     | "/_shell/library/rules"
     | "/_shell/library/spells"
@@ -600,10 +624,13 @@ export interface FileRouteTypes {
     | "/_shell/campaigns/$campaignId/locations"
     | "/_shell/campaigns/$campaignId/notes"
     | "/_shell/campaigns/$campaignId/table"
+    | "/_shell/library/locations/$"
+    | "/_shell/library/locations/$locationId"
     | "/_shell/library/npcs/$"
     | "/_shell/library/npcs/$npcId"
     | "/_shell/worlds/$worldId/chronicle"
     | "/_shell/campaigns/$campaignId/"
+    | "/_shell/library/locations/"
     | "/_shell/library/npcs/"
     | "/_shell/worlds/$worldId/"
     | "/_shell/campaigns/$campaignId/cast/$npcId"
@@ -724,13 +751,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ShellLibraryEquipmentRouteImport;
       parentRoute: typeof ShellRoute;
     };
-    "/_shell/library/locations": {
-      id: "/_shell/library/locations";
-      path: "/library/locations";
-      fullPath: "/library/locations";
-      preLoaderRoute: typeof ShellLibraryLocationsRouteImport;
-      parentRoute: typeof ShellRoute;
-    };
     "/_shell/library/magic-items": {
       id: "/_shell/library/magic-items";
       path: "/library/magic-items";
@@ -814,6 +834,27 @@ declare module "@tanstack/react-router" {
       fullPath: "/campaigns/$campaignId/table";
       preLoaderRoute: typeof ShellCampaignsCampaignIdTableRouteImport;
       parentRoute: typeof ShellCampaignsCampaignIdRouteRoute;
+    };
+    "/_shell/library/locations/": {
+      id: "/_shell/library/locations/";
+      path: "/library/locations";
+      fullPath: "/library/locations/";
+      preLoaderRoute: typeof ShellLibraryLocationsIndexRouteImport;
+      parentRoute: typeof ShellRoute;
+    };
+    "/_shell/library/locations/$": {
+      id: "/_shell/library/locations/$";
+      path: "/library/locations/$";
+      fullPath: "/library/locations/$";
+      preLoaderRoute: typeof ShellLibraryLocationsSplatRouteImport;
+      parentRoute: typeof ShellRoute;
+    };
+    "/_shell/library/locations/$locationId": {
+      id: "/_shell/library/locations/$locationId";
+      path: "/library/locations/$locationId";
+      fullPath: "/library/locations/$locationId";
+      preLoaderRoute: typeof ShellLibraryLocationsLocationIdRouteImport;
+      parentRoute: typeof ShellRoute;
     };
     "/_shell/library/npcs/": {
       id: "/_shell/library/npcs/";
@@ -1109,7 +1150,6 @@ interface ShellRouteChildren {
   ShellCharactersNewRoute: typeof ShellCharactersNewRoute;
   ShellLibraryCompendiumRoute: typeof ShellLibraryCompendiumRoute;
   ShellLibraryEquipmentRoute: typeof ShellLibraryEquipmentRoute;
-  ShellLibraryLocationsRoute: typeof ShellLibraryLocationsRoute;
   ShellLibraryMagicItemsRoute: typeof ShellLibraryMagicItemsRoute;
   ShellLibraryRulesRoute: typeof ShellLibraryRulesRoute;
   ShellLibrarySpellsRoute: typeof ShellLibrarySpellsRoute;
@@ -1117,8 +1157,11 @@ interface ShellRouteChildren {
   ShellCharactersIndexRoute: typeof ShellCharactersIndexRoute;
   ShellLibraryIndexRoute: typeof ShellLibraryIndexRoute;
   ShellWorldsIndexRoute: typeof ShellWorldsIndexRoute;
+  ShellLibraryLocationsSplatRoute: typeof ShellLibraryLocationsSplatRoute;
+  ShellLibraryLocationsLocationIdRoute: typeof ShellLibraryLocationsLocationIdRoute;
   ShellLibraryNpcsSplatRoute: typeof ShellLibraryNpcsSplatRoute;
   ShellLibraryNpcsNpcIdRoute: typeof ShellLibraryNpcsNpcIdRoute;
+  ShellLibraryLocationsIndexRoute: typeof ShellLibraryLocationsIndexRoute;
   ShellLibraryNpcsIndexRoute: typeof ShellLibraryNpcsIndexRoute;
 }
 
@@ -1133,7 +1176,6 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellCharactersNewRoute: ShellCharactersNewRoute,
   ShellLibraryCompendiumRoute: ShellLibraryCompendiumRoute,
   ShellLibraryEquipmentRoute: ShellLibraryEquipmentRoute,
-  ShellLibraryLocationsRoute: ShellLibraryLocationsRoute,
   ShellLibraryMagicItemsRoute: ShellLibraryMagicItemsRoute,
   ShellLibraryRulesRoute: ShellLibraryRulesRoute,
   ShellLibrarySpellsRoute: ShellLibrarySpellsRoute,
@@ -1141,8 +1183,11 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellCharactersIndexRoute: ShellCharactersIndexRoute,
   ShellLibraryIndexRoute: ShellLibraryIndexRoute,
   ShellWorldsIndexRoute: ShellWorldsIndexRoute,
+  ShellLibraryLocationsSplatRoute: ShellLibraryLocationsSplatRoute,
+  ShellLibraryLocationsLocationIdRoute: ShellLibraryLocationsLocationIdRoute,
   ShellLibraryNpcsSplatRoute: ShellLibraryNpcsSplatRoute,
   ShellLibraryNpcsNpcIdRoute: ShellLibraryNpcsNpcIdRoute,
+  ShellLibraryLocationsIndexRoute: ShellLibraryLocationsIndexRoute,
   ShellLibraryNpcsIndexRoute: ShellLibraryNpcsIndexRoute,
 };
 

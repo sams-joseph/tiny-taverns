@@ -11,7 +11,7 @@ import {
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
-import { gullportId } from "./locations.fixtures";
+import { gullportId, libraryShelf, stacksId } from "./locations.fixtures";
 
 /**
  * Places on screen: the creator's tree with this table's reveals and their
@@ -110,5 +110,51 @@ describe("the Library's Locations shelf", () => {
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete place" }));
     await waitFor(() => expect(calls("DELETE")).toEqual([`/library/locations/${gullportId}`]));
+  });
+});
+
+describe("a place's map", () => {
+  it("pins the places inside it, and its owner takes one off", async () => {
+    server.routes.set(`PATCH /library/locations/${stacksId}`, {
+      status: 200,
+      body: { ...libraryShelf[1], pin: null },
+    });
+    await at(`/library/locations/${gullportId}`);
+
+    const map = await screen.findByRole("application", { name: "Map of Gullport" });
+    expect(within(map).getByRole("button", { name: /The Stacks/ })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Take off the map" }));
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "PATCH").map((call) => call.body),
+      ).toEqual([JSON.stringify({ pin: null })]),
+    );
+  });
+
+  it("offers a place that has never had a picture its one draw", async () => {
+    server.routes.set(`POST /library/locations/${stacksId}/draw`, {
+      status: 200,
+      body: { ...libraryShelf[1], imagePending: true, pictured: true },
+    });
+    await at(`/library/locations/${stacksId}`);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Draw it" }));
+    await waitFor(() => expect(calls("POST")).toEqual([`/library/locations/${stacksId}/draw`]));
+    // A place with a picture offers no draw: there is no redraw.
+    cleanup();
+    await at(`/library/locations/${gullportId}`);
+    await screen.findByRole("application", { name: "Map of Gullport" });
+    expect(screen.queryByRole("button", { name: "Draw it" })).toBeNull();
+  });
+
+  it("zooms into a pin at the table, which opens the map inside it", async () => {
+    await at(`/campaigns/${campaignId}/locations?place=${gullportId}`);
+
+    const map = await screen.findByRole("application", { name: "Map of Gullport" });
+    await userEvent.click(within(map).getByRole("button", { name: "Open The Stacks" }));
+    await waitFor(() => expect(globalThis.location.search).toBe(`?place=${stacksId}`));
+    // The Stacks has no picture yet, and says so where its map would be.
+    await screen.findByText("No picture yet");
   });
 });

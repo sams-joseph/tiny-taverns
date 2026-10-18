@@ -1,5 +1,5 @@
 import type { CampaignId, CampaignLocation, Location, SharedWorldId } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import {
   Button,
   Dialog,
@@ -22,6 +22,7 @@ import { CampaignChrome } from "../campaign/CampaignChrome";
 import { SaveFailure } from "../ui/form";
 import { campaignLocationsAtom, libraryLocationsAtom } from "./load";
 import { PlaceTree } from "./PlaceTree";
+import { TableMap } from "./TableMap";
 
 /**
  * A table's places, as its creator arranges them: every place in the
@@ -35,6 +36,7 @@ import { PlaceTree } from "./PlaceTree";
  */
 export function CampaignLocationsScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
+  const { place: open } = useSearch({ from: "/_shell/campaigns/$campaignId/locations" });
   const [adding, setAdding] = useState(false);
   const { busy, failure, submit } = useMutation();
 
@@ -77,6 +79,11 @@ export function CampaignLocationsScreen() {
               <SaveFailure failure={failure} />
             </div>
           )}
+          {open !== undefined && (
+            <div className="mb-6">
+              <TableMap campaignId={campaignId} places={extra} placeId={open} />
+            </div>
+          )}
           {extra.length === 0 ? (
             <EmptyState icon="map-pin" title="No places at this table yet">
               Put a place from your Library here with{" "}
@@ -87,6 +94,17 @@ export function CampaignLocationsScreen() {
             <PlaceTree
               label="Places at this table"
               places={extra}
+              highlight={open}
+              name={(place) => (
+                <Link
+                  to="/campaigns/$campaignId/locations"
+                  params={{ campaignId }}
+                  search={{ place: place.id }}
+                  className="hover:underline"
+                >
+                  {place.name}
+                </Link>
+              )}
               aside={(place) =>
                 place.mine ? undefined : (
                   <p className="text-caption leading-body text-faint">From {place.ownerName}</p>

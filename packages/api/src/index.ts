@@ -43,6 +43,7 @@ export * from "./LevelUp.js";
 export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Location.js";
+export * from "./LocationImage.js";
 export * from "./Note.js";
 export * from "./Npc.js";
 export * from "./NpcResources.js";

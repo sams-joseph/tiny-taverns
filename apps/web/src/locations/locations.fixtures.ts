@@ -1,25 +1,35 @@
 import type { Location } from "@taverns/api";
-import { campaignId, worldId } from "../test/ids";
+import { campaignId, gullportId, lambId, marshId, stacksId, worldId } from "../test/ids";
 
 /**
  * Three places on the creator's shelf — a town, a district in it and a tavern
  * in that — with the town placed in the campaign's world and the tavern
  * revealed to the table, and a place another creator in the world put there.
+ * The town has its map drawn, and the district is pinned on it.
  */
+
+export { gullportId, lambId, marshId, stacksId };
 
 const stamp = "2026-10-01T12:00:00.000Z";
 
-export const gullportId = "6c0c0000-0000-4000-8000-000000000001" as Location["id"];
-export const stacksId = "6c0c0000-0000-4000-8000-000000000002" as Location["id"];
-export const lambId = "6c0c0000-0000-4000-8000-000000000003" as Location["id"];
-export const marshId = "6c0c0000-0000-4000-8000-000000000004" as Location["id"];
+/** Gullport's drawn map, as a read signs it. */
+const gullportMap = {
+  cardUrl: "/location-images/6c0c0000-0000-4000-8000-0000000000aa/card?e=1&s=c",
+  fullUrl: "/location-images/6c0c0000-0000-4000-8000-0000000000aa/full?e=1&s=f",
+  width: 1536,
+  height: 1024,
+};
 
 const owned = (
-  id: Location["id"],
-  parentId: Location["id"] | null,
+  id: string,
+  parentId: string | null,
   kind: Location["kind"],
   name: string,
   description: string | null,
+  picture: {
+    readonly pin?: { readonly x: number; readonly y: number };
+    readonly image?: typeof gullportMap;
+  } = {},
 ) => ({
   id,
   parentId,
@@ -28,6 +38,10 @@ const owned = (
   description,
   appearance: null,
   notes: null,
+  pin: picture.pin ?? null,
+  image: picture.image ?? null,
+  imagePending: false,
+  pictured: picture.image !== undefined,
   origin: "authored",
   assistantTurnId: null,
   createdAt: stamp,
@@ -42,8 +56,13 @@ export const libraryShelf = [
     "town",
     "Gullport",
     "A fishing town of tarred piers and gull-loud mornings.",
+    {
+      image: gullportMap,
+    },
   ),
-  owned(stacksId, gullportId, "district", "The Stacks", "Net lofts and smokehouses."),
+  owned(stacksId, gullportId, "district", "The Stacks", "Net lofts and smokehouses.", {
+    pin: { x: 0.3, y: 0.6 },
+  }),
   owned(lambId, stacksId, "building", "The Drowned Lamb", null),
 ] as const;
 
@@ -57,6 +76,9 @@ const placed = (
   name: place.name,
   description: place.description,
   appearance: place.appearance,
+  pin: place.pin,
+  image: place.image,
+  imagePending: place.imagePending,
   ownerName: "Wren Alderby",
   mine: true,
   ...extra,
@@ -74,6 +96,9 @@ export const tablePlaces = [
     name: "Blackwater Marsh",
     description: "Reeds taller than a rider, and something under the water.",
     appearance: null,
+    pin: null,
+    image: null,
+    imagePending: false,
     ownerName: "Tamsin Reed",
     mine: false,
     placed: true,
@@ -83,7 +108,16 @@ export const tablePlaces = [
 
 /** What the table's players are told: the tavern alone, its district unrevealed. */
 export const playerPlaces = [
-  { id: lambId, parentId: null, kind: "building", name: "The Drowned Lamb", description: null },
+  {
+    id: lambId,
+    parentId: null,
+    kind: "building",
+    name: "The Drowned Lamb",
+    description: null,
+    pin: null,
+    image: null,
+    imagePending: false,
+  },
 ] as const;
 
 /** Every location read the fixture wire answers. */

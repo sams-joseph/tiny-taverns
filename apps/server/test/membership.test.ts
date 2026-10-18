@@ -1062,6 +1062,9 @@ describeLayer("membership", shared, (it) => {
               'campaign_location_reveal',
               'context_location',
               'location',
+              -- A place's picture is read only as a field of the place,
+              -- through the place's own shipped reads.
+              'location_image',
               'campaign_member',
               -- A banner is read only as a field of the character, beside its
               -- portrait, through the character's own shipped reads.

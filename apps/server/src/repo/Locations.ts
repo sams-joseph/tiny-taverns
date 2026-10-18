@@ -10,14 +10,18 @@ import {
   LocationAppearanceCampaign,
   type LocationCreate,
   LocationId,
+  LocationImages,
+  type LocationKind,
+  LocationPin,
   type LocationUpdate,
   NotFound,
   PlayerLocation,
   SharedWorldId,
   WorldLocation,
 } from "@taverns/api";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { SqlClient, SqlSchema, type SqlError, type Statement } from "effect/sql";
+import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   type AssistantOrigin,
@@ -43,12 +47,114 @@ import {
   locationShownToPlayer,
 } from "./visibility.js";
 
-/** A `location` row as its owner reads it, decoded off `location.*`. */
-const LocationRow = classFromColumns(Location, { ...Location.fields, ...timestampColumns });
+/**
+ * The picture beside a place, as one `json` column: its id, state and size, or
+ * `null` with no picture record. **Every read of a place names this fragment**
+ * (through {@link pictureColumns}): the decode refuses a row without it.
+ */
+const LocationPicture = Schema.NullOr(
+  Schema.Struct({
+    id: Schema.String,
+    state: Schema.Literals(["generating", "ready", "failed"]),
+    width: Schema.NullOr(Schema.Int),
+    height: Schema.NullOr(Schema.Int),
+  }),
+);
 
-const WorldLocationRow = classFromColumns(WorldLocation, WorldLocation.fields);
-const CampaignLocationRow = classFromColumns(CampaignLocation, CampaignLocation.fields);
-const PlayerLocationRow = classFromColumns(PlayerLocation, PlayerLocation.fields);
+/**
+ * **The only place a place's picture URL is minted**, as the last step of the
+ * decode of a row whose own statement already returned the place to this
+ * reader: the owner's, a world member's, a creator's or a player's. So who
+ * sees the picture is exactly who sees the place. `undefined` signs nothing,
+ * which is what Hob's and the accept's bare copy of this repository is built
+ * with: a model must never hold a bearer URL.
+ */
+const pictureFromColumn = (sign: ImageSigner | undefined) =>
+  LocationPicture.pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(LocationImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((picture: typeof LocationPicture.Type) => {
+          if (
+            picture === null ||
+            picture.state !== "ready" ||
+            picture.width === null ||
+            picture.height === null ||
+            sign === undefined
+          ) {
+            return null;
+          }
+          const paths = sign("location", picture.id);
+          return paths === null
+            ? null
+            : new LocationImages({
+                cardUrl: paths.card,
+                fullUrl: paths.full,
+                width: picture.width,
+                height: picture.height,
+              });
+        }),
+        SchemaGetter.forbidden(() => "a place's picture is minted, never read back"),
+      ),
+    ),
+  );
+
+/**
+ * The picture, whether it is drawing, and the pin, beside a `location` row in
+ * scope. The pin is shown only where `pinShown` holds — the parent is in the
+ * reader's view too — because a pin is a point on the parent's picture.
+ */
+const pictureColumns = (sql: SqlClient.SqlClient, pinShown: Statement.Fragment) => sql`
+  (select json_build_object(
+     'id', location_image.id,
+     'state', location_image.state,
+     'width', location_image.width,
+     'height', location_image.height
+   ) from location_image
+   where location_image.location_id = location.id) as picture,
+  coalesce(
+    (select location_image.state = 'generating' from location_image
+     where location_image.location_id = location.id),
+    false
+  ) as image_pending,
+  case when location.pin_x is not null and ${pinShown}
+       then json_build_object('x', location.pin_x, 'y', location.pin_y) end as pin
+`;
+
+/** The owner's columns beside `location.*`: every picture column, and whether one was ever recorded. */
+const ownerColumns = (sql: SqlClient.SqlClient) => sql`
+  ${pictureColumns(sql, sql`true`)},
+  exists (select 1 from location_image
+          where location_image.location_id = location.id) as pictured
+`;
+
+/** The rows each reader decodes, their pictures signed with the layer's signer. */
+const rowsFor = (sign: ImageSigner | undefined) => {
+  const picture = { image: pictureFromColumn(sign), pin: Schema.NullOr(LocationPin) } as const;
+  return {
+    owner: classFromColumns(
+      Location,
+      { ...Location.fields, ...timestampColumns, ...picture },
+      { image: "picture" },
+    ),
+    world: classFromColumns(
+      WorldLocation,
+      { ...WorldLocation.fields, ...picture },
+      { image: "picture" },
+    ),
+    campaign: classFromColumns(
+      CampaignLocation,
+      { ...CampaignLocation.fields, ...picture },
+      { image: "picture" },
+    ),
+    player: classFromColumns(
+      PlayerLocation,
+      { ...PlayerLocation.fields, ...picture },
+      { image: "picture" },
+    ),
+  };
+};
+
 const AppearanceRow = classFromColumns(LocationAppearance, {
   ...LocationAppearance.fields,
   campaigns: Schema.Array(LocationAppearanceCampaign),
@@ -75,7 +181,8 @@ const placedColumns = (
   location.account_id = ${accountId} as mine,
   exists (select 1 from context_location as own_placement
           where own_placement.group_id = ${group}
-            and own_placement.location_id = location.id) as placed
+            and own_placement.location_id = location.id) as placed,
+  ${pictureColumns(sql, locationInContext(sql, sql`location.parent_id`, group))}
 `;
 
 /**
@@ -161,6 +268,17 @@ export class Locations extends Context.Service<
       id: LocationId,
       patch: LocationUpdate,
     ) => Effect.Effect<Location, NotFound | Conflict, CurrentActor>;
+    /**
+     * One of the owner's places and the kinds of the places directly inside
+     * it: what its picture is drawn from (`HobImages.drawLocation`).
+     */
+    readonly forDrawing: (
+      id: LocationId,
+    ) => Effect.Effect<
+      { readonly location: Location; readonly childKinds: ReadonlyArray<LocationKind> },
+      NotFound,
+      CurrentActor
+    >;
     /** The place and its whole subtree, with every placement and reveal of them. */
     readonly remove: (id: LocationId) => Effect.Effect<void, NotFound, CurrentActor>;
     /** Each context the place or a place under it is placed in, with its campaigns. */
@@ -216,36 +334,40 @@ export class Locations extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const rows = rowsFor(yield* imageSigner);
 
       const shelf = SqlSchema.findAll({
         Request: Schema.toType(Actor),
-        Result: LocationRow,
+        Result: rows.owner,
         execute: (actor) => sql`
-          select location.* from location
+          select location.*, ${ownerColumns(sql)} from location
           where ${locationOwned(sql, actor)}
           order by lower(location.name), location.id
         `,
       });
       const owned = SqlSchema.findOne({
         Request: Schema.toType(Schema.Struct({ actor: Actor, id: LocationId })),
-        Result: LocationRow,
+        Result: rows.owner,
         execute: ({ actor, id }) => sql`
-          select location.* from location
+          select location.*, ${ownerColumns(sql)} from location
           where location.id = ${id} and ${locationOwned(sql, actor)}
         `,
       });
       const insert = SqlSchema.findOne({
         Request: Columns,
-        Result: LocationRow,
-        execute: (columns) => sql`insert into location ${sql.insert(columns)} returning *`,
+        Result: rows.owner,
+        execute: (columns) => sql`
+          insert into location ${sql.insert(columns)}
+          returning location.*, ${ownerColumns(sql)}
+        `,
       });
       const change = SqlSchema.findOne({
         Request: Schema.toType(Schema.Struct({ actor: Actor, id: LocationId, columns: Columns })),
-        Result: LocationRow,
+        Result: rows.owner,
         execute: ({ actor, id, columns }) => sql`
           update location set ${setClause(sql, columns)}
           where location.id = ${id} and ${locationOwned(sql, actor)}
-          returning *
+          returning location.*, ${ownerColumns(sql)}
         `,
       });
 
@@ -277,7 +399,7 @@ export class Locations extends Context.Service<
       });
       const world = SqlSchema.findAll({
         Request: Schema.toType(Schema.Struct({ worldId: SharedWorldId, actor: Actor })),
-        Result: WorldLocationRow,
+        Result: rows.world,
         execute: ({ worldId, actor }) => sql`
           select ${placedColumns(sql, actor.accountId, sql`${worldId}`)}
           from location
@@ -288,7 +410,7 @@ export class Locations extends Context.Service<
       });
       const table = SqlSchema.findAll({
         Request: Schema.toType(Schema.Struct({ ...creatorFields, group: SharedWorldId })),
-        Result: CampaignLocationRow,
+        Result: rows.campaign,
         execute: ({ campaign, actor, group }) => sql`
           select ${placedColumns(sql, actor.accountId, sql`${group}`)},
                  exists (select 1 from campaign_location_reveal
@@ -302,13 +424,14 @@ export class Locations extends Context.Service<
       });
       const revealed = SqlSchema.findAll({
         Request: Schema.toType(Schema.Struct(creatorFields)),
-        Result: PlayerLocationRow,
+        Result: rows.player,
         execute: ({ campaign, actor }) => sql`
           select location.id,
                  case when location.parent_id is not null
                        and ${locationRevealedAt(sql, sql`location.parent_id`, campaign)}
                       then location.parent_id end as parent_id,
-                 location.kind, location.name, location.description
+                 location.kind, location.name, location.description,
+                 ${pictureColumns(sql, locationRevealedAt(sql, sql`location.parent_id`, campaign))}
           from location
           where ${locationShownToPlayer(sql, campaign, actor)}
           order by lower(location.name), location.id
@@ -375,7 +498,29 @@ export class Locations extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                yield* ownOrNotFound(id);
+                const current = yield* sql<{ readonly parent_id: LocationId | null }>`
+                  select location.parent_id from location
+                  where location.id = ${id} and ${locationOwned(sql, actor)}
+                  for update
+                `;
+                if (current.length === 0) return yield* new NotFound({ resource: "location", id });
+                const parentBefore = current[0]!.parent_id;
+                const parentAfter = patch.parentId === undefined ? parentBefore : patch.parentId;
+                if (patch.pin !== undefined && patch.pin !== null && parentAfter === null) {
+                  return yield* new Conflict({
+                    message: "a place that stands on its own has no map to be pinned on",
+                  });
+                }
+                // A pin is a point on the parent's picture, so a new parent
+                // clears it unless this edit sets one too.
+                const pin =
+                  patch.pin !== undefined
+                    ? patch.pin === null
+                      ? { pin_x: null, pin_y: null }
+                      : { pin_x: patch.pin.x, pin_y: patch.pin.y }
+                    : parentAfter !== parentBefore
+                      ? { pin_x: null, pin_y: null }
+                      : {};
                 if (patch.parentId !== undefined && patch.parentId !== null) {
                   yield* lockTree(sql, actor.accountId);
                   yield* ownOrNotFound(patch.parentId);
@@ -407,6 +552,7 @@ export class Locations extends Context.Service<
                     description: proseColumn(patch.description),
                     appearance: proseColumn(patch.appearance),
                     notes: proseColumn(patch.notes),
+                    ...pin,
                   }),
                 }).pipe(orNotFound("location", id));
                 if (patch.parentId !== undefined) {
@@ -428,6 +574,19 @@ export class Locations extends Context.Service<
                 return updated;
               }),
             ),
+          ),
+
+        forDrawing: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const location = yield* owned({ actor, id }).pipe(orNotFound("location", id));
+              const children = yield* sql<{ readonly kind: LocationKind }>`
+                select location.kind from location
+                where location.parent_id = ${id} and ${locationOwned(sql, actor)}
+              `;
+              return { location, childKinds: children.map((child) => child.kind) };
+            }),
           ),
 
         remove: (id) =>
