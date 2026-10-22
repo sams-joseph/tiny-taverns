@@ -23,6 +23,7 @@ import {
   partyPathCost,
   partyWalk,
   PlayerLevelVisit,
+  runLevelLayout,
   type PlayerMove,
   type SessionEventKind,
   type SessionId,
@@ -122,10 +123,127 @@ const onTableColumn = (sql: SqlClient.SqlClient) =>
   sql`(campaign.table_visit_id is not distinct from level_visit.id) as on_table`;
 
 /** Over `level_visit`: a live fight borrows it, so the fight answers for the dungeon. */
-const borrowedBy = (sql: SqlClient.SqlClient) =>
+export const borrowedBy = (sql: SqlClient.SqlClient) =>
   sql`exists (select 1 from encounter_run
               where encounter_run.level_visit_id = level_visit.id
                 and encounter_run.ended_at is null)`;
+
+/**
+ * Over `encounter` and `level_visit`: the encounter is placed in the visit
+ * (`EncounterSpots.ts` in `@taverns/api`), its spots aside: the campaign's,
+ * on the visit's level, and never played, a fight in progress included (an
+ * encounter is played once). Computed, never stored.
+ */
+const placedIn = (sql: SqlClient.SqlClient) => sql`
+  encounter.campaign_id = level_visit.campaign_id
+  and encounter.level_id = level_visit.level_id
+  and not exists (select 1 from encounter_run where encounter_run.encounter_id = encounter.id)
+`;
+
+/**
+ * The encounters placed in a visit as the DM's read has them
+ * (`LevelVisit.encounters`), as one `json` column, `encounters`, over
+ * `level_visit` in scope: each with a placed creature, in the DM's planned
+ * order, its creatures by roster line and instance with a spot past the
+ * copy's edge flagged `offBoard` (whether one inside it can be stood on is
+ * the geometry's, asked by the read: `withSpotProblems`), and its trigger
+ * area turned from squares of the level into squares of the copy, those past
+ * its edge left out. **The creator's read only.**
+ */
+const placedEncountersColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
+  coalesce((
+    select json_agg(json_build_object(
+      'id', encounter.id, 'name', encounter.name, 'kind', encounter.kind,
+      'creatures', placed.creatures,
+      'trigger', case when prep.trigger_squares is null then null else coalesce((
+        select json_agg(json_build_object(
+          'column', square % level.columns, 'row', square / level.columns
+        ) order by square / level.columns, square % level.columns)
+        from unnest(prep.trigger_squares) square
+        where square % level.columns < level_visit.board_columns
+          and square / level.columns < level_visit.board_rows
+      ), '[]'::json) end
+    ) order by prep.position, encounter.id)
+    from encounter
+    join encounter_prep prep on prep.encounter_id = encounter.id
+    join level on level.id = encounter.level_id and level.account_id = encounter.level_owner_id
+    cross join lateral (
+      select json_agg(json_build_object(
+        'encounterCreatureId', line.id, 'ordinal', spot.ordinal,
+        'name', coalesce(npc.name, creature.name),
+        'column', spot.board_column, 'row', spot.board_row,
+        'problem', case when spot.board_column >= level_visit.board_columns
+                          or spot.board_row >= level_visit.board_rows
+                        then 'offBoard' end
+      ) order by line.created_at, line.id, spot.ordinal) as creatures
+      from encounter_creature line
+      join encounter_creature_spot spot on spot.encounter_creature_id = line.id
+      join creature on creature.id = line.creature_id
+      left join npc on npc.id = line.npc_id
+      where line.encounter_id = encounter.id
+    ) placed
+    where ${placedIn(sql)} and placed.creatures is not null
+  ), '[]'::json) as encounters
+`;
+
+/**
+ * The DM's visit with each placed creature on the copy that no token may
+ * stand on there flagged `blocked` (`unstandable`, the rule a fight's start
+ * seeds by): a wall or a prop the level gained since the creature was
+ * placed, or a copy older than the placement.
+ */
+const withSpotProblems = (visit: LevelVisit): LevelVisit => {
+  if (visit.encounters.length === 0) return visit;
+  const layout = runLevelLayout(
+    { columns: visit.columns, rows: visit.rows, feetPerCell: visit.feetPerCell },
+    visit.level,
+  );
+  const blocked = new Set(
+    unstandable(layout).map((square) => square.row * layout.columns + square.column),
+  );
+  return new LevelVisit({
+    ...visit,
+    encounters: visit.encounters.map((encounter) => ({
+      ...encounter,
+      creatures: encounter.creatures.map((creature) =>
+        creature.problem === null && blocked.has(creature.row * layout.columns + creature.column)
+          ? { ...creature, problem: "blocked" as const }
+          : creature,
+      ),
+    })),
+  });
+};
+
+/**
+ * The placed creatures the party sees now on a visit (`PlayerLevelVisit
+ * .creatures`), as one `json` column, `creatures`, over `level_visit` in
+ * scope: each instance of an encounter placed in the visit whose square is on
+ * the copy and in `party_sees` with the DM's fog taken out, as its name
+ * (a member of the Cast's own, else the creature's: a fight's token's) and
+ * its square, in reading order. Sight decides: the line's own `visibility`
+ * is not asked, as a fight on a level does not ask it of a foe it shows. No
+ * encounter, line, count or trigger is selected. Narrowed here, in SQL.
+ */
+export const seenPlacedColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
+  coalesce((
+    select json_agg(json_build_object(
+      'name', coalesce(npc.name, creature.name),
+      'column', spot.board_column, 'row', spot.board_row
+    ) order by spot.board_row, spot.board_column, line.id, spot.ordinal)
+    from encounter
+    join encounter_creature line on line.encounter_id = encounter.id
+    join encounter_creature_spot spot on spot.encounter_creature_id = line.id
+    join creature on creature.id = line.creature_id
+    left join npc on npc.id = line.npc_id
+    where ${placedIn(sql)}
+      and spot.board_column < level_visit.board_columns
+      and spot.board_row < level_visit.board_rows
+      and (spot.board_row * level_visit.board_columns + spot.board_column)
+            = any(level_visit.party_sees)
+      and not (spot.board_row * level_visit.board_columns + spot.board_column)
+            = any(level_visit.fog_hidden)
+  ), '[]'::json) as creatures
+`;
 
 /**
  * Where the party's eyes stand on a visit: each token whose seat is still
@@ -191,7 +309,7 @@ interface VisitLine {
 }
 
 /** A line as it is logged. */
-interface LoggedLine {
+export interface LoggedLine {
   readonly kind: SessionEventKind;
   readonly payload: Record<string, unknown>;
   readonly visibility: "dm" | "shared";
@@ -224,7 +342,7 @@ const linesOf = (
  * transaction, answering the night whose doorbell the caller rings once it
  * has committed, or `null` with no night open, when nothing is written.
  */
-const tellTheNight = (
+export const tellTheNight = (
   sql: SqlClient.SqlClient,
   campaign: CampaignId | string,
   visitId: string,
@@ -601,7 +719,8 @@ export const playerVisitOnTable = (
                    or (seat.visibility = 'shared'
                      and not (level_visit_token.board_row * level_visit.board_columns
                                 + level_visit_token.board_column) = any(level_visit.fog_hidden)))
-             ), '[]'::json) as tokens
+             ), '[]'::json) as tokens,
+             ${seenPlacedColumn(sql)}
       from level_visit
       where ${levelVisitAtPlayerTable(sql, campaignId, actor)}
         and not ${borrowedBy(sql)}
@@ -768,6 +887,7 @@ export class LevelVisits extends Context.Service<
                    join campaign_character seat on seat.id = level_visit_token.seat_id
                    where level_visit_token.visit_id = level_visit.id
                  ), '[]'::json) as tokens,
+                 ${placedEncountersColumn(sql)},
                  ${onTableColumn(sql)}, level_visit.created_at, level_visit.updated_at
           from level_visit
           join campaign on campaign.id = level_visit.campaign_id
@@ -776,7 +896,10 @@ export class LevelVisits extends Context.Service<
       });
 
       const read = (creator: CampaignCreatorActor, id: LevelVisitId) =>
-        visit({ ...asked(creator), id }).pipe(orNotFound("level_visit", id));
+        visit({ ...asked(creator), id }).pipe(
+          orNotFound("level_visit", id),
+          Effect.map(withSpotProblems),
+        );
 
       /** Ring the night a write logged on, once its transaction has committed. */
       const ring = (night: SessionId | null) =>

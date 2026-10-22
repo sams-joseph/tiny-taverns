@@ -60,7 +60,13 @@ import {
   LOCATION_DESCRIPTION_MAX,
   LOCATION_NAME_MAX,
   LOCATION_NOTES_MAX,
+  BOARD_COLUMNS_DEFAULT,
+  BOARD_ROWS_DEFAULT,
+  type GeneratedRoom,
   generateLevel,
+  type HobEncounterPlacement,
+  LEVEL_MATERIALS,
+  standable,
   LEVEL_DESCRIPTION_MAX,
   LEVEL_NAME_MAX,
   LEVEL_ROOM_LABEL_MAX,
@@ -1219,6 +1225,9 @@ export const ProposeAct = Tool.make("proposeAct", {
   failureMode: "return",
 });
 
+/** A square of a level as `proposeEncounter`'s placement names one, counting from 0. */
+const PlacedSquare = Schema.Struct({ column: Schema.Int, row: Schema.Int });
+
 export const ProposeEncounter = Tool.make("proposeEncounter", {
   description:
     "Offer the DM an encounter to save. Set kind to the one the DM asked for: " +
@@ -1239,7 +1248,14 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "shrine, tavern, store, library, barracks, cistern or garden — with a rough " +
     "size and a short label) and, if you like, mapSize (small, medium or large), " +
     "connections, secrets and mood; leave rooms out and the DM gets an empty level " +
-    "to build. Give tactics — a few short lines on how to run it — and treasure " +
+    "to build. To set the creatures where they wait on that level, give placement: " +
+    "one entry per creatures line (line counts from 1, in the order you listed " +
+    "creatures) with room (which of your rooms, counting from 1; room 1 is where the " +
+    "party comes in) to spread them over that room's floor, or squares, one {column, " +
+    "row} per creature counting from 0 at the top left (a level without rooms is 24 " +
+    "columns by 16 rows of open floor). Give triggerRoom, or triggerSquares, for the " +
+    "area that sets the encounter off when the party walks into it. Leave placement " +
+    "out and the DM places them. Give tactics — a few short lines on how to run it — and treasure " +
     "when there is any. Only a challenge and a hazard take numbers: a challenge " +
     "needs dc, successes and failures, and may say onSuccess and onFailure (what " +
     "happens when the party makes it, and when it goes wrong); a hazard needs " +
@@ -1289,6 +1305,25 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
         }),
       ).check(Schema.isMaxLength(12)),
     ),
+    /**
+     * Where the creatures wait on the level, flat for the reason every
+     * parameter here is flat: per creatures line (from 1), a room of the
+     * layout (from 1) to spread them over, or a square each. The model is
+     * never shown the layout, whose seed the server picks, so a room is the
+     * placement it can make; squares serve a level with no rooms, whose board
+     * it is told. Resolved and checked at the offer (`placementOf`).
+     */
+    placement: optional(
+      Schema.Array(
+        Schema.Struct({
+          line: Schema.Int,
+          room: optional(Schema.Int),
+          squares: optional(Schema.Array(PlacedSquare).check(Schema.isMaxLength(99))),
+        }),
+      ).check(Schema.isMaxLength(12)),
+    ),
+    triggerRoom: optional(Schema.Int),
+    triggerSquares: optional(Schema.Array(PlacedSquare).check(Schema.isMaxLength(400))),
     tactics: optional(
       Schema.Array(Schema.String.check(Schema.isBetweenLength(0, ENCOUNTER_TACTIC_MAX))).check(
         Schema.isMaxLength(ENCOUNTER_TACTICS_MAX),
@@ -1503,6 +1538,183 @@ const challengeFrom = (
           "challenge or a hazard, set kind to challenge or hazard",
       };
   }
+};
+
+/** What `proposeEncounter` says a placement with, as the tool decoded it. */
+interface PlacementParameters {
+  readonly placement?:
+    | ReadonlyArray<{
+        readonly line: number;
+        readonly room?: number | null | undefined;
+        readonly squares?: ReadonlyArray<{ readonly column: number; readonly row: number }> | null;
+      }>
+    | null
+    | undefined;
+  readonly triggerRoom?: number | null | undefined;
+  readonly triggerSquares?: ReadonlyArray<{ readonly column: number; readonly row: number }> | null;
+}
+
+/**
+ * The level a `proposeEncounter` placement is asked of: the one its rooms lay
+ * out (`generateLevel`, the spec the card and the keep lay out again), or,
+ * with no rooms, the empty level the keep makes (`Encounters.create`'s
+ * starting level: the plain board's size, open flagstone), which has none.
+ */
+const placementLevel = (spec: LevelSpec | undefined) => {
+  if (spec !== undefined) {
+    const { level, rooms } = generateLevel(spec);
+    return { geometry: level, rooms };
+  }
+  const columns = BOARD_COLUMNS_DEFAULT;
+  const rows = BOARD_ROWS_DEFAULT;
+  const flagstone = LEVEL_MATERIALS.indexOf("flagstone");
+  return {
+    geometry: { columns, rows, floor: Array.from({ length: columns * rows }, () => flagstone) },
+    rooms: [] as ReadonlyArray<GeneratedRoom>,
+  };
+};
+
+/**
+ * A `proposeEncounter` placement resolved to the proposal's own
+ * (`HobEncounterPlacement`): each creatures line (from 1) to its roster line
+ * and the instances it adds there (lines naming one creature twice are one
+ * roster line, `roster`'s merge), a room (from 1) spread over its floor
+ * squares a token may stand on, middle first, and the trigger to squares of
+ * the level. Every square is checked as the keep's write will check it
+ * (`standable`, one creature a square), so a placement offered is one the
+ * keep writes. A refusal is a sentence the model can act on; nothing given
+ * is no placement.
+ */
+const placementOf = (
+  given: PlacementParameters,
+  lines: ReadonlyArray<{
+    readonly creatureId: CreatureId;
+    readonly npcId?: NpcId | null | undefined;
+    readonly count: number;
+  }>,
+  roster: ReadonlyArray<HobRosterLine>,
+  spec: LevelSpec | undefined,
+): { readonly placement: HobEncounterPlacement | undefined } | { readonly refused: string } => {
+  const entries = absent(given.placement) ?? [];
+  const triggerRoom = absent(given.triggerRoom);
+  const triggerSquares = absent(given.triggerSquares);
+  if (entries.length === 0 && triggerRoom === undefined && triggerSquares === undefined) {
+    return { placement: undefined };
+  }
+  const { geometry, rooms } = placementLevel(spec);
+  const { columns, rows } = geometry;
+  const props = "props" in geometry ? geometry.props : [];
+  const layout = { columns, rows, floor: geometry.floor, props };
+  const where = (square: { readonly column: number; readonly row: number }) =>
+    `column ${String(square.column)}, row ${String(square.row)}`;
+  const roomsSaid =
+    rooms.length === 0
+      ? `the level has no rooms: give squares, columns 0 to ${String(columns - 1)} and rows 0 to ${String(rows - 1)}`
+      : `rooms count from 1 to ${String(rooms.length)}`;
+  const roomOf = (number: number) => rooms[number - 1];
+  const roomSquares = (room: GeneratedRoom) => {
+    const middle = { column: room.x + (room.width - 1) / 2, row: room.y + (room.height - 1) / 2 };
+    const squares: Array<{ column: number; row: number }> = [];
+    for (let row = room.y; row < room.y + room.height; row++) {
+      for (let column = room.x; column < room.x + room.width; column++) {
+        if (standable(layout, { column, row })) squares.push({ column, row });
+      }
+    }
+    const away = (square: { column: number; row: number }) =>
+      Math.abs(square.column - middle.column) + Math.abs(square.row - middle.row);
+    return squares.sort((a, b) => away(a) - away(b) || a.row - b.row || a.column - b.column);
+  };
+
+  // Each creatures line's roster line and the first instance it adds there.
+  const keys = roster.map((line) =>
+    rosterLineKey({ creatureId: line.creatureId, npcId: line.npc?.id }),
+  );
+  const added = new Map<string, number>();
+  const ofLine = lines.map((line) => {
+    const key = rosterLineKey({ creatureId: line.creatureId, npcId: line.npcId ?? undefined });
+    const index = keys.indexOf(key);
+    const from = added.get(key) ?? 0;
+    const total = roster[index]?.count ?? 0;
+    const count = Math.max(0, Math.min(line.count, total - from));
+    added.set(key, from + count);
+    return { index, from, count };
+  });
+
+  const taken = new Set<string>();
+  const spots: Array<HobEncounterPlacement["spots"][number]> = [];
+  const placedLines = new Set<number>();
+  for (const entry of entries) {
+    const line = ofLine[entry.line - 1];
+    if (line === undefined || line.index < 0) {
+      return {
+        refused: `placement line ${String(entry.line)} is not one of your creatures lines — they count from 1 to ${String(lines.length)}`,
+      };
+    }
+    if (placedLines.has(entry.line)) {
+      return { refused: `creatures line ${String(entry.line)} is placed twice — give it once` };
+    }
+    placedLines.add(entry.line);
+    const room = absent(entry.room);
+    const squares = absent(entry.squares);
+    let chosen: Array<{ column: number; row: number }>;
+    if (room !== undefined) {
+      const box = roomOf(room);
+      if (box === undefined) return { refused: `there is no room ${String(room)}: ${roomsSaid}` };
+      chosen = roomSquares(box)
+        .filter((square) => !taken.has(`${String(square.column)}:${String(square.row)}`))
+        .slice(0, line.count);
+      if (chosen.length < line.count) {
+        return {
+          refused: `room ${String(room)} has floor for only ${String(chosen.length)} more creatures — spread line ${String(entry.line)} over another room as well, or give fewer`,
+        };
+      }
+    } else if (squares !== undefined) {
+      if (squares.length !== line.count) {
+        return {
+          refused: `creatures line ${String(entry.line)} is ${String(line.count)} creatures: give ${String(line.count)} squares, one each`,
+        };
+      }
+      chosen = [...squares];
+      for (const square of chosen) {
+        if (!standable(layout, square)) {
+          return {
+            refused: `nothing can stand at ${where(square)} — ${roomsSaid}; or give a room instead`,
+          };
+        }
+        if (taken.has(`${String(square.column)}:${String(square.row)}`)) {
+          return { refused: `two creatures cannot stand on one square (${where(square)})` };
+        }
+        taken.add(`${String(square.column)}:${String(square.row)}`);
+      }
+    } else {
+      return {
+        refused: `give creatures line ${String(entry.line)} a room or its squares, or leave it out of placement`,
+      };
+    }
+    chosen.forEach((square, offset) => {
+      taken.add(`${String(square.column)}:${String(square.row)}`);
+      spots.push({ line: line.index, ordinal: line.from + offset, ...square });
+    });
+  }
+
+  let trigger: Array<number> | null = null;
+  if (triggerRoom !== undefined) {
+    const box = roomOf(triggerRoom);
+    if (box === undefined)
+      return { refused: `there is no room ${String(triggerRoom)}: ${roomsSaid}` };
+    trigger = roomSquares(box).map((square) => square.row * columns + square.column);
+  } else if (triggerSquares !== undefined) {
+    for (const square of triggerSquares) {
+      if (square.column < 0 || square.row < 0 || square.column >= columns || square.row >= rows) {
+        return {
+          refused: `the trigger square at ${where(square)} is off the level — ${roomsSaid}`,
+        };
+      }
+    }
+    trigger = triggerSquares.map((square) => square.row * columns + square.column);
+  }
+  const area = trigger === null ? [] : [...new Set(trigger)].sort((a, b) => a - b);
+  return { placement: { spots, trigger: area.length === 0 ? null : area } };
 };
 
 /**
@@ -3663,6 +3875,9 @@ export const dmHandlersFor = (
       connections,
       secrets,
       mood,
+      placement: placed,
+      triggerRoom,
+      triggerSquares,
       ...challengeParameters
     }) =>
       Effect.gen(function* () {
@@ -3698,6 +3913,14 @@ export const dmHandlersFor = (
                 secrets,
                 mood: absent(mood) ?? "firelit",
               }).pipe(Effect.mapError((refused) => notOffered(refused.message)));
+        const placing = placementOf(
+          { placement: placed, triggerRoom, triggerSquares },
+          creatures ?? [],
+          lines,
+          level,
+        );
+        if ("refused" in placing) return yield* notOffered(placing.refused);
+        const placement = placing.placement;
         const tacticLines = linesOf(tactics);
         const treasureLine = proseOf(treasure);
         const count = lines.reduce((total, line) => total + line.count, 0);
@@ -3717,6 +3940,7 @@ export const dmHandlersFor = (
             ...(sorted.challenge === undefined ? {} : { challenge: sorted.challenge }),
             roster: lines,
             ...(level === undefined ? {} : { level }),
+            ...(placement === undefined ? {} : { placement }),
           },
           `Offered the DM ${what} called "${name}"` +
             (count === 0 ? "" : `, with ${count} ${count === 1 ? "creature" : "creatures"}`) +
@@ -3724,6 +3948,12 @@ export const dmHandlersFor = (
               ? ""
               : `, on a ${level.size} level of ${String(level.rooms.length)} ` +
                 `${level.rooms.length === 1 ? "room" : "rooms"}`) +
+            (placement === undefined || placement.spots.length === 0
+              ? ""
+              : `, ${String(placement.spots.length)} of them placed`) +
+            (placement?.trigger === null || placement === undefined
+              ? ""
+              : ", with a trigger area") +
             ". They can save it or discard it; say one short line about it and stop — " +
             "the card is already on their screen.",
         );

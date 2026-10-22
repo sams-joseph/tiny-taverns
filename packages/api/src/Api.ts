@@ -79,6 +79,7 @@ import {
   EncounterPrep,
   EncounterUpdate,
 } from "./Encounter.js";
+import { EncounterLevelPlacement } from "./EncounterSpots.js";
 import { Feat, FeatFilter, FeatLibraryCreate, FeatLibraryUpdate, FeatSort } from "./Feat.js";
 import {
   Equipment,
@@ -1884,6 +1885,20 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
       payload: EncounterPlacement,
       success: HttpApiSchema.NoContent,
       error: NotFound,
+    }),
+    /**
+     * Place the encounter's creatures on squares of its level and mark its
+     * trigger area, replacing every spot and the trigger it had, answered
+     * with its prep (`EncounterPrep.placement`). See `EncounterLevelPlacement`
+     * for what is refused. While a night is open and the campaign has a visit
+     * of the level, the visit's log has a line for it and its doorbell rings
+     * (`live.visitEvents`).
+     */
+    HttpApiEndpoint.put("place", "/:encounterId/placement", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      payload: EncounterLevelPlacement,
+      success: EncounterPrep,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/encounters")

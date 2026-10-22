@@ -24,6 +24,7 @@ export * from "./EncounterCreature.js";
 export * from "./EncounterDifficulty.js";
 export * from "./EncounterRun.js";
 export * from "./EncounterRunScene.js";
+export * from "./EncounterSpots.js";
 export * from "./Equipment.js";
 export * from "./Errors.js";
 export * from "./Feat.js";

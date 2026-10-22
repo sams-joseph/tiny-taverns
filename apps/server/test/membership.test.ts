@@ -269,6 +269,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       // A fight's snapshot joins the level on the owner the encounter's keys
       // already hold; it reads, and reaches nothing the encounter did not.
       "repo/levelFights.ts",
+      // A placement asks its squares of the encounter's level, joined on the
+      // owner the encounter's keys already hold, beneath `levelOwned`, as a
+      // fight's snapshot does. Never a caller-supplied account.
+      "repo/placements.ts",
       // The level-up recompute's class lookup prefers the bundle's row by
       // `account_id is null` inside a vocabulary its caller already narrowed.
       // An ordering, never a reach.

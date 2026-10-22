@@ -123,3 +123,14 @@ export type VisitTokenMovedPayload = typeof VisitTokenMovedPayload.Type;
 /** `visit-tabled`: the visit put on the campaign's table (`true`) or taken off it. */
 export const VisitTabledPayload = Schema.Struct({ onTable: Schema.Boolean });
 export type VisitTabledPayload = typeof VisitTabledPayload.Type;
+
+/**
+ * `visit-placement-updated`: the DM placed an encounter's creatures on the
+ * visit's level again, or its trigger area, by the encounter's name. The DM's
+ * line: it would say where a fight waits.
+ */
+export const VisitPlacementUpdatedPayload = Schema.Struct({
+  encounterId: Schema.String,
+  name: Schema.String,
+});
+export type VisitPlacementUpdatedPayload = typeof VisitPlacementUpdatedPayload.Type;

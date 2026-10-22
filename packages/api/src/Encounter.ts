@@ -4,6 +4,7 @@ import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
+import { EncounterLevelPlacement } from "./EncounterSpots.js";
 import {
   CampaignId,
   CreatureId,
@@ -219,6 +220,12 @@ export class EncounterPrep extends Schema.Class<EncounterPrep>("EncounterPrep")(
   treasure: Schema.NullOr(Schema.String),
   /** `null` for a fight or a conversation, and for a challenge not yet set out. */
   challenge: Schema.NullOr(EncounterChallenge),
+  /**
+   * Where its creatures stand on its level before the fight, and the squares
+   * that set it off (`EncounterSpots.ts`). No spots and no trigger on an
+   * encounter not yet placed; both go when its level changes.
+   */
+  placement: EncounterLevelPlacement,
 }) {}
 
 /**

@@ -486,6 +486,9 @@ export class Proposals extends Context.Service<
                   })),
                 },
                 from,
+                // Where Hob stood them, by roster index, written through the
+                // placement's own statements once the lines exist.
+                proposal.placement,
               );
               return { accepted: "encounter" as const, encounter };
             });

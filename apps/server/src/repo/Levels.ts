@@ -351,6 +351,16 @@ export class Levels extends Context.Service<
                     and encounter.level_owner_id = level.account_id
                     and level.id = ${id} and ${levelOwned(sql, actor)}
                 `;
+                // And their trigger areas (`0115_encounter_placement.ts`).
+                yield* sql`
+                  update encounter_prep set trigger_squares = null
+                  from encounter, level
+                  where encounter_prep.encounter_id = encounter.id
+                    and encounter.level_id = level.id
+                    and encounter.level_owner_id = level.account_id
+                    and encounter_prep.trigger_squares is not null
+                    and level.id = ${id} and ${levelOwned(sql, actor)}
+                `;
                 // Every part's key cascades from the level. A visit of it
                 // keeps its own copy (`on delete set null`).
                 const gone = yield* sql<{ readonly id: string }>`

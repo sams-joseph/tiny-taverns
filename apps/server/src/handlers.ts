@@ -850,6 +850,11 @@ const EncountersLive = HttpApiBuilder.group(
         .handle("move", ({ params, payload }) =>
           encounters.move(params.campaignId, params.encounterId, payload),
         )
+        .handle("place", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) =>
+            encounters.place(creator, params.encounterId, payload),
+          ),
+        )
         // Its level stays in the creator's Library: a Library object is
         // deleted from the Library.
         .handle("remove", ({ params }) => encounters.remove(params.campaignId, params.encounterId))

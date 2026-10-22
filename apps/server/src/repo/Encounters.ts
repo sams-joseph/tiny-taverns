@@ -9,14 +9,17 @@ import {
   Encounter,
   type EncounterChallenge,
   type EncounterCreate,
+  type EncounterCreatureId,
   encounterDifficulty,
   EncounterId,
   EncounterKind,
   EncounterPlayed,
   type EncounterPlacement,
   EncounterPrep,
+  type EncounterLevelPlacement,
   type EncounterUpdate,
   FEET_PER_SQUARE_DEFAULT,
+  type HobEncounterPlacement,
   LEVEL_MATERIALS,
   LEVEL_NAME_MAX,
   type LevelId,
@@ -29,8 +32,10 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { Levels } from "./Levels.js";
+import { type PlacementWrite, writePlacement } from "./placements.js";
 import { RUN } from "./liveTables.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
@@ -134,6 +139,27 @@ const PlayerEncounterRow = classFromColumns(PlayerEncounter, {
 
 /** An `encounter_prep` row, decoded off `encounter_prep.*` by `SqlSchema`. */
 const EncounterPrepRow = classFromColumns(EncounterPrep, EncounterPrep.fields);
+
+/**
+ * Over `encounter_prep`: the encounter's placement (`EncounterPrep.placement`)
+ * as one `json` column, `placement`: its spots by roster line, oldest line
+ * first, then instance, and its trigger area. **The creator's read only**:
+ * no player read selects a spot or the trigger.
+ */
+const placementColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
+  json_build_object(
+    'spots', coalesce((
+      select json_agg(json_build_object(
+        'encounterCreatureId', spot.encounter_creature_id, 'ordinal', spot.ordinal,
+        'column', spot.board_column, 'row', spot.board_row
+      ) order by line.created_at, line.id, spot.ordinal)
+      from encounter_creature line
+      join encounter_creature_spot spot on spot.encounter_creature_id = line.id
+      where line.encounter_id = encounter_prep.encounter_id
+    ), '[]'::json),
+    'trigger', to_json(encounter_prep.trigger_squares)
+  ) as placement
+`;
 
 /** The written columns, as the method builds them. */
 const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
@@ -326,6 +352,15 @@ export class Encounters extends Context.Service<
       campaignId: CampaignId,
       payload: EncounterCreate,
       from?: AssistantOrigin,
+      /**
+       * Where the new roster's creatures stand on the encounter's level, each
+       * line named by its index in `payload.creatures`: a kept Hob proposal's
+       * (`HobEncounterPlacement`), written through `writePlacement` once the
+       * lines exist, in the create's transaction. Its encounter's level is
+       * always one just made, which no visit can be of yet, so it logs and
+       * rings nothing.
+       */
+      placement?: HobEncounterPlacement,
     ) => Effect.Effect<Encounter, NotFound | Conflict, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -360,6 +395,16 @@ export class Encounters extends Context.Service<
     readonly prepList: (
       creator: CampaignCreatorActor,
     ) => Effect.Effect<ReadonlyArray<EncounterPrep>>;
+    /**
+     * Replace the encounter's placement on its level, every spot and the
+     * trigger, in one transaction (`writePlacement`), answering its prep.
+     * The creator's alone, so it takes the proof.
+     */
+    readonly place: (
+      creator: CampaignCreatorActor,
+      id: EncounterId,
+      placement: EncounterLevelPlacement,
+    ) => Effect.Effect<EncounterPrep, NotFound | Conflict>;
   }
 >()("Encounters") {
   // The roster's create is the one way a roster line is written, so the
@@ -369,6 +414,7 @@ export class Encounters extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const encounterCreatures = yield* EncounterCreatures;
       const levels = yield* Levels;
+      const live = yield* LiveEvents;
       /**
        * The DM's planned order, then the id — the tiebreak `Ordering`
        * requires, though the unique slot leaves nothing for it to break.
@@ -632,7 +678,7 @@ export class Encounters extends Context.Service<
         Request: Schema.toType(Schema.Struct({ ...creatorFields, id: EncounterId })),
         Result: EncounterPrepRow,
         execute: ({ campaign, actor, id }) => sql`
-          select encounter_prep.* from encounter_prep
+          select encounter_prep.*, ${placementColumn(sql)} from encounter_prep
           where encounter_prep.encounter_id = ${id}
             and ${rowWritable(sql, "encounter_prep", campaign, actor)}
         `,
@@ -641,7 +687,7 @@ export class Encounters extends Context.Service<
         Request: Schema.toType(Schema.Struct(creatorFields)),
         Result: EncounterPrepRow,
         execute: ({ campaign, actor }) => sql`
-          select encounter_prep.* from encounter_prep
+          select encounter_prep.*, ${placementColumn(sql)} from encounter_prep
           where ${rowWritable(sql, "encounter_prep", campaign, actor)}
           order by encounter_prep.position, encounter_prep.encounter_id
         `,
@@ -683,7 +729,7 @@ export class Encounters extends Context.Service<
             }),
           ),
 
-        create: (campaignId, payload, from) =>
+        create: (campaignId, payload, from, placement) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -731,8 +777,9 @@ export class Encounters extends Context.Service<
                 // its duplicate rule — so a roster made with the encounter is
                 // the one a DM adding lines afterwards would have made. Any
                 // line it refuses rolls the whole encounter back.
+                const made: Array<EncounterCreatureId> = [];
                 for (const line of payload.creatures ?? []) {
-                  yield* encounterCreatures.create(
+                  const created = yield* encounterCreatures.create(
                     campaignId,
                     id,
                     {
@@ -743,6 +790,30 @@ export class Encounters extends Context.Service<
                     },
                     from,
                   );
+                  made.push(created.id);
+                }
+                // Where they stand, by the lines just made: an index naming
+                // no line is a defect of the offer, which checked it.
+                if (placement !== undefined) {
+                  const spots: Array<PlacementWrite["spots"][number]> = [];
+                  for (const spot of placement.spots) {
+                    const line = made[spot.line];
+                    if (line === undefined) {
+                      return yield* Effect.die("a placed spot names no roster line");
+                    }
+                    spots.push({
+                      encounterCreatureId: line,
+                      ordinal: spot.ordinal,
+                      column: spot.column,
+                      row: spot.row,
+                    });
+                  }
+                  yield* writePlacement(sql, {
+                    campaignId,
+                    actor,
+                    encounterId: id,
+                    placement: { spots, trigger: placement.trigger },
+                  });
                 }
                 // Read back last, so the count and the difficulty are the
                 // roster's just written.
@@ -784,6 +855,17 @@ export class Encounters extends Context.Service<
                       and encounter_creature.encounter_id = encounter.id
                       and encounter.id = ${id}
                       and encounter.level_id is distinct from ${level.level_id}
+                      and ${rowWritable(sql, "encounter", campaignId, actor)}
+                  `;
+                  // And its trigger area, squares of the same level
+                  // (`0115_encounter_placement.ts`).
+                  yield* sql`
+                    update encounter_prep set trigger_squares = null
+                    from encounter
+                    where encounter_prep.encounter_id = encounter.id
+                      and encounter.id = ${id}
+                      and encounter.level_id is distinct from ${level.level_id}
+                      and encounter_prep.trigger_squares is not null
                       and ${rowWritable(sql, "encounter", campaignId, actor)}
                   `;
                 }
@@ -874,7 +956,32 @@ export class Encounters extends Context.Service<
           dieOnSqlError(prepOf({ ...asked(creator), id }).pipe(orNotFound("encounter", id))),
 
         prepList: (creator) => dieOnSqlError(preps(asked(creator))),
+
+        place: (creator, id, placement) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const night = yield* writePlacement(sql, {
+                    campaignId: creator.campaign,
+                    actor: creator.actor,
+                    encounterId: id,
+                    placement,
+                  });
+                  const prep = yield* prepOf({ ...asked(creator), id }).pipe(
+                    Effect.catchTag("NoSuchElementError", Effect.die),
+                  );
+                  return { prep, night };
+                }),
+              )
+              // The visit's doorbell, once the placement has committed.
+              .pipe(
+                Effect.flatMap(({ prep, night }) =>
+                  Effect.as(night === null ? Effect.void : live.touched(night), prep),
+                ),
+              ),
+          ),
       };
     }),
-  ).pipe(Layer.provide([EncounterCreatures.layer, Levels.layer]));
+  ).pipe(Layer.provide([EncounterCreatures.layer, Levels.layer, LiveEvents.layer]));
 }

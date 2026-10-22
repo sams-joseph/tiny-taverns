@@ -1,6 +1,13 @@
 import { Schema } from "effect";
 import { CombatantPosition } from "./Combatant.js";
-import { CampaignCharacterId, LevelId, LevelVisitId } from "./Ids.js";
+import { EncounterKind } from "./EncounterKind.js";
+import {
+  CampaignCharacterId,
+  EncounterCreatureId,
+  EncounterId,
+  LevelId,
+  LevelVisitId,
+} from "./Ids.js";
 import { PlayerLiveLevel, RunBoardLevel } from "./LevelFight.js";
 
 /**
@@ -29,6 +36,49 @@ export const LevelVisitToken = Schema.Struct({
 });
 export type LevelVisitToken = typeof LevelVisitToken.Type;
 
+/**
+ * Why a placed creature cannot stand where it was put on the visit's copy:
+ * the square is past the copy's edge, or no token may stand on it there
+ * (`standable`). The placement was checked against the level when it was
+ * written; the visit is a copy taken when it was opened, and either may have
+ * changed since. A flagged spot is listed rather than dropped, so the DM sees
+ * it needs moving.
+ */
+export const LevelVisitSpotProblem = Schema.Literals(["offBoard", "blocked"]);
+export type LevelVisitSpotProblem = typeof LevelVisitSpotProblem.Type;
+
+/** One placed creature of an encounter on the visit, as the DM sees it. */
+export const LevelVisitPlacedCreature = Schema.Struct({
+  encounterCreatureId: EncounterCreatureId,
+  ordinal: Schema.Int,
+  /** The roster line's name: a member of the Cast's own, else the creature's. */
+  name: Schema.String,
+  column: Schema.Int,
+  row: Schema.Int,
+  /** `null` when it can stand there. */
+  problem: Schema.NullOr(LevelVisitSpotProblem),
+});
+export type LevelVisitPlacedCreature = typeof LevelVisitPlacedCreature.Type;
+
+/**
+ * An encounter placed in the visit: the campaign's, on the visit's level,
+ * with creatures placed, and never played (`EncounterSpots.ts`). Computed on
+ * read, never stored.
+ */
+export const LevelVisitEncounter = Schema.Struct({
+  id: EncounterId,
+  name: Schema.String,
+  kind: EncounterKind,
+  /** By roster line, then instance. */
+  creatures: Schema.Array(LevelVisitPlacedCreature),
+  /**
+   * The trigger area on the visit's board, in reading order, or `null` for
+   * none. Squares of the level past the copy's edge are left out.
+   */
+  trigger: Schema.NullOr(Schema.Array(CombatantPosition)),
+});
+export type LevelVisitEncounter = typeof LevelVisitEncounter.Type;
+
 export class LevelVisit extends Schema.Class<LevelVisit>("LevelVisit")({
   id: LevelVisitId,
   /** The level it was opened from, or `null` once that level is deleted. */
@@ -53,6 +103,8 @@ export class LevelVisit extends Schema.Class<LevelVisit>("LevelVisit")({
   partySeen: Schema.Array(Schema.Int),
   /** Where each seat stands, in seat order. */
   tokens: Schema.Array(LevelVisitToken),
+  /** The encounters placed in the visit and not yet played, in the DM's planned order. */
+  encounters: Schema.Array(LevelVisitEncounter),
   /** Whether this is the visit on the campaign's table. */
   onTable: Schema.Boolean,
   createdAt: Schema.DateTimeUtcFromString,
@@ -120,6 +172,20 @@ export const PlayerLevelVisitToken = Schema.Struct({
 export type PlayerLevelVisitToken = typeof PlayerLevelVisitToken.Type;
 
 /**
+ * A placed creature the party sees now: its name and its square, and nothing
+ * else (no encounter, no roster line, no count, no trigger). Sight decides on
+ * a level: a line the DM keeps hidden (`visibility = 'dm'`) is shown when the
+ * party sees its square, as a fight's foe on a level is.
+ */
+export const PlayerLevelVisitCreature = Schema.Struct({
+  /** A member of the Cast's own name, else the creature's, as a fight's token would say. */
+  name: Schema.String,
+  column: Schema.Int,
+  row: Schema.Int,
+});
+export type PlayerLevelVisitCreature = typeof PlayerLevelVisitCreature.Type;
+
+/**
  * The visit on the table as a seated player sees it (`PlayerLiveTable.visit`).
  *
  * A distinct schema, not `LevelVisit` with fields taken off: no `levelId` and
@@ -140,5 +206,12 @@ export const PlayerLevelVisit = Schema.Struct({
   fog: Schema.Array(CombatantPosition),
   /** The party's tokens this player may see, in seat order. */
   tokens: Schema.Array(PlayerLevelVisitToken),
+  /**
+   * The placed creatures of unplayed encounters standing where the party sees
+   * now (`party_sees` with the DM's fog taken out), in reading order. What the
+   * party saw before and does not see now is not here: the table is told only
+   * what is in front of it.
+   */
+  creatures: Schema.Array(PlayerLevelVisitCreature),
 });
 export type PlayerLevelVisit = typeof PlayerLevelVisit.Type;

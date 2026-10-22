@@ -157,7 +157,10 @@ export const SessionEventKind = Schema.Literals([
    * and `visit-region-updated` a board line's payload (`BoardDoorUpdatedPayload`
    * and its siblings); `visit-fog-updated` `{hidden}`. `visit-vision-updated`
    * carries nothing: what the party sees of the visit changed with no line of
-   * its own (a seat left the table).
+   * its own (a seat left the table, or a placed creature came into or out of
+   * its sight). `visit-placement-updated` `{encounterId, name}` is the DM's
+   * placing an encounter on the visit's level (`VisitPlacementUpdatedPayload`),
+   * always the DM's line.
    */
   "visit-opened",
   "visit-tabled",
@@ -167,6 +170,7 @@ export const SessionEventKind = Schema.Literals([
   "visit-region-updated",
   "visit-fog-updated",
   "visit-vision-updated",
+  "visit-placement-updated",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

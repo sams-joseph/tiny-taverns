@@ -629,9 +629,12 @@ describeLayer("creator-actor", shared, (it) => {
       // DM exploring a visit: `LevelVisits.moveToken`, `updateFog`,
       // `updateDoor`, `updateLight`, `updateRegion` and the transaction they
       // share; eighty-six and eighty-seven are `SessionEvents.listForVisit`
-      // and `pollForVisit`, the visit's lines and the DM's visit stream. Less
-      // the three unused ordinals, that is a hundred and eighty-four.
-      expect(gated).toBe(184);
+      // and `pollForVisit`, the visit's lines and the DM's visit stream.
+      // Eighty-eight is `Encounters.place`: where an encounter's creatures
+      // wait on its level is the DM's prep, written beside the prep read that
+      // returns it, and no player read selects it. Less the three unused
+      // ordinals, that is a hundred and eighty-five.
+      expect(gated).toBe(185);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
