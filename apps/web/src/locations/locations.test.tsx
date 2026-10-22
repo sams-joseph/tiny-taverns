@@ -1,6 +1,7 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { apiUrl } from "../api/client";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import {
   campaign,
@@ -11,7 +12,14 @@ import {
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
-import { gullportId, lambId, libraryShelf, partyMoves, stacksId } from "./locations.fixtures";
+import {
+  gullportId,
+  lambId,
+  libraryShelf,
+  partyMoves,
+  stacksId,
+  tablePlaces,
+} from "./locations.fixtures";
 
 /**
  * Places on screen: the creator's tree with this table's reveals and their
@@ -146,6 +154,28 @@ describe("a place's map", () => {
     await at(`/library/locations/${gullportId}`);
     await screen.findByRole("application", { name: "Map of Gullport" });
     expect(screen.queryByRole("button", { name: "Draw it" })).toBeNull();
+  });
+
+  it("loads the picture from the API and says while Hob is drawing one", async () => {
+    await at(`/library/locations/${gullportId}`);
+    const drawn = await screen.findByRole("application", { name: "Map of Gullport" });
+    // A signed path resolves against the API, not the page's own origin.
+    expect(within(drawn).getByRole("img").getAttribute("src")).toBe(
+      apiUrl(libraryShelf[0].image!.fullUrl),
+    );
+    cleanup();
+
+    server.routes.set(`GET /campaigns/${campaignId}/locations`, {
+      status: 200,
+      body: tablePlaces.map((place) =>
+        place.id === stacksId ? { ...place, imagePending: true } : place,
+      ),
+    });
+    await at(`/campaigns/${campaignId}/locations?place=${stacksId}`);
+    // The canvas with its pins, rather than the empty state, under the badge.
+    const drawing = await screen.findByRole("application", { name: "Map of The Stacks" });
+    expect(within(drawing).getByRole("status").textContent).toBe("Hob is drawing…");
+    expect(screen.queryByText("No picture yet")).toBeNull();
   });
 
   it("zooms into a pin at the table, which opens the map inside it", async () => {
