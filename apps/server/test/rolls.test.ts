@@ -10,7 +10,7 @@ import {
 import { Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
-import { BattleMaps } from "../src/repo/BattleMaps.js";
+import { RunBoards } from "../src/repo/RunBoards.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
@@ -31,7 +31,7 @@ import { describeLayer } from "./support/suite.js";
 
 const services = Layer.mergeAll(
   Accounts.layer,
-  BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
+  RunBoards.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -618,14 +618,14 @@ describeLayer("rolls", services, (it) => {
           Effect.gen(function* () {
             const f = yield* theirFight;
             const rolls = yield* Rolls;
-            const maps = yield* BattleMaps;
+            const boards = yield* RunBoards;
             const refused = (over: Partial<RollCreate>) =>
               as(f.player, Effect.flip(rolls.create(f.campaign.id, attack(f, over))));
 
             expect(yield* refused({ combatantId: f.goblin.id })).toBeInstanceOf(NotFound);
             expect(yield* refused({ combatantId: f.brannoc.id })).toBeInstanceOf(NotFound);
             expect(yield* refused({ targetCombatantId: f.hag.id })).toBeInstanceOf(NotFound);
-            yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [f.square] });
+            yield* boards.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [f.square] });
             expect(yield* refused({})).toBeInstanceOf(NotFound);
             // Where an area went is still the creator's alone.
             expect(
@@ -642,7 +642,7 @@ describeLayer("rolls", services, (it) => {
         const f = yield* aFightWith({ ally: true });
         const rolls = yield* Rolls;
         const combatants = yield* Combatants;
-        const maps = yield* BattleMaps;
+        const boards = yield* RunBoards;
         const goblin = yield* combatants.create(f.dmProof, f.sessionId, f.run.id, {
           displayName: "Goblin",
           ac: 13,
@@ -683,7 +683,7 @@ describeLayer("rolls", services, (it) => {
           }),
         );
 
-        yield* maps.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [square, wrenSquare] });
+        yield* boards.updateFog(f.dmProof, f.sessionId, f.run.id, { hide: [square, wrenSquare] });
         const listed = yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}));
         const byId = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
         for (const read of [listed.find((row) => row.id === shot.id), byId]) {

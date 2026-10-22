@@ -1,4 +1,4 @@
-import { areaSquares, areaToward, battleMapPlane, cellRect } from "@taverns/api";
+import { areaSquares, areaToward, boardPlane, cellRect } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { DrawnBoard } from "../BoardTools";
@@ -39,10 +39,10 @@ export function BlastFx({
   readonly seed: number;
   readonly onEnd: () => void;
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const { area } = blast;
   const centre = (square: { readonly column: number; readonly row: number }) => {
-    const rect = cellRect(board, square);
+    const rect = cellRect(square);
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, cell: rect.width };
   };
   const origin = centre(area.origin);
@@ -284,7 +284,7 @@ export function BlastFx({
       </g>
       <g ref={flares} data-slot="fx-flares" className="mix-blend-screen">
         {squares.map((square) => {
-          const rect = cellRect(board, square);
+          const rect = cellRect(square);
           return (
             <rect
               key={`${String(square.column)}:${String(square.row)}`}

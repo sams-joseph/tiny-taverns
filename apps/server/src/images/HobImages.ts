@@ -1,16 +1,11 @@
 import {
-  BattleMap,
-  battleMapHasSubject,
-  battleMapPromptFor,
   Campaign,
   campaignImageHasSubject,
   campaignImagePromptFor,
   Character,
   type CurrentActor,
-  type Encounter,
   HOUSE_BANNER_STYLE,
   HOUSE_COVER_STYLE,
-  HOUSE_MAP_STYLE,
   HOUSE_PORTRAIT_STYLE,
   Location,
   locationImageHasSubject,
@@ -57,7 +52,7 @@ import { renderImage } from "./render.js";
 /**
  * Hob draws a picture of a thing a person made, once, after it is made — a
  * character's portrait, a campaign's or a Shared World's cover, an NPC's
- * portrait, an encounter's battle map — and this is the server's **one
+ * portrait, a place's picture — and this is the server's **one
  * background worker**, the same for every kind (`kinds.ts`).
  *
  * ### The trigger
@@ -69,8 +64,8 @@ import { renderImage } from "./render.js";
  * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
  * `POST /campaigns/:campaignId/shared-world` (promotion), `drawNpc` from the
  * cast's create, its copy from the Library and its edit (an NPC created blank
- * is drawn by the first edit that gives it a subject), `drawBattleMap` from
- * `POST /campaigns/:c/encounters` and Hob's encounter accept. It records the
+ * is drawn by the first edit that gives it a subject), `drawLocation` from a
+ * place's create and Hob's keep. It records the
  * one image row of that kind the subject will ever have (`repo/Images.ts`
  * `start`, which also applies the shared daily caps, the nothing-to-draw-from
  * skip and the kind's rule about who may start one) and hands a drawing row to
@@ -137,7 +132,7 @@ export interface ImageGeneration {
 export class HobImages extends Context.Service<
   HobImages,
   {
-    /** Whether a new character, campaign, Shared World, NPC or battle map will be drawn. */
+    /** Whether a new character, campaign, Shared World, NPC or place will be drawn. */
     readonly generating: boolean;
     /**
      * See the header. Answers the character again, `portraitPending` when a
@@ -158,17 +153,6 @@ export class HobImages extends Context.Service<
      * its one draw; a call for an NPC that already has a record starts none.
      */
     readonly drawNpc: (npc: Npc) => Effect.Effect<Npc, never, CurrentActor>;
-    /**
-     * The same for a new encounter's battle map, drawn from the map's setting
-     * line coloured by the encounter's name and tags, or without one from the
-     * name, tags and the roster's creature types (`battleMapPromptFor`) —
-     * never a creature's name: `imagePending` when a draw started.
-     */
-    readonly drawBattleMap: (
-      map: BattleMap,
-      encounter: Pick<Encounter, "name" | "tags">,
-      creatureTypes: ReadonlyArray<string>,
-    ) => Effect.Effect<BattleMap, never, CurrentActor>;
     /**
      * The same for a place's picture: a map of a realm, a region, a settlement,
      * a district or a dungeon, a scene of a landmark or a building, drawn from
@@ -473,22 +457,6 @@ export class HobImages extends Context.Service<
                   (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
                 )
               : Effect.succeed(npc),
-
-          drawBattleMap: (map, encounter, creatureTypes) =>
-            Effect.map(
-              start("battleMap", map.id, () => {
-                const subject = {
-                  name: encounter.name,
-                  tags: encounter.tags,
-                  setting: map.setting,
-                  creatureTypes,
-                };
-                return battleMapHasSubject(subject)
-                  ? battleMapPromptFor(subject, { style: HOUSE_MAP_STYLE })
-                  : undefined;
-              }),
-              (pending) => (pending ? new BattleMap({ ...map, imagePending: true }) : map),
-            ),
 
           drawLocation: (location, children) => {
             // The places inside it that are pinned are drawn where their pins

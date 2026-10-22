@@ -2,7 +2,6 @@ import {
   type Actor,
   type CampaignId,
   CurrentActor,
-  type Encounter,
   Heartbeat,
   type HobAccepted,
   type Location,
@@ -39,19 +38,20 @@ import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { Options } from "./repo/Options.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "./repo/CreatorActor.js";
-import { BattleMaps } from "./repo/BattleMaps.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
 import { HobDirectWrites } from "./repo/HobDirectWrites.js";
+import { RunBoards } from "./repo/RunBoards.js";
 import { RunScenes } from "./repo/RunScenes.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { NpcTurns } from "./repo/NpcTurns.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Levels } from "./repo/Levels.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -113,38 +113,6 @@ const asDmOf = Effect.map(
       read: (dm: CampaignCreatorActor) => Effect.Effect<A, E, R>,
     ): Effect.Effect<A, E | NotFound, R | CurrentActor> =>
       Effect.flatMap(dmActors.of(campaignId), read),
-);
-
-/**
- * Start a new encounter's battle map, after the encounter's create committed —
- * what every way of making an encounter does (the form's create here, Hob's
- * accept in `HobLive`), as a character's handlers call `drawCharacter`.
- *
- * The map was inserted with the encounter; the creator proof finds it, and
- * `drawBattleMap` records the one picture it will ever have. The roster's
- * creature types go with it: empty after the form's create, which carries no
- * roster, and the accepted roster after Hob's, which commits it first. Answers the
- * encounter unchanged — `Encounter` carries no map; the map is its own
- * creator read — and never fails: a picture is not worth failing a create for.
- */
-const drawEncounterMapOf = Effect.map(
-  Effect.all({ creators: CampaignCreatorActors, maps: BattleMaps, images: HobImages }),
-  ({ creators, maps, images }) =>
-    (encounter: Encounter): Effect.Effect<Encounter, never, CurrentActor> =>
-      // With images off there is nothing to start, so nothing to read.
-      images.generating
-        ? creators.of(encounter.campaignId).pipe(
-            Effect.flatMap((creator) =>
-              Effect.all([
-                maps.forEncounter(creator, encounter.id),
-                maps.rosterTypes(creator, encounter.id),
-              ]),
-            ),
-            Effect.flatMap(([map, types]) => images.drawBattleMap(map, encounter, types)),
-            Effect.catchTag("NotFound", () => Effect.void),
-            Effect.as(encounter),
-          )
-        : Effect.succeed(encounter),
 );
 
 const HealthLive = HttpApiBuilder.group(
@@ -421,9 +389,6 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("npcBanner", ({ params, query }) =>
         images.image("npcBanner", { ...params, e: query.e, s: query.s }),
-      )
-      .handle("battleMap", ({ params, query }) =>
-        images.image("battleMap", { ...params, e: query.e, s: query.s }),
       )
       .handle("location", ({ params, query }) =>
         images.image("location", { ...params, e: query.e, s: query.s }),
@@ -712,6 +677,22 @@ const LibraryLocationsLive = HttpApiBuilder.group(
   }),
 );
 
+/** The owner's Levels shelf: every method answers the asker's own levels only. */
+const LibraryLevelsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "libraryLevels",
+  Effect.fnUntraced(function* (handlers) {
+    const levels = yield* Levels;
+    return handlers
+      .handle("list", () => levels.library)
+      .handle("create", ({ payload }) => levels.create(payload))
+      .handle("findById", ({ params }) => levels.findById(params.levelId))
+      .handle("save", ({ params, payload }) => levels.save(params.levelId, payload))
+      .handle("remove", ({ params }) => levels.remove(params.levelId))
+      .handle("uses", ({ params }) => levels.uses(params.levelId));
+  }),
+);
+
 /**
  * A table's places, behind the creator proof: anybody else is `NotFound`
  * before a place is read. A player reads `playerLocations`.
@@ -797,8 +778,6 @@ const EncountersLive = HttpApiBuilder.group(
   "encounters",
   Effect.fnUntraced(function* (handlers) {
     const encounters = yield* Encounters;
-    const drawMap = yield* drawEncounterMapOf;
-    const images = yield* HobImages;
     const asDm = yield* asDmOf;
     return (
       handlers
@@ -808,11 +787,9 @@ const EncountersLive = HttpApiBuilder.group(
         .handle("list", ({ params, query }) =>
           asDm(params.campaignId, (creator) => encounters.list(creator, query)),
         )
-        // The battle map is started after the create commits; Hob's accept is
-        // the other way an encounter is made, and does the same.
-        .handle("create", ({ params, payload }) =>
-          encounters.create(params.campaignId, payload).pipe(Effect.flatMap(drawMap)),
-        )
+        // The create makes the encounter's level with it, in its own
+        // transaction; Hob's accept is the other way an encounter is made.
+        .handle("create", ({ params, payload }) => encounters.create(params.campaignId, payload))
         .handle("findById", ({ params }) =>
           asDm(params.campaignId, (creator) => encounters.findById(creator, params.encounterId)),
         )
@@ -822,13 +799,9 @@ const EncountersLive = HttpApiBuilder.group(
         .handle("move", ({ params, payload }) =>
           encounters.move(params.campaignId, params.encounterId, payload),
         )
-        // The map's picture went with the encounter, and its row's trigger
-        // queued the files; this drains them now rather than at the next sweep.
-        .handle("remove", ({ params }) =>
-          encounters
-            .remove(params.campaignId, params.encounterId)
-            .pipe(Effect.tap(() => images.drainSoon)),
-        )
+        // Its level stays in the creator's Library: a Library object is
+        // deleted from the Library.
+        .handle("remove", ({ params }) => encounters.remove(params.campaignId, params.encounterId))
     );
   }),
 );
@@ -848,30 +821,8 @@ const PlayerEncountersLive = HttpApiBuilder.group(
 );
 
 /**
- * An encounter's battle map: the creator's alone. The proof is minted from
- * the path's campaign, so a player, a Shared World member or a stranger is the
- * ordinary `NotFound` before any map row is read.
- */
-const BattleMapsLive = HttpApiBuilder.group(
-  TavernsApi,
-  "battleMaps",
-  Effect.fnUntraced(function* (handlers) {
-    const maps = yield* BattleMaps;
-    const asDm = yield* asDmOf;
-    return handlers
-      .handle("find", ({ params }) =>
-        asDm(params.campaignId, (creator) => maps.forEncounter(creator, params.encounterId)),
-      )
-      .handle("update", ({ params, payload }) =>
-        asDm(params.campaignId, (creator) => maps.update(creator, params.encounterId, payload)),
-      );
-  }),
-);
-
-/**
- * An encounter's DM prep: the creator's alone, behind the proof exactly as the
- * battle map is, so anybody else is the ordinary `NotFound` before a prep row
- * is read.
+ * An encounter's DM prep: the creator's alone, behind the proof, so anybody
+ * else is the ordinary `NotFound` before a prep row is read.
  */
 const EncounterPrepLive = HttpApiBuilder.group(
   TavernsApi,
@@ -1321,7 +1272,6 @@ const HobLive = HttpApiBuilder.group(
     const dmActors = yield* CampaignCreatorActors;
     const images = yield* HobImages;
     const live = yield* LiveEvents;
-    const drawMap = yield* drawEncounterMapOf;
 
     /**
      * Whose conversations a *listing* reaches — **one read, and the same
@@ -1368,10 +1318,8 @@ const HobLive = HttpApiBuilder.group(
         )
         // A kept character draft is the second composer of a character, so it
         // starts the portrait exactly as the form's create does, after the
-        // accept's transaction has committed; an accepted encounter is the
-        // second composer of an encounter, and starts its battle map the same
-        // way; a kept NPC is the cast's third way in, and starts its portrait
-        // as the cast's create does.
+        // accept's transaction has committed; a kept NPC is the cast's third
+        // way in, and starts its portrait as the cast's create does.
         .handle("accept", ({ params }) =>
           Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
             proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
@@ -1383,8 +1331,6 @@ const HobLive = HttpApiBuilder.group(
                     ...accepted,
                     character,
                   }));
-                case "encounter":
-                  return Effect.as(drawMap(accepted.encounter), accepted);
                 case "npc":
                   return Effect.map(images.drawNpc(accepted.npc), (npc) => ({ ...accepted, npc }));
                 case "location":
@@ -1858,7 +1804,7 @@ const RunsLive = HttpApiBuilder.group(
     const runs = yield* EncounterRuns;
     const combatants = yield* Combatants;
     const direct = yield* HobDirectWrites;
-    const maps = yield* BattleMaps;
+    const boards = yield* RunBoards;
     const scenes = yield* RunScenes;
     const dm = yield* asDmOf;
     return handlers
@@ -1912,13 +1858,30 @@ const RunsLive = HttpApiBuilder.group(
         ),
       )
       .handle("board", ({ params }) =>
-        dm(params.campaignId, (as) => maps.forRun(as, params.sessionId, params.runId)),
+        dm(params.campaignId, (as) => boards.forRun(as, params.sessionId, params.runId)),
       )
       .handle("updateFog", ({ params, payload }) =>
-        dm(params.campaignId, (as) => maps.updateFog(as, params.sessionId, params.runId, payload)),
+        dm(params.campaignId, (as) =>
+          boards.updateFog(as, params.sessionId, params.runId, payload),
+        ),
       )
       .handle("setArea", ({ params, payload }) =>
-        dm(params.campaignId, (as) => maps.setArea(as, params.sessionId, params.runId, payload)),
+        dm(params.campaignId, (as) => boards.setArea(as, params.sessionId, params.runId, payload)),
+      )
+      .handle("updateDoor", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          boards.updateDoor(as, params.sessionId, params.runId, params.wallId, payload),
+        ),
+      )
+      .handle("updateLight", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          boards.updateLight(as, params.sessionId, params.runId, params.lightId, payload),
+        ),
+      )
+      .handle("updateRegion", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          boards.updateRegion(as, params.sessionId, params.runId, params.regionId, payload),
+        ),
       )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),
@@ -2139,6 +2102,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldMembersLive,
     SharedWorldLocationsLive,
     LibraryLocationsLive,
+    LibraryLevelsLive,
     InvitePreviewLive,
     ImagesLive,
     UploadsLive,
@@ -2153,7 +2117,6 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SeatPrepLive,
     NotesLive,
     EncountersLive,
-    BattleMapsLive,
     PlayerEncountersLive,
     PlayerNotesLive,
     LocationsLive,

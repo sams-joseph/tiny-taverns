@@ -37,3 +37,7 @@ export const gullportId = "6c0c0000-0000-4000-8000-000000000001";
 export const stacksId = "6c0c0000-0000-4000-8000-000000000002";
 export const lambId = "6c0c0000-0000-4000-8000-000000000003";
 export const marshId = "6c0c0000-0000-4000-8000-000000000004";
+
+/** The fixture shelf's levels (`levels/levels.fixtures.ts`). */
+export const cryptLevelId = "1e7e0000-0000-4000-8000-000000000001";
+export const fordLevelId = "1e7e0000-0000-4000-8000-000000000002";

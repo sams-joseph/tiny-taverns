@@ -43,7 +43,7 @@ export const boardStage = ({
   box,
   standing,
 }: {
-  /** The map box (`[data-slot=battle-map]`), when it is drawn. */
+  /** The board's box (`[data-slot=board]`), when it is drawn. */
   readonly box: () => Element | null;
   readonly standing: BoardStage["standing"];
 }): BoardStage => {

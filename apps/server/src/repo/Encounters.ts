@@ -1,5 +1,7 @@
 import {
   type Actor,
+  BOARD_COLUMNS_DEFAULT,
+  BOARD_ROWS_DEFAULT,
   CampaignId,
   type Conflict,
   creatureXp,
@@ -14,6 +16,10 @@ import {
   type EncounterPlacement,
   EncounterPrep,
   type EncounterUpdate,
+  FEET_PER_SQUARE_DEFAULT,
+  LEVEL_MATERIALS,
+  LEVEL_NAME_MAX,
+  type LevelId,
   NotFound,
   type Page,
   type PlannedOrder,
@@ -24,6 +30,7 @@ import {
 import { Context, Effect, Layer, Schema, Struct } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
+import { Levels } from "./Levels.js";
 import { RUN } from "./liveTables.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
@@ -51,12 +58,16 @@ import {
   containedRowReadable,
   ensureCampaignReadable,
   ensureCampaignWritable,
+  levelOwned,
   type NestedTable,
   nestedRowReadableWithin,
   ownedRowReadable,
   rowReadable,
   rowWritable,
 } from "./visibility.js";
+
+/** The floor a new encounter's level is laid with (`startingLevel`). */
+const FLAGSTONE = LEVEL_MATERIALS.indexOf("flagstone");
 
 /**
  * The last playing as `lastPlayed` builds it: `EncounterPlayed`, with the end
@@ -357,6 +368,7 @@ export class Encounters extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const encounterCreatures = yield* EncounterCreatures;
+      const levels = yield* Levels;
       /**
        * The DM's planned order, then the id — the tiebreak `Ordering`
        * requires, though the unique slot leaves nothing for it to break.
@@ -488,6 +500,69 @@ export class Encounters extends Context.Service<
             `,
           ),
       });
+
+      /**
+       * The two columns that point an encounter at a level, for a level this
+       * actor owns and that is the campaign's creator's (`0109_level_fights.ts`):
+       * the keys refuse any other, and this answers it `NotFound` first,
+       * since saying it exists would be a disclosure. `null` takes it off.
+       */
+      const levelColumns = (actor: Actor, levelId: LevelId | null) =>
+        Effect.gen(function* () {
+          if (levelId === null) return { level_id: null, level_owner_id: null };
+          // The actor's own level: only the creator writes an encounter, which
+          // the caller's gate proves, and the owner key to the campaign's
+          // creator (`encounter_level_owner_fkey`) holds the rest.
+          const owned = yield* sql<{ readonly id: LevelId; readonly account_id: string }>`
+            select level.id, level.account_id from level
+            where level.id = ${levelId} and ${levelOwned(sql, actor)}
+          `;
+          const level = owned[0];
+          if (level === undefined) return yield* new NotFound({ resource: "level", id: levelId });
+          return { level_id: level.id, level_owner_id: level.account_id };
+        });
+
+      /**
+       * The level a new encounter starts on when it names none: the plain
+       * board's size and scale, nothing on it, and the setting line as its
+       * description. Made the way the Library's shelf and editor make one
+       * (`Levels.create`, then `Levels.save` to lay a floor), with the
+       * encounter's provenance, so a kept Hob encounter's level carries its
+       * turn. The floor is plain flagstone rather than the shelf's `void`, so
+       * a fight on it plays as the plain grid does: every square is ground.
+       */
+      const startingLevel = (payload: EncounterCreate, from: AssistantOrigin | undefined) =>
+        Effect.gen(function* () {
+          const made = yield* levels.create(
+            {
+              name: payload.name.trim().slice(0, LEVEL_NAME_MAX),
+              ...(payload.setting === undefined ? {} : { description: payload.setting }),
+              columns: BOARD_COLUMNS_DEFAULT,
+              rows: BOARD_ROWS_DEFAULT,
+              feetPerCell: FEET_PER_SQUARE_DEFAULT,
+            },
+            from,
+          );
+          const laid = yield* levels.save(made.id, {
+            name: made.name,
+            description: made.description,
+            columns: made.columns,
+            rows: made.rows,
+            feetPerCell: made.feetPerCell,
+            ambient: made.ambient,
+            floor: made.floor.map(() => FLAGSTONE),
+            walls: [],
+            props: [],
+            lights: [],
+            regions: [],
+            version: made.version,
+          });
+          return laid.id;
+        }).pipe(
+          // Its own level, just made in this transaction: neither refusal can
+          // happen, and either would be a defect.
+          Effect.catchTags({ NotFound: Effect.die, Conflict: Effect.die }),
+        );
 
       /** The slot after the campaign's last, read under the order lock. */
       const nextSlot = SqlSchema.findOne({
@@ -624,6 +699,10 @@ export class Encounters extends Context.Service<
                 const { next } = yield* nextSlot(campaignId).pipe(
                   Effect.catchTag("NoSuchElementError", Effect.die),
                 );
+                // Every encounter starts on a level: the one the payload
+                // names, or a new one in the creator's Library.
+                const levelId = payload.levelId ?? (yield* startingLevel(payload, from));
+                const level = yield* levelColumns(actor, levelId);
                 const { id, kind } = yield* insert(
                   defined({
                     campaign_id: campaignId,
@@ -631,25 +710,13 @@ export class Encounters extends Context.Service<
                     kind: payload.kind,
                     tags: textArray(payload.tags),
                     visibility: payload.visibility,
+                    ...level,
                     ...assistantColumns(from),
                   }),
                 ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
-                // Every encounter has its one battle map, made with it: a blank
-                // board, and the setting line the picture is drawn from (or,
-                // without one, the name, tags and roster types) after this
-                // commits (`HobImages.drawBattleMap`). Every way an
+                // Every encounter has its prep, made with it: the creator's
+                // alone, on a row no player read touches. Every way an
                 // encounter is made comes through here, so none can lack one.
-                yield* sql`
-                  insert into battle_map ${sql.insert(
-                    defined({
-                      encounter_id: id,
-                      campaign_id: campaignId,
-                      setting: proseColumn(payload.setting),
-                    }),
-                  )}
-                `;
-                // And its prep, the same way and for the same reason: the
-                // creator's alone, on a row no player read touches.
                 yield* sql`
                   insert into encounter_prep ${sql.insert({
                     encounter_id: id,
@@ -709,18 +776,9 @@ export class Encounters extends Context.Service<
                   kind: patch.kind,
                   tags: textArray(patch.tags),
                   visibility: patch.visibility,
+                  ...(patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId)),
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));
-                // The setting line lives on the map, the creator's alone; the
-                // encounter row above is what a player may read. Editing it
-                // redraws nothing: a picture is drawn once.
-                if (patch.setting !== undefined) {
-                  yield* sql`
-                    update battle_map set ${setClause(sql, { setting: proseColumn(patch.setting) })}
-                    where battle_map.encounter_id = ${id}
-                      and ${rowWritable(sql, "battle_map", campaignId, actor)}
-                  `;
-                }
                 const prep = prepColumns(patch);
                 if (Object.keys(prep).length > 0) {
                   yield* sql`
@@ -736,9 +794,9 @@ export class Encounters extends Context.Service<
             ),
           ),
 
-        // Its battle map goes with it (`on delete cascade`), and the map's
-        // picture with the map; that row's trigger queues the picture's files
-        // in `storage_deletion`, which the handler drains after this commits.
+        // Its level stays in the creator's Library (`on delete set null` is
+        // the encounter's own pointer): a level is account-owned and may be
+        // used by other encounters, and the Library deletes it.
         //
         // Notes attached to this encounter are detached, not deleted — the
         // `on delete set null (encounter_id)` on `note_encounter_fkey` does it.
@@ -802,5 +860,5 @@ export class Encounters extends Context.Service<
         prepList: (creator) => dieOnSqlError(preps(asked(creator))),
       };
     }),
-  ).pipe(Layer.provide(EncounterCreatures.layer));
+  ).pipe(Layer.provide([EncounterCreatures.layer, Levels.layer]));
 }

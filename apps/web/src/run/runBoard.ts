@@ -1,16 +1,26 @@
 import {
   type AreaShape,
   type BoardArea,
+  type BoardDoorUpdate,
+  type BoardSize,
   type BoardSquare,
+  type LevelPartId,
   type Combatant,
   type EncounterRunBoard,
   rulerReading,
 } from "@taverns/api";
 import { useEffect, useRef, useState } from "react";
 import type { Resource } from "../api/failure";
-import { describeBoard } from "../campaign/BattleMapBoard";
-import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { areaAt, caughtBy, caughtLine, sameArea, squaresOf, startingFeet, stepFeet } from "./area";
+import {
+  areaAt,
+  caughtBy,
+  caughtLine,
+  coverFromOrigin,
+  sameArea,
+  squaresOf,
+  startingFeet,
+  stepFeet,
+} from "./area";
 import type { BoardTool, ToolPointer } from "./BoardTools";
 import { useEscapeAway } from "./escape";
 import { type FogEdit, fogAfter, squareKey, squaresBetween } from "./fog";
@@ -48,6 +58,19 @@ export interface RunBoardProps {
    * line as the fog's; resolves once settled, and never rejects.
    */
   readonly onArea: (area: BoardArea | null) => Promise<void>;
+  /**
+   * A door of the fight's level opened, closed, locked or revealed, and a
+   * light lit or snuffed: the live writes, in the same line as the fog's;
+   * each resolves once settled, and never rejects. Only a level board offers
+   * them (`LevelSwitches.tsx`).
+   */
+  readonly onDoor: (
+    wallId: LevelPartId,
+    update: Omit<BoardDoorUpdate, "requestId">,
+  ) => Promise<void>;
+  readonly onLight: (lightId: LevelPartId, lit: boolean) => Promise<void>;
+  /** A secret region of the level (a trap, a hazard) revealed to the table, or hidden again. */
+  readonly onRegion: (regionId: LevelPartId, revealed: boolean) => Promise<void>;
 }
 
 /**
@@ -59,19 +82,16 @@ export interface RunBoardProps {
  * whose pinned area both draw.
  */
 export function useRunBoard(
-  { resource, reload, over, tokens, hostileTokensHidden, onFog, onArea }: RunBoardProps,
+  { resource, over, tokens, hostileTokensHidden, onFog, onArea }: RunBoardProps,
   /** The canvas: the board takes a pointer, so the dock's tools are offered. */
   canvas: boolean,
 ) {
   const board = resource.state === "ready" ? resource.value : null;
-  // A fight started straight after its encounter was made may begin before
-  // Hob finishes the picture.
-  useHobDrawingPolling(board?.imagePending === true, reload);
   const [grid, setGrid] = useState<boolean>();
   const [lastMove, setLastMove] = useState<string>();
   const [names, setNames] = useTokenNames();
 
-  const gridShown = grid ?? board?.grid === "square";
+  const gridShown = grid ?? true;
   const { selected } = tokens;
   const tools = useBoardTools({
     board,
@@ -249,10 +269,19 @@ function useBoardTools({
         }
       : undefined;
 
+  // On a level, by cover from the template's origin: total cover is not
+  // affected, and the rest says what it adds to a Dex save.
   const caught =
     board === null || pinned === null
       ? undefined
-      : caughtLine(caughtBy(squaresOf(board, pinned), tokens.combatants, tokens.hpOf));
+      : (() => {
+          const { reached, sheltered } = coverFromOrigin(
+            board,
+            pinned,
+            caughtBy(squaresOf(board, pinned), tokens.combatants, tokens.hpOf),
+          );
+          return caughtLine(reached, sheltered);
+        })();
 
   return {
     tool,
@@ -373,10 +402,21 @@ function useFogTool({
   };
 }
 
-/** The board's size in the DM's units, and what a deleted encounter took with it. */
+/** "24 × 16 squares · 5 ft each · 120 × 80 ft" — the board's size in the DM's units. */
+export const describeBoard = (board: BoardSize & { readonly feetPerCell: number }): string =>
+  [
+    `${String(board.columns)} × ${String(board.rows)} squares`,
+    `${String(board.feetPerCell)} ft each`,
+    `${String(board.columns * board.feetPerCell)} × ${String(board.rows * board.feetPerCell)} ft`,
+  ].join(" · ");
+
+/**
+ * The board's size in the DM's units, and what it is played on. A level is
+ * drawn on the canvas (`RunStage.tsx`), not on this card.
+ */
 export const boardCaption = (board: EncounterRunBoard): string =>
   `${describeBoard(board)}${
-    board.mapId === null
-      ? ". This fight's encounter was deleted, and its picture with it. The board keeps its squares."
-      : ""
+    board.level !== null
+      ? ". Played on a copy of the encounter's level, drawn on the full-width board."
+      : ". A plain grid: the encounter names no level."
   }`;

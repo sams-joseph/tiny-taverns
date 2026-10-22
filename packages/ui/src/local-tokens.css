@@ -181,6 +181,126 @@
   --ease-anticipate: cubic-bezier(0.6, -0.28, 0.74, 0.05);
   --ease-strike: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-recoil: cubic-bezier(0.12, 0.9, 0.3, 1.25);
+
+  /* PROTOTYPE, not from the delivery: the level builder's inked, firelit art
+     (`apps/web/src/level/`), as the prototype the maintainer approved on
+     2026-10-21 drew it. Read at draw time by the renderer and the prop kit
+     (`level/palette.ts`); ours until a design delivery takes them. */
+  /* The board around a level: the void under it and the hatch outside its
+     edge. */
+  --level-void: #09070b;
+  --level-hatch: #09070b;
+  --level-hatch-line: #110d12;
+  /* The light that falls before any lamp, per ambient, multiplied into the
+     floor. */
+  --level-ambient-bright: #f2ede6;
+  --level-ambient-dim: #4d4557;
+  --level-ambient-dark: #08060b;
+  /* Each light tone, and what darkvision and the party's memory tint the
+     floor. */
+  --level-light-fire: #ff9947;
+  --level-light-arcane: #8c73ff;
+  --level-light-moon: #80a6f2;
+  --level-light-radiant: #ffdb80;
+  --level-darkvision: #808fad;
+  --level-memory: #030306;
+  /* Floors, as the floor shader paints each material. */
+  --level-flagstone-mortar: #0d090d;
+  --level-flagstone-dark: #40363d;
+  --level-flagstone-light: #665754;
+  --level-flagstone-chip: #0f0a08;
+  --level-planks-seam: #0f0805;
+  --level-planks-dark: #4d2612;
+  --level-planks-light: #80451f;
+  --level-planks-edge: #0f0903;
+  --level-planks-nail: #1f1a1a;
+  --level-grass-dark: #173312;
+  --level-grass-light: #38631c;
+  --level-grass-blade: #141f08;
+  --level-grass-shade: #0a0f05;
+  --level-grass-flower: #f2cc66;
+  --level-grass-bloom: #d9404d;
+  --level-earth-dark: #362114;
+  --level-earth-light: #5c3d24;
+  --level-earth-pebble: #665952;
+  --level-water-deep: #041a26;
+  --level-water-shallow: #0a404d;
+  --level-water-caustic: #409999;
+  --level-water-glint: #80cccc;
+  --level-tile-dark: #4f3d36;
+  --level-tile-light: #6e5445;
+  --level-tile-grout: #0f0a0d;
+  /* Walls and doors: dressed stone with a warm top, and a door's wood and
+     iron. */
+  --level-wall-dark: #6b5c66;
+  --level-wall-light: #9e878a;
+  --level-wall-mortar: #120d12;
+  --level-wall-top: #332112;
+  --level-door-wood: #6b3d1c;
+  --level-door-iron: #33303b;
+  /* The prop kit, drawn in code and inked in --fx-ink: the warm highlight
+     along a rim, then each kind's own colours. */
+  --level-rim: #ffd6a0;
+  --level-rim-stone: #ffdcb4;
+  --level-crate: #8a5a2e;
+  --level-crate-slat: #4a2c14;
+  --level-crate-brace: #a06a36;
+  --level-barrel: #7a4a26;
+  --level-barrel-lid: #93602f;
+  --level-barrel-hoop: #2b2530;
+  --level-grain: #28140a;
+  --level-table: #7d4b25;
+  --level-table-seam: #3e2410;
+  --level-brass: #c9a46a;
+  --level-wood-dark: #5a3418;
+  --level-plate: #d8cfc0;
+  --level-chair: #6e4120;
+  --level-chair-back: #4e2d15;
+  --level-pillar-base: #4c4552;
+  --level-pillar: #8f8597;
+  --level-statue-base: #5c5560;
+  --level-statue: #8c8796;
+  --level-statue-head: #aaa5b4;
+  --level-statue-staff: #c9c2cf;
+  --level-brazier: #2f2a33;
+  --level-brazier-leg: #3c3a44;
+  --level-flame-core: #fff1b8;
+  --level-flame: #ffb347;
+  --level-flame-deep: #d9480f;
+  --level-ember: #4a0f06;
+  --level-coal: #1e0602;
+  --level-rubble: #6a6270;
+  --level-rubble-dark: #57505d;
+  --level-grit: #a096aa;
+  --level-chest: #7a4421;
+  --level-gold-dull: #c49a3a;
+  --level-gold-bright: #e3c15a;
+  --level-gold: #d9a441;
+  --level-shelf: #4a2a16;
+  --level-shelf-lip: #6b4022;
+  --level-cloth-red: #8e1f24;
+  --level-book-blue: #2f5a8e;
+  --level-book-green: #3f6b2f;
+  --level-book-violet: #6b3f8e;
+  --level-book-tan: #a8673a;
+  --level-book-teal: #2d6b6b;
+  --level-linen: #d9cdb5;
+  --level-linen-light: #f0e8d8;
+  --level-blanket-sheen: #ffc8b4;
+  --level-altar: #6d6470;
+  --level-wax: #f2e6c8;
+  --level-candle-flame: #ffcf6b;
+  --level-leaf-dark: #1f4a22;
+  --level-leaf: #2c6b2c;
+  --level-leaf-mid: #25592a;
+  --level-leaf-sheen: #78be50;
+  --level-boulder: #6f6878;
+  --level-bush: #2f6b2f;
+  --level-bush-light: #3a7d33;
+  --level-bush-sheen: #96d25a;
+  --level-berry: #c4161c;
+  --level-rug: #6e161c;
+  --level-rug-blue: #2f3f6b;
 }
 
 /* The delivery zeroes its own durations under reduced motion

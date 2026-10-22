@@ -214,6 +214,7 @@ describeLayer(
               "listStartingSpells",
               "proposeCampaign",
               "proposeCharacter",
+              "proposeLevel",
               "proposeLocation",
               "proposeSharedWorld",
             ]);

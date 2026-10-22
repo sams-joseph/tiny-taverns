@@ -41,18 +41,16 @@ import {
 import { DateTime, Effect, Result } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
+import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
-import { usePictureActions } from "../pictures/usePictureActions";
-import { HobCover } from "../hob/HobCover";
-import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
 import { BuilderRail } from "./BuilderRail";
 import { CastLineDialog } from "./CastLineDialog";
+import { LevelPicker } from "./LevelPicker";
 import {
   addCreature,
   createPayload,
@@ -77,7 +75,7 @@ import {
   validate,
 } from "./encounterDraft";
 import { KIND_ICON } from "./encounterList";
-import { encounterPageAtom, encounterPrepListAtom } from "./load";
+import { encounterPrepListAtom } from "./load";
 
 /**
  * Writing an encounter, new or already made: the redesign's encounter builder
@@ -248,8 +246,7 @@ const partyLevelsOf = (party: ReadonlyArray<PartySeat>): ReadonlyArray<number | 
 
 /**
  * What the builder opens on beyond the `Encounter` row, which is the campaign
- * view's: its roster, its map's setting line and its prep, each read through
- * the creator's own read.
+ * view's: its roster and its prep, each read through the creator's own read.
  *
  * **A new encounter reads the creator's prep list and nothing from it.** Every
  * other read a blank builder needs a player may also make, so without one the
@@ -280,16 +277,11 @@ const builderAtom = Atom.family(
               Effect.all(
                 {
                   roster: client.encounterCreatures.list({ params: { campaignId, encounterId } }),
-                  map: client.battleMaps.find({ params: { campaignId, encounterId } }),
                   prep: client.encounterPrep.find({ params: { campaignId, encounterId } }),
                 },
                 { concurrency: "unbounded" },
               ),
-              ({ roster, map, prep }): Stored => ({
-                roster,
-                setting: map.setting ?? "",
-                prep,
-              }),
+              ({ roster, prep }): Stored => ({ roster, prep }),
             ),
           // What the save names, so a builder opened again reads what was saved.
           [reads.encounters(campaignId)],
@@ -449,13 +441,19 @@ function EncounterBuilder({
             }),
       // **`Encounter.creatureCount` and its difficulty are computed per read
       // from the roster**, so the roster half of a save moves numbers on the list
-      // the encounter row was never sent for — and the prep, the map's setting
-      // line and the roster all answer this one key. A read-aloud is a note,
-      // found over the notes by the preview and the Overview, so a save that
-      // wrote one names the notes too.
-      touchesNote
-        ? [reads.encounters(campaignId), reads.notes(campaignId)]
-        : [reads.encounters(campaignId)],
+      // the encounter row was never sent for — and the prep and the roster
+      // both answer this one key. A read-aloud is a note, found over the notes
+      // by the preview and the Overview, so a save that wrote one names the
+      // notes too. A level picked or dropped moves where that level is used,
+      // which its delete confirmation lists, and a create that names none
+      // makes a new level on the Library's shelf.
+      [
+        reads.encounters(campaignId),
+        ...(touchesNote ? [reads.notes(campaignId)] : []),
+        ...(encounter === undefined || draft.levelId !== (saved.encounter?.levelId ?? null)
+          ? [reads.libraryLevels]
+          : []),
+      ],
     );
 
     if (Result.isSuccess(result)) {
@@ -617,27 +615,30 @@ function EncounterBuilder({
           </BuilderCard>
 
           <div className="flex min-w-0 flex-col gap-5 @4xl:col-start-1 @4xl:row-start-2">
-            <BattleMapCard campaignId={campaignId} encounterId={encounter?.id}>
-              <Field
-                label="Location"
-                htmlFor="encounter-setting"
-                hint={
-                  encounter === undefined
-                    ? "One line on the ground it happens on, with no creatures in it. Hob draws the battle map from it once, as the encounter is made. Only you see the map."
-                    : "The battle map was drawn once, when the encounter was made; changing this does not redraw it. Only you see it."
-                }
-                error={shown("setting")}
-              >
-                <Input
-                  id="encounter-setting"
-                  maxLength={ENCOUNTER_SETTING_MAX}
-                  placeholder="Where it happens"
-                  value={draft.setting}
-                  aria-invalid={shown("setting") !== undefined}
-                  onChange={(event) => patch({ setting: event.target.value })}
-                />
-              </Field>
-            </BattleMapCard>
+            <MapCard>
+              <LevelPicker
+                fresh={encounter === undefined}
+                value={draft.levelId}
+                onChange={(levelId) => patch({ levelId })}
+              />
+              {encounter === undefined && draft.levelId === null && (
+                <Field
+                  label="Location"
+                  htmlFor="encounter-setting"
+                  hint="One line on what the place looks like. It becomes the new level's description; build the place itself in the level editor. Only you see it."
+                  error={shown("setting")}
+                >
+                  <Input
+                    id="encounter-setting"
+                    maxLength={ENCOUNTER_SETTING_MAX}
+                    placeholder="Where it happens"
+                    value={draft.setting}
+                    aria-invalid={shown("setting") !== undefined}
+                    onChange={(event) => patch({ setting: event.target.value })}
+                  />
+                </Field>
+              )}
+            </MapCard>
 
             {showCreatures && (
               <Card
@@ -993,31 +994,11 @@ function OtherReadAloud({
 }
 
 /**
- * The *Battle map* card: the picture Hob drew of the place, whole, over the
- * setting line it was drawn from.
- *
- * **Hob's picture, or the creator's own.** A map is drawn once, from the
- * setting line, as the encounter is made, with no redraw; the creator may
- * upload one in its place through the card's buttons (the drawing's drop
- * target is not drawn). A new encounter has
- * nothing drawn yet and an old one may have no picture at all (images off,
- * nothing to draw from, a refused or failed draw); either way the card is the
- * setting line alone, with no empty slot. While Hob is still drawing it says
- * so, and re-reads the map until the picture lands.
- *
- * The picture is the encounter page's read (`encounterPageAtom`), the one the
- * preview and the page already hold, so arriving from either costs no request.
+ * The *Battle map* card: the level a fight on it is played on — a new, empty
+ * one made with a new encounter unless the creator picks one of their own
+ * (`LevelPicker.tsx`) — and, for that new level, the line it is described by.
  */
-function BattleMapCard({
-  campaignId,
-  encounterId,
-  children,
-}: {
-  readonly campaignId: CampaignId;
-  readonly encounterId: EncounterId | undefined;
-  /** The setting line's field. */
-  readonly children: ReactNode;
-}) {
+function MapCard({ children }: { readonly children: ReactNode }) {
   return (
     <Card role="region" aria-labelledby="battle-map-heading" className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-hairline px-5 py-4">
@@ -1025,48 +1006,11 @@ function BattleMapCard({
           Battle map
         </SectionHeading>
         <span className="text-body-s leading-snug text-muted-foreground">
-          A grid goes over it when you run the encounter.
+          The level the fight is played on.
         </span>
       </div>
-      {encounterId !== undefined && <DrawnMap campaignId={campaignId} encounterId={encounterId} />}
-      <div className="p-5">{children}</div>
+      <div className="flex flex-col gap-4 p-5">{children}</div>
     </Card>
-  );
-}
-
-/** The picture itself, or Hob drawing it, or nothing. */
-function DrawnMap({
-  campaignId,
-  encounterId,
-}: {
-  readonly campaignId: CampaignId;
-  readonly encounterId: EncounterId;
-}) {
-  const [page] = useApiAtom(encounterPageAtom({ campaignId, encounterId }));
-  const map = page.state === "ready" ? page.value.map : null;
-  const invalidate = useInvalidate();
-  const rereadMap = useCallback(
-    () => invalidate([reads.battleMap(encounterId)]),
-    [invalidate, encounterId],
-  );
-  useHobDrawingPolling(map?.imagePending ?? false, rereadMap);
-  // The creator's own map in place of Hob's, or none. Uploading resets the
-  // grid, so the encounter's read changes with the map's.
-  const pictures = usePictureActions({
-    subject: "battleMap",
-    subjectId: map?.id ?? "",
-    hasPicture: map?.image != null,
-    noun: "map",
-    invalidates: [reads.battleMap(encounterId), reads.encounters(campaignId)],
-  });
-  // The builder has already read the map for its setting line, so a failure
-  // here is a second read's; the form still works without the picture.
-  return map === null ? null : (
-    <>
-      <HobCover image={map.image} pending={map.imagePending} shape="whole" />
-      <div className="flex flex-wrap gap-2 px-5 pt-4">{pictures.buttons}</div>
-      {pictures.dialogs}
-    </>
   );
 }
 

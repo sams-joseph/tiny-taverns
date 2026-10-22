@@ -1,4 +1,4 @@
-import { type BoardSquare, areaSquares, areaToward, battleMapPlane, cellRect } from "@taverns/api";
+import { type BoardSquare, areaSquares, areaToward, boardPlane, cellRect } from "@taverns/api";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DrawnBoard } from "../BoardTools";
 import type { BoardStage } from "../fx/stage";
@@ -10,8 +10,8 @@ type Stage3d = typeof import("./stage3d");
 
 /** The board's grid on its plane, as the effects' camera needs it. */
 const gridOf = (board: DrawnBoard): GridOnPlane => {
-  const plane = battleMapPlane(board, board.image);
-  const first = cellRect(board, { column: 0, row: 0 });
+  const plane = boardPlane(board);
+  const first = cellRect({ column: 0, row: 0 });
   return {
     planeWidth: plane.width,
     planeHeight: plane.height,

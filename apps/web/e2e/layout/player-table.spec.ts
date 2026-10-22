@@ -117,7 +117,7 @@ for (const width of WIDTHS) {
 
     test("the shared battle map", async ({ app, page }) => {
       await app.open(table);
-      const board = page.locator('[data-slot="battle-map"]');
+      const board = page.locator('[data-slot="board"]');
       await expect(board).toBeVisible();
       const canvas = (await page.locator("[data-slot=run-stage]").count()) > 0;
       const strip = page.getByRole("region", { name: "Initiative" });
@@ -255,7 +255,7 @@ for (const width of WIDTHS) {
         ],
       });
       await app.open(table);
-      const board = page.locator('[data-slot="battle-map"]');
+      const board = page.locator('[data-slot="board"]');
       const fog = board.locator('[data-slot="fog"]').filter({ visible: true }).first();
       await expect(fog).toHaveAttribute("data-squares", "2");
 
@@ -302,7 +302,7 @@ for (const width of WIDTHS) {
       // The DM has pinned a 10 ft sphere on Brannoc's square.
       await withBoard(page, { area: { shape: "sphere", feet: 10, origin: { column: 5, row: 4 } } });
       await app.open(table);
-      const board = page.locator('[data-slot="battle-map"]');
+      const board = page.locator('[data-slot="board"]');
       const area = board.getByRole("img", { name: "Pinned: a 10 ft sphere" });
       await expect(area).toBeVisible();
 
@@ -338,7 +338,7 @@ for (const width of WIDTHS) {
         },
       );
       await app.open(table);
-      const board = page.locator('[data-slot="battle-map"]');
+      const board = page.locator('[data-slot="board"]');
       await expect(board).toBeVisible();
       test.skip(
         (await page.locator("[data-slot=run-stage]").count()) === 0,

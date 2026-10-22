@@ -12,8 +12,8 @@ import {
   Toggle,
 } from "@taverns/ui";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
-import { BattleMapBoard } from "../campaign/BattleMapBoard";
 import { AreaLayer } from "./BoardTools";
+import { GridBoard } from "./GridBoard";
 import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens } from "./RunTokens";
 import { TOKEN_NAMES, type TokenNames } from "./tokens";
@@ -188,10 +188,10 @@ export function RunBoardCard(props: RunBoardProps) {
         board !== null &&
         withBoard !== undefined && (
           <>
-            <BattleMapBoard map={{ ...board, grid: gridShown ? "square" : "none" }}>
+            <GridBoard board={board} grid={gridShown}>
               {board.area !== null && <AreaLayer board={board} area={board.area} state="pinned" />}
               <RunTokens {...withBoard} />
-            </BattleMapBoard>
+            </GridBoard>
             <p className="mb-0 border-t border-hairline px-panel py-2.5 text-caption leading-body text-muted-foreground">
               {boardCaption(board)}
             </p>

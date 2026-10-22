@@ -1860,6 +1860,22 @@ const LOCATION_NOUNS: ReadonlyArray<string> = [
   "inn",
 ];
 
+/**
+ * A level, which `proposeLevel` lays out — "build me a battle map", "make a
+ * new level for the crypt". The bare word "level" is left out: *"make her
+ * level 5"* is chat about a character.
+ */
+const LEVEL_NOUNS: ReadonlyArray<string> = [
+  "battle map",
+  "battle maps",
+  "battlemap",
+  "battlemaps",
+  "new level",
+  "dungeon level",
+  "dungeon map",
+  "level map",
+];
+
 /** The things the DM's toolkit can build, in the words a DM uses for them. */
 const DM_NOUNS: ReadonlyArray<string> = [
   "encounter",
@@ -1905,6 +1921,7 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "stats",
   "stat block",
   ...LOCATION_NOUNS,
+  ...LEVEL_NOUNS,
 ];
 
 /**
@@ -1926,6 +1943,7 @@ export const ACCOUNT_NOUNS: ReadonlyArray<string> = [
   "hero",
   "pc",
   ...LOCATION_NOUNS,
+  ...LEVEL_NOUNS,
 ];
 
 /** *"build me something"* names no table and is still a build ask. */
@@ -2238,6 +2256,8 @@ const dmPrompt = (
     "offer it with proposeLocation, with the places inside it when they asked for them.",
     "listLocations shows the places in this campaign's world; a new place can only go",
     "inside one that is the DM's own.",
+    "When the DM asks for a level or a battle map, offer it with proposeLevel: name the rooms",
+    "by purpose and size and say how they connect and how they are lit; never coordinates.",
     "When the DM says the party travels to, arrives at or has moved to one of those places,",
     "offer the move with proposePartyMove.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
@@ -2401,14 +2421,16 @@ const accountPrompt = (): string =>
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for playing",
     "tabletop roleplaying games. Right now you are helping somebody outside any campaign.",
     "",
-    "You can draft four things for them. When they want a new campaign to run, offer it",
+    "You can draft five things for them. When they want a new campaign to run, offer it",
     "with proposeCampaign: a name, a party name if one fits, and a short pitch. When they",
     "want a new Shared World — a setting several of their campaigns can share — offer it",
     "with proposeSharedWorld: a name and a few sentences about the land, its age and its",
     "trouble. When they want a new place for their Library — a city, a region, a dungeon —",
     "offer it with proposeLocation; listLocations shows the places they already have. When",
-    "they want a character, draft one with proposeCharacter against the core rules, as",
-    "follows.",
+    "they want a level or a battle map for their Library, offer it with proposeLevel: name",
+    "the rooms by purpose and size and say how they connect and how they are lit; never",
+    "coordinates. When they want a character, draft one with proposeCharacter against the",
+    "core rules, as follows.",
     "",
     ...DRAFTING,
     "",
@@ -2842,6 +2864,25 @@ const offered = (turn: HobTurn): string | undefined => {
       return `[You offered the ${proposal.kind} "${proposal.name}" — ${draft}${
         parts.length === 0 ? "" : `: ${parts.join("; ")}`
       }]`;
+    }
+    // Read back in the tool's own words, so "make it bigger" or "add a
+    // library" redrafts the level offered. The seed is the server's and is
+    // not read back: a redraft is laid out afresh.
+    case "level": {
+      const rooms = proposal.rooms
+        .map(
+          (room) => `${room.size} ${room.purpose}${room.label === null ? "" : ` "${room.label}"`}`,
+        )
+        .join(", ");
+      const parts = [
+        `size ${proposal.size}`,
+        `rooms: ${rooms}`,
+        `connections ${proposal.connections}`,
+        `secrets ${String(proposal.secrets)}`,
+        `mood ${proposal.mood}`,
+        proposal.description === null ? undefined : `description: ${proposal.description}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered the level "${proposal.name}" — ${draft}: ${parts.join("; ")}]`;
     }
     case "partyMove":
       return `[You offered the DM to move the party to "${proposal.locationName}" (locationId ${proposal.locationId}) — ${kept}]`;

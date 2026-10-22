@@ -1,4 +1,4 @@
-import type { BoardSquare } from "@taverns/api";
+import { type BoardSquare, type EncounterRunBoard, LEVEL_MATERIALS } from "@taverns/api";
 import { describe, expect, it } from "vitest";
 import {
   AREA_SHAPES,
@@ -6,6 +6,7 @@ import {
   areaName,
   caughtBy,
   caughtLine,
+  coverFromOrigin,
   sameArea,
   squaresOf,
   startingFeet,
@@ -135,5 +136,80 @@ describe("who a pinned template catches", () => {
     const sphere = { shape: "sphere", feet: 20, origin: at(10, 6) } as const;
     expect(caughtIn(sphere, off)).toEqual([]);
     expect(caughtLine([])).toBe("Nobody caught in the area");
+  });
+});
+
+describe("who a pinned template reaches on a level", () => {
+  /**
+   * A 10 × 10 level: a crate on (4,5), and four walls round (7,3). A 20 ft
+   * sphere at (5,5) catches the goblin on (3,5) behind the crate, Wren in the
+   * open on (6,5) and the captain boxed in on (7,3).
+   */
+  const level = {
+    columns: 10,
+    rows: 10,
+    feetPerCell: 5,
+    level: {
+      ambient: "bright",
+      floor: Array.from({ length: 100 }, () => LEVEL_MATERIALS.indexOf("flagstone")),
+      walls: (
+        [
+          [7, 3, 8, 3],
+          [8, 3, 8, 4],
+          [7, 4, 8, 4],
+          [7, 3, 7, 4],
+        ] as const
+      ).map(([x1, y1, x2, y2], k) => ({
+        id: `w${String(k)}`,
+        x1,
+        y1,
+        x2,
+        y2,
+        kind: "wall",
+        doorState: null,
+        low: false,
+        revealed: false,
+      })),
+      props: [
+        {
+          id: "crate",
+          kind: "crate",
+          x: 4,
+          y: 5,
+          rotation: 0,
+          blocksMovement: null,
+          blocksSight: null,
+          cover: null,
+          difficult: null,
+          dmOnly: false,
+        },
+      ],
+      lights: [],
+      regions: [],
+    },
+  } as unknown as EncounterRunBoard;
+  const rows = [row("Goblin", at(3, 5)), row("Wren", at(6, 5), "pc", 31), row("Captain", at(7, 3))];
+  const sphere = { shape: "sphere", feet: 20, origin: at(5, 5) } as const;
+
+  it("sets total cover from the origin apart, and says the rest's Dex save bonus", () => {
+    const caught = caughtBy(squaresOf(level, sphere), rows, (r) => r.hp);
+    expect(names(caught)).toEqual(["Goblin", "Wren", "Captain"]);
+    const { reached, sheltered } = coverFromOrigin(level, sphere, caught);
+    expect(reached.map((r) => [r.displayName, r.cover])).toEqual([
+      ["Goblin", "half"],
+      ["Wren", "none"],
+    ]);
+    expect(names(sheltered)).toEqual(["Captain"]);
+    expect(caughtLine(reached, sheltered)).toBe(
+      "2 caught: Goblin (Half cover: +2 to a Dex save), Wren · Behind total cover, not affected: Captain",
+    );
+  });
+
+  it("reaches everyone it catches, with no cover, on a plain grid", () => {
+    const plain = { ...level, level: null } as EncounterRunBoard;
+    const caught = caughtBy(squaresOf(plain, sphere), rows, (r) => r.hp);
+    const { reached, sheltered } = coverFromOrigin(plain, sphere, caught);
+    expect(reached.map((r) => r.cover)).toEqual(["none", "none", "none"]);
+    expect(sheltered).toEqual([]);
   });
 });

@@ -1870,3 +1870,16 @@ export const locationShownToPlayer = (
                   and ${campaignReadable(sql, actor, campaignId)})`,
     locationRevealedAt(sql, sql`location.id`, campaignId),
   ]);
+
+// ---------------------------------------------------------------------------
+// Levels (`0108_levels.ts`)
+//
+// A level is account-owned and in no campaign, and in this phase one question
+// reaches it: the owner's. Its parts (walls, props, lights, regions) are read
+// only by walking a level this fragment returned. A fight on a level reads
+// its own snapshot, never `level`, so a player never reaches one here.
+// ---------------------------------------------------------------------------
+
+/** Rows of `level` the actor owns: the Library's read and every write. */
+export const levelOwned = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
+  sql`level.account_id = ${actor.accountId}`;

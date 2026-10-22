@@ -14,6 +14,7 @@ import {
   worldId,
 } from "../test/ids";
 import { TEST_SESSION } from "../test/session";
+import { fullLevels } from "../levels/levels.fixtures";
 import { fullLocations } from "../locations/locations.fixtures";
 
 /**
@@ -217,40 +218,12 @@ export const encounter = {
   creatureCount: 6,
   // Never off the table yet. Computed per read from its runs.
   lastPlayed: null,
+  // Played on the plain grid, not one of the creator's levels.
+  levelId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,
 };
-
-/**
- * The encounter's battle map, as its creator reads it: a blank board with the
- * setting line the edit form opens on.
- */
-export const battleMap = {
-  id: "2b1f2a1e-0000-4000-8000-000000000611",
-  encounterId,
-  campaignId,
-  setting: "A boardwalk over black water",
-  grid: "square",
-  columns: 24,
-  rows: 16,
-  feetPerCell: 5,
-  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
-  image: null,
-  imagePending: false,
-  ...stamps,
-};
-
-/** A battle map's picture as the server signs it: `BattleMap.image`. */
-export const drawnMapPicture = {
-  cardUrl: "/battle-map-images/2b1f2a1e-0000-4000-8000-00000000c003/card?e=1&s=c",
-  fullUrl: "/battle-map-images/2b1f2a1e-0000-4000-8000-00000000c003/full?e=1&s=f",
-  width: 1536,
-  height: 1024,
-};
-
-/** The same map once Hob has drawn it: the picture under the same board. */
-export const drawnBattleMap = { ...battleMap, image: drawnMapPicture };
 
 /**
  * The encounter's DM prep, as its creator reads it: the tactics and treasure
@@ -1859,24 +1832,13 @@ export const encounterShelf = (): Map<string, Answer> => {
     [`GET ${c}/encounter-prep`, { status: 200, body: shelfPrep }],
   ]);
   for (const row of shelf) {
-    routes.set(`GET ${c}/encounters/${row.id}/map`, {
-      status: 200,
-      body: { ...battleMap, id: row.id, encounterId: row.id, setting: null },
-    });
     routes.set(`GET ${c}/encounters/${row.id}/creatures`, { status: 200, body: [] });
   }
   // What the edit form opens on: each encounter's own prep.
   for (const prep of shelfPrep) {
     routes.set(`GET ${c}/encounters/${prep.encounterId}/prep`, { status: 200, body: prep });
   }
-  // The shelf's one drawn map: the preview's band, the page's board and the
-  // builder's card each have a picture to draw.
-  routes.set(`GET ${c}/encounters/${encounterId}/map`, { status: 200, body: drawnBattleMap });
   routes.set(`GET ${c}/encounters/${encounterId}/creatures`, { status: 200, body: [rosterRow] });
-  routes.set(`GET ${c}/encounters/${bargainId}/map`, {
-    status: 200,
-    body: { ...battleMap, encounterId: bargainId, setting: "Hag's stilt-hut, deep in the marsh" },
-  });
   routes.set(`GET ${c}/encounters/${bargainId}/creatures`, { status: 200, body: bargainRoster });
   routes.set(`GET ${c}/encounters/${sketchId}/creatures`, { status: 200, body: sketchRoster });
   // A move is taken. The list is read back in the order it was, which drops
@@ -1957,6 +1919,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     // The places at the table, on the shelf and in the world.
     ...fullLocations(),
+    // The levels on the shelf.
+    ...fullLevels(),
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
     [`GET /campaigns/${campaignId}/player-notes`, { status: 200, body: page([playerReadAloud]) }],
@@ -2034,10 +1998,6 @@ export const fullCampaign = (): Map<string, Answer> =>
       { status: 200, body: [rosterRow] },
     ],
     [
-      `GET /campaigns/${campaignId}/encounters/${encounterId}/map`,
-      { status: 200, body: battleMap },
-    ],
-    [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/prep`,
       { status: 200, body: encounterPrep },
     ],
@@ -2049,10 +2009,6 @@ export const fullCampaign = (): Map<string, Answer> =>
     [
       `GET /campaigns/${campaignId}/encounters/${sketchId}/creatures`,
       { status: 200, body: sketchRoster },
-    ],
-    [
-      `GET /campaigns/${campaignId}/encounters/${sketchId}/map`,
-      { status: 200, body: { ...battleMap, encounterId: sketchId, setting: null } },
     ],
     // The nights this table has had — read by both doors into a session, and
     // only ever to work out the next number. Session 12 is the highest, so the

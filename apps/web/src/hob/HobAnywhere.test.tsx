@@ -88,11 +88,15 @@ describe("Hob outside a campaign", () => {
     expect(starters()).toEqual(["Draft my first character", "Draft a campaign"]);
   });
 
-  it("offers the same two drafts in the Library, and never campaign prep", async () => {
+  it("offers a level first in the Library, then the two drafts, and never campaign prep", async () => {
     await renderAt("/library");
     await openHob();
 
-    expect(starters()).toEqual(["Draft a character", "Draft a campaign"]);
+    expect(starters()).toEqual([
+      "Build a battle map level",
+      "Draft a character",
+      "Draft a campaign",
+    ]);
     expect(within(panel()).queryByText("Build an encounter")).toBeNull();
   });
 

@@ -1,5 +1,7 @@
+import { generateLevel } from "@taverns/api";
 import { Badge, Button, Card, Icon, cn, Input, sectionHeadingVariants } from "@taverns/ui";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { LevelPreview } from "../level/LevelPreview";
 import { ARTIFACT_KINDS, type HobArtifact } from "./transcript";
 
 /**
@@ -29,10 +31,15 @@ import { ARTIFACT_KINDS, type HobArtifact } from "./transcript";
 const isSaveable = (artifact: HobArtifact) => artifact.kind !== "rules";
 
 function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "encounter" } }) {
+  const spec = artifact.level;
+  const level = useMemo(() => (spec === undefined ? undefined : generateLevel(spec).level), [spec]);
   return (
     <div className="flex flex-col gap-1.5">
-      {/* The battle map is drawn from this line once the DM saves, so they
-          see it before they do. */}
+      {/* The level the keep makes with the encounter, laid out as it will be. */}
+      {level !== undefined && (
+        <LevelPreview level={level} label={`A preview of ${artifact.title}'s level`} />
+      )}
+      {/* The new level's description, which the DM sees before they save. */}
       {artifact.setting !== undefined && (
         <p className="flex items-start gap-2 pb-1 text-body-s leading-body text-muted-foreground">
           <Icon name="map" size={14} className="mt-0.5 shrink-0 text-faint" />
@@ -326,6 +333,37 @@ function LocationBody({ artifact }: { readonly artifact: HobArtifact & { kind: "
   );
 }
 
+/**
+ * A level Hob proposed: the level itself, laid out from the proposal's labels
+ * and seed exactly as the keep will lay it out, drawn as a still; then what
+ * Hob said it is and the rooms it asked for.
+ */
+function LevelBody({ artifact }: { readonly artifact: HobArtifact & { kind: "level" } }) {
+  const level = useMemo(() => generateLevel(artifact.spec).level, [artifact.spec]);
+  return (
+    <div className="flex flex-col gap-2">
+      <LevelPreview level={level} label={`A preview of ${artifact.spec.name}`} />
+      {artifact.description !== undefined && (
+        <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+          {artifact.description}
+        </p>
+      )}
+      <ul className="flex flex-col gap-1">
+        {artifact.rooms.map((room, index) => (
+          <li
+            // Two rooms may read the same; their place in the list is theirs.
+            key={`${String(index)}:${room}`}
+            className="flex items-start gap-2 text-body-s leading-body text-foreground"
+          >
+            <Icon name="door-open" size={12} className="mt-1 shrink-0 text-faint" />
+            <span>{room}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** A character the account's panel drafted: how they look, and Hob's reasons. */
 function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "character" } }) {
   return (
@@ -461,6 +499,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <LevelUpBody artifact={artifact} />;
     case "location":
       return <LocationBody artifact={artifact} />;
+    case "level":
+      return <LevelBody artifact={artifact} />;
     // The title is the place and the meta says what the keep does: nothing more to draw.
     case "partyMove":
       return null;
@@ -507,6 +547,7 @@ export function ArtifactCard({
   const levelUp = artifact.kind === "levelUp";
   const location = artifact.kind === "location";
   const partyMove = artifact.kind === "partyMove";
+  const level = artifact.kind === "level";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -631,7 +672,9 @@ export function ArtifactCard({
                                         ? "In your Library’s places"
                                         : partyMove
                                           ? "The party is there"
-                                          : "In tonight’s session"}
+                                          : level
+                                            ? "In your Library’s levels"
+                                            : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -655,7 +698,8 @@ export function ArtifactCard({
                             act ||
                             levelUp ||
                             location ||
-                            partyMove
+                            partyMove ||
+                            level
                           ? "Keep it"
                           : "Save to session"}
               </Button>

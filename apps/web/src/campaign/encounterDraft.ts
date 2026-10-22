@@ -20,6 +20,7 @@ import {
   type EncounterPrep,
   type EncounterUpdate,
   ENCOUNTER_ROSTER_MAX,
+  type LevelId,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_SKILL_MAX,
   ENCOUNTER_SKILLS_MAX,
@@ -48,8 +49,9 @@ import { DateTime } from "effect";
  *
  * What a DM thinks of as the encounter is four stores: the `Encounter` row, its
  * creator-only `EncounterPrep`, its roster (`encounter_creature`, one row per
- * creature) and two lines that live elsewhere — the battle map's setting line
- * and the oldest `read_aloud` note attached to it. {@link draftFrom} reads all
+ * creature) and the oldest `read_aloud` note attached to it. A new encounter
+ * also carries a setting line, which only its create sends: it becomes the
+ * description of the level made with it. {@link draftFrom} reads all
  * of them into one value the screen edits; {@link createPayload},
  * {@link updatePayload}, {@link rosterDiff} and {@link readAloudWrite} say what
  * each store is sent on save. None of them issues a request.
@@ -84,11 +86,11 @@ export type SavedReadAloud = Pick<Note, "id" | "body">;
 
 /** Everything a draft is made from, and what a save is measured against. */
 export interface SavedEncounter {
-  readonly encounter: Pick<Encounter, "id" | "name" | "kind" | "tags" | "visibility"> | undefined;
+  readonly encounter:
+    | Pick<Encounter, "id" | "name" | "kind" | "tags" | "visibility" | "levelId">
+    | undefined;
   readonly prep: Prep;
   readonly roster: ReadonlyArray<SavedLine>;
-  /** The map's setting line as stored; `""` for none. */
-  readonly setting: string;
   readonly readAloud: SavedReadAloud | undefined;
 }
 
@@ -97,7 +99,6 @@ export const NEW_ENCOUNTER: SavedEncounter = {
   encounter: undefined,
   prep: NO_PREP,
   roster: [],
-  setting: "",
   readAloud: undefined,
 };
 
@@ -161,8 +162,17 @@ export interface EncounterDraft {
    * a draft until the DM says otherwise.
    */
   readonly ready: boolean;
-  /** The map's setting line — the builder's *Location*. */
+  /**
+   * A new encounter's *Location*: one line on what the place looks like, the
+   * description of the level its create makes. Sent only by a create that
+   * names no level of its own; an existing encounter's place is its level's.
+   */
   readonly setting: string;
+  /**
+   * The creator's own level a fight on it is played on. `null` is, on a new
+   * encounter, a new empty level made with it; on a saved one, the plain grid.
+   */
+  readonly levelId: LevelId | null;
   readonly readAloud: string;
   /** As typed: `"Marsh, Night"`. */
   readonly tags: string;
@@ -296,7 +306,8 @@ export const draftFrom = (saved: SavedEncounter): EncounterDraft => ({
   name: saved.encounter?.name ?? "",
   kind: saved.encounter?.kind ?? "combat",
   ready: saved.prep.ready,
-  setting: saved.setting,
+  setting: "",
+  levelId: saved.encounter?.levelId ?? null,
   readAloud: saved.readAloud?.body ?? "",
   tags: saved.encounter?.tags.join(", ") ?? "",
   // `dm` for a new encounter: the column default, and the only safe one to fail to.
@@ -654,7 +665,10 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
     tags: parseTags(draft.tags),
     visibility: draft.visibility,
     ready: draft.ready,
-    ...(setting === "" ? {} : { setting }),
+    // The setting line is the new level's description, so it goes only with
+    // a create that makes one.
+    ...(setting === "" || draft.levelId !== null ? {} : { setting }),
+    ...(draft.levelId === null ? {} : { levelId: draft.levelId }),
     ...(tactics.length === 0 ? {} : { tactics }),
     ...(treasure === "" ? {} : { treasure }),
     ...(challenge === null ? {} : { challenge }),
@@ -674,19 +688,19 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
 /**
  * The encounter's update.
  *
- * The setting line is sent only when it changed, `null` when emptied: it is
- * the map's, and an untouched line is not a write. The prep is sent whole, as
+ * The level is sent only when it changed: an untouched one is not a write.
+ * There is no setting line: a saved encounter's place is its level's
+ * description, edited in the Library's editor. The prep is sent whole, as
  * the form shows it, with the kind beside it — a challenge travels with its
  * kind, and a kind switched away sends `null` so the server clears it.
  */
 export const updatePayload = (draft: EncounterDraft, saved: SavedEncounter): EncounterUpdate => {
-  const setting = draft.setting.trim();
   const treasure = draft.treasure.trim();
   return {
     name: draft.name.trim(),
     tags: parseTags(draft.tags),
     visibility: draft.visibility,
-    ...(setting === saved.setting.trim() ? {} : { setting: setting === "" ? null : setting }),
+    ...(draft.levelId === (saved.encounter?.levelId ?? null) ? {} : { levelId: draft.levelId }),
     kind: draft.kind,
     ready: draft.ready,
     tactics: tacticsOf(draft.tactics),

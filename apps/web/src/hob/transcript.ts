@@ -3,6 +3,7 @@ import {
   type EncounterChallenge,
   encounterKindLabel,
   type HobProposal,
+  type LevelSpec,
 } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import type { DateTime } from "effect";
@@ -69,6 +70,7 @@ export const ARTIFACT_KINDS = {
   levelUp: { icon: "arrow-big-up-dash", label: "Level up", variant: "magic" },
   location: { icon: "map-pin", label: "Place", variant: "default" },
   partyMove: { icon: "footprints", label: "Party move", variant: "secondary" },
+  level: { icon: "grid-3x3", label: "Level", variant: "default" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -116,10 +118,15 @@ export type HobArtifact =
       readonly kind: "encounter";
       readonly roster: ReadonlyArray<HobRosterLine>;
       /**
-       * The line the encounter's battle map will be drawn from, when Hob wrote
-       * one. Shown on the card because accepting draws the map from it.
+       * One line on what the place looks like, when Hob wrote one: the
+       * description of the level the accept makes with the encounter.
        */
       readonly setting?: string;
+      /**
+       * The encounter's level as labels and a seed, when Hob laid one out:
+       * the card draws it as the keep will make it.
+       */
+      readonly level?: LevelSpec;
       /**
        * A skill challenge's or a hazard's numbers as label and value —
        * `["DC", "14"]`, `["Save", "CON 13"]` — and the skills it names.
@@ -238,6 +245,19 @@ export type HobArtifact =
   | (ArtifactBase & {
       /** The party travelling to a place at the table: its title is the place. */
       readonly kind: "partyMove";
+    })
+  | (ArtifactBase & {
+      /**
+       * A level for the asker's Library: its title is the level, its meta the
+       * board and the light. `spec` is the proposal's labels and seed, which
+       * the card lays out (`generateLevel`) and draws as its preview: the
+       * level the keep will write.
+       */
+      readonly kind: "level";
+      readonly spec: LevelSpec;
+      readonly description?: string;
+      /** Each room as the card lists it, `"The Chapel (large shrine)"`. */
+      readonly rooms: ReadonlyArray<string>;
     })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
@@ -397,6 +417,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
           ...(line.npc === undefined ? {} : { npcName: line.npc.name }),
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
+        ...(proposal.level === undefined ? {} : { level: proposal.level }),
         ...(challenge === undefined
           ? {}
           : {
@@ -465,6 +486,27 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
                 .join(", ")}`,
         ),
       };
+    case "level": {
+      const { target: _target, ...spec } = proposal;
+      return {
+        id: turnId,
+        kind: "level",
+        title: proposal.name,
+        meta: [
+          `${proposal.size[0]!.toUpperCase()}${proposal.size.slice(1)} board`,
+          `${String(proposal.rooms.length)} ${proposal.rooms.length === 1 ? "room" : "rooms"}`,
+          proposal.mood,
+        ].join(" · "),
+        chips: [],
+        spec,
+        ...(proposal.description === null ? {} : { description: proposal.description }),
+        rooms: proposal.rooms.map((room) =>
+          room.label === null
+            ? `${room.size[0]!.toUpperCase()}${room.size.slice(1)} ${room.purpose}`
+            : `${room.label} (${room.size} ${room.purpose})`,
+        ),
+      };
+    }
     case "partyMove":
       return {
         id: turnId,

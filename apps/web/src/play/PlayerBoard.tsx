@@ -2,32 +2,36 @@ import {
   type BoardSquare,
   type CombatantId,
   type DiagonalRule,
-  type PictureRect,
+  type PlaneRect,
   type PlayerLiveBoard,
   type PlayerLiveCombatant,
-  battleMapPlane,
+  BOARD_CELL_PX,
+  boardPlane,
+  playerLevelLayout,
+  playerWalk,
+  playerSight,
 } from "@taverns/api";
+import { useMemo, useState } from "react";
 import { CameraBar } from "../run/CameraBar";
 import { centreOf } from "../run/canvas";
+import { canDrawWebGL } from "../run/fx3d/support";
+import { LevelBackdrop } from "../run/LevelBackdrop";
 import { InStageCorner } from "../run/RunStage";
-import { Card, Icon, SectionHeading } from "@taverns/ui";
-import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
+import { Card, cn, Icon, SectionHeading } from "@taverns/ui";
 import { BoardCanvas } from "../run/BoardCanvas";
 import { AreaLayer } from "../run/BoardTools";
 import type { Act } from "../run/effects";
+import { GridBoard } from "../run/GridBoard";
+import { describeBoard } from "../run/runBoard";
 import { type LayerToken, TokenLayer } from "../run/RunTokens";
 import { tableRowState } from "./tableRows";
 
 /**
- * The fight's battle map as a seated player sees it, once the DM has turned on
- * *Share map* — built from the DM's own parts (the captain's call: the
- * picture, the grid, and tokens for everyone the players can already see in
- * initiative).
+ * The fight's board as a seated player sees it, once the DM has turned on
+ * *Share map* — built from the DM's own parts (the captain's call: the grid,
+ * and tokens for everyone the players can already see in initiative).
  *
- * It draws `PlayerLiveBoard`, a schema of its own with no setting line and no
- * "Hob is drawing", so the board is handed those as absent rather than the
- * wide type narrowed here: the picture's alt text is the generic one, and a
- * picture not drawn yet is the grid alone.
+ * It draws `PlayerLiveBoard`, a schema of its own.
  *
  * A token is a row of the player's order standing on a square: the server
  * sends only those (`tokenShownTo`), so a hidden creature, every monster while
@@ -41,6 +45,13 @@ import { tableRowState } from "./tableRows";
  *
  * Fog of war covers its squares outright (`PlayerLiveBoard.fog`), under the
  * tokens, since the only token there is the player's own.
+ *
+ * **A fight on a level** draws the party's level on the canvas under the board
+ * (`LevelBackdrop` in the party's view), as the DM's board draws the whole
+ * one: lit by the lights the table was sent, what the party sees now in full,
+ * what it has explored dimmed, the rest hatched. The server sends only what
+ * the party has seen (`PlayerLiveLevel`), and a token only where the party
+ * sees now, so neither is narrowed here.
  *
  * An area the DM has pinned is drawn under the tokens by the DM's own layer
  * (`run/BoardTools.tsx`), so the table sees where it lands and who stands in
@@ -72,7 +83,7 @@ interface TableToken extends LayerToken {
 }
 
 /** The DM's token layer, over a player's board. */
-function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
+function PlayerTokens(props: PlayerBoardProps) {
   const { board, order, labels, upNextId, selectedId, diagonals, feetLeft, movable } = props;
   const positions = new Map(board.tokens.map((token) => [token.combatantId, token.position]));
   const tokens = order.flatMap((row): ReadonlyArray<TableToken> => {
@@ -97,9 +108,20 @@ function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
     ];
   });
   const mine = (token: TableToken) => token.row.kind === "you";
+  // On a level, the range and the ruler walk the party's view of it as the
+  // server holds a player's move to (`playerWalk`): over the squares the party
+  // has seen, and one step into the dark beyond them, no further.
+  const level = board.level;
+  const { columns, rows, feetPerCell } = board;
+  const walk = useMemo(() => {
+    if (level === null) return undefined;
+    const party = playerWalk({ columns, rows, feetPerCell }, level);
+    return { layout: party.layout, ends: party.ends, sight: playerSight(level) };
+  }, [level, columns, rows, feetPerCell]);
   return (
     <TokenLayer
-      board={props.map}
+      board={board}
+      walk={walk}
       tokens={tokens}
       labels={labels}
       selected={tokens.find((token) => token.id === selectedId)}
@@ -124,14 +146,9 @@ function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
   );
 }
 
-type DrawnMap = ReturnType<typeof drawn>;
-
-/** The player's board as the battle map draws it: no setting line, no picture still coming. */
-const drawn = (board: PlayerLiveBoard) => ({ ...board, setting: null, imagePending: false });
-
 /** The board as a card, in the page's flow: below the canvas's width, or anywhere it has none. */
-export function PlayerBattleMap(props: PlayerBoardProps) {
-  const map = drawn(props.board);
+export function PlayerBoardCard(props: PlayerBoardProps) {
+  const map = props.board;
   return (
     <Card aria-label="Battle map" role="region" className="overflow-clip">
       <div className="flex items-center gap-2.5 border-b border-hairline px-panel py-2.5">
@@ -140,12 +157,12 @@ export function PlayerBattleMap(props: PlayerBoardProps) {
           Battle map
         </SectionHeading>
       </div>
-      <BattleMapBoard map={map}>
+      <GridBoard board={map} grid>
         {props.board.area !== null && (
           <AreaLayer board={map} area={props.board.area} state="pinned" />
         )}
-        <PlayerTokens {...props} map={map} />
-      </BattleMapBoard>
+        <PlayerTokens {...props} />
+      </GridBoard>
       <p className="mb-0 border-t border-hairline px-panel py-2.5 text-caption leading-body text-muted-foreground">
         {describeBoard(map)}
       </p>
@@ -162,17 +179,44 @@ export function PlayerBattleMap(props: PlayerBoardProps) {
 export function PlayerBoardStage({
   freeArea,
   ...props
-}: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
-  const map = drawn(props.board);
+}: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
+  const map = props.board;
   const up = props.order.find((row) => row.combatantId === props.upNextId);
   const upAt = props.board.tokens.find((token) => token.combatantId === up?.combatantId)?.position;
-  const upPoint = upAt === undefined ? undefined : centreOf(map, upAt);
+  const upPoint = upAt === undefined ? undefined : centreOf(upAt);
+  // The party's level as the renderer reads it, kept while the board's
+  // answer is the same (a re-read is a new one, and redraws).
+  const level = props.board.level;
+  const { columns, rows, feetPerCell } = props.board;
+  const layout = useMemo(
+    () => (level === null ? null : playerLevelLayout({ columns, rows, feetPerCell }, level)),
+    [level, columns, rows, feetPerCell],
+  );
+  const [levelDrawable, setLevelDrawable] = useState(canDrawWebGL);
+  // A level fight draws the party's level under the board where the browser
+  // can, as the DM's board does (`RunStage.tsx`); the board box over it is
+  // then clear, its grid the renderer's.
+  const drawsLevel = layout !== null && level !== null && levelDrawable;
   return (
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
-        plane={battleMapPlane(map, map.image)}
-        cellPx={map.alignment.cellPx}
+        plane={boardPlane(map)}
+        cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
+        backdrop={
+          drawsLevel
+            ? (view) => (
+                <LevelBackdrop
+                  layout={layout}
+                  cellPx={BOARD_CELL_PX}
+                  view={view}
+                  grid
+                  party={level}
+                  onFailed={() => setLevelDrawable(false)}
+                />
+              )
+            : undefined
+        }
         controls={(camera) => (
           <InStageCorner
             fallback={(children) => (
@@ -188,12 +232,16 @@ export function PlayerBoardStage({
           </InStageCorner>
         )}
       >
-        <BattleMapBoard map={map} className="box-content">
+        <GridBoard
+          board={map}
+          grid={!drawsLevel}
+          className={cn("box-content", drawsLevel && "border-transparent bg-transparent")}
+        >
           {props.board.area !== null && (
             <AreaLayer board={map} area={props.board.area} state="pinned" />
           )}
-          <PlayerTokens {...props} map={map} />
-        </BattleMapBoard>
+          <PlayerTokens {...props} />
+        </GridBoard>
       </BoardCanvas>
     </section>
   );

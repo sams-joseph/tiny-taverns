@@ -39,7 +39,6 @@ const KIND_LABEL: { readonly [K in ImageKindName]: string } = {
   npcBanner: "Banner",
   campaign: "Cover",
   sharedWorld: "Cover",
-  battleMap: "Map",
   location: "Picture",
 };
 
@@ -50,8 +49,6 @@ const FILLS: { readonly [S in ImageSubject]: string } = {
   npc: "One picture fills both the square portrait and the wide banner on the cast's cards. Frame each below.",
   campaign: "The cover heads the campaign's card and its overview. Frame it below.",
   sharedWorld: "The cover heads the Shared World's card and its page. Frame it below.",
-  battleMap:
-    "The whole picture goes under the grid, uncropped, and the grid is set across its width again.",
   location:
     "The whole picture is the place's map, uncropped. Pins keep their places across it, so check them after.",
 };

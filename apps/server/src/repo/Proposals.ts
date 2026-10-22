@@ -9,6 +9,9 @@ import {
   type HobAccepted,
   keptFrom,
   type CharacterOwnCreate,
+  generateLevel,
+  LevelSave,
+  type LevelSpec,
   type HobProposal,
   type Location,
   type LocationKind,
@@ -18,7 +21,7 @@ import {
   type NpcSheetPut,
   sharedWorldCreateFrom,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { Acts } from "./Acts.js";
 import { Advancement } from "./Advancement.js";
@@ -30,6 +33,7 @@ import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { Groups } from "./Groups.js";
+import { Levels } from "./Levels.js";
 import { Locations } from "./Locations.js";
 import { PartyTravel } from "./PartyTravel.js";
 import { discardedConflict, lockTurnForAccept, markAccepted } from "./HobThreads.js";
@@ -43,6 +47,7 @@ import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
 import type { ConversationReach } from "./visibility.js";
 
+const decodeLevelSave = Schema.decodeUnknownEffect(LevelSave);
 /**
  * Where a proposal becomes a row, and the only place `origin = 'assistant'` is
  * ever written.
@@ -100,8 +105,16 @@ import type { ConversationReach } from "./visibility.js";
  * too, or a Shared World, through `Groups.create` with the payload
  * `sharedWorldCreateFrom` builds for the form, or a level-up of a character
  * the asker owns, through `Advancement.levelUpForAccept` (the wizard's own
- * write) with the version the proposal read. The asker becomes the
- * campaign's creator, or the world's owner, exactly as by the form.
+ * write) with the version the proposal read, or a place or a level for the
+ * asker's Library. The asker becomes the campaign's creator, or the world's
+ * owner, exactly as by the form.
+ *
+ * A kept level is laid out again from the labels and seed on the turn
+ * (`generateLevel`, the function the card drew its preview with), then made
+ * through `Levels.create` and the editor's own `Levels.save`, so the document
+ * is never in the proposal and never in a request. A kept encounter that
+ * carries a level spec makes its level the same way, then the encounter on it;
+ * one without makes the empty level `Encounters.create` makes for the form.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
@@ -256,7 +269,41 @@ export class Proposals extends Context.Service<
       const acts = yield* Acts;
       const advancement = yield* Advancement;
       const locations = yield* Locations;
+      const levels = yield* Levels;
       const travel = yield* PartyTravel;
+
+      /**
+       * A level laid out again from the spec and seed the card drew, then made
+       * the way the editor makes one: the shelf's create, stamped with the
+       * turn, and the editor's save of the whole document at the version that
+       * create answered. Owned by the accepting credential.
+       */
+      const keepLevel = (spec: LevelSpec, from: AssistantOrigin) =>
+        Effect.gen(function* () {
+          const { level: generated } = generateLevel(spec);
+          // The generator's level checked against the wire's own save, as an
+          // editor's save is, before anything is written: one that does not
+          // hold together is refused here rather than half kept.
+          const draft = yield* decodeLevelSave({ ...generated, version: 0 }).pipe(
+            Effect.mapError(
+              () =>
+                new Conflict({
+                  message: "Hob's level did not come out whole; ask Hob for it again",
+                }),
+            ),
+          );
+          const made = yield* levels.create(
+            {
+              name: draft.name,
+              columns: draft.columns,
+              rows: draft.rows,
+              feetPerCell: draft.feetPerCell,
+            },
+            from,
+          );
+          const level = yield* levels.save(made.id, { ...draft, version: made.version });
+          return { accepted: "level" as const, level };
+        });
 
       /**
        * A drafted place and everything under it, made through the shelf's own
@@ -406,15 +453,21 @@ export class Proposals extends Context.Service<
             });
 
           case "encounter":
-            return Effect.map(
-              encounters.create(
+            return Effect.gen(function* () {
+              // The level the card drew, laid out again from its spec and
+              // made the way a kept level is, in this transaction; without
+              // one, the create below makes the encounter an empty level.
+              const level =
+                proposal.level === undefined ? undefined : yield* keepLevel(proposal.level, from);
+              const encounter = yield* encounters.create(
                 campaignId,
                 {
                   name: proposal.name,
                   tags: proposal.tags,
-                  // The line the battle map is drawn from, which the card
-                  // showed; the accept handler starts the draw after commit.
+                  // The line on what the place looks like, which the card
+                  // showed: the new level's description.
                   setting: proposal.setting,
+                  ...(level === undefined ? {} : { levelId: level.level.id }),
                   // The kind and the prep the card showed, through the same
                   // create the form uses. A proposal from before Hob could
                   // offer them has none, and was a fight.
@@ -433,9 +486,9 @@ export class Proposals extends Context.Service<
                   })),
                 },
                 from,
-              ),
-              (encounter) => ({ accepted: "encounter" as const, encounter }),
-            );
+              );
+              return { accepted: "encounter" as const, encounter };
+            });
 
           case "character":
             return Effect.map(
@@ -523,6 +576,16 @@ export class Proposals extends Context.Service<
                 yield* locations.place(creator, kept.location.id);
               }
               return kept;
+            });
+
+          case "level":
+            // The creator's toolkit offers it, into the campaign's own
+            // thread; the proof is asked again, so nobody else keeps one. The
+            // level goes into the creator's Library and nowhere else: a level
+            // is in no campaign.
+            return Effect.gen(function* () {
+              yield* creators.of(campaignId);
+              return yield* keepLevel(proposal, from);
             });
 
           case "partyMove":
@@ -698,7 +761,9 @@ export class Proposals extends Context.Service<
                           : proposal.target === "location"
                             ? // Into the asker's Library, and nowhere else.
                               yield* keepPlaces(proposal, from)
-                            : undefined;
+                            : proposal.target === "level"
+                              ? yield* keepLevel(proposal, from)
+                              : undefined;
                   if (accepted === undefined) {
                     // Only the account's own toolkits write into these threads
                     // and they propose nothing else; the refusal is the same

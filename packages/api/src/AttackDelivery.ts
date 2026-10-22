@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { AREA_FEET, type BoardArea, type BoardSquare } from "./BattleMap.js";
+import { AREA_FEET, type BoardArea, type BoardSquare } from "./Board.js";
 import type { ActionArea } from "./Creature.js";
 import type { SpellArea } from "./Spell.js";
 import type { NpcAttack, NpcTarget } from "./NpcTurnOptions.js";

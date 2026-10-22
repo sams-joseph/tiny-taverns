@@ -2,9 +2,9 @@ import type {
   CampaignId,
   CharacterId,
   CharacterOptionId,
-  EncounterId,
   EncounterRunId,
   FeatId,
+  LevelId,
   NpcId,
   RuleArticleId,
   SessionId,
@@ -105,14 +105,6 @@ export const reads = {
    * `sessions` too.
    */
   encounters: (campaignId: CampaignId): ReadKey => key`encounters:${campaignId}`,
-
-  /**
-   * One encounter's battle map, as its creator reads it — the encounter page's
-   * read, re-read while Hob is drawing the picture. The setting line on it is
-   * written through the encounter's own form, which names `encounters`, so
-   * the page's read answers that key too.
-   */
-  battleMap: (encounterId: EncounterId): ReadKey => key`battle-map:${encounterId}`,
 
   /**
    * This campaign's notes — the creator's `notes` and a player's
@@ -350,6 +342,12 @@ export const reads = {
    * writes name `locations` and `worldLocations` as well.
    */
   libraryLocations: "library:locations" as ReadKey,
+
+  /** The account's own levels, on the Library's Levels shelf. */
+  libraryLevels: "library:levels" as ReadKey,
+
+  /** One of the account's levels, whole. */
+  libraryLevel: (levelId: LevelId): ReadKey => key`library:levels:${levelId}`,
 
   /**
    * The places at one table — the creator's `locations` and a player's

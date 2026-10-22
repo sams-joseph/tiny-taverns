@@ -1,4 +1,4 @@
-import type { BoardSquare, PictureRect, PictureSize } from "@taverns/api";
+import type { BoardSquare, PlaneRect, PlaneSize } from "@taverns/api";
 import { cellRect } from "@taverns/api";
 
 /**
@@ -6,13 +6,12 @@ import { cellRect } from "@taverns/api";
  * arithmetic a test can pin.
  *
  * A view is the one transform the canvas applies to the board: a point `p` of
- * the board's plane (the original picture's pixels, `battleMapPlane`) is drawn
- * at `p · zoom + (x, y)` in the canvas's own pixels. Panning moves `(x, y)`;
+ * the board's plane (`boardPlane`, `BOARD_CELL_PX` a square) is drawn at
+ * `p · zoom + (x, y)` in the canvas's own pixels. Panning moves `(x, y)`;
  * zooming changes `zoom` about a point that stays where it is.
  *
- * Zoom is bounded by how big a square is drawn, not by a factor, because the
- * plane's pixels are a picture's and one map's square may be 64 of them and
- * another's 140: the same factor would be a different board on each.
+ * Zoom is bounded by how big a square is drawn, not by a factor, so the
+ * bounds say what a person sees whatever the plane's scale.
  */
 
 export interface CanvasView {
@@ -55,7 +54,7 @@ const clamp = (value: number, { min, max }: ZoomLimits): number =>
  * The whole board in `area` (the part of the canvas no panel covers), as large
  * as fits and centred in it.
  */
-export const fitView = (plane: PictureSize, area: PictureRect, limits: ZoomLimits): CanvasView => {
+export const fitView = (plane: PlaneSize, area: PlaneRect, limits: ZoomLimits): CanvasView => {
   const zoom = clamp(Math.min(area.width / plane.width, area.height / plane.height), limits);
   return {
     zoom,
@@ -75,8 +74,8 @@ export const fitView = (plane: PictureSize, area: PictureRect, limits: ZoomLimit
  * squares centred on them.
  */
 export const openingView = (
-  plane: PictureSize,
-  area: PictureRect,
+  plane: PlaneSize,
+  area: PlaneRect,
   cellPx: number,
   focus?: { readonly x: number; readonly y: number },
 ): CanvasView => {
@@ -122,8 +121,8 @@ export const zoomAbout = (
  */
 export const keepInView = (
   view: CanvasView,
-  plane: PictureSize,
-  canvas: PictureSize,
+  plane: PlaneSize,
+  canvas: PlaneSize,
   cellPx: number,
 ): CanvasView => {
   const square = cellPx * view.zoom;
@@ -152,10 +151,7 @@ export const wheelZoomFactor = (deltaY: number): number =>
   2 ** (-Math.min(50, Math.max(-50, deltaY)) / 100);
 
 /** The middle of a square, in the plane's units: what the camera centres. */
-export const centreOf = (
-  board: Parameters<typeof cellRect>[0],
-  square: BoardSquare,
-): { readonly x: number; readonly y: number } => {
-  const rect = cellRect(board, square);
+export const centreOf = (square: BoardSquare): { readonly x: number; readonly y: number } => {
+  const rect = cellRect(square);
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 };

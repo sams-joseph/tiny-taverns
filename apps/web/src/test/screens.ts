@@ -1,6 +1,7 @@
 import {
   brannocId,
   campaignId,
+  cryptLevelId,
   encounterId,
   gullportId,
   npcId,
@@ -100,6 +101,8 @@ export const screens: ReadonlyArray<Screen> = [
     scenario: "creator",
     path: `/library/locations/${gullportId}`,
   },
+  { name: "library-levels", scenario: "creator", path: "/library/levels" },
+  { name: "library-level", scenario: "creator", path: `/library/levels/${cryptLevelId}` },
   { name: "locations-map", scenario: "creator", path: `${c}/locations?place=${gullportId}` },
   { name: "characters", scenario: "player", path: "/characters" },
   { name: "sheet", scenario: "player", path: `/characters/${brannocId}` },

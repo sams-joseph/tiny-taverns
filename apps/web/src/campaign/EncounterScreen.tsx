@@ -1,14 +1,31 @@
-import type { Encounter, Note } from "@taverns/api";
+import {
+  BOARD_COLUMNS_DEFAULT,
+  BOARD_ROWS_DEFAULT,
+  type Encounter,
+  FEET_PER_SQUARE_DEFAULT,
+  type LevelId,
+  type Note,
+} from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { BackLink, Badge, Button, Card, EmptyState, Icon, SectionHeading } from "@taverns/ui";
-import { useCallback, useState } from "react";
-import { useInvalidate } from "../api/atoms";
-import { reads } from "../api/keys";
-import { useHobDrawingPolling } from "../hob/drawingPolling";
+import {
+  BackLink,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Icon,
+  Loading,
+  SectionHeading,
+} from "@taverns/ui";
+import { useState } from "react";
+import { useApiAtom } from "../api/atoms";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { LevelPreview } from "../level/LevelPreview";
+import { libraryLevelAtom } from "../levels/load";
+import { sizeLine } from "../levels/size";
+import { describeBoard } from "../run/runBoard";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { DetailFacts } from "../ui/detail";
-import { useGridAdjustment } from "./AdjustGrid";
-import { BattleMapBoard, describeBoard } from "./BattleMapBoard";
 import { CampaignChrome } from "./CampaignChrome";
 import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
 import { describeDifficulty } from "./difficulty";
@@ -20,16 +37,16 @@ import { sceneNoun } from "../run/scene";
 
 /**
  * One encounter: its battle map, its roster and the notes attached to it — the
- * page the Encounters preview's heading opens. **The creator's alone**: the map read behind
- * it is refused to everybody else (`campaign/load.ts`, `encounterPageAtom`),
- * so a player who pastes the URL reads the same failure a stranger does.
+ * page the Encounters preview's heading opens. **The creator's alone**: the
+ * roster read behind it is refused to everybody else (`campaign/load.ts`,
+ * `encounterPageAtom`), so a player who pastes the URL reads the same failure
+ * a stranger does.
  *
  * Built from what the campaign already draws: the encounter builder edits it
- * (the name, the roster and the setting line the map was drawn from), the
- * campaign's `run` puts it on the table, `NoteCard` shows what is attached.
- * There is no redraw: a picture is drawn once, as the encounter is made. The
- * grid is shown where the map says it sits, and *Adjust grid* lines it up in
- * place under the board (`AdjustGrid.tsx`).
+ * (the name, the roster and the level it is played on), the campaign's `run`
+ * puts it on the table, `NoteCard` shows what is attached. The battle map is
+ * the encounter's level, drawn as a still and opened in the Library's editor
+ * (`EncounterLevel`), or the plain grid when it names none.
  *
  * **Run is the page's one primary**, and the campaign row's own press stands
  * down on this route (`CampaignRow` in `shell/AppShell.tsx`): both are
@@ -194,51 +211,35 @@ function EncounterBody({
   readonly notes: ReadonlyArray<Note>;
   readonly running: boolean;
 }) {
-  const { map, roster } = page;
-  const grid = useGridAdjustment({ campaignId: encounter.campaignId, map });
-  const invalidate = useInvalidate();
-  // The page opens straight after the encounter is made, while Hob may still be
-  // drawing its map. Re-read the map alone until the picture lands or fails.
-  const rereadMap = useCallback(
-    () => invalidate([reads.battleMap(encounter.id)]),
-    [invalidate, encounter.id],
-  );
-  useHobDrawingPolling(map.imagePending, rereadMap);
+  const { roster } = page;
 
   return (
     <div className="@container flex flex-col gap-6">
-      <section aria-labelledby="encounter-map" className="flex flex-col gap-3">
-        <SectionHeading
-          id="encounter-map"
-          size="subtitle"
-          action={
-            <span className="flex flex-wrap items-center gap-3">
+      {encounter.levelId === null ? (
+        <section aria-labelledby="encounter-map" className="flex flex-col gap-3">
+          <SectionHeading
+            id="encounter-map"
+            size="subtitle"
+            action={
               <span className="text-body-s leading-body text-muted-foreground">
-                {describeBoard(grid.shown)}
+                {describeBoard({
+                  columns: BOARD_COLUMNS_DEFAULT,
+                  rows: BOARD_ROWS_DEFAULT,
+                  feetPerCell: FEET_PER_SQUARE_DEFAULT,
+                })}
               </span>
-              {!grid.adjusting && (
-                <Button variant="outline" size="sm" onClick={grid.open}>
-                  Adjust grid
-                </Button>
-              )}
-            </span>
-          }
-        >
-          Battle map
-        </SectionHeading>
-        <BattleMapBoard map={grid.shown} />
-        {grid.panel}
-        {map.setting !== null && (
+            }
+          >
+            Battle map
+          </SectionHeading>
           <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-            <span className="text-heading">What the place looks like:</span> {map.setting}
+            This encounter names no level, so a fight on it is played on a plain grid. Pick one of
+            your levels with <span className="text-heading">Edit</span>.
           </p>
-        )}
-        {map.image === null && !map.imagePending && (
-          <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-            Hob drew no picture of this place, so the board is a blank grid.
-          </p>
-        )}
-      </section>
+        </section>
+      ) : (
+        <EncounterLevel levelId={encounter.levelId} />
+      )}
 
       <div className="grid gap-6 @3xl:grid-cols-2">
         <Card className="gap-4 p-card">
@@ -323,5 +324,59 @@ function EncounterBody({
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * The encounter's level, as its battle map: a still of it (`LevelPreview`),
+ * its size, and the way into the Library's editor. The level is the
+ * creator's own Library object, read through the shelf's own read.
+ */
+function EncounterLevel({ levelId }: { readonly levelId: LevelId }) {
+  const [level, retry] = useApiAtom(libraryLevelAtom(levelId));
+  return (
+    <section aria-labelledby="encounter-map" className="flex flex-col gap-3">
+      <SectionHeading
+        id="encounter-map"
+        size="subtitle"
+        action={
+          <span className="flex flex-wrap items-center gap-3">
+            {level.state === "ready" && (
+              <span className="text-body-s leading-body text-muted-foreground">
+                {level.value.name} · {sizeLine(level.value)}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/library/levels/$levelId" params={{ levelId }} />}
+            >
+              <Icon name="pencil" size={14} />
+              Open in the editor
+            </Button>
+          </span>
+        }
+      >
+        Battle map
+      </SectionHeading>
+      {level.state === "loading" && <Loading label="Reading the level…" />}
+      {level.state === "failed" && <ApiFailureNotice failure={level.failure} onRetry={retry} />}
+      {level.state === "ready" && (
+        <>
+          <LevelPreview
+            level={level.value}
+            label={`The level ${level.value.name}, from above`}
+            capped
+          />
+          {level.value.description !== null && (
+            <p className="max-w-measure text-body-s leading-body text-muted-foreground">
+              <span className="text-heading">What the place looks like:</span>{" "}
+              {level.value.description}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 }

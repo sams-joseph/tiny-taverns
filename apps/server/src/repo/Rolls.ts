@@ -5,14 +5,17 @@ import {
   CharacterId,
   CombatantId,
   Conflict,
+  coveredAc,
   CurrentActor,
   EncounterRunId,
+  type LevelCover,
   NotFound,
   Roll,
   rollOutcomeOf,
   type RollCreate,
   RollId,
   type RollListFilterValues,
+  runLevelSight,
   SessionId,
   Visibility,
 } from "@taverns/api";
@@ -31,6 +34,7 @@ import {
   orNotFound,
   timestampColumns,
 } from "./rows.js";
+import { runLevel } from "./levelFights.js";
 import { boardShown, COMBATANT, combatantShownTo, RUN, underFog } from "./liveTables.js";
 import {
   campaignReadable,
@@ -62,6 +66,11 @@ const CurrentNightRow = fromColumns(
 );
 
 const noOpenNight = new Conflict({ message: "nobody is playing at that table right now" });
+
+/** A player's aim at a creature with total cover from them on the fight's level. */
+const totalCover = new Conflict({
+  message: "That creature has total cover from you: nothing you aim reaches it past the walls.",
+});
 
 const rollReadable = (
   sql: SqlClient.SqlClient,
@@ -299,6 +308,13 @@ export class Rolls extends Context.Service<
        * read through). Answers the target's AC, which the server resolves the
        * to-hit against because the player is never told it, or `undefined`
        * when either is not theirs to name.
+       *
+       * On a level, the AC carries the target's cover from the attacker's
+       * square (`LevelRules.ts`, the rule the DM's runner and a kept Hob turn
+       * read): the fight's whole copy as the table knows its secret doors,
+       * DM-only props included, since the server's answer is the one the roll
+       * is resolved by. `cover` is `none` on a plain grid or with either off
+       * the board.
        */
       const playerAttack = (
         campaignId: CampaignId,
@@ -307,26 +323,56 @@ export class Rolls extends Context.Service<
         attackerId: CombatantId | undefined,
         targetId: CombatantId | undefined,
         actor: Actor,
-      ): Effect.Effect<{ readonly ac: number | null } | undefined> =>
+      ): Effect.Effect<{ readonly ac: number | null; readonly cover: LevelCover } | undefined> =>
         Effect.gen(function* () {
           if (runId === null) return undefined;
-          if (attackerId !== undefined) {
-            const own = yield* sql<{ readonly id: string }>`
-              select combatant.id from combatant
-              where combatant.id = ${attackerId}
-                and combatant.encounter_run_id = ${runId}
-                and combatant.character_id = ${characterId}
-            `;
-            if (own.length === 0) return undefined;
-          }
-          if (targetId === undefined) return { ac: null };
-          const target = yield* sql<{ readonly ac: number | null }>`
-            select combatant.ac from combatant
+          // The character's own row of the fight: the one named, or the one it has.
+          const own = yield* sql<{
+            readonly id: string;
+            readonly board_column: number | null;
+            readonly board_row: number | null;
+          }>`
+            select combatant.id, combatant.board_column, combatant.board_row from combatant
+            where combatant.encounter_run_id = ${runId}
+              and combatant.character_id = ${characterId}
+              and ${attackerId === undefined ? sql`true` : sql`combatant.id = ${attackerId}`}
+            order by combatant.id
+            limit 1
+          `;
+          if (attackerId !== undefined && own.length === 0) return undefined;
+          const none: LevelCover = "none";
+          if (targetId === undefined) return { ac: null, cover: none };
+          const target = yield* sql<{
+            readonly ac: number | null;
+            readonly board_column: number | null;
+            readonly board_row: number | null;
+          }>`
+            select combatant.ac, combatant.board_column, combatant.board_row from combatant
             where combatant.id = ${targetId}
               and combatant.encounter_run_id = ${runId}
               and ${combatantShownTo(sql, sql`${targetId}::uuid`, campaignId, actor)}
           `;
-          return target[0] === undefined ? undefined : { ac: target[0].ac };
+          const aimed = target[0];
+          if (aimed === undefined) return undefined;
+          const from = own[0];
+          if (
+            from === undefined ||
+            from.board_column === null ||
+            from.board_row === null ||
+            aimed.board_column === null ||
+            aimed.board_row === null
+          ) {
+            return { ac: aimed.ac, cover: none };
+          }
+          const level = yield* runLevel(sql, runId);
+          const cover: LevelCover =
+            level === null
+              ? "none"
+              : runLevelSight(level.layout, level.level).cover(
+                  { column: from.board_column, row: from.board_row },
+                  { column: aimed.board_column, row: aimed.board_row },
+                );
+          return { ac: aimed.ac, cover };
         }).pipe(Effect.orDie);
       const combatantPointer = (column: string, campaignId: CampaignId, actor: Actor) => sql`
         case when ${combatantNamed(column, campaignId, actor)}
@@ -532,17 +578,20 @@ export class Rolls extends Context.Service<
                         id: payload.targetCombatantId ?? payload.combatantId ?? "",
                       });
                     }
+                    // On a level, total cover is no target; the rest adds to its AC.
+                    if (target.cover === "total") return yield* totalCover;
+                    const ac = coveredAc(target.ac, target.cover);
                     const d20 = payload.kept[0];
                     const outcome =
                       payload.kind === "attack" &&
                       payload.targetCombatantId !== undefined &&
                       d20 !== undefined
-                        ? rollOutcomeOf(attackVerdict(d20, payload.total, target.ac))
+                        ? rollOutcomeOf(attackVerdict(d20, payload.total, ac))
                         : undefined;
                     resolved = {
-                      ...(target.ac === null || payload.targetCombatantId === undefined
+                      ...(ac === null || payload.targetCombatantId === undefined
                         ? {}
-                        : { targetAc: target.ac }),
+                        : { targetAc: ac }),
                       ...(outcome === undefined ? {} : { outcome }),
                     };
                   }

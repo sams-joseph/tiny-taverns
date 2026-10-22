@@ -54,6 +54,7 @@ export function AttackResultCard({
   onRollSave,
   onDismiss,
   range,
+  sight = [],
   next,
   sent,
   onUndo,
@@ -79,6 +80,8 @@ export function AttackResultCard({
    * plainly within them (`run/options.ts`). Said, never refused.
    */
   readonly range?: "out" | "long" | undefined;
+  /** On a level: the target's cover and who could not see whom, as the roll took them. */
+  readonly sight?: ReadonlyArray<string> | undefined;
   /** The next strike of a multiattack, while one is being run. */
   readonly next?: { readonly label: string; readonly onNext: () => void } | undefined;
 }) {
@@ -121,6 +124,15 @@ export function AttackResultCard({
             : `${outcome.target} was at long range: the attack was rolled at disadvantage.`}
         </p>
       )}
+      {sight.map((line) => (
+        <p
+          key={line}
+          data-slot="attack-sight"
+          className="mb-0 text-caption leading-snug text-info-ink"
+        >
+          {line}
+        </p>
+      ))}
       {concentrationDc !== undefined && (
         <div className="flex items-center gap-2">
           <p className="mb-0 min-w-0 flex-1 text-caption leading-snug text-magic-ink">

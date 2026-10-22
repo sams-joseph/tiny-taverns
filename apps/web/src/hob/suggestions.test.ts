@@ -23,10 +23,12 @@ const SCREENS: ReadonlyArray<AccountScreen> = [
 ];
 
 describe("the account's panel", () => {
-  it.each(SCREENS)("offers only the three things it drafts, on %s", (screen) => {
+  it.each(SCREENS)("offers only the four things it drafts, on %s", (screen) => {
     for (const known of [{}, { campaigns: 0, characters: 0, sharedWorlds: 0 }, { sharedWorlds: 2 }])
       for (const title of titles(screen, known))
-        expect(title).toMatch(/^Draft (my first|another|a) (campaign|Shared World|character)\b/);
+        expect(title).toMatch(
+          /^(Draft (my first|another|a) (campaign|Shared World|character)\b|Build a battle map level$)/,
+        );
   });
 
   it("never offers campaign content", () => {
@@ -37,6 +39,7 @@ describe("the account's panel", () => {
   it("puts what the screen is about first", () => {
     expect(titles("campaigns")[0]).toMatch(/campaign/);
     expect(titles("characters")[0]).toMatch(/character/);
+    expect(titles("library")[0]).toBe("Build a battle map level");
     expect(titles("sharedWorlds", { sharedWorlds: 1 })[0]).toBe("Draft another Shared World");
     expect(titles("sharedWorlds", { sharedWorlds: 0 })[0]).toBe("Draft my first Shared World");
     expect(titles("sharedWorlds")[0]).toBe("Draft a Shared World");

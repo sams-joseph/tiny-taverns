@@ -1,4 +1,5 @@
 import type { Actor, CampaignId } from "@taverns/api";
+import { Effect } from "effect";
 import type { SqlClient, Statement } from "effect/sql";
 import {
   campaignWritableById,
@@ -89,15 +90,43 @@ export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
     and encounter_run.visibility = 'shared' and encounter_run.map_shown)`;
 
 /**
- * Over `combatant` in scope: its token stands on a square of its fight's board
- * that is under fog (`0087_run_board_fog.ts`). A token off the board stands
+ * Whether a seated player's board shows this combatant's token now
+ * (`tokenShown`), read after the write that moved it and after the party's
+ * vision was recomputed for that write, so a move's line is shared by where
+ * the party's eyes are once it is done.
+ */
+export const tokenShownNow = (sql: SqlClient.SqlClient, id: string) =>
+  Effect.map(
+    sql<{ readonly shown: boolean }>`
+      select (select ${tokenShown(sql)} from encounter_run
+               where encounter_run.id = combatant.encounter_run_id) as shown
+      from combatant where combatant.id = ${id}
+    `,
+    (rows) => rows[0]?.shown === true,
+  );
+
+/**
+ * Over `combatant` in scope: the party cannot see where its token stands. The
+ * square is under fog (`0087_run_board_fog.ts`), or the board is a level's and
+ * the square is not one the party sees now (`party_sees`,
+ * `0110_party_vision.ts`), which is what fog means on a level: every rule
+ * below that says "under fog" (`hiddenByFog`, `tokenShown`, `tokenShownTo`,
+ * and the narration, roll and thread rules that compose it) holds for a
+ * creature out of the party's sight too. A player character on the board
+ * whose character holds a live seat is a viewer (`refreshPartyVision`), so it
+ * always stands on a square the party sees; a `pc` the DM added by hand with
+ * no character, or one whose seat has gone, is not, and is under fog out of
+ * the party's sight like any other creature. A token off the board stands
  * nowhere, so it is under no fog.
  */
 export const underFog = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`exists (select 1 from encounter_run_board
     where encounter_run_board.run_id = combatant.encounter_run_id
-      and combatant.board_row * encounter_run_board.board_columns + combatant.board_column
-          = any(encounter_run_board.fog_hidden))`;
+      and (combatant.board_row * encounter_run_board.board_columns + combatant.board_column
+            = any(encounter_run_board.fog_hidden)
+        or (encounter_run_board.party_sees is not null
+          and not (combatant.board_row * encounter_run_board.board_columns
+                   + combatant.board_column = any(encounter_run_board.party_sees)))))`;
 
 /**
  * Over `combatant` in scope: fog hides this row from this reader — **its row

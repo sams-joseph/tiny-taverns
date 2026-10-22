@@ -562,6 +562,7 @@ describeLayer("hob", shared, (it) => {
           // kept only by the creator's accept. No other toolkit has either.
           "proposeCampaignStory",
           "proposeEncounter",
+          "proposeLevel",
           "proposeLocation",
           "proposeNight",
           "proposeNightSummary",
@@ -1940,6 +1941,9 @@ describeLayer("hob", shared, (it) => {
       ["Plan next session", true],
       ["prep the next night for me", true],
       ["add an act for the heist", true],
+      // A level, which `proposeLevel` lays out.
+      ["Build me a battle map for the crypt", true],
+      ["make a new level for the sewers", true],
       // Not asked for. Every one of these is a question this panel really gets.
       ["Who is the ferryman?", false],
       ["Who wrote this note?", false],
@@ -1976,6 +1980,9 @@ describeLayer("hob", shared, (it) => {
       // Not asked for: a setting is a thing to talk about, not a thing to keep.
       ["suggest a setting for a horror one-shot", false],
       ["What game should I run?", false],
+      // A level for the Library; a character's level is chat.
+      ["make me a battle map of a flooded shrine", true],
+      ["make my fighter level 5", false],
     ];
 
     it.each(ACCOUNT_ASKS)("account: %s", (asked, expected) => {
@@ -2054,6 +2061,7 @@ describeLayer("hob", shared, (it) => {
         "proposeBeat",
         "proposeCampaignStory",
         "proposeEncounter",
+        "proposeLevel",
         "proposeLocation",
         "proposeNight",
         "proposeNightSummary",
@@ -2068,6 +2076,7 @@ describeLayer("hob", shared, (it) => {
       expect(account.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLevel",
         "proposeLocation",
         "proposeSharedWorld",
       ]);
@@ -2138,6 +2147,7 @@ describeLayer("hob", shared, (it) => {
         // kept only by the creator's accept. No other toolkit has either.
         "proposeCampaignStory",
         "proposeEncounter",
+        "proposeLevel",
         "proposeLocation",
         "proposeNight",
         "proposeNightSummary",
@@ -2211,6 +2221,7 @@ describeLayer("hob", shared, (it) => {
         "listStartingSpells",
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLevel",
         "proposeLocation",
         "proposeSharedWorld",
       ]);
@@ -2220,6 +2231,7 @@ describeLayer("hob", shared, (it) => {
         "listStartingSpells",
         "proposeCampaign",
         "proposeCharacter",
+        "proposeLevel",
         "proposeLocation",
         "proposeSharedWorld",
       ]);

@@ -1,12 +1,16 @@
 import {
   AREA_FEET,
   type AreaShape,
-  type BattleMapBoard,
+  type BoardSize,
   type BoardArea,
   type BoardSquare,
   type Combatant,
+  type EncounterRunBoard,
+  type LevelCover,
   areaSquares,
   areaToward,
+  runLevelSight,
+  saveCoverLine,
 } from "@taverns/api";
 
 /**
@@ -62,7 +66,7 @@ export const areaAt = ({
 
 /** The squares a template covers on this board. */
 export const squaresOf = (
-  board: Pick<BattleMapBoard, "columns" | "rows"> & { readonly feetPerCell: number },
+  board: BoardSize & { readonly feetPerCell: number },
   area: BoardArea,
 ): ReadonlyArray<BoardSquare> =>
   areaSquares(board, {
@@ -90,11 +94,60 @@ export const caughtBy = <Row extends Pick<Combatant, "kind" | "position">>(
     return squares.some((square) => same(square, at));
   });
 
-/** The pinned banner's words: `"3 caught: Brannoc, Goblin Boss, Goblin 2"`. */
-export const caughtLine = (caught: ReadonlyArray<Pick<Combatant, "displayName">>): string =>
-  caught.length === 0
-    ? "Nobody caught in the area"
-    : `${String(caught.length)} caught: ${caught.map((row) => row.displayName).join(", ")}`;
+/**
+ * On a level, who a pinned template's caught rows are by their cover from its
+ * point of origin (`LevelRules.ts`, the rule a kept Hob area reads): one behind
+ * total cover is not affected and is set apart in `sheltered`; the rest keep
+ * their cover, which adds to a Dexterity save. The DM rolls those saves by
+ * hand, so this is said, not applied. On a plain grid every row is reached
+ * with none.
+ */
+export const coverFromOrigin = <Row extends Pick<Combatant, "position">>(
+  board: EncounterRunBoard,
+  area: BoardArea,
+  caught: ReadonlyArray<Row>,
+): {
+  readonly reached: ReadonlyArray<Row & { readonly cover: LevelCover }>;
+  readonly sheltered: ReadonlyArray<Row>;
+} => {
+  if (board.level === null) {
+    return { reached: caught.map((row) => ({ ...row, cover: "none" as const })), sheltered: [] };
+  }
+  const sight = runLevelSight(board, board.level);
+  const reached: Array<Row & { readonly cover: LevelCover }> = [];
+  const sheltered: Array<Row> = [];
+  for (const row of caught) {
+    const cover = row.position === null ? "none" : sight.cover(area.origin, row.position);
+    if (cover === "total") sheltered.push(row);
+    else reached.push({ ...row, cover });
+  }
+  return { reached, sheltered };
+};
+
+/**
+ * The pinned banner's words: `"3 caught: Brannoc, Goblin Boss, Goblin 2"`. On
+ * a level, a caught row's cover from the origin is said beside it (`Goblin
+ * (Half cover: +2 to a Dex save)`), and the rows behind total cover after
+ * them, as not affected.
+ */
+export const caughtLine = (
+  caught: ReadonlyArray<Pick<Combatant, "displayName"> & { readonly cover?: LevelCover }>,
+  sheltered: ReadonlyArray<Pick<Combatant, "displayName">> = [],
+): string => {
+  const named = caught.map((row) => {
+    const said = row.cover === undefined ? undefined : saveCoverLine(row.cover);
+    return said === undefined ? row.displayName : `${row.displayName} (${said})`;
+  });
+  const reached =
+    caught.length === 0
+      ? "Nobody caught in the area"
+      : `${String(caught.length)} caught: ${named.join(", ")}`;
+  return sheltered.length === 0
+    ? reached
+    : `${reached} · Behind total cover, not affected: ${sheltered
+        .map((row) => row.displayName)
+        .join(", ")}`;
+};
 
 /** A template named as a table says it: `"20 ft sphere"`. */
 export const areaName = (area: Pick<BoardArea, "shape" | "feet">): string =>

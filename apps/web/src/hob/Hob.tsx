@@ -199,6 +199,9 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
           // A kept place is on its owner's shelf, wherever it was kept from.
           case "location":
             return navigate({ to: "/library/locations", search: { location: kept.id } });
+          // A kept level opens in the editor, wherever it was kept from.
+          case "level":
+            return navigate({ to: "/library/levels/$levelId", params: { levelId: kept.id } });
         }
         if (campaignId === undefined) return undefined;
         switch (kept.accepted) {

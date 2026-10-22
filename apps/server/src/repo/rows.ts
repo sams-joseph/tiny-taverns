@@ -175,6 +175,9 @@ export const textArray = typedArray<string>(PgTypes.OID.text);
 /** An `integer[]` parameter. */
 export const intArray = typedArray<number>(PgTypes.OID.int4);
 
+/** A `smallint[]` parameter: a level's floor. */
+export const smallintArray = typedArray<number>(PgTypes.OID.int2);
+
 /**
  * `SqlSchema.findOne`'s "no row" as the domain's refusal.
  *

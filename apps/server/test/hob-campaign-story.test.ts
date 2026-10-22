@@ -24,6 +24,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
+import { Levels } from "../src/repo/Levels.js";
 import { Locations } from "../src/repo/Locations.js";
 import { PartyTravel } from "../src/repo/PartyTravel.js";
 import { HobThreads } from "../src/repo/HobThreads.js";
@@ -103,6 +104,7 @@ const services = Layer.mergeAll(
       Encounters.layer,
       GroupHistory.layer,
       Locations.layer,
+      Levels.layer,
       PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
       Notes.layer,
       Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),

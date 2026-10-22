@@ -4,7 +4,9 @@ import {
   CombatantId,
   type Creature,
   type CreatureId,
+  type CreatureSenses,
   CurrentActor,
+  darkvisionOf,
   type DiagonalRule,
   type EncounterRun,
   type EncounterRunBoard,
@@ -22,12 +24,13 @@ import { createHash } from "node:crypto";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { BattleMaps } from "./BattleMaps.js";
+import { RunBoards } from "./RunBoards.js";
 import { Campaigns } from "./Campaigns.js";
 import { Combatants } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { Creatures } from "./Creatures.js";
 import { EncounterRuns } from "./EncounterRuns.js";
+import { traitsOf } from "./levelFights.js";
 import { runOnTable, underFog } from "./liveTables.js";
 import { dieOnSqlError, fromColumns } from "./rows.js";
 import { RunScenes } from "./RunScenes.js";
@@ -48,7 +51,7 @@ import { Spells } from "./Spells.js";
 export interface TableFightRead {
   readonly sessionId: SessionId;
   readonly run: EncounterRun;
-  /** The fight's board, or `null` for a fight with none. Its picture is not signed here. */
+  /** The fight's board, or `null` for a fight with none. */
   readonly board: EncounterRunBoard | null;
   readonly diagonals: DiagonalRule;
   /** In initiative order, as `Combatants.list` answers it and `nextTurn` walks it. */
@@ -62,6 +65,12 @@ export interface TableFightRead {
   readonly creatures: ReadonlyMap<CreatureId, Creature>;
   /** The spells those stat blocks' spellcasting names, by lower-cased name (`Spells.named`). */
   readonly spells: ReadonlyMap<string, NpcSpell>;
+  /**
+   * What each party member perceives with on a level: its darkvision off its
+   * sheet's traits (`darkvisionOf`), which is all a sheet says of sight. Read
+   * for the geometry and never put in a prompt.
+   */
+  readonly senses: ReadonlyMap<CombatantId, CreatureSenses>;
   /** The run's scene: the encounter's tactic lines as beats, and its challenge. */
   readonly scene: EncounterRunScene;
   /** What whoever is up may do, when it is a monster's turn; absent otherwise. */
@@ -72,7 +81,10 @@ export interface TableFightRead {
 
 /** The read as `npcTurnOptions` and `npcTurnCheck` take a fight. */
 export const turnFightOf = (
-  read: Pick<TableFightRead, "run" | "combatants" | "board" | "diagonals" | "creatures" | "spells">,
+  read: Pick<
+    TableFightRead,
+    "run" | "combatants" | "board" | "diagonals" | "creatures" | "spells" | "senses"
+  >,
 ): NpcTurnFight => ({
   run: read.run,
   combatants: read.combatants,
@@ -82,11 +94,13 @@ export const turnFightOf = (
     [...read.creatures.values()].map((creature) => [creature.id, creature.statBlock]),
   ),
   spells: read.spells,
+  senses: read.senses,
 });
 
 /**
  * **The state a monster's options were read from**, as one hash: the run's
- * phase, round and marker, the board's measure, and every row's place, hit
+ * phase, round and marker, the board's measure and its level's doors and
+ * lights, and every row's place, hit
  * points, conditions and spending — what `npcTurnOptions` reads, and nothing
  * it does not, so a name or a note edited mid-fight does not stale a turn. A
  * proposed turn records it; carrying the turn out reads the fight again and
@@ -104,6 +118,16 @@ export const fightStamp = (fight: NpcTurnFight, round: number): string =>
         fight.board === undefined
           ? null
           : [fight.board.columns, fight.board.rows, fight.board.feetPerCell],
+        // On a level, what moves sight and walking: each door's state and
+        // whether it was revealed, and each light's switch.
+        fight.board?.level == null
+          ? null
+          : [
+              fight.board.level.walls
+                .filter((wall) => wall.kind !== "wall")
+                .map((wall) => [wall.id, wall.doorState, wall.revealed]),
+              fight.board.level.lights.map((light) => [light.id, light.lit]),
+            ],
         fight.diagonals,
         fight.combatants.map((row) => [
           row.id,
@@ -146,7 +170,7 @@ export class TableFight extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const runs = yield* EncounterRuns;
       const combatants = yield* Combatants;
-      const maps = yield* BattleMaps;
+      const boards = yield* RunBoards;
       const scenes = yield* RunScenes;
       const campaigns = yield* Campaigns;
       const creatures = yield* Creatures;
@@ -158,6 +182,14 @@ export class TableFight extends Context.Service<
         execute: (campaignId) => runOnTable(sql, campaignId),
       });
       /** Beneath `read`'s gate, which has already proved the run the creator's. */
+      /** Each party row's sheet traits, beneath `read`'s gate, for its darkvision. */
+      const partyTraits = (runId: EncounterRunId) =>
+        sql<{ readonly id: CombatantId; readonly traits: unknown }>`
+          select combatant.id, character.body -> 'traits' as traits
+          from combatant
+          join character on character.id = combatant.character_id
+          where combatant.encounter_run_id = ${runId} and combatant.kind = 'pc'
+        `;
       const fogged = SqlSchema.findAll({
         Request: Schema.toType(EncounterRunId),
         Result: FoggedRow,
@@ -173,13 +205,14 @@ export class TableFight extends Context.Service<
           const as = Effect.provideService(CurrentActor, dm.actor);
           // The run first: its gate is what the fog read below stands beneath.
           const run = yield* runs.findById(dm, sessionId, runId);
-          const [rows, board, scene, campaign, fog] = yield* Effect.all(
+          const [rows, board, scene, campaign, fog, traits] = yield* Effect.all(
             [
               combatants.list(dm, sessionId, runId),
-              maps.forRun(dm, sessionId, runId),
+              boards.forRun(dm, sessionId, runId),
               scenes.read(dm, sessionId, runId),
               campaigns.findById(dm.campaign).pipe(as),
               dieOnSqlError(fogged(runId)),
+              dieOnSqlError(partyTraits(runId)),
             ],
             { concurrency: "unbounded" },
           );
@@ -223,6 +256,12 @@ export class TableFight extends Context.Service<
             ]),
           );
 
+          const senses = new Map<CombatantId, CreatureSenses>(
+            traits.map((row) => [
+              row.id,
+              { darkvision: darkvisionOf(traitsOf(row.traits)), blindsight: 0, truesight: 0 },
+            ]),
+          );
           const fight = turnFightOf({
             run,
             combatants: rows,
@@ -230,6 +269,7 @@ export class TableFight extends Context.Service<
             diagonals: campaign.diagonalRule,
             creatures: byId,
             spells: spellMap,
+            senses,
           });
           const up = rows.find((row) => row.id === run.activeCombatantId);
           const options =
@@ -244,6 +284,7 @@ export class TableFight extends Context.Service<
             underFog: new Set(fog.map((row) => row.id)),
             creatures: byId,
             spells: spellMap,
+            senses,
             scene,
             options,
             stamp: fightStamp(fight, run.round),
@@ -268,15 +309,15 @@ export class TableFight extends Context.Service<
 
   /**
    * The layer Hob holds: over the **bare** live repositories, which sign
-   * nothing (no `ImageUrls` reaches them), so a board's picture and a seat's
-   * portrait never become a bearer URL a model could repeat. The handlers'
+   * nothing (no `ImageUrls` reaches them), so a seat's portrait never
+   * becomes a bearer URL a model could repeat. The handlers'
    * signed copies are `Layer.fresh` in `app.ts` so these stay unsigned.
    */
   static readonly unsigned = this.layer.pipe(
     Layer.provide([
       EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
       Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
-      BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
+      RunBoards.layer.pipe(Layer.provide(LiveEvents.layer)),
       RunScenes.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
       Creatures.layer,

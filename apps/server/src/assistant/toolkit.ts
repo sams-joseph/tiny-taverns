@@ -59,6 +59,18 @@ import {
   LOCATION_DESCRIPTION_MAX,
   LOCATION_NAME_MAX,
   LOCATION_NOTES_MAX,
+  generateLevel,
+  LEVEL_DESCRIPTION_MAX,
+  LEVEL_NAME_MAX,
+  LEVEL_ROOM_LABEL_MAX,
+  LEVEL_ROOMS_MAX,
+  LEVEL_SECRETS_MAX,
+  LEVEL_SEED_MAX,
+  LevelConnections,
+  LevelMood,
+  LevelRoomPurpose,
+  LevelRoomSize,
+  type LevelSpec,
   LocationId,
   LocationKind,
   NoteCategory,
@@ -108,7 +120,7 @@ import {
   type SubraceEntry,
   subraceNamed,
 } from "@taverns/api";
-import { Effect, Ref, Result, Schema, SchemaGetter } from "effect";
+import { Effect, Random, Ref, Result, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Acts } from "../repo/Acts.js";
 import type { CampaignStories } from "../repo/CampaignStories.js";
@@ -1220,9 +1232,13 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "itself, give its npcId (a searchCampaign hit whose source is 'npc') with " +
     "count 1 and, as creatureId, the creature whose stat block it fights with " +
     "(a Veteran for a seasoned guard); give side 'party' when it is the party's " +
-    "ally. Give a setting when you can: one line on what the place looks like " +
-    "from above, with no creatures in it; the encounter's battle map is drawn " +
-    "from it. Give tactics — a few short lines on how to run it — and treasure " +
+    "ally. Give a setting when you can: one line on what the place looks like; " +
+    "it becomes the description of the encounter's level, its battle map. To lay " +
+    "that level out, give rooms as proposeLevel takes them (each a purpose — " +
+    "shrine, tavern, store, library, barracks, cistern or garden — with a rough " +
+    "size and a short label) and, if you like, mapSize (small, medium or large), " +
+    "connections, secrets and mood; leave rooms out and the DM gets an empty level " +
+    "to build. Give tactics — a few short lines on how to run it — and treasure " +
     "when there is any. Only a challenge and a hazard take numbers: a challenge " +
     "needs dc, successes and failures, and may say onSuccess and onFailure (what " +
     "happens when the party makes it, and when it goes wrong); a hazard needs " +
@@ -1238,10 +1254,29 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     kind: optional(EncounterKind),
     tags: optional(Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 40)))),
     /**
-     * The battle map's setting line, bounded as the form bounds it. The one
-     * thing the map is drawn from, so the card shows it before the DM accepts.
+     * The setting line, bounded as the form bounds it: the description of the
+     * level made with the encounter, so the card shows it before the DM
+     * accepts.
      */
     setting: optionalText(ENCOUNTER_SETTING_MAX),
+    /**
+     * The encounter's level as `proposeLevel`'s labels, flat beside the rest
+     * and all optional: a level is laid out only when `rooms` names one.
+     * `mapSize` is `proposeLevel`'s `size`, named apart from a room's size.
+     */
+    mapSize: optional(Schema.Literals(["small", "medium", "large"])),
+    rooms: optional(
+      Schema.Array(
+        Schema.Struct({
+          purpose: LevelRoomPurpose,
+          size: optional(LevelRoomSize),
+          label: optionalText(LEVEL_ROOM_LABEL_MAX),
+        }),
+      ),
+    ),
+    connections: optional(LevelConnections),
+    secrets: optional(Schema.Int),
+    mood: optional(LevelMood),
     /** Absent or empty for a scene with nobody in it; a fight is refused one. */
     creatures: optional(
       Schema.Array(
@@ -2031,6 +2066,120 @@ export const ProposePartyMove = Tool.make("proposePartyMove", {
   failureMode: "return",
 });
 
+/**
+ * `proposeLevel`: a battle map for the asker's Library, as **labels, not
+ * coordinates** — rooms by purpose and rough size, how they connect, how many
+ * secret doors and the light — which `generateLevel` (`@taverns/api`) lays
+ * out. The model never places a wall: a small local model cannot, and a level
+ * it could would be one the save refuses.
+ *
+ * The schema is permissive and the handler holds the rules (an empty room
+ * list, more rooms than the size holds, too many secret doors), for
+ * `searchCampaign.query`'s reason: a refusal the framework makes before a
+ * handler runs is one the model cannot hear. The seed is the server's.
+ */
+export const ProposeLevel = Tool.make("proposeLevel", {
+  description:
+    "Offer them a new level — a battle map of rooms and corridors for a fight or a " +
+    "dungeon — for their Library, built from what they described. Say what it is, not " +
+    "where things go: a name, a short description, the board's size (small, medium or " +
+    `large: at most ${String(LEVEL_ROOMS_MAX.small)}, ${String(LEVEL_ROOMS_MAX.medium)} ` +
+    `or ${String(LEVEL_ROOMS_MAX.large)} rooms), and each room's purpose — shrine, tavern, ` +
+    "store, library, barracks, cistern or garden — with a rough size and a short label " +
+    "if it has a name. connections is how rooms open onto the corridors: doors, mixed " +
+    "or open arches. secrets is how many secret doors to hide. mood is the light: " +
+    "firelit, dim, dark (nothing lit), moonlit or arcane. The walls, doors, furniture " +
+    "and lights are laid out for you, and they can change anything afterwards in the " +
+    "editor. Only a suggestion: nothing is made unless they keep it. Say one short " +
+    "line about it and stop.",
+  parameters: Schema.Struct({
+    name: Schema.String.check(Schema.isBetweenLength(1, LEVEL_NAME_MAX)),
+    description: optionalText(LEVEL_DESCRIPTION_MAX),
+    size: Schema.Literals(["small", "medium", "large"]),
+    rooms: Schema.Array(
+      Schema.Struct({
+        purpose: LevelRoomPurpose,
+        size: optional(LevelRoomSize),
+        label: optionalText(LEVEL_ROOM_LABEL_MAX),
+      }),
+    ),
+    connections: optional(LevelConnections),
+    secrets: optional(Schema.Int),
+    mood: LevelMood,
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+type LevelDraft = Tool.Parameters<typeof ProposeLevel>;
+
+/**
+ * A level's labels as `proposeLevel` takes them, checked, with every default
+ * filled and a seed the server picked: the spec `generateLevel` lays out. A
+ * refusal is a sentence the model can act on. `proposeLevel` and
+ * `proposeEncounter`'s level both come through here, so they cannot disagree.
+ */
+const levelSpecOf = ({ name, description, size, rooms, connections, secrets, mood }: LevelDraft) =>
+  Effect.gen(function* () {
+    const title = name.trim();
+    if (title === "") return yield* new Conflict({ message: "give the level a name" });
+    if (rooms.length === 0) {
+      return yield* new Conflict({ message: "give the level at least one room" });
+    }
+    const most = LEVEL_ROOMS_MAX[size];
+    if (rooms.length > most) {
+      return yield* new Conflict({
+        message:
+          `a ${size} level holds at most ${String(most)} rooms — offer fewer rooms` +
+          (size === "large" ? "" : " or a larger size"),
+      });
+    }
+    const hidden = absent(secrets) ?? 0;
+    if (hidden < 0 || hidden > LEVEL_SECRETS_MAX) {
+      return yield* new Conflict({
+        message: `secrets is how many secret doors, from 0 to ${String(LEVEL_SECRETS_MAX)}`,
+      });
+    }
+    const spec: LevelSpec = {
+      name: title,
+      description: blank(description) ?? null,
+      size,
+      rooms: rooms.map((room) => ({
+        purpose: room.purpose,
+        size: absent(room.size) ?? "medium",
+        label: blank(room.label) ?? null,
+      })),
+      connections: absent(connections) ?? "mixed",
+      secrets: hidden,
+      mood,
+      seed: yield* Random.nextIntBetween(0, LEVEL_SEED_MAX),
+    };
+    return spec;
+  });
+
+/**
+ * `proposeLevel`, bound: the spec with every default filled and a seed the
+ * server picked, which is the whole proposal. It is laid out once here only
+ * to tell the model what it offered; the card and the keep lay it out again
+ * from the same spec and get the same level.
+ */
+const levelHandlerFor = (actor: Actor, proposal: ProposalSlot) => (draft: LevelDraft) =>
+  Effect.gen(function* () {
+    const spec = yield* levelSpecOf(draft);
+    const { size, mood } = spec;
+    const title = spec.name;
+    const { level } = generateLevel(spec);
+    const doors = level.walls.filter((wall) => wall.kind !== "wall").length;
+    return yield* bind(actor, proposal).offer(
+      { target: "level", ...spec },
+      `Offered the level "${title}": ${String(spec.rooms.length)} ` +
+        `${spec.rooms.length === 1 ? "room" : "rooms"} on a ${size} board, ` +
+        `${String(doors)} ${doors === 1 ? "door" : "doors"}, ${mood}. ` +
+        "Nothing is made unless they keep it; say one short line about it and stop.",
+    );
+  });
+
 /** What `listLocations` answers, from any of the three reads it is bound to. */
 const locationReads = (
   places: ReadonlyArray<{
@@ -2197,6 +2346,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeNpcSheet,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
     ProposePartyMove,
     ReadFight,
     SpendCharacterResource,
@@ -2238,6 +2388,9 @@ export const HobToolkit = Toolkit.make(
   // Library, placed in that world when kept.
   ListLocations,
   ProposeLocation,
+  // A level — a battle map — for the creator's Library, as labels the
+  // generator lays out.
+  ProposeLevel,
   // The party travelling to one of those places: the creator's alone, a
   // proposal the creator keeps (the maintainer's exception for live play).
   ProposePartyMove,
@@ -2438,11 +2591,12 @@ export const ProposeSharedWorld = Tool.make("proposeSharedWorld", {
  *
  * The core drafting toolkit plus {@link proposeCampaignOver},
  * {@link ProposeSharedWorld}, {@link ListLocations} over the asker's own
- * Library and {@link ProposeLocation}, and nothing else: it has no campaign to
- * read and no Shared World record, so it can draft the four things an account
- * makes on its own — a character over the core rules, a new campaign, a new
- * Shared World and a place. Campaign content (a note, an encounter) needs a campaign, and
- * a Chronicle entry needs a world; their tools are absent rather than refused.
+ * Library, {@link ProposeLocation} and {@link ProposeLevel}, and nothing else:
+ * it has no campaign to read and no Shared World record, so it can draft the
+ * five things an account makes on its own — a character over the core rules,
+ * a new campaign, a new Shared World, a place and a level. Campaign content (a
+ * note, an encounter) needs a campaign, and a Chronicle entry needs a world;
+ * their tools are absent rather than refused.
  */
 export const accountToolkitOver = (
   vocabulary: CharacterVocabulary,
@@ -2455,9 +2609,10 @@ export const accountToolkitOver = (
     ProposeSharedWorld,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
   );
 
-/** {@link accountToolkitOver} above the cap: the same six, plus the listing. */
+/** {@link accountToolkitOver} above the cap: the same seven, plus the listing. */
 export const accountToolkitListing = (
   vocabulary: CharacterVocabulary,
   worlds: ReadonlyArray<CampaignWorld>,
@@ -2470,6 +2625,7 @@ export const accountToolkitListing = (
     ProposeSharedWorld,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
   );
 
 /**
@@ -3123,6 +3279,7 @@ export const dmHandlersFor = (
     // The places in the campaign's world, through the creator's own read.
     listLocations: () => Effect.map(repositories.locations.atCampaign(dm), locationReads),
     proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
+    proposeLevel: levelHandlerFor(actor, proposal),
     proposePartyMove: ({ locationId }) =>
       Effect.gen(function* () {
         const place = (yield* repositories.locations.atCampaign(dm)).find(
@@ -3499,6 +3656,11 @@ export const dmHandlersFor = (
       creatures,
       tactics,
       treasure,
+      mapSize,
+      rooms,
+      connections,
+      secrets,
+      mood,
       ...challengeParameters
     }) =>
       Effect.gen(function* () {
@@ -3513,6 +3675,27 @@ export const dmHandlersFor = (
         if ("refused" in sorted) return yield* notOffered(sorted.refused);
         const lines = yield* roster(creatures ?? []);
         const settingLine = proseOf(setting);
+        // A level only when a room is named; the smallest size that holds
+        // them unless Hob chose one, and firelit unless it said.
+        const named = absent(rooms) ?? [];
+        const level =
+          named.length === 0
+            ? undefined
+            : yield* levelSpecOf({
+                name: name.trim().slice(0, LEVEL_NAME_MAX),
+                description: settingLine,
+                size:
+                  absent(mapSize) ??
+                  (named.length <= LEVEL_ROOMS_MAX.small
+                    ? "small"
+                    : named.length <= LEVEL_ROOMS_MAX.medium
+                      ? "medium"
+                      : "large"),
+                rooms: named,
+                connections,
+                secrets,
+                mood: absent(mood) ?? "firelit",
+              }).pipe(Effect.mapError((refused) => notOffered(refused.message)));
         const tacticLines = linesOf(tactics);
         const treasureLine = proseOf(treasure);
         const count = lines.reduce((total, line) => total + line.count, 0);
@@ -3531,9 +3714,14 @@ export const dmHandlersFor = (
             ...(treasureLine === undefined ? {} : { treasure: treasureLine }),
             ...(sorted.challenge === undefined ? {} : { challenge: sorted.challenge }),
             roster: lines,
+            ...(level === undefined ? {} : { level }),
           },
           `Offered the DM ${what} called "${name}"` +
             (count === 0 ? "" : `, with ${count} ${count === 1 ? "creature" : "creatures"}`) +
+            (level === undefined
+              ? ""
+              : `, on a ${level.size} level of ${String(level.rooms.length)} ` +
+                `${level.rooms.length === 1 ? "room" : "rooms"}`) +
             ". They can save it or discard it; say one short line about it and stop — " +
             "the card is already on their screen.",
         );
@@ -4458,6 +4646,7 @@ const accountHandlersFor = (
       (places) => locationReads(places.map((place) => ({ ...place, mine: true }))),
     ),
   proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
+  proposeLevel: levelHandlerFor(actor, proposal),
 });
 
 /** {@link accountToolkitOver}, bound to {@link accountHandlersFor}. */
@@ -4655,13 +4844,19 @@ const optionText = (
         : `  Targets: ${option.targets
             .map(
               (target) =>
-                `${handle(target.combatantId)}${target.ally ? ", an ally," : ""} ${String(target.feet)} ft (${
+                `${handle(target.combatantId)}${target.ally ? ", an ally," : ""} ${String(target.feet)} ft (${[
                   target.band === "out"
                     ? "out of reach"
                     : target.band === "long"
                       ? "long range, at disadvantage"
-                      : target.band
-                })`,
+                      : target.band,
+                  ...(target.cover === "half"
+                    ? ["half cover, +2 AC"]
+                    : target.cover === "threeQuarters"
+                      ? ["three-quarters cover, +5 AC"]
+                      : []),
+                  ...(target.unseenByTarget === true ? ["cannot see it: advantage"] : []),
+                ].join("; ")})`,
             )
             .join(", ")}.`,
     );
@@ -4922,6 +5117,7 @@ const fightText = (read: TableFightRead, focus?: FightFocus): string => {
                   ...(options.movement === undefined
                     ? []
                     : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+                  ...sightLines(options, handle),
                   ...options.omitted.map((omission) =>
                     omission.id === "*"
                       ? `It can do nothing now: ${omission.reason}.`
@@ -4949,6 +5145,44 @@ const MOMENT_HEADINGS: Record<NpcTurnMoment, string> = {
   reaction: "A reaction",
 };
 
+/**
+ * On a level: how it sees, who it cannot target and why, and how it walks.
+ * Targets in cover are already marked on each option; a creature prefers one
+ * with none.
+ */
+const sightLines = (
+  options: NpcTurnOptions,
+  handle: (id: string) => string,
+): ReadonlyArray<string> => {
+  const sight = options.sight;
+  if (sight === undefined) return [];
+  const senses = (["darkvision", "blindsight", "truesight"] as const).flatMap((sense) =>
+    sight.senses[sense] > 0 ? [`${sense} ${String(sight.senses[sense])} ft`] : [],
+  );
+  return [
+    `On a level: it sees by ${senses.length === 0 ? "light alone" : senses.join(", ")}` +
+      (sight.unread.length === 0
+        ? ""
+        : ` (not read, counted as none: ${sight.unread.join(", ")})`) +
+      ". It may target only what it sees, past less than total cover; cover adds to AC, so prefer a target without it.",
+    ...(sight.hidden.length === 0
+      ? []
+      : [
+          `Cannot target now: ${sight.hidden
+            .map(
+              (entry) =>
+                `${handle(entry.combatantId)} (${entry.reason === "total cover" ? "total cover" : "out of sight"})`,
+            )
+            .join(", ")}.`,
+        ]),
+    ...(options.movement === undefined
+      ? []
+      : [
+          "A move must be walkable round walls, closed doors and blocking props, difficult terrain costing double; a square it cannot walk to within its feet is refused.",
+        ]),
+  ];
+};
+
 /** The focused creature in full, and its options at the moment: only the slots the moment takes. */
 const focusText = (
   focus: FightFocus,
@@ -4974,6 +5208,7 @@ const focusText = (
     ...(moment !== "turn" || options.movement === undefined
       ? []
       : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+    ...sightLines(options, handle),
     ...options.omitted.map((omission) =>
       omission.id === "*"
         ? `It can do nothing now: ${omission.reason}.`

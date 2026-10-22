@@ -2,13 +2,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
-import {
-  BattleMap,
-  BattleMapUpdate,
-  BoardAreaSet,
-  BoardFogUpdate,
-  EncounterRunBoard,
-} from "./BattleMap.js";
+import { BoardAreaSet, BoardFogUpdate, EncounterRunBoard } from "./Board.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import {
   ImageSubject,
@@ -185,6 +179,8 @@ import {
   RuleArticleId,
   RollId,
   SpellId,
+  LevelId,
+  LevelPartId,
   LocationId,
   NoteId,
   PartyMoveId,
@@ -209,6 +205,8 @@ import {
   PlayerLocation,
   WorldLocation,
 } from "./Location.js";
+import { Level, LevelCreate, LevelSave, LevelSummary } from "./Level.js";
+import { BoardDoorUpdate, BoardLightUpdate, BoardRegionUpdate, LevelUse } from "./LevelFight.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
 import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
@@ -825,10 +823,12 @@ class MeGroup extends HttpApiGroup.make("me")
      * (`party.leave`), which answers *"somebody left and their character goes
      * with them"* without touching the character itself.
      *
-     * Like the PATCH beside it, one statement and no doorbell: nothing live
-     * moved, and the fight's copy of a character is a snapshot that reads
-     * nothing back. An open DM page stays stale until it refetches, exactly as
-     * it does for a level-up typed between games.
+     * The fight's copy of a character is a snapshot that reads nothing back,
+     * so an open DM page stays stale until it refetches, exactly as it does
+     * for a level-up typed between games. The one live thing that moves is
+     * party vision: a character that is gone is no longer one of the party's
+     * eyes, so each live level fight it stands in has its vision recomputed
+     * in the same transaction and its night's doorbell rung.
      */
     HttpApiEndpoint.delete("deleteCharacter", "/characters/:characterId", {
       params: { characterId: CharacterId },
@@ -1067,6 +1067,54 @@ class LibraryLocationsGroup extends HttpApiGroup.make("libraryLocations")
   .middleware(Authorization) {}
 
 /**
+ * The owner's Levels shelf: a level is account-owned and top-level, like a
+ * place, so the shelf answers the asker's own and nobody else's. Another
+ * account's level is `NotFound` at every endpoint.
+ *
+ * `save` replaces the whole document and is refused with a `Conflict`,
+ * writing nothing, when its `version` is not the level's. `remove` is a hard
+ * delete of the level and every part of it.
+ */
+class LibraryLevelsGroup extends HttpApiGroup.make("libraryLevels")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      success: Schema.Array(LevelSummary),
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      payload: LevelCreate,
+      success: Level,
+    }),
+    HttpApiEndpoint.get("findById", "/:levelId", {
+      params: { levelId: LevelId },
+      success: Level,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("save", "/:levelId", {
+      params: { levelId: LevelId },
+      payload: LevelSave,
+      success: Level,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("remove", "/:levelId", {
+      params: { levelId: LevelId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * The encounters that name the level, with their campaigns, by campaign
+     * then encounter: what the delete confirmation lists, since the delete
+     * takes the level off each. Fights already started keep their own copy.
+     */
+    HttpApiEndpoint.get("uses", "/:levelId/uses", {
+      params: { levelId: LevelId },
+      success: Schema.Array(LevelUse),
+      error: NotFound,
+    }),
+  )
+  .prefix("/library/levels")
+  .middleware(Authorization) {}
+
+/**
  * The places at a table, as its **creator** reads and arranges them: every
  * place in the campaign's context, which is its Shared World or its hidden
  * one. Behind the creator proof, so a player, a world member and a stranger
@@ -1231,10 +1279,10 @@ class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
  * per kind of image, each at the path its kind's signed URLs name.
  *
  * The capability is the signature instead. `Character.portrait` and `banner`,
- * `Campaign.image`, `SharedWorld.image`, `Npc.image` and `banner`, and `BattleMap.image`
+ * `Campaign.image`, `SharedWorld.image`, `Npc.image` and `banner`, and `Location.image`
  * carry these paths already signed, and the server mints them only inside a
  * read a SQL visibility predicate has allowed, so holding a URL means some read
- * let you see that character, campaign, Shared World, NPC or battle map within
+ * let you see that character, campaign, Shared World, NPC or place within
  * the last day or so. The signature covers the kind, the image, the size and the expiry;
  * a forged, altered or expired one is the same `NotFound` as an image that does
  * not exist, and so is one that is not `ready` or a signature minted for
@@ -1303,15 +1351,6 @@ class ImagesGroup extends HttpApiGroup.make("images")
     }),
   )
   .add(
-    /** An encounter's battle map; its URLs are minted only on the creator's map reads. */
-    HttpApiEndpoint.get("battleMap", "/battle-map-images/:imageId/:variant", {
-      params: { imageId: Schema.String, variant: Schema.String },
-      query: signedImage,
-      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
-      error: NotFound,
-    }),
-  )
-  .add(
     /** A place's picture; its URLs are minted on the reads that may see the place. */
     HttpApiEndpoint.get("location", "/location-images/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
@@ -1355,7 +1394,7 @@ class UploadsGroup extends HttpApiGroup.make("uploads").add(
  * Every endpoint is the subject's owner's alone, decided by the same
  * statement that decides who may start a draw (`OWNED_SUBJECT` in
  * `repo/Images.ts`): a character's owner, or a campaign's creator for the
- * campaign, its NPCs and its battle maps, or a Shared World's owner. Anyone
+ * campaign and its NPCs, or a Shared World's owner, or a place's owner. Anyone
  * else, and an upload that is not the caller's, is `NotFound`. Who may *see*
  * the picture is still only the subject's own reads.
  *
@@ -1792,37 +1831,8 @@ class PlayerNotesGroup extends HttpApiGroup.make("playerNotes")
   .middleware(Authorization) {}
 
 /**
- * An encounter's battle map — **the creator's alone.** Every encounter has one,
- * made with it; the picture is Hob's, drawn once as the encounter is made, and
- * the grid is the DM's to line up. A player, a Shared World member and a
- * stranger get `NotFound` from both endpoints, whether or not the encounter is
- * shared: an encounter's name is not its layout. Showing a map to the table is
- * a later play feature, with a player schema of its own.
- *
- * There is no create and no delete: the map is made and deleted with its
- * encounter. There is no redraw either — a picture is drawn once.
- */
-class BattleMapsGroup extends HttpApiGroup.make("battleMaps")
-  .add(
-    HttpApiEndpoint.get("find", "/", {
-      params: { campaignId: CampaignId, encounterId: EncounterId },
-      success: BattleMap,
-      error: NotFound,
-    }),
-    /** The grid, changed in place; see `BattleMapUpdate`. */
-    HttpApiEndpoint.patch("update", "/", {
-      params: { campaignId: CampaignId, encounterId: EncounterId },
-      payload: BattleMapUpdate,
-      success: BattleMap,
-      error: NotFound,
-    }),
-  )
-  .prefix("/campaigns/:campaignId/encounters/:encounterId/map")
-  .middleware(Authorization) {}
-
-/**
  * An encounter's DM prep — its tactics, treasure and challenge numbers — and
- * **the creator's alone**, as the battle map is: a player, a Shared World member
+ * **the creator's alone**: a player, a Shared World member
  * and a stranger get `NotFound` from both endpoints, whether or not the
  * encounter is shared. It is written through the encounter's own create and
  * update. The list is every encounter's in the campaign, for the list screen
@@ -3605,6 +3615,57 @@ class RunsGroup extends HttpApiGroup.make("runs")
       success: EncounterRunBoard,
       error: [NotFound, Conflict],
     }),
+    /**
+     * Open, close or lock a door of the fight's level, or reveal or hide a
+     * secret one, answered with the board. `NotFound` for a wall the level
+     * does not have; `Conflict` for a fight that is over or has no level, a
+     * wall that is not a door, and a reveal of a door that is not secret. See
+     * `BoardDoorUpdate`.
+     */
+    HttpApiEndpoint.patch("updateDoor", "/:runId/board/doors/:wallId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        wallId: LevelPartId,
+      },
+      payload: BoardDoorUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Reveal a secret region of the fight's level (a trap, a hazard) to the
+     * table, or hide it again, answered with the board. `NotFound` for a
+     * region the level does not have; `Conflict` for a fight that is over or
+     * has no level, and a region that is not secret. See `BoardRegionUpdate`.
+     */
+    HttpApiEndpoint.patch("updateRegion", "/:runId/board/regions/:regionId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        regionId: LevelPartId,
+      },
+      payload: BoardRegionUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Light or snuff a light of the fight's level, answered with the board.
+     * `NotFound` for a light the level does not have; `Conflict` for a fight
+     * that is over or has no level. See `BoardLightUpdate`.
+     */
+    HttpApiEndpoint.patch("updateLight", "/:runId/board/lights/:lightId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        lightId: LevelPartId,
+      },
+      payload: BoardLightUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
     /** Audit rows for Hob's direct resource spends in this fight, newest first. */
     HttpApiEndpoint.get("hobDirectUpdates", "/:runId/hob-direct-updates", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
@@ -3832,6 +3893,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SharedWorldMembersGroup)
   .add(SharedWorldLocationsGroup)
   .add(LibraryLocationsGroup)
+  .add(LibraryLevelsGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)
   .add(CampaignInvitesGroup)
@@ -3847,7 +3909,6 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PlayerPartyTravelGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
-  .add(BattleMapsGroup)
   .add(EncounterPrepGroup)
   .add(CreaturesGroup)
   .add(CharacterOptionsGroup)

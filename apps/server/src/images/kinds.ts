@@ -7,7 +7,7 @@
  *
  * - **`table` / `subjectColumn`** — its record (`character_portrait`,
  *   `character_banner`, `campaign_image`, `shared_world_image`, `npc_image`,
- *   `npc_banner`, `battle_map_image`), one row per subject, bound to the subject and its owner
+ *   `npc_banner`, `location_image`), one row per subject, bound to the subject and its owner
  *   by a composite key (see `0049_campaign_images.ts` for why a table per kind).
  * - **`root`** — the first segment of its storage keys:
  *   `{root}/{accountId}/{subjectId}/{imageId}/`.
@@ -45,7 +45,7 @@ export interface ImageKindSpec<Variant extends string> {
   /**
    * `cover` crops each variant to its exact size; `inside` scales it to fit
    * without cropping, keeping the original's aspect. A picture something is
-   * measured against (a battle map's grid) must never lose an edge.
+   * measured against (a place's pins) must never lose an edge.
    */
   readonly fit: "cover" | "inside";
 }
@@ -177,32 +177,12 @@ export const IMAGE_KINDS = {
     fit: "cover",
   } satisfies ImageKindSpec<"card" | "full">,
   /**
-   * An encounter's battle map: the cover's size and cost (the captain's
-   * decision), drawn top-down with no grid. **Never cropped** (`fit:
-   * "inside"`): the grid is aligned in the original's pixels, so a variant is
-   * the whole picture scaled, and a provider that answers another aspect ratio
-   * still lines up. Only the creator's map reads mint its URLs.
-   */
-  battleMap: {
-    table: "battle_map_image",
-    subjectColumn: "map_id",
-    root: "battle-map-images",
-    tag: "battle-map-image",
-    route: "/battle-map-images",
-    size: "1536x1024",
-    variants: {
-      card: { width: 768, height: 512 },
-      full: { width: 1536, height: 1024 },
-    },
-    position: "centre",
-    fit: "inside",
-  } satisfies ImageKindSpec<"card" | "full">,
-  /**
    * A place's picture: a map seen from above for a realm, a region, a
    * settlement, a district or a dungeon, a scene for a landmark or a
-   * building — the cover's size and cost. **Never cropped**, for the battle
-   * map's reason: the places inside it are pinned at fractions of the whole
-   * picture. Every read that may see the place mints its URLs.
+   * building — the cover's size and cost. **Never cropped** (`fit:
+   * "inside"`): the places inside it are pinned at fractions of the whole
+   * picture, so a variant is the whole picture scaled. Every read that may
+   * see the place mints its URLs.
    */
   location: {
     table: "location_image",

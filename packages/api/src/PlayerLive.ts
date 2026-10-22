@@ -1,10 +1,11 @@
 import { Schema } from "effect";
 import { AttackDelivery, DamageType } from "./AttackDelivery.js";
-import { BattleMapAlignment, BattleMapGrid, BattleMapImages, BoardArea } from "./BattleMap.js";
+import { BoardArea } from "./Board.js";
 import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
+import { PlayerLiveLevel } from "./LevelFight.js";
 import { RollOutcome } from "./Roll.js";
 import {
   CampaignCharacterId,
@@ -156,18 +157,12 @@ export type PlayerLiveToken = typeof PlayerLiveToken.Type;
  * The fight's board as a player sees it, once the DM has turned on *Share map*.
  *
  * A distinct schema, not the creator's `EncounterRunBoard` with fields taken
- * off: it has no field for the map's setting line (the DM's prose), the map's
- * id or whether a picture is still being drawn. The grid and the picture mean
- * what they mean on `EncounterRunBoard`, so one component draws both.
+ * off. The size and scale mean what they mean on `EncounterRunBoard`.
  */
 export const PlayerLiveBoard = Schema.Struct({
-  grid: BattleMapGrid,
   columns: Schema.Int,
   rows: Schema.Int,
   feetPerCell: Schema.Int,
-  alignment: BattleMapAlignment,
-  /** The map's picture, or `null` when there is none to show. */
-  image: Schema.NullOr(BattleMapImages),
   /**
    * The squares under fog of war, in reading order (row by row): drawn opaque,
    * since no token on one is on this player's board but their own. A creature
@@ -180,9 +175,15 @@ export const PlayerLiveBoard = Schema.Struct({
    */
   area: Schema.NullOr(BoardArea),
   /**
+   * The fight's level as the party has seen it (`PlayerLiveLevel`), or `null`
+   * on a board that is not a level's.
+   */
+  level: Schema.NullOr(PlayerLiveLevel),
+  /**
    * The tokens on the board: only rows in this player's `order`, only those the
    * DM has put down, no NPC's while the DM hides hostile tokens, and none under
-   * fog but the player's own.
+   * fog but the player's own. On a level, none the party does not see now
+   * (`PlayerLiveLevel.sees`) but the player's own.
    */
   tokens: Schema.Array(PlayerLiveToken),
 });

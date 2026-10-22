@@ -517,12 +517,9 @@ describeLayer("creator-actor", shared, (it) => {
       // connecting one to an owned Shared World adds the eighty-first, and
       // disconnecting it again is the eighty-second. Moving directly between two
       // Shared Worlds adds the eighty-third.
-      // Eighty-four and eighty-five are `BattleMaps.forEncounter` and
-      // `update`: an encounter's map is the creator's alone, gated from the day
-      // it was declared, before any player projection of a map exists.
-      // Eighty-six is `BattleMaps.forRun`, a fight's board, for the same reason.
-      // Eighty-seven is `BattleMaps.rosterTypes`, the creature types a map without a
-      // setting line is drawn from, read beside the map it draws.
+      // Eighty-four is `RunBoards.forRun`, a fight's board, the creator's alone
+      // from the day it was declared. Eighty-five to eighty-seven are unused:
+      // the ordinals below are the ones each seam was given when it landed.
       // Eighty-eight and eighty-nine are `Encounters.prep` and `prepList`: an
       // encounter's tactics, treasure and challenge numbers are the creator's
       // alone, gated from the day they were declared.
@@ -584,10 +581,10 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and thirty-five is `Combatants.turn`: the DM's ticks on any
       // row, gated with the rest of the order from the day declared. A player
       // ticks their own through `PlayerTable.turn`, ungated below.
-      // A hundred and thirty-six is `BattleMaps.updateFog`: a fight's fog of
+      // A hundred and thirty-six is `RunBoards.updateFog`: a fight's fog of
       // war is written on the board `forRun` reads, the creator's alone, and a
       // player sees only its squares, on `PlayerLiveBoard`.
-      // A hundred and thirty-seven is `BattleMaps.setArea`: the area template
+      // A hundred and thirty-seven is `RunBoards.setArea`: the area template
       // pinned on that board, which a player sees only while the board is shown.
       // A hundred and thirty-eight is `Combatants.resources`: a monster's
       // spending over the fight, the creator's like the turn's, and no player
@@ -619,6 +616,10 @@ describeLayer("creator-actor", shared, (it) => {
       // `PartyTravel.list`, `move`, `moveForAccept`, `remove`, and the record
       // `move` and `moveForAccept` share. Moving the party is the creator's;
       // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
+      // A hundred and seventy to seventy-two are `RunBoards.updateDoor`,
+      // `updateLight` and `updateRegion`: the DM's hand on a fight's level,
+      // the board's like fog. Less the three unused ordinals, that is a
+      // hundred and sixty-nine.
       expect(gated).toBe(169);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
@@ -936,7 +937,11 @@ describeLayer("creator-actor", shared, (it) => {
       // `forPlayer`, for `Notes.listAsPlayer`'s reason. The two hundredth is
       // `PartyTravel.forPlayer`, the travel log as a player is told it, for
       // the same reason.
-      expect(ungated).toBe(200);
+      // Two hundred and one to six are levels: `Levels.library`, `findById`,
+      // `create`, `save`, `remove` and `uses`, the owner's shelf, for
+      // `Locations.library`'s reason: a level is in no campaign, and
+      // `levelOwned` is already the owner predicate.
+      expect(ungated).toBe(206);
     });
   });
 });

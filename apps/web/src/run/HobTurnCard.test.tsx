@@ -382,6 +382,28 @@ describe("Hob's card in the runner", () => {
       expect(sent(resolveRoute)).toEqual([{ total: 15 }]);
     });
 
+    it("says a party member's cover from the area's origin on the save the DM enters", async () => {
+      server.routes.set(`GET ${runBase}/hob/saves`, { status: 200, body: [pending] });
+      const [step] = breath.steps;
+      const covered = {
+        ...breath,
+        steps: [
+          {
+            ...step,
+            save: {
+              ...step!.save,
+              targets: step!.save.targets.map((target) => ({ ...target, cover: "half" })),
+            },
+          },
+        ],
+      };
+      await offeredThenKept(covered);
+      await waitFor(() => result().getByLabelText("Brannoc's DEX save total"));
+      expect(
+        result().getByText("Half cover: +2 to a Dex save from the origin: add it to the total."),
+      ).toBeInTheDocument();
+    });
+
     it("says why a keep was refused, and keeps the offer", async () => {
       server.routes.set(turnRoute, { status: 200, sse: offered(turnId, STEPPED) });
       server.routes.set(keepRoute, {

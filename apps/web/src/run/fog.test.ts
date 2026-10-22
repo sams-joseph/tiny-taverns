@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fogAfter, fogOutline, fogPayload, squareKey, squaresBetween } from "./fog";
 
-// The fixture fight's board: 24 × 16 squares of 64 plane pixels, no picture.
-const board = { columns: 24, rows: 16, alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 } };
+// The fixture fight's board: 24 × 16 squares.
+const board = { columns: 24, rows: 16 };
 const keys = (squares: ReadonlyArray<{ column: number; row: number }>) =>
   [...squares.map(squareKey)].sort();
 
@@ -74,13 +74,12 @@ describe("a stroke of the brush", () => {
   });
 
   it("is drawn as one path, a square per subpath on the board's own squares", () => {
-    const offset = { ...board, alignment: { cellPx: 64, offsetXPx: 10, offsetYPx: 20 } };
     expect(
-      fogOutline(offset, [
+      fogOutline([
         { column: 1, row: 2 },
         { column: 2, row: 2 },
       ]),
-    ).toBe("M74 148h64v64h-64zM138 148h64v64h-64z");
-    expect(fogOutline(board, [])).toBe("");
+    ).toBe("M64 128h64v64h-64zM128 128h64v64h-64z");
+    expect(fogOutline([])).toBe("");
   });
 });

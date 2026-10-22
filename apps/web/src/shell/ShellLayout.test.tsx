@@ -113,6 +113,11 @@ describe("the persistent shell", () => {
         if (name === "overview" || name === "player-overview")
           expect(title.closest("[data-slot=overview-hero]")).not.toBeNull();
         else expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
+      } else if (name === "library-level") {
+        // The level editor holds the whole window (`useFullscreen`): no bar,
+        // and its `h1` is the level's name in the editor's own top bar.
+        expect(slot()).toBeEmptyDOMElement();
+        expect(title.closest("[data-slot=level-editor]")).not.toBeNull();
       } else if (name === "world") {
         // A Shared World's screen is its Overview: the same hero, so no bar,
         // and its `h1` is the world's name over its cover.

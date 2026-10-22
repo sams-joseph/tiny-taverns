@@ -132,12 +132,6 @@ export class ImageUploads extends Context.Service<
             if (new Set(kinds).size !== kinds.length) {
               return yield* new UploadRejected({ message: "Each picture is named once." });
             }
-            if (payload.images.some((image) => image.kind === "battleMap" && image.crop)) {
-              return yield* new UploadRejected({
-                message:
-                  "A battle map is never cropped: its grid is measured on the whole picture.",
-              });
-            }
             if (payload.images.some((image) => image.kind === "location" && image.crop)) {
               return yield* new UploadRejected({
                 message:

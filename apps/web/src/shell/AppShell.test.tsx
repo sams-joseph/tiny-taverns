@@ -7,6 +7,7 @@ import { Schema } from "effect";
 import { SHELVES } from "../library/shelves";
 import type { routeTree } from "../routeTree.gen";
 import { renderAt } from "../test/renderRoute";
+import { cryptLevelId } from "../levels/levels.fixtures";
 import { gullportId } from "../locations/locations.fixtures";
 
 /**
@@ -79,6 +80,9 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/library/locations/": "/library/locations",
   "/_shell/library/locations/$locationId": `/library/locations/${locationId}`,
   "/_shell/library/locations/$": "/library/locations/not-a-uuid",
+  "/_shell/library/levels/": "/library/levels",
+  "/_shell/library/levels/$levelId": `/library/levels/${cryptLevelId}`,
+  "/_shell/library/levels/$": "/library/levels/not-a-uuid",
   "/_shell/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/_shell/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/_shell/campaigns/$campaignId/encounters/": `/campaigns/${campaignId}/encounters`,

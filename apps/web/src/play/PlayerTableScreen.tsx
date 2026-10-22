@@ -3,12 +3,15 @@ import {
   type CampaignId,
   type CombatantId,
   type DeathSaves,
+  type LevelCover,
   NEUTRAL_RUN_NAMES,
   type PlayerLiveCombatant,
   type PlayerLiveCombatantYou,
   type RollMode,
   attackModeAt,
+  coverLine,
   deathSaveRolled,
+  playerCover,
   rollDiceExpression,
   walkingFeet,
 } from "@taverns/api";
@@ -47,7 +50,7 @@ import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
-import { PlayerBattleMap, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
+import { PlayerBoardCard, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
 import { TableRowCard, YourCard } from "./PlayerCard";
 import { PlayerStrip } from "./PlayerStrip";
 import { SceneOnTheTable } from "./SceneOnTheTable";
@@ -125,6 +128,8 @@ export function PlayerTableScreen() {
   const [picked, setPicked] = useState<CombatantId>();
   /** Your line waiting for its target: the next creature you pick, on the board or the strip. */
   const [aiming, setAiming] = useState<ActionLine>();
+  /** Why your last aim was not rolled: a target your table can tell has total cover. */
+  const [aimRefused, setAimRefused] = useState<string>();
   const dice = useTableRolls({
     campaignId,
     characterId: seat?.characterId,
@@ -231,9 +236,37 @@ export function PlayerTableScreen() {
   const aimAt = (row: PlayerLiveCombatant) => {
     if (aiming !== undefined) aimWith(aiming, row);
   };
+  /**
+   * On a level, the cover `row` has from you as your table can know it
+   * (`playerCover`, over the party's view of the level): `undefined` on a
+   * plain grid, with either off the board, or where the party has not seen
+   * every square between you, when the card says nothing. The server's answer
+   * over the whole level is what your attack is resolved by.
+   */
+  const coverFromYou = (row: PlayerLiveCombatant): LevelCover | undefined => {
+    const board = fight?.board ?? null;
+    if (board === null || board.level === null || you === undefined) return undefined;
+    const at = (id: CombatantId) =>
+      board.tokens.find((token) => token.combatantId === id)?.position;
+    const from = at(you.combatantId);
+    const to = at(row.combatantId);
+    return from === undefined || to === undefined
+      ? undefined
+      : playerCover(board, board.level, from, to);
+  };
+
   /** A line at a creature: from the turn card, target first, or once aimed. */
   const aimWith = (line: ActionLine, row: PlayerLiveCombatant) => {
     if (you === undefined || row.combatantId === you.combatantId) return;
+    // Total cover is no target: said here, and refused by the server if not.
+    if (coverFromYou(row) === "total") {
+      setAimRefused(
+        `${row.displayName} has total cover from you: ${line.name} cannot target them.`,
+      );
+      setAiming(undefined);
+      return;
+    }
+    setAimRefused(undefined);
     const board = fight?.board ?? null;
     const at = (id: CombatantId) =>
       board?.tokens.find((token) => token.combatantId === id)?.position;
@@ -291,12 +324,15 @@ export function PlayerTableScreen() {
   const canvas = stage.wide === true && boardProps !== undefined;
 
   const turnCardShown = canvas && yourTurn && you !== undefined;
+  const selectedCover =
+    selected === undefined || selected.kind === "you" ? undefined : coverFromYou(selected);
   const card =
     selected !== undefined && selected.kind !== "you" ? (
       <TableRowCard
         row={selected}
         label={labels.get(selected.combatantId) ?? "?"}
         up={selected.combatantId === upNextId}
+        cover={selectedCover === undefined ? undefined : coverLine(selectedCover)}
         onBack={you === undefined ? undefined : () => setPicked(you.combatantId)}
       />
     ) : owned !== undefined ? (
@@ -454,6 +490,15 @@ export function PlayerTableScreen() {
           </CardContent>
         </Card>
       )}
+      {aimRefused !== undefined && (
+        <Card className="border-danger">
+          <CardContent className="pt-card">
+            <p role="alert" className="mb-0 text-body-s leading-body text-danger">
+              {aimRefused}
+            </p>
+          </CardContent>
+        </Card>
+      )}
       {card}
     </>
   );
@@ -594,7 +639,7 @@ export function PlayerTableScreen() {
                 </div>
               }
               strip
-              map={boardProps === undefined ? null : <PlayerBattleMap {...boardProps} />}
+              map={boardProps === undefined ? null : <PlayerBoardCard {...boardProps} />}
               card={<div className="flex flex-col gap-4">{panel}</div>}
               rest={
                 <>

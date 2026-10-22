@@ -15,13 +15,13 @@ import {
 /**
  * Every statement about Hob-drawn images' records — one table per kind
  * (`character_portrait`, `character_banner`, `campaign_image`,
- * `shared_world_image`, `npc_image`, `npc_banner`, `battle_map_image`;
+ * `shared_world_image`, `npc_image`, `npc_banner`, `location_image`;
  * `images/kinds.ts`) — and the `storage_deletion` outbox they share. The
  * worker that draws and stores is `images/HobImages.ts`; this file is only rows.
  *
  * **Who may read an image is not decided here.** The wire carries an image only
  * as a field of its subject — a `Character` (and the rows that point at one), a
- * `Campaign`, a `SharedWorld`, an `Npc` or a `BattleMap` — minted by that subject's own reads
+ * `Campaign`, a `SharedWorld`, an `Npc` or a `Location` — minted by that subject's own reads
  * for an id a visibility predicate already returned. The one read below that takes no actor,
  * {@link ImageRecords} `readyPrefix`, runs only after the image route has
  * checked a signature that such a read minted.
@@ -31,8 +31,8 @@ import {
  * the draw is billed to. A character is its owner's; a campaign is its
  * creator's, through `campaignWritable`, so a player's request draws nothing;
  * a Shared World is its owner's, through `groupWritable`, so a member's draws
- * nothing either; a campaign NPC and an encounter's battle map are their
- * campaign's creator's, the same way a campaign is.
+ * nothing either; a campaign NPC is its campaign's creator's, the same way a
+ * campaign is; a place is its owner's.
  */
 
 export type ImageFailure =
@@ -98,7 +98,7 @@ export const imageObjectKey = (prefix: StorageKey, file: string): StorageKey =>
  * is the point: whose picture it is must be decided before it can be drawn.
  *
  * A kind whose row is also keyed by its subject's campaign (`npc_image`,
- * `npc_banner`, `battle_map_image`) answers `campaign_id` as well, and the insert writes it.
+ * `npc_banner`) answers `campaign_id` as well, and the insert writes it.
  */
 const OWNED_SUBJECT: {
   readonly [K in ImageKind]: (
@@ -148,16 +148,6 @@ const OWNED_SUBJECT: {
   `,
   // The NPC's banner, beside its portrait: the same creator, the same bill.
   npcBanner: (sql, subjectId, actor) => OWNED_SUBJECT.npc(sql, subjectId, actor),
-  // An encounter's battle map, through its campaign's `campaignWritable`: only
-  // the creator starts its picture, and it is billed to them.
-  battleMap: (sql, subjectId, actor) => sql`
-    select battle_map.id as subject_id, battle_map.campaign_id,
-      ${actor.accountId}::uuid as account_id
-    from battle_map
-    where battle_map.id = ${subjectId}
-      and ${campaignWritable(sql, actor, rowCampaign(sql, "battle_map"))}
-    for update of battle_map
-  `,
   // A place, through `locationOwned`: only its owner starts or uploads its
   // picture, and it is billed to them — the account `location_image_subject_fkey`
   // names. A place has no campaign, so a world member or a creator who placed
@@ -305,8 +295,7 @@ export class ImageRecords extends Context.Service<
      * Make an upload the subject's pictures: under the ticket's and the
      * subject's locks, replace each kind's row with a `ready` upload row, run
      * `put` with each new row's prefix, and close the ticket, queueing its
-     * file. A battle map's grid is reset to the new picture's width. `false`,
-     * with nothing written, when the ticket was applied, expired or not this
+     * file. `false`, with nothing written, when the ticket was applied, expired or not this
      * actor's, or the subject is no longer theirs.
      */
     readonly applyUpload: <E>(
@@ -635,19 +624,6 @@ export class ImageRecords extends Context.Service<
                       finished_at: new Date(),
                     })}
                   `;
-                  if (image.kind === "battleMap") {
-                    // The grid is measured in the picture's pixels, so a new
-                    // picture starts with the grid across its whole width, as a
-                    // drawn map does.
-                    yield* sql`
-                      update battle_map set
-                        cell_px = ${image.stored.width}::double precision / board_columns,
-                        offset_x_px = 0,
-                        offset_y_px = 0,
-                        updated_at = now()
-                      where id = ${subject.subject_id}
-                    `;
-                  }
                   prefixes.push({ kind: image.kind, prefix });
                 }
                 yield* put(prefixes);

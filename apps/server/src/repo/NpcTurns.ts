@@ -9,6 +9,13 @@ import {
   attackLands,
   attackModeAt,
   type AttackRoll,
+  combineModes,
+  coveredAc,
+  coverLine,
+  type NpcAim,
+  type NpcPlacement,
+  saveCoverBonus,
+  saveCoverLine,
   abilityKeyOf,
   type Combatant,
   type CombatantId,
@@ -340,6 +347,7 @@ export class NpcTurns extends Context.Service<
             option: NpcTurnOption,
             targetId: CombatantId,
             band: NpcTarget["band"] | undefined,
+            aim: NpcAim | undefined,
             notes: Array<string>,
           ) =>
             Effect.gen(function* () {
@@ -353,13 +361,28 @@ export class NpcTurns extends Context.Service<
                 );
                 return undefined;
               }
+              // On a level: cover adds to the AC it rolls against, and a
+              // target that cannot see it is attacked at advantage, which a
+              // long range's disadvantage cancels (`npcTurnCheck`'s aim).
+              const cover = aim?.cover ?? "none";
               const rolled = rollAttack({
                 toHit: numbers.toHit,
                 damage: numbers.damage,
-                ac: target.ac,
-                mode: attackModeAt(band),
+                ac: coveredAc(target.ac, cover),
+                mode: combineModes([
+                  attackModeAt(band),
+                  aim?.unseenByTarget === true ? "advantage" : "normal",
+                ]),
                 random: dice.random,
               });
+              const covered = coverLine(cover);
+              if (covered !== undefined) notes.push(`${target.displayName}: ${covered}.`);
+              if (aim?.unseenByTarget === true) {
+                notes.push(
+                  `${target.displayName} could not see ${selfName}: ${option.name} was rolled at advantage` +
+                    (band === "long" ? ", cancelled by long range." : "."),
+                );
+              }
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
               const delivery = attackDelivery(numbers, band);
               const about = { combatantId: selfId, targetCombatantId: targetId };
@@ -415,7 +438,13 @@ export class NpcTurns extends Context.Service<
           const saveFor = (
             option: NpcTurnOption,
             targets: ReadonlyArray<CombatantId>,
-            placement: { readonly origin: BoardSquare; readonly toward: BoardSquare } | undefined,
+            placement:
+              | {
+                  readonly origin: BoardSquare;
+                  readonly toward: BoardSquare;
+                  readonly covers?: NpcPlacement["covers"];
+                }
+              | undefined,
             notes: Array<string>,
           ) =>
             Effect.gen(function* () {
@@ -473,11 +502,23 @@ export class NpcTurns extends Context.Service<
                   notes.push(`${target.displayName} was already down: it made no save.`);
                   continue;
                 }
+                // On a level, cover from the area's origin adds to a Dexterity
+                // save (total cover was never caught: `npcTurnOptions`).
+                const cover = placement?.covers?.[targetId];
+                const bonus = cover === undefined ? 0 : (saveCoverBonus(cover, save.ability) ?? 0);
+                const covered = bonus === 0 ? {} : { cover: cover! };
                 if (target.kind === "pc") {
                   // Hob never rolls for a player. The pending save says it
                   // waits, for as long as it does; a note would outlive that.
+                  // Its cover is said on the save, for the DM to add.
                   const pendingSaveId = yield* pend(target);
-                  results.push({ target: named, roll: null, succeeded: null, pendingSaveId });
+                  results.push({
+                    target: named,
+                    roll: null,
+                    succeeded: null,
+                    pendingSaveId,
+                    ...covered,
+                  });
                   continue;
                 }
                 const block = statBlockOf(target);
@@ -491,12 +532,21 @@ export class NpcTurns extends Context.Service<
                       "not roll it.",
                   );
                   const pendingSaveId = yield* pend(target);
-                  results.push({ target: named, roll: null, succeeded: null, pendingSaveId });
+                  results.push({
+                    target: named,
+                    roll: null,
+                    succeeded: null,
+                    pendingSaveId,
+                    ...covered,
+                  });
                   continue;
+                }
+                if (bonus !== 0) {
+                  notes.push(`${target.displayName}: ${saveCoverLine(cover!)!} from the origin.`);
                 }
                 const thrown = rollDiceExpression(
                   rollLabel(`${target.displayName} · ${save.ability} save, DC ${String(save.dc)}`),
-                  `1d20${signed(modifier)}`,
+                  `1d20${signed(modifier + bonus)}`,
                   "normal",
                   dice.random,
                 )!;
@@ -528,9 +578,10 @@ export class NpcTurns extends Context.Service<
                 if (hit !== undefined) notes.push(...resistanceNote(target, damage));
                 results.push({
                   target: named,
-                  roll: { d20: thrown.kept[0]!, modifier, total: thrown.total },
+                  roll: { d20: thrown.kept[0]!, modifier: modifier + bonus, total: thrown.total },
                   succeeded,
                   ...(hit === undefined ? {} : { hit }),
+                  ...covered,
                 });
               }
               return {
@@ -612,12 +663,18 @@ export class NpcTurns extends Context.Service<
                   );
                   continue;
                 }
-                const made = yield* attack(swing, strike.target, strike.band, notes);
+                const made = yield* attack(swing, strike.target, strike.band, strike.aim, notes);
                 if (made !== undefined) attacks.push(made);
               }
             } else if (option.attack !== undefined) {
               for (const target of step.targets) {
-                const made = yield* attack(option, target, step.bands?.[target], notes);
+                const made = yield* attack(
+                  option,
+                  target,
+                  step.bands?.[target],
+                  step.aims?.[target],
+                  notes,
+                );
                 if (made !== undefined) attacks.push(made);
               }
               if (option.attack.damage.length === 0) {

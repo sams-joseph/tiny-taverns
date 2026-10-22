@@ -1,10 +1,4 @@
-import {
-  type BattleMapBoard,
-  type BattleMapImages,
-  type BoardSquare,
-  battleMapPlane,
-  squareAt,
-} from "@taverns/api";
+import { type BoardSize, type BoardSquare, boardPlane, squareAt } from "@taverns/api";
 import { Button, cn } from "@taverns/ui";
 import { type PointerEvent, useRef, useState } from "react";
 import { fogOutline, squareKey } from "./fog";
@@ -28,13 +22,13 @@ export function FogLayer({
   squares,
   veil,
 }: {
-  readonly board: BattleMapBoard & { readonly image: BattleMapImages | null };
+  readonly board: BoardSize;
   readonly squares: ReadonlyArray<BoardSquare>;
   /** `dim` for the DM, who sees through it; `opaque` for a player, who does not. */
   readonly veil: "dim" | "opaque";
 }) {
   if (squares.length === 0) return null;
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   return (
     <svg
       data-slot="fog"
@@ -46,7 +40,7 @@ export function FogLayer({
       className={cn("pointer-events-none absolute inset-0 size-full", veil === "dim" && "z-lifted")}
     >
       <path
-        d={fogOutline(board, squares)}
+        d={fogOutline(squares)}
         className={veil === "dim" ? "fill-surface-sunken/62" : "fill-surface-sunken"}
       />
     </svg>
@@ -76,10 +70,10 @@ export function FogBrush({
   board,
   stroke,
 }: {
-  readonly board: BattleMapBoard & { readonly image: BattleMapImages | null };
+  readonly board: BoardSize;
   readonly stroke: FogStroke;
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const layer = useRef<HTMLDivElement>(null);
   const painting = useRef<{ readonly pointerId: number; last: BoardSquare } | undefined>(undefined);
   const [hover, setHover] = useState<BoardSquare>();
@@ -152,7 +146,7 @@ export function FogBrush({
         >
           <path
             data-slot="fog-brush-square"
-            d={fogOutline(board, [hover])}
+            d={fogOutline([hover])}
             fill="none"
             strokeWidth={2}
             vectorEffect="non-scaling-stroke"

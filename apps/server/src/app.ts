@@ -51,7 +51,7 @@ import { CampaignCreatorActors } from "./repo/CreatorActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { RunScenes } from "./repo/RunScenes.js";
-import { BattleMaps } from "./repo/BattleMaps.js";
+import { RunBoards } from "./repo/RunBoards.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
@@ -64,6 +64,7 @@ import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Levels } from "./repo/Levels.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -396,7 +397,7 @@ export const hobImagesFromConfig: Layer.Layer<
       yield* Effect.logInfo(
         `Hob-drawn images are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
           "so new characters keep their lettered plates, new campaigns and Shared Worlds their " +
-          "plain cards, new NPCs their initials and new encounters a blank battle map. " +
+          "plain cards and new NPCs their initials. " +
           "To turn them on, set them in apps/server/.env.local (see .env.example).",
       );
       return HobImages.layer({ generation: Option.none(), storageOn });
@@ -411,7 +412,7 @@ export const hobImagesFromConfig: Layer.Layer<
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
       "Hob-drawn images are ON (character and NPC portraits with their banners, campaign and " +
-        "Shared World covers, battle maps, places): " +
+        "Shared World covers, places): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
@@ -497,7 +498,7 @@ export const servicesOver = <E>(
   | ClassProgression
   | Combatants
   | Creatures
-  | BattleMaps
+  | RunBoards
   | CampaignCreatorActors
   | EncounterCreatures
   | EncounterRuns
@@ -514,6 +515,7 @@ export const servicesOver = <E>(
   | LiveEvents
   | MagicItems
   | Memberships
+  | Levels
   | Locations
   | PartyTravel
   | Notes
@@ -624,12 +626,10 @@ export const servicesOver = <E>(
     // A running scene and its checks: creator-only, like the runs above.
     RunScenes.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
-    // Every encounter's battle map: creator-only, every method behind the
-    // `CampaignCreatorActor` proof. A read signs the picture's URLs, and only
-    // the handlers hold this repository — no toolkit has a map tool. A fight's
-    // fog is a live write, so it rings the doorbell too. `fresh`, as
-    // `Combatants` is: Hob's `TableFight` reads the bare board, unsigned.
-    Layer.fresh(BattleMaps.layer).pipe(Layer.provide([LiveEvents.layer, imageUrls])),
+    // A fight's board: creator-only, every method behind the
+    // `CampaignCreatorActor` proof. Its fog, area, doors and lights are live
+    // writes, so it rings the doorbell too. Hob's `TableFight` reads its own.
+    RunBoards.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The conversation with Hob, as rows. An ordinary campaign-scoped
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.
@@ -664,6 +664,10 @@ export const servicesOver = <E>(
     // `Locations.layer` Hob reads for `listLocations` and the accept writes
     // through must never hold a bearer URL.
     Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
+    // Account-owned levels: the owner's alone, every method behind
+    // `levelOwned`. The handlers hold it, and the accept writes a kept Hob
+    // level through it; `proposeLevel` itself reads nothing.
+    Levels.layer,
     // The party's travels: a move during an open night rings its doorbell.
     PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,
@@ -807,6 +811,9 @@ export const servicesOver = <E>(
         // create, and into the campaign's or the world's context through the
         // creator's or member's own placement.
         Locations.layer,
+        // A kept level goes into the keeper's Library through the shelf's
+        // own create and the editor's own save.
+        Levels.layer,
         // A kept party move goes through the creator's own move, which hands
         // its doorbell back for the handler to ring after the commit.
         PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -916,7 +923,7 @@ export const applicationOver = <E>(
     | ClassProgression
     | Combatants
     | Creatures
-    | BattleMaps
+    | RunBoards
     | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns
@@ -933,6 +940,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | MagicItems
     | Memberships
+    | Levels
     | Locations
     | PartyTravel
     | Notes

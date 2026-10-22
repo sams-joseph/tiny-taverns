@@ -34,12 +34,6 @@ const database = migratedDatabase("taverns_test_schema");
 const NOT_CONTENT = [
   "ability_score",
   "account",
-  // An encounter's battle map: part of its encounter, the creator's alone
-  // through the creator proof, and its provenance is the encounter's. See
-  // 0057_battle_maps.ts.
-  "battle_map",
-  // A battle map's picture: who may see it is exactly who may read the map.
-  "battle_map_image",
   // A seat's hook and secret: the DM's own notes about the character in it,
   // the creator's alone through the creator proof, reached only by walking its
   // seat, and written by nobody but the creator. See 0063_seat_prep.ts.
@@ -89,16 +83,23 @@ const NOT_CONTENT = [
   // encounter, the creator's alone through the creator proof, and its
   // provenance is the encounter's. See 0060_encounter_prep.ts.
   "encounter_prep",
-  // A fight's board: its run's copy of the grid and a pointer to its map, the
-  // creator's alone through the creator proof like the map it came from. See
-  // 0058_encounter_run_boards.ts.
+  // A fight's board: its run's copy of its level or the plain grid, the
+  // creator's alone through the creator proof like the run it belongs to. See
+  // 0058_encounter_run_boards.ts and 0109_level_fights.ts.
   "encounter_run_board",
   // A running scene's log of checks and saves, and the scene itself — its
   // beats, its challenge's snapshot, the DM's notes: copied from and sitting
   // beside the prep, the creator's alone through the creator proof, with their
   // run's provenance. See 0065_run_scenes.ts.
   "encounter_run_check",
+  // A fight's copy of its level's parts, with the live door, reveal and light
+  // columns: part of its board, the creator's alone through the creator proof,
+  // with their run's provenance. See 0109_level_fights.ts.
+  "encounter_run_light",
+  "encounter_run_prop",
+  "encounter_run_region",
   "encounter_run_scene",
+  "encounter_run_wall",
   "equipment_category",
   "equipment_content",
   "equipment_property",
@@ -135,6 +136,15 @@ const NOT_CONTENT = [
   // own account's apply. See 0091_image_uploads.ts.
   "image_upload",
   "language",
+  // An account's level and its parts: who may read one is its owner, never a
+  // dm/shared switch, and a part is its level's. The level carries the
+  // provenance pair because a person may keep a Hob draft of one. See
+  // 0108_levels.ts.
+  "level",
+  "level_light",
+  "level_prop",
+  "level_region",
+  "level_wall",
   // An account's place: who may read it is its owner, a member of a world it
   // is placed in, or a player of a table that revealed it — never a dm/shared
   // switch. It carries the provenance pair because a person may keep a Hob

@@ -1,7 +1,8 @@
 import { NodeServices } from "@effect/platform-node";
+import { PgMigrator } from "@effect/sql-pg";
 import { expect } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { SqlClient } from "effect/sql";
+import { Migrator, SqlClient } from "effect/sql";
 import * as Database from "../src/Database.js";
 import init from "../src/migrations/0001_init.js";
 import clerkIdentity from "../src/migrations/0002_clerk_identity.js";
@@ -22,7 +23,6 @@ import beats from "../src/migrations/0008_beats.js";
 import searchIndex from "../src/migrations/0009_search_index.js";
 import assistantConversation from "../src/migrations/0010_assistant_conversation.js";
 import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
-import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
 import encounterPrep from "../src/migrations/0060_encounter_prep.js";
 import encounterReady from "../src/migrations/0061_encounter_ready.js";
 import characterInspiration from "../src/migrations/0062_character_inspiration.js";
@@ -65,7 +65,7 @@ const sourceDatabase = freshDatabase("taverns_test_migrations_sources");
 /** A tenth, for the keys a campaign's move depends on, as they were before it could move. */
 const moveKeysDatabase = freshDatabase("taverns_test_migrations_move_keys");
 
-/** An eleventh, for fights on file before a fight kept its board. */
+/** An eleventh, for the picture battle maps on file when they were retired. */
 const boardsDatabase = freshDatabase("taverns_test_migrations_boards");
 
 /** A twelfth, for encounters written before they had a kind or any prep. */
@@ -176,8 +176,6 @@ describeLayer("migrations", database, (it) => {
         "account",
         "assistant_thread",
         "assistant_turn",
-        "battle_map",
-        "battle_map_image",
         "beat",
         "campaign",
         "campaign_act",
@@ -220,7 +218,11 @@ describeLayer("migrations", database, (it) => {
         "encounter_run",
         "encounter_run_board",
         "encounter_run_check",
+        "encounter_run_light",
+        "encounter_run_prop",
+        "encounter_run_region",
         "encounter_run_scene",
+        "encounter_run_wall",
         "equipment",
         "equipment_category",
         "equipment_content",
@@ -242,6 +244,11 @@ describeLayer("migrations", database, (it) => {
         "image_spend",
         "image_upload",
         "language",
+        "level",
+        "level_light",
+        "level_prop",
+        "level_region",
+        "level_wall",
         "location",
         "location_image",
         "magic_item",
@@ -399,6 +406,11 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
+        { migration_id: 108, name: "levels" },
+        { migration_id: 109, name: "level_fights" },
+        { migration_id: 110, name: "party_vision" },
+        { migration_id: 111, name: "retire_battle_maps" },
+        { migration_id: 112, name: "run_region_reveal" },
       ]);
     }),
   );
@@ -516,6 +528,11 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
+        { migration_id: 108, name: "levels" },
+        { migration_id: 109, name: "level_fights" },
+        { migration_id: 110, name: "party_vision" },
+        { migration_id: 111, name: "retire_battle_maps" },
+        { migration_id: 112, name: "run_region_reveal" },
       ]);
     }),
   );
@@ -1329,96 +1346,152 @@ describeLayer(
   },
 );
 
-describeLayer("upgrading a database whose fights predate their boards", boardsDatabase, (it) => {
+/** Every migration before `0111`, the shape a database had while battle maps had pictures. */
+const migrateBeforeRetiring = Effect.scoped(
+  Layer.build(
+    Layer.provide(
+      PgMigrator.layer({
+        loader: Effect.map(Migrator.fromFileSystem(Database.migrationsDirectory), (all) =>
+          all.filter(([id]) => id < 111),
+        ),
+      }),
+      NodeServices.layer,
+    ),
+  ),
+).pipe(Effect.orDie);
+
+describeLayer("retiring the picture battle maps", boardsDatabase, (it) => {
   it.effect(
-    "gives a fight its encounter's grid as it stands, and a fight whose encounter is gone none",
+    "drops the maps and their pictures, queues every file, and keeps each fight's board",
     () =>
       Effect.gen(function* () {
-        const boards = yield* Effect.gen(function* () {
+        const measured = yield* Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
-          yield* migrate;
-          // The shape `0057` left: no boards table at all.
-          yield* sql`drop table encounter_run_board`;
+          yield* migrateBeforeRetiring;
 
           const accounts = yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "board-hash" })}
           returning id
         `;
-          const campaign = yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road");
+          const jo = accounts[0]!.id;
+          const campaign = yield* rawCampaign(sql, jo, "The Salt Road");
           const encounters = yield* sql<{ readonly id: string }>`
-          insert into encounter ${sql.insert([
-            { campaign_id: campaign, name: "Kept" },
-            { campaign_id: campaign, name: "Deleted" },
-          ])}
+          insert into encounter ${sql.insert({ campaign_id: campaign, name: "Kept" })}
           returning id
         `;
-          const [kept, deleted] = [encounters[0]!.id, encounters[1]!.id];
           const maps = yield* sql<{ readonly id: string }>`
-          insert into battle_map ${sql.insert([
-            {
-              encounter_id: kept,
-              campaign_id: campaign,
-              board_columns: 30,
-              cell_px: 51.2,
-              offset_x_px: 7,
-            },
-            // `sql.insert` takes its columns from the first row, so both name them.
-            {
-              encounter_id: deleted,
-              campaign_id: campaign,
-              board_columns: 24,
-              cell_px: 64,
-              offset_x_px: 0,
-            },
-          ])}
+          insert into battle_map ${sql.insert({
+            encounter_id: encounters[0]!.id,
+            campaign_id: campaign,
+            setting: "A rotten pier",
+            board_columns: 30,
+            cell_px: 51.2,
+            offset_x_px: 7,
+          })}
           returning id
+        `;
+          yield* sql`
+          insert into battle_map_image ${sql.insert({
+            map_id: maps[0]!.id,
+            campaign_id: campaign,
+            account_id: jo,
+            storage_prefix: "battle-map-images/drawn/",
+          })}
+        `;
+          yield* sql`
+          insert into image_upload ${sql.insert({
+            account_id: jo,
+            subject: "battleMap",
+            subject_id: maps[0]!.id,
+            content_type: "image/png",
+            content_length: 10,
+            storage_prefix: "uploads/a-map/",
+            expires_at: new Date(Date.now() + 60_000),
+          })}
         `;
           const sessions = yield* sql<{ readonly id: string }>`
           insert into session ${sql.insert({ campaign_id: campaign, number: 1 })}
           returning id
         `;
           const runs = yield* sql<{ readonly id: string }>`
-          insert into encounter_run ${sql.insert([
-            {
-              session_id: sessions[0]!.id,
-              encounter_id: kept,
-              encounter_name: "Kept",
-              started_at: new Date(Date.now() - 60_000),
-              ended_at: new Date(),
-            },
-            {
-              session_id: sessions[0]!.id,
-              encounter_id: deleted,
-              encounter_name: "Deleted",
-              started_at: new Date(),
-              ended_at: null,
-            },
-          ])}
+          insert into encounter_run ${sql.insert({
+            session_id: sessions[0]!.id,
+            encounter_id: encounters[0]!.id,
+            encounter_name: "Kept",
+          })}
           returning id
         `;
-          yield* sql`delete from encounter where id = ${deleted}`;
-
-          yield* encounterRunBoards;
-          const rows = yield* sql<{
-            readonly run_id: string;
-            readonly map_id: string | null;
-            readonly board_columns: number;
-            readonly cell_px: number;
-            readonly offset_x_px: number;
-          }>`
-          select run_id, map_id, board_columns, cell_px, offset_x_px from encounter_run_board
-        `;
-          return { rows, keptRun: runs[0]!.id, keptMap: maps[0]!.id };
-        }).pipe(Effect.orDie);
-        expect(boards.rows).toEqual([
-          {
-            run_id: boards.keptRun,
-            map_id: boards.keptMap,
+          yield* sql`
+          insert into encounter_run_board ${sql.insert({
+            run_id: runs[0]!.id,
+            map_id: maps[0]!.id,
+            grid: "none",
             board_columns: 30,
+            board_rows: 16,
+            feet_per_cell: 5,
             cell_px: 51.2,
             offset_x_px: 7,
-          },
+            offset_y_px: 0,
+          })}
+        `;
+          yield* sql`
+          update encounter_run_board set fog_hidden = '{3,4}' where run_id = ${runs[0]!.id}
+        `;
+
+          yield* migrate;
+
+          const tables = yield* tableNames;
+          const columns = yield* sql<{ readonly column_name: string }>`
+          select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = 'encounter_run_board'
+        `;
+          const boards = yield* sql<{
+            readonly board_columns: number;
+            readonly board_rows: number;
+            readonly fog_hidden: ReadonlyArray<number>;
+          }>`
+          select board_columns, board_rows, fog_hidden from encounter_run_board
+        `;
+          const queued = yield* sql<{ readonly prefix: string }>`
+          select prefix from storage_deletion order by prefix
+        `;
+          const uploads = yield* sql<{
+            readonly subject: string;
+          }>`select subject from image_upload`;
+          const refused = yield* sql`
+          insert into image_upload ${sql.insert({
+            account_id: jo,
+            subject: "battleMap",
+            subject_id: maps[0]!.id,
+            content_type: "image/png",
+            content_length: 10,
+            storage_prefix: "uploads/another/",
+            expires_at: new Date(Date.now() + 60_000),
+          })}
+        `.pipe(Effect.match({ onFailure: () => "refused", onSuccess: () => "written" }));
+          return {
+            tables,
+            columns: columns.map((row) => row.column_name),
+            boards,
+            queued: queued.map((row) => row.prefix),
+            uploads,
+            refused,
+          };
+        }).pipe(Effect.orDie);
+
+        expect(measured.tables).not.toContain("battle_map");
+        expect(measured.tables).not.toContain("battle_map_image");
+        for (const gone of ["map_id", "grid", "cell_px", "offset_x_px", "offset_y_px"]) {
+          expect(measured.columns).not.toContain(gone);
+        }
+        // The fight keeps its size and its fog.
+        expect(measured.boards).toEqual([
+          { board_columns: 30, board_rows: 16, fog_hidden: [3, 4] },
         ]);
+        // Both files are queued for the image loop's drain.
+        expect(measured.queued).toEqual(["battle-map-images/drawn/", "uploads/a-map/"]);
+        expect(measured.uploads).toEqual([]);
+        expect(measured.refused).toBe("refused");
       }),
   );
 });

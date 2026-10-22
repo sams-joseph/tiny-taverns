@@ -27,22 +27,17 @@ import {
   type PlayerLiveToken,
   type PlayerLiveTurn,
   type PlayerMove,
+  partyPathCost,
+  partyWalk,
+  tableSight,
   RollId,
   RollOutcome,
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
-import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import {
-  alignmentColumn,
-  areaColumn,
-  battleMapPicture,
-  boardColumns,
-  fogColumn,
-  pictureFromColumn,
-} from "./BattleMaps.js";
+import { areaColumn, boardColumns, fogColumn } from "./RunBoards.js";
 import {
   type PortraitSigner,
   portraitFromId,
@@ -57,10 +52,17 @@ import {
   hiddenByFog,
   initiativeOrder,
   RUNS,
-  tokenShown,
+  tokenShownNow,
   tokenShownTo,
 } from "./liveTables.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
+import {
+  partySeen,
+  playerLevelColumn,
+  refreshPartyVision,
+  ringVision,
+  runLevel,
+} from "./levelFights.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -237,15 +239,11 @@ export const liveOrderStatement = (
   `;
 };
 
-/** The fight's board as a player may see it: the grid and the picture, no setting. */
-const playerBoardRow = (sign: ImageSigner | undefined) =>
-  fromColumns(
-    Schema.Struct({
-      ...Struct.omit(PlayerLiveBoard.fields, ["tokens"]),
-      image: pictureFromColumn(sign),
-    }),
-    { ...boardColumns, image: "picture" },
-  );
+/** The fight's board as a player may see it, before its tokens. */
+const PlayerBoardRow = fromColumns(
+  Schema.Struct(Struct.omit(PlayerLiveBoard.fields, ["tokens"])),
+  boardColumns,
+);
 
 /**
  * What is on one table right now, to somebody sitting at it.
@@ -257,8 +255,7 @@ const playerBoardRow = (sign: ImageSigner | undefined) =>
  * that still has an active seat in this campaign.
  *
  * **The board** is selected only while the fight is shared and the DM has
- * turned on *Share map* (`0067_run_map_sharing.ts`), and never its setting
- * line. A token is a position selected beside a row of the order under the
+ * turned on *Share map* (`0067_run_map_sharing.ts`). A token is a position selected beside a row of the order under the
  * same condition, and not at all for an NPC while hostile tokens are hidden,
  * so a row the order drops takes its token with it. **Fog** drops the row of
  * a creature under it, token and all (`liveTables.ts`' `hiddenByFog`); an ally
@@ -344,7 +341,6 @@ export class PlayerTable extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
       const LiveCombatantRow = liveCombatantRow(yield* portraitSigner);
-      const PlayerBoardRow = playerBoardRow(yield* imageSigner);
 
       /**
        * The fight on this table tonight, if there is one. `playerRunColumns`,
@@ -379,8 +375,6 @@ export class PlayerTable extends Context.Service<
           ),
       });
 
-      // The picture is joined through the board's pointer only to a map in
-      // this campaign, so the pointer grants nothing outside it.
       /**
        * What the table heard of this fight (`hob-turn-kept`, `0095`): only
        * the lines written `shared`, which the keep decides from the acting
@@ -453,15 +447,12 @@ export class PlayerTable extends Context.Service<
       const boardOf = SqlSchema.findOneOption({
         Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId })),
         Result: PlayerBoardRow,
-        execute: ({ campaignId, runId }) => sql`
-          select encounter_run_board.grid, encounter_run_board.board_columns,
-                 encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
-                 ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}, ${fogColumn(sql)}, ${areaColumn(sql)}
+        execute: ({ runId }) => sql`
+          select encounter_run_board.board_columns, encounter_run_board.board_rows,
+                 encounter_run_board.feet_per_cell, ${playerLevelColumn(sql)},
+                 ${fogColumn(sql)}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
-          left join battle_map on battle_map.id = encounter_run_board.map_id
-            and battle_map.campaign_id = ${campaignId}
           where encounter_run_board.run_id = ${runId}
             and ${boardShown(sql)}
         `,
@@ -727,23 +718,62 @@ export class PlayerTable extends Context.Service<
                     const fight = yield* fightForMove(sql, runId);
                     const to = payload.position;
                     yield* ensureOnBoard(fight, to);
-                    const feet = feetWalked(fight, combatantId, row, to);
+                    // On a level, a player walks: the square must be reachable
+                    // from where the token stands, step by step over the
+                    // fight's copy (`partyPathCost`), through no wall, no door
+                    // that is not open, no secret door the DM has not
+                    // revealed, no blocking prop and no void, and only over
+                    // squares the party has seen, the DM's fog taken out
+                    // (`partyWalk`): the walk may end one step into the dark
+                    // beyond them and goes no further. Every refusal says the
+                    // same thing, so none tells of what the party has not
+                    // seen. The DM still places freely.
+                    const level = yield* runLevel(sql, runId);
+                    const walk =
+                      level === null ? null : partyWalk(level.layout, yield* partySeen(sql, runId));
+                    if (level !== null && walk !== null) {
+                      if (row.board_column === null || row.board_row === null) {
+                        return yield* new Conflict({
+                          message: "your DM puts your token on the level first",
+                        });
+                      }
+                      const walked = partyPathCost(
+                        walk,
+                        { column: row.board_column, row: row.board_row },
+                        to,
+                        tableSight(level.level),
+                      );
+                      if (walked === null) {
+                        return yield* new Conflict({
+                          message: "you cannot get there from where you stand",
+                        });
+                      }
+                    }
+                    const feet = feetWalked(
+                      fight,
+                      combatantId,
+                      row,
+                      to,
+                      level === null || walk === null
+                        ? null
+                        : { layout: walk.layout, level: level.level, ends: walk.ends },
+                    );
 
-                    const moved = yield* sql<{
-                      readonly visibility: "dm" | "shared";
-                      readonly token_shown: boolean;
-                    }>`
+                    const moved = yield* sql<{ readonly visibility: "dm" | "shared" }>`
                       update combatant
                       set board_column = ${to.column},
                           board_row = ${to.row},
                           feet_moved = combatant.feet_moved + ${feet},
                           updated_at = now()
                       where combatant.id = ${combatantId}
-                      returning combatant.visibility,
-                        (select ${tokenShown(sql)} from encounter_run
-                          where encounter_run.id = combatant.encounter_run_id) as token_shown
+                      returning combatant.visibility
                     `;
-                    const shown = moved[0]!;
+                    // A party token moved: what the party sees moves with it,
+                    // first, so the line is shared by where the token stands
+                    // in the party's sight once the move is done.
+                    const vision = yield* refreshPartyVision(sql, runId);
+                    const lineShared =
+                      moved[0]!.visibility === "shared" && (yield* tokenShownNow(sql, combatantId));
                     yield* appendEvent(sql, {
                       sessionId: row.session_id,
                       kind: "combatant-moved",
@@ -758,8 +788,13 @@ export class PlayerTable extends Context.Service<
                         to,
                       },
                       requestId: payload.requestId,
-                      visibility:
-                        shown.visibility === "shared" && shown.token_shown ? "shared" : "dm",
+                      visibility: lineShared ? "shared" : "dm",
+                    });
+                    yield* ringVision(sql, {
+                      sessionId: row.session_id,
+                      runId,
+                      vision,
+                      lineShared,
                     });
                     return row.session_id;
                   }),

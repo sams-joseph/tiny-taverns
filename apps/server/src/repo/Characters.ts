@@ -27,6 +27,7 @@ import {
 import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
+import { levelFightsOf, refreshFights } from "./levelFights.js";
 import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import {
   assistantColumns,
@@ -1167,26 +1168,42 @@ export class Characters extends Context.Service<
 
         removeOwn: (id) =>
           dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                // Retire the live seats first: the roster lines stay, saying
-                // who sat here, and `on delete set null (character_id)` clears
-                // the pointer in the delete below.
-                yield* sql`
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const actor = yield* CurrentActor;
+                  // The level fights it stands in, found while its combatants
+                  // still point at it: once it is gone it is no viewer there.
+                  const fights = yield* levelFightsOf(sql, [id]);
+                  // Retire the live seats first: the roster lines stay, saying
+                  // who sat here, and `on delete set null (character_id)` clears
+                  // the pointer in the delete below.
+                  yield* sql`
                   update campaign_character set left_at = now(), updated_at = now()
                   where campaign_character.character_id = ${id}
                     and campaign_character.account_id = ${actor.accountId}
                     and campaign_character.left_at is null
                 `;
-                const rows = yield* sql<{ readonly id: CharacterId }>`
+                  const rows = yield* sql<{ readonly id: CharacterId }>`
                   delete from character
                   where character.id = ${id} and ${ownCharacter(sql, actor)}
                   returning character.id
                 `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
-              }),
-            ),
+                  if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
+                  return yield* refreshFights(sql, fights);
+                }),
+              )
+              .pipe(
+                Effect.flatMap((sessions) =>
+                  Option.match(live, {
+                    onNone: () => Effect.void,
+                    onSome: (events) =>
+                      Effect.forEach(sessions, (sessionId) => events.touched(sessionId), {
+                        discard: true,
+                      }),
+                  }),
+                ),
+              ),
           ),
       };
     }),

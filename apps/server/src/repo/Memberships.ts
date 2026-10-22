@@ -9,12 +9,15 @@ import {
   CurrentActor,
   type SharedWorldId,
   NotFound,
+  type SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import type { SqlError, Statement } from "effect/sql";
 import { SqlClient, SqlSchema } from "effect/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { campaignImageColumns, campaignImageSigner, campaignRow } from "./Campaigns.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import { levelFightsOf, refreshFights } from "./levelFights.js";
 import { classFromColumns, classWithRow, dieOnSqlError, orNotFound } from "./rows.js";
 import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibility.js";
 
@@ -139,7 +142,7 @@ export const revokeMemberAt = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
   accountId: AccountId,
-): Effect.Effect<number, SqlError.SqlError> =>
+): Effect.Effect<RevokedMember, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows = yield* sql<{ readonly campaign_id: CampaignId }>`
       update campaign_member set revoked_at = now()
@@ -154,15 +157,42 @@ export const revokeMemberAt = (
     // COMMIT otherwise, and it is also the honest answer: a character whose
     // player was removed is not at the table any more. The seat row stands as
     // history, which is what retiring rather than deleting buys.
-    if (rows.length > 0) {
-      yield* sql`
-        update campaign_character set left_at = now(), updated_at = now()
-        where campaign_character.campaign_id = ${campaignId}
-          and campaign_character.account_id = ${accountId}
-          and campaign_character.left_at is null
-      `;
-    }
-    return rows.length;
+    if (rows.length === 0) return { revoked: 0, sessions: [] };
+    const seats = yield* sql<{ readonly character_id: string | null }>`
+      update campaign_character set left_at = now(), updated_at = now()
+      where campaign_character.campaign_id = ${campaignId}
+        and campaign_character.account_id = ${accountId}
+        and campaign_character.left_at is null
+      returning campaign_character.character_id
+    `;
+    // Their characters are no longer the party's eyes on a level fight.
+    const characters = seats.flatMap((seat) =>
+      seat.character_id === null ? [] : [seat.character_id],
+    );
+    const sessions = yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+    return { revoked: rows.length, sessions };
+  });
+
+/**
+ * What `revokeMemberAt` did: how many memberships it revoked, and the nights
+ * whose doorbell the caller rings (`ringRevoked`) once it has committed.
+ */
+export interface RevokedMember {
+  readonly revoked: number;
+  readonly sessions: ReadonlyArray<SessionId>;
+}
+
+/** Ring each night a revocation recomputed a fight's vision in, after the commit. */
+export const ringRevoked = (
+  live: Option.Option<LiveEvents["Service"]>,
+  revoked: RevokedMember,
+): Effect.Effect<void> =>
+  Option.match(live, {
+    onNone: () => Effect.void,
+    onSome: (events) =>
+      Effect.forEach(revoked.sessions, (sessionId) => events.touched(sessionId), {
+        discard: true,
+      }),
   });
 
 /**
@@ -247,6 +277,7 @@ export class Memberships extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* Effect.serviceOption(LiveEvents);
       const CampaignRow = campaignRow(yield* campaignImageSigner);
 
       const onShelf = (shelf: CampaignShelf): Statement.Fragment =>
@@ -358,19 +389,22 @@ export class Memberships extends Context.Service<
             // — the revoke and the seat retirement — and the deferred
             // participation key checks them together at COMMIT. Under
             // autocommit the first alone would be refused on the spot.
-            sql.withTransaction(
-              Effect.gen(function* () {
-                if (accountId === creator.actor.accountId) {
-                  return yield* new Conflict({
-                    message: "a campaign cannot lose its creator; archive the campaign instead",
-                  });
-                }
-                const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
-                if (revoked === 0) {
-                  return yield* new NotFound({ resource: "member", id: accountId });
-                }
-              }),
-            ),
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  if (accountId === creator.actor.accountId) {
+                    return yield* new Conflict({
+                      message: "a campaign cannot lose its creator; archive the campaign instead",
+                    });
+                  }
+                  const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
+                  if (revoked.revoked === 0) {
+                    return yield* new NotFound({ resource: "member", id: accountId });
+                  }
+                  return revoked;
+                }),
+              )
+              .pipe(Effect.flatMap((revoked) => ringRevoked(live, revoked))),
           ),
       };
     }),

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { DiagonalRule } from "./BattleMap.js";
+import { DiagonalRule } from "./Board.js";
 import { AccountId, CampaignId, SharedWorldId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 

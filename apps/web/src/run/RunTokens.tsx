@@ -5,8 +5,10 @@ import {
   type DiagonalRule,
   type EncounterRunBoard,
   type RulerReading,
-  battleMapPlane,
+  boardPlane,
   cellRect,
+  pathCost,
+  reachableOnLevel,
   reachableSquares,
   rulerReading,
   squareAt,
@@ -21,6 +23,7 @@ import {
   useState,
 } from "react";
 import { BoardEffects } from "./BoardEffects";
+import { type LevelWalk, runLevelWalk } from "./levelRules";
 import { boardStage } from "./fx/stage";
 import type { Act } from "./effects";
 import { FogLayer } from "./Fog";
@@ -72,9 +75,12 @@ import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } fr
  * left of its speed reaches are tinted: every square within the leading number
  * of its stat block's or sheet's speed less the feet the server has counted it
  * walking this turn (`feetLeftOf`), under the diagonal rule, less the squares
- * others hold (`reachableSquares`). A drag measures from where it started, and
- * its ruler's *left* or *over* is against the same feet, so the board and the
- * panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
+ * others hold (`reachableSquares`). On a level fight (`walk`) the squares are
+ * the ones a walk reaches (`reachableOnLevel`: round walls, shut doors and
+ * blocking props, difficult terrain at double), and the ruler reads the walk
+ * (`pathCost`), as the server counts the move. A drag measures from where it
+ * started, and its ruler's *left* or *over* is against the same feet, so the
+ * board and the panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
  * Area or Fog is on (`BoardTools.tsx`, `Fog.tsx`) it is not drawn.
  *
  * ### Effects
@@ -94,8 +100,8 @@ import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } fr
  * ### Where they sit
  *
  * Every token and range square is a `cellRect` in the plane the board is drawn
- * on (`BattleMapBoard.tsx`), laid out as percentages of it — so they sit on the
- * picture's squares at any width or zoom, and a token's button is its whole
+ * on (`GridBoard.tsx`), laid out as percentages of it — so they sit on the
+ * board's squares at any width or zoom, and a token's button is its whole
  * square.
  */
 
@@ -197,6 +203,8 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onSelect: (token: T) => void;
   readonly onTarget: ((token: T) => void) | undefined;
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
+  /** A level fight's walk: the range and the ruler go by it. Absent on a plain grid. */
+  readonly walk?: LevelWalk | undefined;
   /** The attacks and areas this reader may see drawn; a player's board has none yet. */
   readonly acts?: ReadonlyArray<Act>;
 }
@@ -231,15 +239,21 @@ function Range<T extends LayerToken>({
     return null;
   const left = feetLeftOf(selected);
   if (left === undefined) return null;
-  const squares = reachableSquares(board, {
-    from,
-    feet: left,
-    occupied,
-    feetPerCell: board.feetPerCell,
-    diagonals,
-  });
+  const walk = props.walk;
+  const squares =
+    walk === undefined
+      ? reachableSquares(board, {
+          from,
+          feet: left,
+          occupied,
+          feetPerCell: board.feetPerCell,
+          diagonals,
+        })
+      : reachableOnLevel(walk.layout, from, left, walk.sight, diagonals, walk.ends)
+          .map(({ square }) => square)
+          .filter((square) => !occupied.some((taken) => same(taken, square)));
   if (squares.length === 0) return null;
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   return (
     <svg
       data-slot="token-range"
@@ -249,7 +263,7 @@ function Range<T extends LayerToken>({
       className="pointer-events-none absolute inset-0 size-full"
     >
       {squares.map((square) => {
-        const rect = cellRect(board, square);
+        const rect = cellRect(square);
         return (
           <rect
             key={`${String(square.column)}:${String(square.row)}`}
@@ -278,6 +292,7 @@ const RULER_TONE: Readonly<Record<RulerReading["verdict"], RulerTone>> = {
   left: "accent",
   over: "danger",
   occupied: "danger",
+  blocked: "danger",
 };
 
 /**
@@ -303,14 +318,14 @@ export function Ruler({
   readonly tone?: RulerTone;
   readonly slot?: string;
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const end = { x: 20 + (to.column - from.column) * 40, y: 20 + (to.row - from.row) * 40 };
   return (
     <div
       data-slot={slot}
       className="pointer-events-none absolute z-lifted"
-      // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
-      style={percentOf(cellRect(board, from), plane)}
+      // eslint-disable-next-line shadcn/no-inline-styles -- a box on the board's plane, computed from the board; no class can carry it.
+      style={percentOf(cellRect(from), plane)}
     >
       <svg viewBox="0 0 40 40" aria-hidden className="size-full overflow-visible">
         <line
@@ -378,6 +393,7 @@ export function RunTokens(props: TokenProps) {
     outOfRange,
     ...rest
   } = props;
+  const walk = useMemo(() => runLevelWalk(props.board), [props.board]);
   const tokens = combatants.map((combatant) => ({
     ...tokenState(combatant, { hp: hpOf(combatant), hostileTokensHidden }),
     combatant,
@@ -399,6 +415,7 @@ export function RunTokens(props: TokenProps) {
   return (
     <TokenLayer
       {...rest}
+      walk={walk}
       tokens={tokens}
       selected={byId(props.selected?.id)}
       movable={() => movable}
@@ -431,7 +448,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     onMove,
   } = props;
   const targeting = onTarget !== undefined;
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const layer = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>();
   /** A dropped token, held on its square until the server answers the move. */
@@ -445,7 +462,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const stage = useMemo(
     () =>
       boardStage({
-        box: () => layer.current?.closest("[data-slot=battle-map]") ?? null,
+        box: () => layer.current?.closest("[data-slot=board]") ?? null,
         standing: (squares) =>
           standingNow.current.flatMap((token) =>
             squares.some((square) => same(square, token.position))
@@ -485,7 +502,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   // A token in the tray goes down on the square clicked.
   const placing =
     !targeting && selected !== undefined && movable(selected) && selected.position === null;
-  const at = (square: BoardSquare) => percentOf(cellRect(board, square), plane);
+  const at = (square: BoardSquare) => percentOf(cellRect(square), plane);
 
   /** The square under a point on the screen, or `undefined` off the board. */
   const squareUnder = (clientX: number, clientY: number): BoardSquare | undefined => {
@@ -563,6 +580,18 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
           occupied: heldBesides(dragged.id).some((held) => same(held, drag.over)),
           feetPerCell: board.feetPerCell,
           diagonals,
+          ...(props.walk === undefined
+            ? {}
+            : {
+                walked: pathCost(
+                  props.walk.layout,
+                  drag.from,
+                  drag.over,
+                  props.walk.sight,
+                  diagonals,
+                  props.walk.ends,
+                ),
+              }),
         })
       : undefined;
 
@@ -667,7 +696,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
                       (active || dragging) && "z-lifted",
                       fade,
                     )}
-                    // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
+                    // eslint-disable-next-line shadcn/no-inline-styles -- a box on the board's plane, computed from the board; no class can carry it.
                     style={at(square)}
                   />
                 }
@@ -703,7 +732,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
                 active && "z-lifted",
                 fade,
               )}
-              // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
+              // eslint-disable-next-line shadcn/no-inline-styles -- a box on the board's plane, computed from the board; no class can carry it.
               style={at(squareOf(combatant))}
             >
               {face}

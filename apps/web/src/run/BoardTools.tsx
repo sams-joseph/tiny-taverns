@@ -1,12 +1,11 @@
 import {
   type AreaShape,
-  type BattleMapBoard,
-  type BattleMapImages,
+  type BoardSize,
   type BoardArea,
   type BoardSquare,
   type EncounterRunBoard,
   type RulerReading,
-  battleMapPlane,
+  boardPlane,
   cellRect,
   squareAt,
 } from "@taverns/api";
@@ -38,10 +37,7 @@ import { Ruler } from "./RunTokens";
 /** The dock's tools, one at a time. Fog's brush is `Fog.tsx`'s. */
 export type BoardTool = "move" | "measure" | "area" | "fog";
 
-export type DrawnBoard = BattleMapBoard & {
-  readonly image: BattleMapImages | null;
-  readonly feetPerCell: number;
-};
+export type DrawnBoard = BoardSize & { readonly feetPerCell: number };
 
 /**
  * An area template on the board: the squares it covers, tinted the drawing's
@@ -59,7 +55,7 @@ export function AreaLayer({
   /** `pinned` is on the table; `preview` is where a click would pin it. */
   readonly state: "pinned" | "preview";
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const squares = squaresOf(board, area);
   return (
     <svg
@@ -73,7 +69,7 @@ export function AreaLayer({
       className="pointer-events-none absolute inset-0 size-full"
     >
       {squares.map((square) => {
-        const rect = cellRect(board, square);
+        const rect = cellRect(square);
         return (
           <rect
             key={`${String(square.column)}:${String(square.row)}`}
@@ -133,7 +129,7 @@ export function ToolSurface({
     | undefined;
   readonly pointer: ToolPointer;
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const layer = useRef<HTMLDivElement>(null);
   /** The pointer laying a ruler, while it is held down. */
   const held = useRef<{ readonly pointerId: number } | undefined>(undefined);
@@ -202,7 +198,7 @@ export function ToolSurface({
         >
           <rect
             data-slot="tool-square"
-            {...cellRect(board, hovered)}
+            {...cellRect(hovered)}
             fill="none"
             strokeWidth={2}
             vectorEffect="non-scaling-stroke"

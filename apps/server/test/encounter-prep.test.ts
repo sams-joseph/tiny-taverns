@@ -485,6 +485,11 @@ describeLayer(
         onFail: "null",
         duration: "null",
         skills: null,
+        mapSize: "null",
+        rooms: null,
+        connections: "null",
+        secrets: null,
+        mood: "null",
       } as const;
 
       it.effect(

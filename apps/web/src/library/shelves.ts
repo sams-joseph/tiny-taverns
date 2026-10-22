@@ -10,11 +10,11 @@ import type { Collapse } from "../shell/TabRow";
  *
  * The global row has one *Library* item; the split between monsters,
  * character-building vocabulary, reference compendium articles, spells, mundane
- * equipment, magic items, reusable NPC sources and places lives one level down. None of
- * these routes names a campaign, because each is account-owned originals rather
- * than campaign copies.
+ * equipment, magic items, reusable NPC sources, places and levels lives one
+ * level down. None of these routes names a campaign, because each is
+ * account-owned originals rather than campaign copies.
  *
- * Eight shelves do not fit a phone, so the Library's narrow strip keeps the
+ * Nine shelves do not fit a phone, so the Library's narrow strip keeps the
  * three a table reaches for mid-game and puts the rest in its *More* menu, in
  * the order `collapse` says (`shell/TabRow.tsx`). The global row's panel lists
  * every shelf at every width, each with its `description`: one line on what the
@@ -28,7 +28,8 @@ export type Shelf =
   | "/library/equipment"
   | "/library/magic-items"
   | "/library/npcs"
-  | "/library/locations";
+  | "/library/locations"
+  | "/library/levels";
 
 export const SHELVES: ReadonlyArray<{
   readonly to: Shelf;
@@ -79,6 +80,12 @@ export const SHELVES: ReadonlyArray<{
     to: "/library/locations",
     label: "Locations",
     description: "Realms, cities, dungeons and taverns, to put into your campaigns",
+    collapse: "2xl",
+  },
+  {
+    to: "/library/levels",
+    label: "Levels",
+    description: "Battle maps built of floors, walls, doors, props and lights",
     collapse: "2xl",
   },
 ];

@@ -5,7 +5,7 @@ import {
   areaSquares,
   feetBetween,
   reachableSquares,
-} from "./BattleMap.js";
+} from "./Board.js";
 import type { Combatant } from "./Combatant.js";
 import type {
   ActionArea,
@@ -18,6 +18,10 @@ import type {
 } from "./Creature.js";
 import type { EncounterRun } from "./EncounterRun.js";
 import type { CombatantId, CreatureId } from "./Ids.js";
+import { type RunBoardLevel, runLevelLayout, tableSight } from "./LevelFight.js";
+import { type CreatureSenses, NO_SENSES, reachableOnLevel } from "./LevelGeometry.js";
+import type { LevelCover } from "./LevelKit.js";
+import { attackSight, runLevelSight, sensesOf } from "./LevelRules.js";
 import {
   type FeatureSection,
   featureKey,
@@ -45,8 +49,19 @@ import type { Spell } from "./Spell.js";
  * guessed at but put in {@link NpcTurnOptions.omitted} with its reason, so a
  * caller can say what it left out.
  *
+ * **On a level** (`board.level`) a creature is offered only targets it can
+ * see (`LevelSight.sees`, by its stat block's senses) and that have less than
+ * total cover from it; each says its cover and whether it cannot see the
+ * attacker back (advantage). The rest are listed in `sight.hidden`. An area
+ * centred on a point is centred only on a creature it can see, and catches
+ * nobody with total cover from its origin; a placement's `covers` says whom it
+ * catches with half or three-quarters cover from there. Where it can
+ * walk is reachability over the level (`reachableOnLevel`: walls, shut
+ * doors, blocking props, difficult terrain at double), not a radius.
+ *
  * Not modelled, and so never refused or offered on their account: creature
- * size (every token is one square), cover and line of sight, a reaction's or a
+ * size (every token is one square), line of sight and cover on a plain grid,
+ * a reaction's or a
  * triggered bonus action's trigger (offered and flagged `triggered`, for the
  * chooser to judge), and conditions beyond the ones that stop a creature
  * acting or moving.
@@ -59,9 +74,21 @@ export interface NpcTurnFight {
   readonly combatants: ReadonlyArray<Combatant>;
   /** The fight's board, or `undefined` for a fight with none: then nothing is measured. */
   readonly board:
-    | { readonly columns: number; readonly rows: number; readonly feetPerCell: number }
+    | {
+        readonly columns: number;
+        readonly rows: number;
+        readonly feetPerCell: number;
+        /** The fight's copy of its level, when it is fought on one (`EncounterRunBoard.level`). */
+        readonly level?: RunBoardLevel | null;
+      }
     | undefined;
   readonly diagonals: DiagonalRule;
+  /**
+   * What a combatant with no stat block perceives with (a party member's
+   * darkvision, off its sheet), by its row. A row with neither sees by light
+   * alone.
+   */
+  readonly senses?: ReadonlyMap<CombatantId, CreatureSenses>;
   /** Each combatant's stat block by the creature it was seeded from. */
   readonly statBlocks: ReadonlyMap<CreatureId, StatBlock>;
   /**
@@ -94,7 +121,17 @@ export interface NpcTarget {
    * disadvantage); `out` beyond all of them, which the runner marks.
    */
   readonly band: "reach" | "normal" | "long" | "out";
+  /** On a level: the target's cover from it (never total: that target is not offered). */
+  readonly cover?: Exclude<LevelCover, "total">;
+  /** On a level: the target cannot see it, so its attack has advantage. */
+  readonly unseenByTarget?: true;
 }
+
+/** How an aimed target stood on a level when a step was taken: what its attack rolls against. */
+export type NpcAim = Pick<NpcTarget, "cover" | "unseenByTarget">;
+
+/** Why a creature on the board is not among a level fight's targets. */
+export type NpcHiddenReason = "total cover" | "out of sight";
 
 /**
  * Where a target `feet` away stands for a line's `reach` and `range`: within
@@ -123,7 +160,16 @@ export interface NpcPlacement {
   readonly catches: ReadonlyArray<CombatantId>;
   /** The ones it catches on the creature's own side, so a chooser can see what it costs its friends. */
   readonly allies: ReadonlyArray<CombatantId>;
+  /**
+   * On a level, each caught creature with half or three-quarters cover from
+   * the origin: what it adds to a Dexterity save (`saveCoverBonus`). One
+   * behind total cover is not caught at all.
+   */
+  readonly covers?: Readonly<Record<CombatantId, AreaCover>>;
 }
+
+/** Cover from an area's origin that still lets it reach: what a Dexterity save adds. */
+export type AreaCover = Exclude<LevelCover, "none" | "total">;
 
 /** What taking an option spends, beyond its slot. */
 export interface NpcSpend {
@@ -203,8 +249,28 @@ export interface NpcTurnOptions {
   /** Whether it is this creature's own turn. */
   readonly up: boolean;
   readonly options: ReadonlyArray<NpcTurnOption>;
-  /** Where it can still walk this turn; absent off its turn, off the board or with no speed. */
-  readonly movement?: { readonly feetLeft: number; readonly squares: ReadonlyArray<BoardSquare> };
+  /**
+   * Where it can still walk this turn; absent off its turn, off the board or
+   * with no speed. On a level each is a square a walk within the feet left
+   * reaches (`reachableOnLevel`); on a plain grid, by straight distance.
+   */
+  readonly movement?: {
+    readonly feetLeft: number;
+    readonly squares: ReadonlyArray<BoardSquare>;
+  };
+  /**
+   * On a level: what it perceives with, any sense its stat block lists that
+   * could not be read (counted as none), and who on the board it cannot
+   * target, and why.
+   */
+  readonly sight?: {
+    readonly senses: CreatureSenses;
+    readonly unread: ReadonlyArray<string>;
+    readonly hidden: ReadonlyArray<{
+      readonly combatantId: CombatantId;
+      readonly reason: NpcHiddenReason;
+    }>;
+  };
   /** What was left out and why, by the id it would have had. */
   readonly omitted: ReadonlyArray<{
     readonly id: string;
@@ -356,17 +422,59 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
     row.position === null ? [] : [{ row, at: row.position }],
   );
 
+  // On a level: who it can see, and the cover each has from it.
+  const level = board?.level ?? undefined;
+  const sensesFor = (row: Combatant): CreatureSenses => {
+    const block = row.creatureId === null ? undefined : fight.statBlocks.get(row.creatureId);
+    return block === undefined
+      ? (fight.senses?.get(row.id) ?? NO_SENSES)
+      : sensesOf(block.senses).senses;
+  };
+  const ownSenses = level === undefined ? undefined : sensesOf(statBlock.senses);
+  const aims = new Map<CombatantId, NpcAim>();
+  const hidden: Array<{ combatantId: CombatantId; reason: NpcHiddenReason }> = [];
+  if (level !== undefined && board !== undefined && from !== undefined) {
+    const sight = runLevelSight(board, level);
+    for (const { row, at } of placed) {
+      const seen = attackSight(
+        sight,
+        { square: from, senses: ownSenses!.senses },
+        { square: at, senses: sensesFor(row) },
+      );
+      if (seen.cover === "total") hidden.push({ combatantId: row.id, reason: "total cover" });
+      else if (!seen.attackerSees) hidden.push({ combatantId: row.id, reason: "out of sight" });
+      else {
+        aims.set(row.id, {
+          cover: seen.cover,
+          ...(seen.targetSees ? {} : { unseenByTarget: true as const }),
+        });
+      }
+    }
+  }
+  /** Who it may aim at: everyone placed, or on a level only those it sees past less than total cover. */
+  const aimable =
+    level === undefined || from === undefined
+      ? placed
+      : placed.filter(({ row }) => aims.has(row.id));
+
   /** Everyone on the board, nearest first, banded by the option's reach and range. */
   const targetsFor = (
     reach: number | undefined,
     range: ActionRange | undefined,
   ): ReadonlyArray<NpcTarget> | undefined => {
     if (!measured || (reach === undefined && range === undefined)) return undefined;
-    return placed
+    return aimable
       .map(({ row, at }) => {
         const feet = feetBetween(from, at, measure);
         const band = bandAt(feet, reach, range);
-        return { combatantId: row.id, kind: row.kind, ally: row.side === self.side, feet, band };
+        return {
+          combatantId: row.id,
+          kind: row.kind,
+          ally: row.side === self.side,
+          feet,
+          band,
+          ...aims.get(row.id),
+        };
       })
       .sort((a, b) => a.feet - b.feet);
   };
@@ -406,16 +514,34 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
       });
     const out: Array<NpcPlacement> = [];
     const seen = new Set<string>();
+    // On a level, the cover each creature has from the area's origin: total
+    // cover is out of the area, and the rest adds to a Dexterity save.
+    const sight = level === undefined ? undefined : runLevelSight(board, level);
     const add = (origin: BoardSquare, toward: BoardSquare, excludeSelf: boolean) => {
       const squares = cover(origin, toward);
-      const catches = catchesIn(squares, excludeSelf);
+      const covers: Record<CombatantId, AreaCover> = {};
+      const catches = catchesIn(squares, excludeSelf).filter((id) => {
+        const at = fight.combatants.find((row) => row.id === id)?.position;
+        if (sight === undefined || at == null) return true;
+        const from = sight.cover(origin, at);
+        if (from === "total") return false;
+        if (from !== "none") covers[id] = from;
+        return true;
+      });
       const key = [...catches].sort().join(",");
       if (catches.length === 0 || seen.has(key)) return;
       seen.add(key);
       const allies = catches.filter(
         (id) => fight.combatants.find((row) => row.id === id)?.side === self.side,
       );
-      out.push({ origin, toward, squares, catches, allies });
+      out.push({
+        origin,
+        toward,
+        squares,
+        catches,
+        allies,
+        ...(Object.keys(covers).length === 0 ? {} : { covers }),
+      });
     };
     if (area.origin === "self") {
       if (area.shape === "cone" || area.shape === "line") {
@@ -424,7 +550,8 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
         add(from, from, true);
       }
     } else if (range !== undefined) {
-      for (const { at } of placed) {
+      // A point it must see to centre an area on.
+      for (const { at } of aimable) {
         if (feetBetween(from, at, measure) <= range.normal) add(at, at, false);
       }
     }
@@ -822,19 +949,40 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
     else if (!measured) omit("move", "Move", "not on the board");
     else {
       const feetLeft = Math.max(0, speed - self.feetMoved);
+      const occupied = placed.map(({ at }) => at);
       movement = {
         feetLeft,
-        squares: reachableSquares(board, {
-          from,
-          feet: feetLeft,
-          occupied: placed.map(({ at }) => at),
-          ...measure,
-        }),
+        squares:
+          level === undefined
+            ? reachableSquares(board, { from, feet: feetLeft, occupied, ...measure })
+            : reachableOnLevel(
+                runLevelLayout(board, level),
+                from,
+                feetLeft,
+                tableSight(level),
+                fight.diagonals,
+              )
+                .map(({ square }) => square)
+                .filter(
+                  (square) =>
+                    !occupied.some(
+                      (taken) => taken.column === square.column && taken.row === square.row,
+                    ),
+                ),
       };
     }
   } else {
     omit("move", "Move", "not its turn");
   }
 
-  return { combatantId, up, options, ...(movement === undefined ? {} : { movement }), omitted };
+  return {
+    combatantId,
+    up,
+    options,
+    ...(movement === undefined ? {} : { movement }),
+    ...(ownSenses === undefined || from === undefined
+      ? {}
+      : { sight: { senses: ownSenses.senses, unread: ownSenses.unread, hidden } }),
+    omitted,
+  };
 };
