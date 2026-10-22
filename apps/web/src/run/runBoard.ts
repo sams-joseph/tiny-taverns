@@ -1,7 +1,9 @@
 import {
   type AreaShape,
   type BoardArea,
+  type BoardDoorUpdate,
   type BoardSquare,
+  type LevelPartId,
   type Combatant,
   type EncounterRunBoard,
   rulerReading,
@@ -48,6 +50,17 @@ export interface RunBoardProps {
    * line as the fog's; resolves once settled, and never rejects.
    */
   readonly onArea: (area: BoardArea | null) => Promise<void>;
+  /**
+   * A door of the fight's level opened, closed, locked or revealed, and a
+   * light lit or snuffed: the live writes, in the same line as the fog's;
+   * each resolves once settled, and never rejects. Only a level board offers
+   * them (`LevelSwitches.tsx`).
+   */
+  readonly onDoor: (
+    wallId: LevelPartId,
+    update: Omit<BoardDoorUpdate, "requestId">,
+  ) => Promise<void>;
+  readonly onLight: (lightId: LevelPartId, lit: boolean) => Promise<void>;
 }
 
 /**
@@ -373,10 +386,16 @@ function useFogTool({
   };
 }
 
-/** The board's size in the DM's units, and what a deleted encounter took with it. */
+/**
+ * The board's size in the DM's units, and what a deleted encounter took with
+ * it. A level fight has no picture by design, and says it is played on its
+ * level; its level is drawn on the canvas (`RunStage.tsx`), not on this card.
+ */
 export const boardCaption = (board: EncounterRunBoard): string =>
   `${describeBoard(board)}${
-    board.mapId === null
-      ? ". This fight's encounter was deleted, and its picture with it. The board keeps its squares."
-      : ""
+    board.level !== null
+      ? ". Played on a copy of the encounter's level, drawn on the full-width board."
+      : board.mapId === null
+        ? ". This fight's encounter was deleted, and its picture with it. The board keeps its squares."
+        : ""
   }`;

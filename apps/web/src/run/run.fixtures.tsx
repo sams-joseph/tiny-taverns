@@ -123,6 +123,81 @@ export const runBoard = {
   imagePending: false,
   fog: [],
   area: null,
+  // A picture board: the encounter names no level.
+  level: null,
+};
+
+const levelPart = (n: number) => `1e7e3000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/** A door, a secret door and a torch on the fixture fight's level. */
+export const runLevelDoorId = levelPart(2);
+export const runLevelSecretId = levelPart(3);
+export const runLevelTorchId = levelPart(4);
+
+/**
+ * The same fight played on a copy of a level: 8 × 6 squares of flagstone, a
+ * wall down x = 4 with a closed door in it and a closed secret door, and a lit
+ * torch, as `runs.board` answers the DM.
+ */
+export const runLevelBoard = {
+  ...runBoard,
+  mapId: null,
+  setting: null,
+  columns: 8,
+  rows: 6,
+  level: {
+    ambient: "dim",
+    floor: Array.from({ length: 48 }, () => 1),
+    walls: [
+      {
+        id: levelPart(1),
+        x1: 4,
+        y1: 0,
+        x2: 4,
+        y2: 2,
+        kind: "wall",
+        doorState: null,
+        low: false,
+        revealed: false,
+      },
+      {
+        id: runLevelDoorId,
+        x1: 4,
+        y1: 2,
+        x2: 4,
+        y2: 3,
+        kind: "door",
+        doorState: "closed",
+        low: false,
+        revealed: false,
+      },
+      {
+        id: runLevelSecretId,
+        x1: 4,
+        y1: 3,
+        x2: 4,
+        y2: 4,
+        kind: "secretDoor",
+        doorState: "closed",
+        low: false,
+        revealed: false,
+      },
+    ],
+    props: [],
+    lights: [
+      {
+        id: runLevelTorchId,
+        x: 1.5,
+        y: 1.5,
+        bright: 20,
+        dim: 20,
+        tone: "fire",
+        flicker: true,
+        lit: true,
+      },
+    ],
+    regions: [],
+  },
 };
 
 /**

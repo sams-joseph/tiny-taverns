@@ -1,15 +1,19 @@
 import type { PictureRect } from "@taverns/api";
 import { cn } from "@taverns/ui";
-import { battleMapPlane } from "@taverns/api";
+import { battleMapPlane, runLevelLayout } from "@taverns/api";
 import {
   type ReactNode,
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { canDrawWebGL } from "./fx3d/support";
+import { LevelBackdrop } from "./LevelBackdrop";
+import { LevelSwitches } from "./LevelSwitches";
 import { createPortal } from "react-dom";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
@@ -282,6 +286,14 @@ export function RunBoardStage({
   const { resource, reload, over } = props;
   const { board, gridShown, withBoard, tools, fogTool } = useRunBoard(props, true);
   const camera = useRef<Camera | null>(null);
+  // The fight's level as the geometry and the renderer read it, kept while
+  // the board's answer is the same (a re-read is a new one, and redraws).
+  const level = board?.level ?? null;
+  const layout = useMemo(
+    () => (board === null || level === null ? null : runLevelLayout(board, level)),
+    [board, level],
+  );
+  const [levelDrawable, setLevelDrawable] = useState(canDrawWebGL);
   const active = props.tokens.combatants.find(
     (combatant) => combatant.id === props.tokens.activeId,
   );
@@ -312,6 +324,9 @@ export function RunBoardStage({
   if (board === null || withBoard === undefined) return null;
 
   const plane = battleMapPlane(board, board.image);
+  // A level fight draws its level under the board where the browser can; the
+  // board box over it is then clear, its grid the renderer's.
+  const drawsLevel = layout !== null && levelDrawable;
   return (
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
@@ -320,6 +335,19 @@ export function RunBoardStage({
         freeArea={freeArea}
         focus={activeAt}
         camera={camera}
+        backdrop={
+          drawsLevel
+            ? (view) => (
+                <LevelBackdrop
+                  layout={layout}
+                  cellPx={board.alignment.cellPx}
+                  view={view}
+                  grid={gridShown}
+                  onFailed={() => setLevelDrawable(false)}
+                />
+              )
+            : undefined
+        }
         controls={(at) => (
           <InStageCorner
             fallback={(children) => (
@@ -356,14 +384,24 @@ export function RunBoardStage({
         )}
       >
         <BattleMapBoard
-          map={{ ...board, grid: gridShown ? "square" : "none" }}
-          className="box-content"
+          map={{ ...board, grid: gridShown && !drawsLevel ? "square" : "none" }}
+          className={cn("box-content", drawsLevel && "border-transparent bg-transparent")}
         >
           {tools.pinned !== null && <AreaLayer board={board} area={tools.pinned} state="pinned" />}
           {tools.preview !== undefined && (
             <AreaLayer board={board} area={tools.preview} state="preview" />
           )}
           <RunTokens {...withBoard} />
+          {board.level !== null && tools.tool === "move" && (
+            <LevelSwitches
+              level={board.level}
+              columns={board.columns}
+              rows={board.rows}
+              disabled={over}
+              onDoor={(wallId, update) => void props.onDoor(wallId, update)}
+              onLight={(lightId, lit) => void props.onLight(lightId, lit)}
+            />
+          )}
           {tools.tool === "fog" && <FogBrush board={board} stroke={fogTool.stroke} />}
           {(tools.tool === "measure" || tools.tool === "area") && (
             <ToolSurface

@@ -318,6 +318,14 @@ export const boardFogWrites = (campaignId: CampaignId): Invalidation => [
 ];
 
 /**
+ * What a door or a light of a fight's level changes outside the fight:
+ * nothing anybody reads. The DM's own board takes the write's answer
+ * (`runBoardAtom`), and a player's table carries no level yet
+ * (`0109_level_fights.ts`).
+ */
+export const boardLevelWrites: Invalidation = [];
+
+/**
  * What pinning or clearing an area template changes outside the fight: only
  * the seated player's table, whose shared board draws it. The DM's own board
  * takes the write's answer (`runBoardAtom`).

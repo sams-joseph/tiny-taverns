@@ -1,12 +1,15 @@
 import type {
   BoardArea,
+  BoardDoorUpdate,
   BoardSquare,
   Combatant,
   CombatantId,
   DeathSaves,
   EncounterRun,
+  EncounterRunBoard,
   EncounterRunUpdate,
   HobDirectResourceUpdate,
+  LevelPartId,
   Npc,
   NpcSessionMonitor,
   Roll,
@@ -33,6 +36,7 @@ import { Effect, Result } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
 import { useFullscreen, useShowHob } from "../shell/slots";
@@ -76,6 +80,7 @@ import { SceneRunner } from "./SceneRunner";
 import {
   boardFogWrites,
   boardAreaWrites,
+  boardLevelWrites,
   combatantVisibilityWrites,
   combatantWrites,
   deathSaveWrites,
@@ -825,6 +830,7 @@ export function RunScreen() {
   const mapShare = useMutation();
   const fogs = useMutation();
   const areas = useMutation();
+  const levelSwitches = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -844,7 +850,7 @@ export function RunScreen() {
       reloadRolls();
       // The fog and the pinned area are the board's, which nothing else
       // re-reads: another of the DM's tabs painted or pinned them.
-      if (event.kind === "board-fog-updated" || event.kind === "board-area-updated") rereadBoard();
+      if (event.kind.startsWith("board-")) rereadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
     [refresh, reloadScene, reloadRolls, rereadBoard],
@@ -1620,6 +1626,46 @@ export function RunScreen() {
     });
 
   /**
+   * A door or a light of the fight's level, in the board's line with the
+   * fog's: its answer is the board, written straight into the board's atom,
+   * so the door swings as soon as the server has it.
+   */
+  const switchLevel = (
+    write: (client: TavernsClient) => Effect.Effect<EncounterRunBoard, unknown>,
+    refused: string,
+  ): Promise<void> =>
+    inBoardLine(async () => {
+      const saved = await levelSwitches.submit(write, boardLevelWrites).catch(() => undefined);
+      if (saved !== undefined && Result.isSuccess(saved)) {
+        writeBoard((current) => AsyncResult.map(current, () => saved.success));
+        return;
+      }
+      toast.add({
+        type: "destructive",
+        title: refused,
+        description: "That did not reach the server. The board shows the level as it holds it.",
+      });
+    });
+  const onDoor = (wallId: LevelPartId, update: Omit<BoardDoorUpdate, "requestId">) =>
+    switchLevel(
+      (client) =>
+        client.runs.updateDoor({
+          params: { ...path, wallId },
+          payload: { ...update, requestId: newRequestId() },
+        }),
+      "The door did not change",
+    );
+  const onLight = (lightId: LevelPartId, lit: boolean) =>
+    switchLevel(
+      (client) =>
+        client.runs.updateLight({
+          params: { ...path, lightId },
+          payload: { lit, requestId: newRequestId() },
+        }),
+      lit ? "The light was not lit" : "The light was not snuffed",
+    );
+
+  /**
    * How far someone walks, from the front of their speed: the stat block's for
    * a creature, the sheet's for a party member, nothing for a row the DM typed.
    */
@@ -2125,6 +2171,8 @@ export function RunScreen() {
           onHideHostile: (hidden) => void setShown(mapShare, { hostileTokensHidden: hidden }),
           onFog: paintFog,
           onArea: pinArea,
+          onDoor,
+          onLight,
         };
 
   // On the canvas the screen holds the whole window: the shell puts its nav
