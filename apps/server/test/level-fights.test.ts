@@ -489,9 +489,32 @@ describeLayer("level-fights", shared, (it) => {
 
         const doors = yield* eventsOf(fight.id, "board-door-updated");
         expect(doors.map((event) => event.visibility)).toEqual(["dm", "dm", "dm", "dm"]);
-        expect(doors[0]?.payload).toEqual({ wallId: DOOR, doorState: "open", revealed: false });
+        // Each line says which kind of door and what it was and became, for
+        // the log's "A door was locked" (`BoardDoorUpdatedPayload`).
+        const was = (
+          wallKind: string,
+          from: string,
+          to: string,
+          before: boolean,
+          now: boolean,
+        ) => ({
+          wallKind,
+          wasDoorState: from,
+          doorState: to,
+          wasRevealed: before,
+          revealed: now,
+        });
+        expect(doors.map((event) => event.payload)).toEqual([
+          { wallId: DOOR, ...was("door", "closed", "open", false, false) },
+          { wallId: DOOR, ...was("door", "open", "locked", false, false) },
+          { wallId: SECRET, ...was("secretDoor", "closed", "open", false, true) },
+          { wallId: SECRET, ...was("secretDoor", "open", "open", true, false) },
+        ]);
+        // The torch matches the torch preset, so its line can name it.
         const lights = yield* eventsOf(fight.id, "board-light-updated");
-        expect(lights).toEqual([{ visibility: "dm", payload: { lightId: TORCH, lit: false } }]);
+        expect(lights).toEqual([
+          { visibility: "dm", payload: { lightId: TORCH, lit: false, preset: "torch" } },
+        ]);
       }),
     );
 

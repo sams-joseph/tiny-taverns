@@ -153,6 +153,20 @@ export const LIGHT_PRESETS = {
 } as const satisfies Record<string, LightReach>;
 export type LightPreset = keyof typeof LIGHT_PRESETS;
 
+/** The preset a light matches exactly, if any: what the editor shows it as and the log names it. */
+export const lightPresetOf = (
+  light: Pick<LightReach, "bright" | "dim" | "tone">,
+): LightPreset | null => {
+  for (const [name, preset] of Object.entries(LIGHT_PRESETS) as Array<
+    [LightPreset, (typeof LIGHT_PRESETS)[LightPreset]]
+  >) {
+    if (preset.bright === light.bright && preset.dim === light.dim && preset.tone === light.tone) {
+      return name;
+    }
+  }
+  return null;
+};
+
 /** The most squares a level runs across or down, the bound of every fight's board. */
 export const LEVEL_SQUARES_MAX = 200;
 /** The farthest a light reaches, bright or dim, in feet. */

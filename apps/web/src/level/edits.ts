@@ -1,5 +1,6 @@
 import {
   LIGHT_PRESETS,
+  lightPresetOf,
   PROP_KINDS,
   propFootprint,
   type LayoutLight,
@@ -380,19 +381,8 @@ export const updateLight = (
   return changed ? { ...doc, lights } : doc;
 };
 
-/** The preset a light matches exactly, if any. */
-export const presetOf = (
-  light: Pick<LayoutLight, "bright" | "dim" | "tone">,
-): LightPreset | null => {
-  for (const [name, preset] of Object.entries(LIGHT_PRESETS) as Array<
-    [LightPreset, (typeof LIGHT_PRESETS)[LightPreset]]
-  >) {
-    if (preset.bright === light.bright && preset.dim === light.dim && preset.tone === light.tone) {
-      return name;
-    }
-  }
-  return null;
-};
+/** The preset a light matches exactly, if any (`lightPresetOf`). */
+export const presetOf = lightPresetOf;
 
 // ---------------------------------------------------------------------------
 // Regions

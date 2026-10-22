@@ -185,7 +185,13 @@ const eventLines = (
   return Option.getOrElse(
     Option.filter(printed, (lines) => lines.length > 0),
     () => [
-      { key, at, label: SENTENCE[event.kind](named, noun), detail: "", tone: "muted" as const },
+      {
+        key,
+        at,
+        label: SENTENCE[event.kind](named, noun, event.payload),
+        detail: "",
+        tone: "muted" as const,
+      },
     ],
   );
 };

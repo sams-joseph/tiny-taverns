@@ -9,6 +9,10 @@ import {
   EncounterRunBoard,
   EncounterRunId,
   type LevelPartId,
+  type LevelLightTone,
+  BoardDoorUpdatedPayload,
+  BoardLightUpdatedPayload,
+  lightPresetOf,
   NotFound,
   SessionId,
 } from "@taverns/api";
@@ -469,7 +473,7 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
                   yield* levelFight(runId);
-                  const walls = yield* sql<{ readonly kind: string }>`
+                  const walls = yield* sql<{ readonly kind: "wall" | "door" | "secretDoor" }>`
                     select encounter_run_wall.kind from encounter_run_wall
                     where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
                     for update
@@ -484,8 +488,9 @@ export class RunBoards extends Context.Service<
                     return yield* new Conflict({ message: "only a secret door is revealed" });
                   }
                   const changed = yield* sql<{
-                    readonly door_state: string;
+                    readonly door_state: "open" | "closed" | "locked";
                     readonly revealed: boolean;
+                    readonly was_door_state: "open" | "closed" | "locked";
                     readonly was_revealed: boolean;
                   }>`
                     update encounter_run_wall
@@ -493,7 +498,7 @@ export class RunBoards extends Context.Service<
                         revealed = coalesce(${update.revealed ?? null}::boolean, revealed)
                     where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
                     returning encounter_run_wall.door_state, encounter_run_wall.revealed,
-                      old.revealed as was_revealed
+                      old.door_state as was_door_state, old.revealed as was_revealed
                   `;
                   // What the party sees through it now, then whether the table
                   // is told: a plain door they have seen, on a board they are
@@ -505,11 +510,16 @@ export class RunBoards extends Context.Service<
                     sessionId,
                     kind: "board-door-updated",
                     encounterRunId: runId,
+                    // Which door and what happened to it, for the log's line
+                    // (`BoardDoorUpdatedPayload`).
                     payload: {
                       wallId,
+                      wallKind: wall.kind,
                       doorState: changed[0]!.door_state,
                       revealed: changed[0]!.revealed,
-                    },
+                      wasDoorState: changed[0]!.was_door_state,
+                      wasRevealed: changed[0]!.was_revealed,
+                    } satisfies typeof BoardDoorUpdatedPayload.Encoded,
                     requestId: update.requestId,
                     visibility: lineShared ? "shared" : "dm",
                   });
@@ -556,11 +566,16 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
                   yield* levelFight(runId);
-                  const changed = yield* sql<{ readonly id: string }>`
+                  const changed = yield* sql<{
+                    readonly bright: number;
+                    readonly dim: number;
+                    readonly tone: LevelLightTone;
+                  }>`
                     update encounter_run_light set lit = ${update.lit}
                     where encounter_run_light.run_id = ${runId}
                       and encounter_run_light.id = ${lightId}
-                    returning encounter_run_light.id
+                    returning encounter_run_light.bright, encounter_run_light.dim,
+                      encounter_run_light.tone
                   `;
                   if (changed.length === 0) {
                     return yield* new NotFound({ resource: "light", id: lightId });
@@ -575,7 +590,12 @@ export class RunBoards extends Context.Service<
                     sessionId,
                     kind: "board-light-updated",
                     encounterRunId: runId,
-                    payload: { lightId, lit: update.lit },
+                    // Which light, by the preset it matches, for the log's line.
+                    payload: {
+                      lightId,
+                      lit: update.lit,
+                      preset: lightPresetOf(changed[0]!),
+                    } satisfies typeof BoardLightUpdatedPayload.Encoded,
                     requestId: update.requestId,
                     visibility: lineShared ? "shared" : "dm",
                   });

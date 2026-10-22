@@ -87,6 +87,7 @@ export function SessionLog({
                   {SENTENCE[event.kind](
                     event.combatantId === null ? undefined : names.get(event.combatantId),
                     noun,
+                    event.payload,
                   )}
                 </span>
               </li>

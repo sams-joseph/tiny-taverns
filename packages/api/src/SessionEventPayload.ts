@@ -3,10 +3,11 @@ import { Schema } from "effect";
 /**
  * The few `SessionEvent.payload` shapes a client reads: the hit-point, death
  * save and condition lines the DM's *Rolls* dock prints ("31 → 19 hp",
- * "Con save DC 10", "Unconscious added").
+ * "Con save DC 10", "Unconscious added"), and which door or light a level's
+ * line names ("A door was locked", "A torch was lit").
  *
  * `payload` stays `Schema.Unknown` on the wire, because every other kind is a
- * doorbell and its remainder is nobody's contract. These three are declared
+ * doorbell and its remainder is nobody's contract. These are declared
  * here so that the server's object literals (`satisfies …Encoded`) and the
  * dock's decode cannot drift apart; a row that fails to decode — an older line
  * from before a field existed, say — is printed from its `kind` alone.
@@ -71,3 +72,30 @@ export type HobTurnKeptPayload = typeof HobTurnKeptPayload.Type;
  */
 export const CombatantUpdatedPayload = Schema.Struct({ ...conditionsCrossed });
 export type CombatantUpdatedPayload = typeof CombatantUpdatedPayload.Type;
+
+const DoorState = Schema.Literals(["open", "closed", "locked"]);
+
+/**
+ * `board-door-updated`: which kind of door, and what it was and is now. A
+ * line logged before `wallKind` and the `was…` fields existed fails to decode
+ * and prints from its kind alone.
+ */
+export const BoardDoorUpdatedPayload = Schema.Struct({
+  wallId: Schema.String,
+  wallKind: Schema.Literals(["door", "secretDoor"]),
+  doorState: DoorState,
+  revealed: Schema.Boolean,
+  wasDoorState: DoorState,
+  wasRevealed: Schema.Boolean,
+});
+export type BoardDoorUpdatedPayload = typeof BoardDoorUpdatedPayload.Type;
+
+/** `board-light-updated`: which light, by the preset it matches (`lightPresetOf`), lit or snuffed. */
+export const BoardLightUpdatedPayload = Schema.Struct({
+  lightId: Schema.String,
+  lit: Schema.Boolean,
+  preset: Schema.NullOr(
+    Schema.Literals(["candle", "torch", "lamp", "brazier", "arcane", "moonbeam"]),
+  ),
+});
+export type BoardLightUpdatedPayload = typeof BoardLightUpdatedPayload.Type;
