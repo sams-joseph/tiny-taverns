@@ -20,7 +20,7 @@ import { levelUsesAtom } from "./load";
 /**
  * Deleting one of the owner's levels: `DELETE /library/levels/:id`, after
  * asking. It takes every wall, prop, light and region on it, and takes the
- * level off every encounter that names it (each goes back to its battle map),
+ * level off every encounter that names it (each is fought on the plain grid),
  * so the confirmation names those first, read from `uses`, and waits for that
  * read before offering the delete. A fight already started keeps its own copy.
  */
@@ -68,8 +68,8 @@ export function DeleteLevelDialog({
             ) : (
               <div className="flex flex-col gap-2">
                 <p>
-                  These encounters go back to their battle maps. Fights already started keep their
-                  own copy.
+                  These encounters will be fought on the plain grid. Fights already started keep
+                  their own copy.
                 </p>
                 <ul data-slot="level-uses" className="flex flex-col gap-1">
                   {byCampaign(uses.value).map(([campaign, encounters]) => (

@@ -10,6 +10,7 @@ import {
   keptFrom,
   type CharacterOwnCreate,
   generateLevel,
+  LevelSave,
   type LevelSpec,
   type HobProposal,
   type Location,
@@ -20,7 +21,7 @@ import {
   type NpcSheetPut,
   sharedWorldCreateFrom,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { Acts } from "./Acts.js";
 import { Advancement } from "./Advancement.js";
@@ -46,6 +47,8 @@ import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
 import type { ConversationReach } from "./visibility.js";
 
+
+const decodeLevelSave = Schema.decodeUnknownEffect(LevelSave);
 /**
  * Where a proposal becomes a row, and the only place `origin = 'assistant'` is
  * ever written.
@@ -278,7 +281,18 @@ export class Proposals extends Context.Service<
        */
       const keepLevel = (spec: LevelSpec, from: AssistantOrigin) =>
         Effect.gen(function* () {
-          const { level: draft } = generateLevel(spec);
+          const { level: generated } = generateLevel(spec);
+          // The generator's level checked against the wire's own save, as an
+          // editor's save is, before anything is written: one that does not
+          // hold together is refused here rather than half kept.
+          const draft = yield* decodeLevelSave({ ...generated, version: 0 }).pipe(
+            Effect.mapError(
+              () =>
+                new Conflict({
+                  message: "Hob's level did not come out whole; ask Hob for it again",
+                }),
+            ),
+          );
           const made = yield* levels.create(
             {
               name: draft.name,

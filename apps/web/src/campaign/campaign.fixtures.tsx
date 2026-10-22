@@ -218,7 +218,7 @@ export const encounter = {
   creatureCount: 6,
   // Never off the table yet. Computed per read from its runs.
   lastPlayed: null,
-  // Played on its battle map, not one of the creator's levels.
+  // Played on the plain grid, not one of the creator's levels.
   levelId: null,
   visibility: "dm",
   ...provenance,

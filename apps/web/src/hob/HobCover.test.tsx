@@ -5,7 +5,7 @@ import { drawnCover } from "../campaign/campaign.fixtures";
 import { HobCover } from "./HobCover";
 
 /**
- * A cover — a campaign's, a Shared World's or a battle map's: nothing when there is none, a
+ * A cover — a campaign's, a Shared World's or a place's map: nothing when there is none, a
  * quiet band while Hob draws it, and the picture once it is drawn. jsdom loads
  * no image, so `load` and `error` are fired by hand; what a browser draws is not
  * measurable here and is not asserted. The screens that show one are tested

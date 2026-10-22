@@ -66,7 +66,7 @@ describe("the Library's Levels shelf", () => {
     expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
     // Where it is used, read before the delete is offered.
     expect(await within(dialog).findByText("The Salt Road: Ambush in the reeds")).toBeTruthy();
-    expect(within(dialog).getByText(/go back to their battle maps/)).toBeTruthy();
+    expect(within(dialog).getByText(/fought on the plain grid/)).toBeTruthy();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete level" }));
     await waitFor(() =>

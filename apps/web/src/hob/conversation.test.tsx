@@ -678,7 +678,7 @@ describe("the conversation is still there", () => {
     expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
   });
 
-  it("shows the setting Hob wrote, which the battle map is drawn from on save", async () => {
+  it("shows the setting Hob wrote, which describes the level made on save", async () => {
     server.threads = [aThread("Build me an ambush")];
     server.turns = [
       {
