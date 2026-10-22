@@ -619,7 +619,9 @@ describeLayer("creator-actor", shared, (it) => {
       // `PartyTravel.list`, `move`, `moveForAccept`, `remove`, and the record
       // `move` and `moveForAccept` share. Moving the party is the creator's;
       // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
-      expect(gated).toBe(169);
+      // A hundred and seventy and seventy-one are `BattleMaps.updateDoor` and
+      // `updateLight`: the DM's hand on a fight's level, the board's like fog.
+      expect(gated).toBe(171);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
@@ -936,7 +938,11 @@ describeLayer("creator-actor", shared, (it) => {
       // `forPlayer`, for `Notes.listAsPlayer`'s reason. The two hundredth is
       // `PartyTravel.forPlayer`, the travel log as a player is told it, for
       // the same reason.
-      expect(ungated).toBe(200);
+      // Two hundred and one to six are levels: `Levels.library`, `findById`,
+      // `create`, `save`, `remove` and `uses`, the owner's shelf, for
+      // `Locations.library`'s reason: a level is in no campaign, and
+      // `levelOwned` is already the owner predicate.
+      expect(ungated).toBe(206);
     });
   });
 });
