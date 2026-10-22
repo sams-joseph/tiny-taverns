@@ -156,6 +156,9 @@ const NOT_CONTENT = [
   "level_visit_light",
   "level_visit_prop",
   "level_visit_region",
+  // A visit write's requestId, so a repeat changes nothing with no night
+  // open. See 0114_level_visit_writes.ts.
+  "level_visit_request",
   "level_visit_token",
   "level_visit_wall",
   "level_wall",

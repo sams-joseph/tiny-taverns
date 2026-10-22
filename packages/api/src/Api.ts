@@ -3,7 +3,13 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/ht
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { BoardAreaSet, BoardFogUpdate, EncounterRunBoard } from "./Board.js";
-import { LevelVisit, LevelVisitOpen, LevelVisitSummary, TableVisitSet } from "./LevelVisit.js";
+import {
+  LevelVisit,
+  LevelVisitOpen,
+  LevelVisitSummary,
+  LevelVisitTokenMove,
+  TableVisitSet,
+} from "./LevelVisit.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import {
   ImageSubject,
@@ -1166,12 +1172,17 @@ class LocationsGroup extends HttpApiGroup.make("locations")
  * are `NotFound` at every endpoint.
  *
  * `open` copies one of the creator's own levels into a new visit, the party
- * standing down its left edge; another account's level is `NotFound`, and a
- * level the campaign already has a visit of is a `Conflict`. `remove` is the
- * DM's *Reset level*: a real delete of the visit and everything on it, which
- * takes it off the table, and is refused with a `Conflict` while a live fight
- * is played on it. `putOnTable` makes a visit the one on the campaign's table,
- * and `takeOffTable` leaves none there.
+ * standing on its entry squares (down its left edge on a level with none);
+ * another account's level is `NotFound`, and a level the campaign already has
+ * a visit of is a `Conflict`. `remove` is the DM's *Reset level*: a real
+ * delete of the visit and everything on it, which takes it off the table, and
+ * is refused with a `Conflict` while a live fight is played on it.
+ * `putOnTable` makes a visit the one on the campaign's table, and
+ * `takeOffTable` leaves none there. The rest are the DM exploring the visit:
+ * tokens, fog, doors, lights and regions, each answered with the visit.
+ *
+ * While a night is open, each write here is a line in its log naming the
+ * visit, and rings its doorbell (`live.visitEvents`).
  */
 class LevelVisitsGroup extends HttpApiGroup.make("levelVisits")
   .add(
@@ -1206,6 +1217,53 @@ class LevelVisitsGroup extends HttpApiGroup.make("levelVisits")
       params: { campaignId: CampaignId },
       success: HttpApiSchema.NoContent,
       error: NotFound,
+    }),
+    /**
+     * The DM stands a seat's token on a square of the visit. `NotFound` for a
+     * seat with no token on it; `Conflict` for a square off the board or one
+     * no token may stand on. See `LevelVisitTokenMove`, which says what every
+     * write below shares.
+     */
+    HttpApiEndpoint.put("moveToken", "/visits/:visitId/tokens/:seatId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, seatId: CampaignCharacterId },
+      payload: LevelVisitTokenMove,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /** Hide or reveal squares of the visit under the DM's fog. See `BoardFogUpdate`. */
+    HttpApiEndpoint.patch("updateFog", "/visits/:visitId/fog", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      payload: BoardFogUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Open, close or lock a door of the visit, or reveal or hide a secret one.
+     * `NotFound` for a wall the visit does not have; `Conflict` for a plain
+     * wall and a reveal of a door that is not secret. See `BoardDoorUpdate`.
+     */
+    HttpApiEndpoint.patch("updateDoor", "/visits/:visitId/doors/:wallId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, wallId: LevelPartId },
+      payload: BoardDoorUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /** Light or snuff a light of the visit. See `BoardLightUpdate`. */
+    HttpApiEndpoint.patch("updateLight", "/visits/:visitId/lights/:lightId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, lightId: LevelPartId },
+      payload: BoardLightUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Reveal a secret region of the visit, or hide it again. `Conflict` for a
+     * region that is not secret. See `BoardRegionUpdate`.
+     */
+    HttpApiEndpoint.patch("updateRegion", "/visits/:visitId/regions/:regionId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, regionId: LevelPartId },
+      payload: BoardRegionUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId")
@@ -3920,6 +3978,20 @@ class LiveGroup extends HttpApiGroup.make("live")
        * failure event inside a 200 stream: the handler resolves the actor and
        * checks the run *before* it returns a stream at all.
        */
+      success: HttpApiSchema.StreamSse({ events: LiveEvent }),
+      error: NotFound,
+    }),
+    /**
+     * The DM's stream of a level visit's lines on this night: `events`' contract
+     * (replay after `since` or `Last-Event-ID`, then tail; a heartbeat with no
+     * `id`), over the lines naming the visit rather than a fight. A visit and
+     * a night that are not this creator's campaign's are an ordinary 404
+     * before any stream.
+     */
+    HttpApiEndpoint.get("visitEvents", "/visits/:visitId/events", {
+      params: { campaignId: CampaignId, sessionId: SessionId, visitId: LevelVisitId },
+      query: { since: SessionLogFilter.since },
+      headers: { "last-event-id": Schema.optional(Schema.String) },
       success: HttpApiSchema.StreamSse({ events: LiveEvent }),
       error: NotFound,
     }),

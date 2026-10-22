@@ -2,6 +2,7 @@ import {
   DIFFICULT_MATERIALS,
   LEVEL_MATERIALS,
   LEVEL_PROP_KINDS,
+  LEVEL_REGION_KINDS,
   LIGHT_PRESETS,
   PROP_KINDS,
   type LevelRegionKind,
@@ -14,13 +15,7 @@ import { MATERIAL_LABEL, PRESET_LABEL, PROP_LABEL, REGION_LABEL } from "./labels
 import { readPalette } from "./palette";
 import type { EditorState, EditorStore } from "./store";
 
-const REGION_KINDS: ReadonlyArray<LevelRegionKind> = [
-  "difficult",
-  "magicalDarkness",
-  "heavyObscurement",
-  "hazard",
-  "trap",
-];
+const REGION_KINDS: ReadonlyArray<LevelRegionKind> = LEVEL_REGION_KINDS;
 
 function Item({
   pressed,
@@ -182,16 +177,19 @@ export function Tray({
               }
             />
           ))}
-          <div className="flex items-center gap-2 px-2">
-            <Checkbox
-              id={secretId}
-              checked={state.regionSecret}
-              onCheckedChange={(checked) => store.choose({ regionSecret: checked })}
-            />
-            <Label htmlFor={secretId} className="text-label-s text-muted-foreground">
-              Secret
-            </Label>
-          </div>
+          {/* A way in is the DM's overlay and never secret. */}
+          {state.regionKind === "entry" ? null : (
+            <div className="flex items-center gap-2 px-2">
+              <Checkbox
+                id={secretId}
+                checked={state.regionSecret}
+                onCheckedChange={(checked) => store.choose({ regionSecret: checked })}
+              />
+              <Label htmlFor={secretId} className="text-label-s text-muted-foreground">
+                Secret
+              </Label>
+            </div>
+          )}
         </Strip>
       );
     case "party":

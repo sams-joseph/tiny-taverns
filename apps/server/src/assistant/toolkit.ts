@@ -2089,7 +2089,8 @@ export const ProposeLevel = Tool.make("proposeLevel", {
     "store, library, barracks, cistern or garden — with a rough size and a short label " +
     "if it has a name. connections is how rooms open onto the corridors: doors, mixed " +
     "or open arches. secrets is how many secret doors to hide. mood is the light: " +
-    "firelit, dim, dark (nothing lit), moonlit or arcane. The walls, doors, furniture " +
+    "firelit, dim, dark (nothing lit), moonlit or arcane. List first the room the party " +
+    "comes in by: its middle is marked as the way in. The walls, doors, furniture " +
     "and lights are laid out for you, and they can change anything afterwards in the " +
     "editor. Only a suggestion: nothing is made unless they keep it. Say one short " +
     "line about it and stop.",

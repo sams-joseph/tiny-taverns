@@ -20,6 +20,8 @@ Any live client must implement this against `GET …/runs/:runId/events` (`handl
 - `GET …/log?since=` is the same query over a non-streaming transport.
 - Authorization happens before a stream exists, so a denial is a JSON 404 rather than a failure event inside a 200.
 
+A level visit's lines have a stream of their own, `GET …/sessions/:s/visits/:visitId/events` (`live.visitEvents`), under the same contract: the same replay-then-tail (`logStream` in `handlers.ts`, one implementation for both), over the night's lines naming the visit (`session_event.level_visit_id`). It is a second endpoint rather than a run stream bent to carry a visit, because a visit is not a fight and has no run to key on.
+
 `seq` comes from one global sequence (`session_event_seq`), not `max(seq)+1` per session: a cursor only has to increase. It is `integer` (`0081`), so it reads as the wire's number. `payload` is the human-legible remainder, not state; a client re-reads rows rather than applying it. The hit-point, death-save and condition lines are the declared exceptions (`SessionEventPayload.ts`, which the server writes them through): the runner's _Rolls_ dock prints them, and nothing applies them.
 
 ## Modelling decisions
@@ -69,6 +71,15 @@ A session can start over roleplay with no encounter in sight, so opening a night
 It is a row lock and an existence check, not a partial unique index. `start` takes `for no key update` on the encounter row, so a second start of the same encounter (another tab, another night, where `encounter_run_one_live_per_session` cannot settle it) waits for the first to commit and then sees its run. An index needs a column meaning "the run that opened the playthrough", and none stays true: `continued_from` is `on delete set null`, so deleting the night that holds a carried chain's middle link would either fail on the index or reopen an encounter whose successor still stands. Deleting every night an encounter was played on does free it, because it then has no run. `play-once.test.ts` drives each case with real actors, including the race; a player never reaches the rule and is `NotFound` either way.
 
 The browser offers no start that would be refused: see [Web screens](web-screens.md). Its one way to `resume` is `campaign/PickUpRunDialog.tsx`, behind an encounter's _Pick up_.
+
+## Exploring a level: the visit
+
+A level visit (`LevelVisit.ts`, [Data model](data-model.md#levels)) is the campaign's live state of one of its creator's levels, the dungeon between fights. The DM explores it with no fight on: stands a token on any square a token may stand on (no walk, no speed, as a miniature), opens and locks doors, reveals secret doors and regions, lights lights and paints fog. The door, light, region and fog statements are the fight board's own (`repo/boardWrites.ts`, over `BoardTables`), so a door opens the same way on either; what a write logs and whom it tells is the caller's. Each write holds the visit row `for update`, recomputes the party's vision over the visit (`refreshVisitVision`, the function a fight uses), and is one transaction.
+
+- **Opening stands the party on the way in.** A level's `entry` region is the DM's overlay of where the party comes in; `open` stands the seats on its squares a token fits, in reading order, and the rest down the left edge. A fight on the level ignores it, and no player read sends it.
+- **Frozen while borrowed.** While a live fight names the visit (`encounter_run.level_visit_id`), every visit write is a `Conflict`, so the visit and the fight never both answer for the dungeon.
+- **Logged only on an open night.** A visit outlives nights, so its writes are logged on whichever night is open (the campaign's current session, started and not ended) as `visit-*` lines naming the visit, and ring that night's doorbell after the commit. With no night open a write logs nothing and rings nothing. Each is the DM's line for now; which become the players' is the players' phase's decision, as `0110` decided a fight's.
+- **Idempotent without a night.** A fight's `requestId` is kept on its log line; a visit write may have no line, so the visit keeps its own ledger (`level_visit_request`), entered first in the write's transaction, so a late retry of an earlier drag changes nothing.
 
 ## Finishing: one write, and the server owns the rest
 

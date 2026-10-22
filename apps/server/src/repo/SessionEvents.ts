@@ -5,6 +5,7 @@ import {
   type CharacterId,
   type CombatantId,
   EncounterRunId,
+  LevelVisitId,
   NotFound,
   type Origin,
   SessionEvent,
@@ -24,6 +25,7 @@ import {
   ensureNestedParentReadable,
   ensureNestedRowReadable,
   inCampaign,
+  levelVisitWritable,
   type NestedTable,
   nestedRowReadable,
   under,
@@ -52,6 +54,8 @@ export interface AppendEvent {
   readonly encounterRunId?: EncounterRunId | undefined;
   readonly combatantId?: CombatantId | undefined;
   readonly characterId?: CharacterId | undefined;
+  /** The level visit a visit write's line names (`0114_level_visit_writes.ts`). */
+  readonly levelVisitId?: string | undefined;
   readonly payload?: Record<string, unknown> | undefined;
   /** Set on the mutations a client may safely repeat. See `session_event_request_id_key`. */
   readonly requestId?: string | undefined;
@@ -90,6 +94,7 @@ export const appendEvent = (
       encounter_run_id: event.encounterRunId,
       combatant_id: event.combatantId,
       character_id: event.characterId,
+      level_visit_id: event.levelVisitId,
       payload: event.payload === undefined ? undefined : JSON.stringify(event.payload),
       request_id: event.requestId,
       visibility: event.visibility,
@@ -206,6 +211,26 @@ export class SessionEvents extends Context.Service<
       since: number,
       limit: number,
     ) => Effect.Effect<ReadonlyArray<SessionEvent>, never, never>;
+    /**
+     * `listForRun` for a level visit's lines on one night
+     * (`0114_level_visit_writes.ts`): the night and the visit each proved
+     * this creator's campaign's, `NotFound` otherwise.
+     */
+    readonly listForVisit: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      visitId: LevelVisitId,
+      since: number,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<SessionEvent>, NotFound>;
+    /** `pollForRun`'s spelling of `listForVisit`, for the DM's visit stream. */
+    readonly pollForVisit: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      visitId: LevelVisitId,
+      since: number,
+      limit: number,
+    ) => Effect.Effect<ReadonlyArray<SessionEvent>, never, never>;
   }
 >()("SessionEvents") {
   static readonly layer = Layer.effect(this)(
@@ -247,6 +272,45 @@ export class SessionEvents extends Context.Service<
         limit: number,
       ): Effect.Effect<ReadonlyArray<SessionEvent>, never, never> =>
         runEvents({ actor, campaignId, runId, since, limit }).pipe(Effect.orDie);
+
+      /**
+       * A visit's lines on one night after `since`, oldest first, paged as
+       * `runEvents` is. The visit's own predicate is asked again here, so a
+       * line can only be read through a visit of this creator's campaign.
+       */
+      const visitEvents = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            actor: Actor,
+            campaignId: CampaignId,
+            sessionId: SessionId,
+            visitId: LevelVisitId,
+            since: Schema.Number,
+            limit: Schema.Number,
+          }),
+        ),
+        Result: SessionEventRow,
+        execute: ({ actor, campaignId, sessionId, visitId, since, limit }) => sql`
+          select session_event.* from session_event
+          join level_visit on level_visit.id = session_event.level_visit_id
+          where session_event.level_visit_id = ${visitId}
+            and session_event.session_id = ${sessionId}
+            and session_event.seq > ${since}
+            and ${levelVisitWritable(sql, campaignId, actor)}
+            and ${logReadable(sql, campaignId, actor)}
+          order by session_event.seq asc
+          limit ${limit}
+        `,
+      });
+      const visitPage = (
+        actor: Actor,
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        visitId: LevelVisitId,
+        since: number,
+        limit: number,
+      ): Effect.Effect<ReadonlyArray<SessionEvent>, never, never> =>
+        visitEvents({ actor, campaignId, sessionId, visitId, since, limit }).pipe(Effect.orDie);
 
       const sessionEvents = SqlSchema.findAll({
         Request: Schema.toType(
@@ -298,6 +362,24 @@ export class SessionEvents extends Context.Service<
 
         pollForRun: ({ actor, campaign: campaignId }, _sessionId, runId, since, limit) =>
           runPage(actor, campaignId, runId, since, limit),
+
+        listForVisit: ({ actor, campaign: campaignId }, sessionId, visitId, since, limit) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              yield* ensureNestedParentReadable(sql, LOG, sessionId, campaignId, actor);
+              const visits = yield* sql`
+                select level_visit.id from level_visit
+                where level_visit.id = ${visitId} and ${levelVisitWritable(sql, campaignId, actor)}
+              `;
+              if (visits.length === 0) {
+                return yield* new NotFound({ resource: "level_visit", id: visitId });
+              }
+              return yield* visitPage(actor, campaignId, sessionId, visitId, since, limit);
+            }),
+          ),
+
+        pollForVisit: ({ actor, campaign: campaignId }, sessionId, visitId, since, limit) =>
+          visitPage(actor, campaignId, sessionId, visitId, since, limit),
       };
     }),
   );

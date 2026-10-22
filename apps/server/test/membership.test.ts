@@ -1096,11 +1096,13 @@ describeLayer("membership", shared, (it) => {
               -- the creator's visit reads, behind the creator proof; a
               -- player's and a stranger's refusals are covered in
               -- level-visits.test.ts. A placed creature's square is read by
-              -- nothing yet.
+              -- nothing yet. A visit's request ledger is read by no read at
+              -- all: only a visit write asks it whether a request was applied.
               'level_visit',
               'level_visit_light',
               'level_visit_prop',
               'level_visit_region',
+              'level_visit_request',
               'level_visit_token',
               'level_visit_wall',
               'encounter_creature_spot',

@@ -227,6 +227,9 @@ describeLayer("creator-actor", shared, (it) => {
         // because it always took its actor as an argument. Ungated it would have
         // left the other two decorative — the stream is the wide read.
         pollForRun: true,
+        // A level visit's lines, read and streamed as a fight's are.
+        listForVisit: true,
+        pollForVisit: true,
       };
 
       // `Recap` is the fourth, and the only one that is gated in part: `read`
@@ -293,7 +296,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([12, 5, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([12, 5, 10, 5, 4, 2, 4, 4]);
     });
   });
 
@@ -622,9 +625,13 @@ describeLayer("creator-actor", shared, (it) => {
       // a table's level visits: `LevelVisits.list`, `findById`, `open`,
       // `remove`, `putOnTable`, `takeOffTable` and the read they share. A
       // visit is live-play state with no player read yet, the creator's from
-      // the day it was declared. Less the three unused ordinals, that is a
-      // hundred and seventy-six.
-      expect(gated).toBe(176);
+      // the day it was declared. A hundred and eighty to eighty-five are the
+      // DM exploring a visit: `LevelVisits.moveToken`, `updateFog`,
+      // `updateDoor`, `updateLight`, `updateRegion` and the transaction they
+      // share; eighty-six and eighty-seven are `SessionEvents.listForVisit`
+      // and `pollForVisit`, the visit's lines and the DM's visit stream. Less
+      // the three unused ordinals, that is a hundred and eighty-four.
+      expect(gated).toBe(184);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

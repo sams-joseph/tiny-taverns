@@ -86,6 +86,7 @@ const TORCH_EAST = part(20);
 const LAMP_UNLIT = part(21);
 const TRAP = part(30);
 const MUD = part(31);
+const ENTRY = part(32);
 
 const COLUMNS = 9;
 const at = (column: number, row: number) => row * COLUMNS + column;
@@ -96,7 +97,7 @@ const at = (column: number, row: number) => row * COLUMNS + column;
  * between rows 3 and 4. The west room (columns 0–3) is flagstone, the east
  * (4–8) planks. A barrel and a DM-only crate in the west; a lit torch in the
  * east; an unlit lamp in the west; a secret trap in the west, and mud across
- * both rooms' top rows.
+ * both rooms' top rows; the way in (`entry`) in the west.
  */
 const twoRooms = (level: Level, ambient: "bright" | "dark" = "bright"): LevelSave => ({
   name: "Two Rooms",
@@ -172,6 +173,8 @@ const twoRooms = (level: Level, ambient: "bright" | "dark" = "bright"): LevelSav
   regions: [
     { id: TRAP, kind: "trap", squares: [at(1, 1)], secret: true },
     { id: MUD, kind: "difficult", squares: [at(3, 0), at(8, 0)], secret: false },
+    // The way in, the DM's overlay: never on a player's wire.
+    { id: ENTRY, kind: "entry", squares: [at(1, 2), at(2, 2)], secret: false },
   ],
   version: level.version,
 });
@@ -414,8 +417,8 @@ describeLayer("party-vision", shared, (it) => {
         // One floor value per seen square, and none of the east room's planks.
         expect(level.floor).toEqual(WEST.map(() => 1));
         // The east room's torch, the west room's unlit lamp, the DM's crate and
-        // the secret trap are not on the wire at all.
-        for (const absent of [TORCH_EAST, LAMP_UNLIT, CRATE_DM, TRAP]) {
+        // the secret trap are not on the wire at all, nor the way in.
+        for (const absent of [TORCH_EAST, LAMP_UNLIT, CRATE_DM, TRAP, ENTRY]) {
           expect(raw.body).not.toContain(absent);
         }
         for (const word of ["dmOnly", "revealed", "secret", '"lit"']) {

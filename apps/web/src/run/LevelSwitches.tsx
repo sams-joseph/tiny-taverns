@@ -117,6 +117,7 @@ const REGION_NOUN: Record<LevelRegionKind, string> = {
   heavyObscurement: "the heavy obscurement",
   hazard: "the hazard",
   trap: "the trap",
+  entry: "the way in",
 };
 
 /**

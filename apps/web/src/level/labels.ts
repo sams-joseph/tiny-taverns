@@ -61,6 +61,7 @@ export const REGION_LABEL: Readonly<Record<LevelRegionKind, string>> = {
   heavyObscurement: "Heavily obscured",
   hazard: "Hazard",
   trap: "Trap",
+  entry: "Way in",
 };
 
 export const COVER_LABEL: Readonly<Record<LevelCover, string>> = {

@@ -5,6 +5,7 @@ import {
   type LevelRegionKind,
   type LightPreset,
   type SessionEventKind,
+  VisitTabledPayload,
 } from "@taverns/api";
 import { Option, Schema } from "effect";
 
@@ -67,7 +68,23 @@ export const SENTENCE: Record<
   "party-moved": () => "The party moved",
   // The row is in `character_roll`; this marker is only the doorbell.
   "roll-made": () => "A roll hit the tray",
+  // A level visit's lines (`LevelVisit.ts`): the party exploring with no fight on.
+  "visit-opened": () => "The party came to a level",
+  "visit-tabled": (_who, _noun, payload) =>
+    Option.match(decodeTabled(payload), {
+      onNone: () => "A level went on or came off the table",
+      onSome: ({ onTable }) =>
+        onTable ? "A level went on the table" : "A level came off the table",
+    }),
+  "visit-token-moved": () => "A token moved on the level",
+  "visit-door-updated": (_who, _noun, payload) => doorSentence(payload),
+  "visit-light-updated": (_who, _noun, payload) => lightSentence(payload),
+  "visit-region-updated": (_who, _noun, payload) => regionSentence(payload),
+  "visit-fog-updated": () => "The fog on the level shifted",
+  "visit-vision-updated": () => "What the party sees of the level changed",
 };
+
+const decodeTabled = Schema.decodeUnknownOption(VisitTabledPayload);
 
 const decodeDoor = Schema.decodeUnknownOption(BoardDoorUpdatedPayload);
 const decodeLight = Schema.decodeUnknownOption(BoardLightUpdatedPayload);
@@ -109,6 +126,7 @@ const REGION_NOUN: Record<LevelRegionKind, string> = {
   heavyObscurement: "Heavy obscurement",
   hazard: "A hazard",
   trap: "A trap",
+  entry: "The way in",
 };
 
 /** A secret region's line: which kind, shown to the table or hidden again. */

@@ -109,3 +109,17 @@ export const BoardLightUpdatedPayload = Schema.Struct({
   ),
 });
 export type BoardLightUpdatedPayload = typeof BoardLightUpdatedPayload.Type;
+
+const Square = Schema.Struct({ column: Schema.Int, row: Schema.Int });
+
+/** `visit-token-moved`: whose token, by its seat, and from where to where on the visit. */
+export const VisitTokenMovedPayload = Schema.Struct({
+  seatId: Schema.String,
+  from: Square,
+  to: Square,
+});
+export type VisitTokenMovedPayload = typeof VisitTokenMovedPayload.Type;
+
+/** `visit-tabled`: the visit put on the campaign's table (`true`) or taken off it. */
+export const VisitTabledPayload = Schema.Struct({ onTable: Schema.Boolean });
+export type VisitTabledPayload = typeof VisitTabledPayload.Type;

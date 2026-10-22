@@ -168,15 +168,15 @@ export const revokeMemberAt = (
     `;
     // Their characters are no longer the party's eyes on a level fight, and
     // stand on none of the table's level visits.
-    yield* dropSeatTokens(
+    const visitNights = yield* dropSeatTokens(
       sql,
       seats.map((seat) => seat.id),
     );
     const characters = seats.flatMap((seat) =>
       seat.character_id === null ? [] : [seat.character_id],
     );
-    const sessions = yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
-    return { revoked: rows.length, sessions };
+    const fightNights = yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+    return { revoked: rows.length, sessions: [...new Set([...fightNights, ...visitNights])] };
   });
 
 /**

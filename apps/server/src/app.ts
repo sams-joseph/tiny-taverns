@@ -673,7 +673,7 @@ export const servicesOver = <E>(
     // A campaign's visits of its creator's levels: creator-only, every method
     // behind the `CampaignCreatorActor` proof. Only the handlers hold it; Hob
     // opens no visit, which is a live-play record.
-    LevelVisits.layer,
+    LevelVisits.layer.pipe(Layer.provide(LiveEvents.layer)),
     // The party's travels: a move during an open night rings its doorbell.
     PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,

@@ -53,6 +53,12 @@ export interface BoardTables {
   readonly region: string;
   /** Each part table's column naming its board row. */
   readonly partKey: string;
+  /**
+   * The board row's column holding the fog it started with, which a fog
+   * `reset` goes back to (`0087`'s `fog_start`), or `null` for a board that
+   * started with none: a visit is opened unfogged.
+   */
+  readonly fogStart: string | null;
 }
 
 export const RUN_BOARD: BoardTables = {
@@ -63,6 +69,7 @@ export const RUN_BOARD: BoardTables = {
   light: "encounter_run_light",
   region: "encounter_run_region",
   partKey: "run_id",
+  fogStart: "fog_start",
 };
 
 export const VISIT_BOARD: BoardTables = {
@@ -73,6 +80,7 @@ export const VISIT_BOARD: BoardTables = {
   light: "level_visit_light",
   region: "level_visit_region",
   partKey: "visit_id",
+  fogStart: null,
 };
 
 /**
@@ -611,7 +619,7 @@ const PROP_SIZES = JSON.stringify(
  *   its square, as a lit room is seen without its lamp;
  * - regions that are not secret, or are secret and revealed by the DM
  *   (`0112_run_region_reveal.ts`), clipped to the seen squares, none left
- *   empty.
+ *   empty; never an `entry`, the DM's overlay (`0114_level_visit_writes.ts`).
  *
  * `seen_at` is the seen set as one flag per square, so each part's test is a
  * subscript rather than a scan of the array.
@@ -681,6 +689,7 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
                          where v.seen_at[square + 1] order by square) as squares
             from encounter_run_region g
             where g.run_id = encounter_run_board.run_id and (not g.secret or g.revealed)
+              and g.kind <> 'entry'
           ) clipped
           where cardinality(clipped.squares) > 0
         ), '[]'::json)

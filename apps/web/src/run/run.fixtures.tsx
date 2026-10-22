@@ -82,6 +82,7 @@ export const sessionEvent = (
   kind,
   encounterRunId: runIdRaw,
   combatantId,
+  levelVisitId: null,
   payload: {},
   visibility: "dm",
   origin: "authored",

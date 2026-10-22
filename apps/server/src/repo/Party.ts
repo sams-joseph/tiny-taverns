@@ -555,11 +555,15 @@ export class Party extends Context.Service<
                     row.character_id === null ? [] : [row.character_id],
                   );
                   // Nor does it stand on any of the table's level visits.
-                  yield* dropSeatTokens(
+                  const visitNights = yield* dropSeatTokens(
                     sql,
                     rows.map((row) => row.id),
                   );
-                  return yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+                  const fightNights = yield* refreshFights(
+                    sql,
+                    yield* levelFightsOf(sql, characters),
+                  );
+                  return [...new Set([...fightNights, ...visitNights])];
                 }),
               )
               .pipe(

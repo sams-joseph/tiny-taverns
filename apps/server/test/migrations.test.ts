@@ -253,6 +253,7 @@ describeLayer("migrations", database, (it) => {
         "level_visit_light",
         "level_visit_prop",
         "level_visit_region",
+        "level_visit_request",
         "level_visit_token",
         "level_visit_wall",
         "level_wall",
@@ -419,6 +420,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 111, name: "retire_battle_maps" },
         { migration_id: 112, name: "run_region_reveal" },
         { migration_id: 113, name: "level_visits" },
+        { migration_id: 114, name: "level_visit_writes" },
       ]);
     }),
   );
@@ -542,6 +544,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 111, name: "retire_battle_maps" },
         { migration_id: 112, name: "run_region_reveal" },
         { migration_id: 113, name: "level_visits" },
+        { migration_id: 114, name: "level_visit_writes" },
       ]);
     }),
   );

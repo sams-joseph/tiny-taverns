@@ -1187,7 +1187,7 @@ export class Characters extends Context.Service<
                   returning campaign_character.id
                 `;
                   // It stands on no level visit any more.
-                  yield* dropSeatTokens(
+                  const visitNights = yield* dropSeatTokens(
                     sql,
                     seats.map((seat) => seat.id),
                   );
@@ -1197,7 +1197,8 @@ export class Characters extends Context.Service<
                   returning character.id
                 `;
                   if (rows.length === 0) return yield* new NotFound({ resource: "character", id });
-                  return yield* refreshFights(sql, fights);
+                  const fightNights = yield* refreshFights(sql, fights);
+                  return [...new Set([...fightNights, ...visitNights])];
                 }),
               )
               .pipe(

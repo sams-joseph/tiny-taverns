@@ -79,6 +79,25 @@ export class LevelVisitSummary extends Schema.Class<LevelVisitSummary>("LevelVis
 export const LevelVisitOpen = Schema.Struct({ levelId: LevelId });
 export type LevelVisitOpen = typeof LevelVisitOpen.Type;
 
+/**
+ * The DM stands a seat's token on a square of the visit, as they would a
+ * miniature: any square on the board a token may stand on (`standable`), with
+ * no walk and no speed. `Conflict` for a square off the board or one no token
+ * may stand on; `NotFound` for a seat with no token on the visit. It is
+ * written over and over while the DM drags, so it carries a `requestId`.
+ *
+ * Every write to a visit (this, and its fog, doors, lights and regions, which
+ * take a fight board's payloads: `BoardFogUpdate`, `BoardDoorUpdate`,
+ * `BoardLightUpdate`, `BoardRegionUpdate`) is answered with the visit,
+ * recomputes what the party sees, and is a `Conflict` while a live fight is
+ * played on the visit. A repeated `requestId` changes nothing.
+ */
+export const LevelVisitTokenMove = Schema.Struct({
+  position: CombatantPosition,
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type LevelVisitTokenMove = typeof LevelVisitTokenMove.Type;
+
 /** Put one of the campaign's visits on its table, taking off whichever was there. */
 export const TableVisitSet = Schema.Struct({ visitId: LevelVisitId });
 export type TableVisitSet = typeof TableVisitSet.Type;
