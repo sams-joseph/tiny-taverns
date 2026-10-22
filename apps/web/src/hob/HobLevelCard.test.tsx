@@ -120,7 +120,9 @@ for (const surface of SURFACES) {
       ]);
       // And it was drawn, on a 2D canvas.
       expect(
-        vi.mocked(HTMLCanvasElement.prototype.getContext).mock.calls.some(([kind]) => kind === "2d"),
+        vi
+          .mocked(HTMLCanvasElement.prototype.getContext)
+          .mock.calls.some(([kind]) => kind === "2d"),
       ).toBe(true);
 
       await userEvent.click(offered.getByRole("button", { name: "Keep it" }));

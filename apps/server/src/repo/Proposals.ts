@@ -102,8 +102,14 @@ import type { ConversationReach } from "./visibility.js";
  * too, or a Shared World, through `Groups.create` with the payload
  * `sharedWorldCreateFrom` builds for the form, or a level-up of a character
  * the asker owns, through `Advancement.levelUpForAccept` (the wizard's own
- * write) with the version the proposal read. The asker becomes the
- * campaign's creator, or the world's owner, exactly as by the form.
+ * write) with the version the proposal read, or a place or a level for the
+ * asker's Library. The asker becomes the campaign's creator, or the world's
+ * owner, exactly as by the form.
+ *
+ * A kept level is laid out again from the labels and seed on the turn
+ * (`generateLevel`, the function the card drew its preview with), then made
+ * through `Levels.create` and the editor's own `Levels.save`, so the document
+ * is never in the proposal and never in a request.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in

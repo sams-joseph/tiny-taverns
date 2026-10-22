@@ -44,9 +44,13 @@ const SEEDS = Array.from({ length: 40 }, (_, index) => index + 1);
 const unreachableRooms = ({ level, rooms }: GeneratedLevel): ReadonlyArray<number> => {
   const opened = {
     ...level,
-    walls: level.walls.map((wall) => (wall.kind === "wall" ? wall : { ...wall, doorState: "open" as const })),
+    walls: level.walls.map((wall) =>
+      wall.kind === "wall" ? wall : { ...wall, doorState: "open" as const },
+    ),
   };
-  const revealed = new Set(level.walls.filter((wall) => wall.kind === "secretDoor").map((wall) => wall.id));
+  const revealed = new Set(
+    level.walls.filter((wall) => wall.kind === "secretDoor").map((wall) => wall.id),
+  );
   const blocked = new Uint8Array(level.columns * level.rows);
   for (const prop of level.props) {
     if (!propBehaviour(prop).blocksMovement) continue;
@@ -78,7 +82,8 @@ const unreachableRooms = ({ level, rooms }: GeneratedLevel): ReadonlyArray<numbe
     ] as const) {
       const to = { column: from.column + dx, row: from.row + dy };
       const at = to.row * level.columns + to.column;
-      if (to.column < 0 || to.row < 0 || to.column >= level.columns || to.row >= level.rows) continue;
+      if (to.column < 0 || to.row < 0 || to.column >= level.columns || to.row >= level.rows)
+        continue;
       if (reached[at] === 1) continue;
       if (movementCost(opened, from, to, { revealed }) === null) continue;
       reached[at] = 1;
@@ -116,9 +121,7 @@ describe("generateLevel", () => {
       for (const seed of SEEDS) {
         for (const count of [1, Math.ceil(LEVEL_ROOMS_MAX[size] / 2), LEVEL_ROOMS_MAX[size]]) {
           const { rooms, level } = generateLevel(specFor(size, seed, count));
-          expect(rooms.length, `${size}, ${String(count)} rooms, seed ${String(seed)}`).toBe(
-            count,
-          );
+          expect(rooms.length, `${size}, ${String(count)} rooms, seed ${String(seed)}`).toBe(count);
           // No two rooms share a square, and each is on its own floor.
           const owner = new Int32Array(level.columns * level.rows).fill(-1);
           const clashes: Array<number> = [];
@@ -143,8 +146,10 @@ describe("generateLevel", () => {
   it("keeps every room reachable from every other, its doors opened", () => {
     for (const size of SIZES) {
       for (const seed of SEEDS.slice(0, size === "large" ? 12 : 25)) {
-        expect(unreachableRooms(generateLevel(specFor(size, seed))), `${size} at ${String(seed)}`)
-          .toEqual([]);
+        expect(
+          unreachableRooms(generateLevel(specFor(size, seed))),
+          `${size} at ${String(seed)}`,
+        ).toEqual([]);
       }
     }
   });
@@ -204,7 +209,11 @@ describe("generateLevel", () => {
     const firelit = tones("firelit");
     expect(firelit.ambient).toBe("dark");
     expect(firelit.lights.some((light) => light.tone === "fire")).toBe(true);
-    expect(tones("moonlit").lights.filter((light) => light.tone === "fire").every((light) => light.bright <= 5)).toBe(true);
+    expect(
+      tones("moonlit")
+        .lights.filter((light) => light.tone === "fire")
+        .every((light) => light.bright <= 5),
+    ).toBe(true);
     expect(tones("arcane").lights.some((light) => light.tone === "arcane")).toBe(true);
     const dark = tones("dark");
     expect(dark.ambient).toBe("dark");
@@ -213,7 +222,11 @@ describe("generateLevel", () => {
   });
 
   it("carries the name and description, and a blank description is none", () => {
-    const { level } = generateLevel({ ...specFor("small", 2), name: "  Vault  ", description: " " });
+    const { level } = generateLevel({
+      ...specFor("small", 2),
+      name: "  Vault  ",
+      description: " ",
+    });
     expect(level.name).toBe("Vault");
     expect(level.description).toBeNull();
   });

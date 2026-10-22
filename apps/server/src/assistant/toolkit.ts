@@ -2556,11 +2556,12 @@ export const ProposeSharedWorld = Tool.make("proposeSharedWorld", {
  *
  * The core drafting toolkit plus {@link proposeCampaignOver},
  * {@link ProposeSharedWorld}, {@link ListLocations} over the asker's own
- * Library and {@link ProposeLocation}, and nothing else: it has no campaign to
- * read and no Shared World record, so it can draft the four things an account
- * makes on its own — a character over the core rules, a new campaign, a new
- * Shared World and a place. Campaign content (a note, an encounter) needs a campaign, and
- * a Chronicle entry needs a world; their tools are absent rather than refused.
+ * Library, {@link ProposeLocation} and {@link ProposeLevel}, and nothing else:
+ * it has no campaign to read and no Shared World record, so it can draft the
+ * five things an account makes on its own — a character over the core rules,
+ * a new campaign, a new Shared World, a place and a level. Campaign content (a
+ * note, an encounter) needs a campaign, and a Chronicle entry needs a world;
+ * their tools are absent rather than refused.
  */
 export const accountToolkitOver = (
   vocabulary: CharacterVocabulary,
@@ -2576,7 +2577,7 @@ export const accountToolkitOver = (
     ProposeLevel,
   );
 
-/** {@link accountToolkitOver} above the cap: the same six, plus the listing. */
+/** {@link accountToolkitOver} above the cap: the same seven, plus the listing. */
 export const accountToolkitListing = (
   vocabulary: CharacterVocabulary,
   worlds: ReadonlyArray<CampaignWorld>,

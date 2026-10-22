@@ -105,7 +105,14 @@ export const drawLevelThumbnail = (
     if (!light.lit) continue;
     const reach = ((light.bright + light.dim) / level.feetPerCell) * px;
     if (reach <= 0) continue;
-    const glow = c.createRadialGradient(light.x * px, light.y * px, 0, light.x * px, light.y * px, reach);
+    const glow = c.createRadialGradient(
+      light.x * px,
+      light.y * px,
+      0,
+      light.x * px,
+      light.y * px,
+      reach,
+    );
     glow.addColorStop(0, k(LIGHT[light.tone], 0.4));
     glow.addColorStop(light.bright / (light.bright + light.dim), k(LIGHT[light.tone], 0.18));
     glow.addColorStop(1, k(LIGHT[light.tone], 0));
@@ -121,7 +128,11 @@ export const drawLevelThumbnail = (
     c.moveTo(wall.x1 * px, wall.y1 * px);
     c.lineTo(wall.x2 * px, wall.y2 * px);
     c.strokeStyle =
-      wall.kind === "door" ? k("door-wood") : wall.kind === "secretDoor" ? k("door-iron") : k("wall-top");
+      wall.kind === "door"
+        ? k("door-wood")
+        : wall.kind === "secretDoor"
+          ? k("door-iron")
+          : k("wall-top");
     c.lineWidth = Math.max(1, px * (wall.kind === "wall" ? 0.4 : 0.3));
     c.stroke();
   }

@@ -2871,8 +2871,7 @@ const offered = (turn: HobTurn): string | undefined => {
     case "level": {
       const rooms = proposal.rooms
         .map(
-          (room) =>
-            `${room.size} ${room.purpose}${room.label === null ? "" : ` "${room.label}"`}`,
+          (room) => `${room.size} ${room.purpose}${room.label === null ? "" : ` "${room.label}"`}`,
         )
         .join(", ");
       const parts = [
