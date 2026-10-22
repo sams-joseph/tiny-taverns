@@ -9,6 +9,7 @@ import {
   pathCost,
   type RunBoardLevel,
   tableSight,
+  type WalkEnds,
 } from "@taverns/api";
 import { Effect } from "effect";
 import type { SqlClient } from "effect/sql";
@@ -71,7 +72,9 @@ export const ensureOnBoard = (
  * On a plain grid the walk is straight, under the campaign's diagonal rule.
  * On a level (`level`, `runLevel`'s answer) it is the walk `pathCost` finds
  * over the fight's copy as the table knows its secret doors: round the walls,
- * difficult terrain at double, diagonals by the same rule. A square no walk
+ * difficult terrain at double, diagonals by the same rule. A player's walk
+ * passes the layout narrowed to what the party has seen (`partyWalk`), so it
+ * is counted over the same squares it was allowed over. A square no walk
  * reaches (the DM placing freely through a wall) counts straight, as before.
  */
 export const feetWalked = (
@@ -79,7 +82,12 @@ export const feetWalked = (
   id: CombatantId,
   from: { readonly board_column: number | null; readonly board_row: number | null },
   to: CombatantPosition | null,
-  level: { readonly layout: LevelLayout; readonly level: RunBoardLevel } | null,
+  level: {
+    readonly layout: LevelLayout;
+    readonly level: RunBoardLevel;
+    /** A party walk's dark edge (`partyWalk`): a walk ends there, never goes on. */
+    readonly ends?: WalkEnds;
+  } | null,
 ): number => {
   if (
     to === null ||
@@ -95,7 +103,14 @@ export const feetWalked = (
   const walked =
     level === null
       ? null
-      : pathCost(level.layout, start, to, tableSight(level.level), fight.diagonal_rule);
+      : pathCost(
+          level.layout,
+          start,
+          to,
+          tableSight(level.level),
+          fight.diagonal_rule,
+          level.ends,
+        );
   return (
     walked ??
     feetBetween(start, to, { feetPerCell: fight.feet_per_cell, diagonals: fight.diagonal_rule })

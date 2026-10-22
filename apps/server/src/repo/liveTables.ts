@@ -95,9 +95,12 @@ export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
  * `0110_party_vision.ts`), which is what fog means on a level: every rule
  * below that says "under fog" (`hiddenByFog`, `tokenShown`, `tokenShownTo`,
  * and the narration, roll and thread rules that compose it) holds for a
- * creature out of the party's sight too. A player character on the board is
- * a viewer, so it always stands on a square the party sees. A token off the
- * board stands nowhere, so it is under no fog.
+ * creature out of the party's sight too. A player character on the board
+ * whose character holds a live seat is a viewer (`refreshPartyVision`), so it
+ * always stands on a square the party sees; a `pc` the DM added by hand with
+ * no character, or one whose seat has gone, is not, and is under fog out of
+ * the party's sight like any other creature. A token off the board stands
+ * nowhere, so it is under no fog.
  */
 export const underFog = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`exists (select 1 from encounter_run_board

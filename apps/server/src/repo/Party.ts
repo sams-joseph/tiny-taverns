@@ -19,6 +19,7 @@ import {
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import { levelFightsOf, refreshFights } from "./levelFights.js";
 import {
   characterRow,
   claimCharacterRequest,
@@ -524,25 +525,46 @@ export class Party extends Context.Service<
 
         leave: (campaignId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              // The owner retires their own seat; the creator retires any.
-              // `or` of two complete predicates, `copyableIntoCampaign`'s
-              // shape — neither half is a fragment of the other.
-              const rows = yield* sql<{ readonly id: CampaignCharacterId }>`
-                update campaign_character set left_at = now(), updated_at = now()
-                where campaign_character.id = ${id}
-                  and campaign_character.left_at is null
-                  and ${sql.or([
-                    ownRowWritable(sql, "campaign_character", campaignId, actor),
-                    rowWritable(sql, "campaign_character", campaignId, actor),
-                  ])}
-                returning campaign_character.id
-              `;
-              if (rows.length === 0) {
-                return yield* Effect.fail(new NotFound({ resource: "campaign_character", id }));
-              }
-            }),
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const actor = yield* CurrentActor;
+                  // The owner retires their own seat; the creator retires any.
+                  // `or` of two complete predicates, `copyableIntoCampaign`'s
+                  // shape — neither half is a fragment of the other.
+                  const rows = yield* sql<{
+                    readonly id: CampaignCharacterId;
+                    readonly character_id: string | null;
+                  }>`
+                    update campaign_character set left_at = now(), updated_at = now()
+                    where campaign_character.id = ${id}
+                      and campaign_character.left_at is null
+                      and ${sql.or([
+                        ownRowWritable(sql, "campaign_character", campaignId, actor),
+                        rowWritable(sql, "campaign_character", campaignId, actor),
+                      ])}
+                    returning campaign_character.id, campaign_character.character_id
+                  `;
+                  if (rows.length === 0) {
+                    return yield* Effect.fail(
+                      new NotFound({ resource: "campaign_character", id }),
+                    );
+                  }
+                  // A character that left is no longer one of the party's
+                  // eyes on any level fight it stands in.
+                  const characters = rows.flatMap((row) =>
+                    row.character_id === null ? [] : [row.character_id],
+                  );
+                  return yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+                }),
+              )
+              .pipe(
+                Effect.flatMap((sessions) =>
+                  Effect.forEach(sessions, (sessionId) => live.touched(sessionId), {
+                    discard: true,
+                  }),
+                ),
+              ),
           ),
 
         damage: (campaignId, id, payload) =>

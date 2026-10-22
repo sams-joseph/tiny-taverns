@@ -12,7 +12,8 @@ import {
 /**
  * The DM's hand on a fight's level, on the board over it: a switch on every
  * door and every light, where it stands. Pressing a door opens or closes it
- * (a locked one unlocks); its ⋯ locks or unlocks it and, for a secret door,
+ * (a locked one unlocks); its ⋯ locks or unlocks it (locking an open door
+ * shuts it: a locked door is a closed one) and, for a secret door,
  * reveals it to the table or hides it again. Pressing a light lights or
  * snuffs it. Each press is the live write (`runs.updateDoor`,
  * `runs.updateLight`), and the board shows the server's answer, and every
@@ -160,7 +161,11 @@ function DoorSwitch({
           <DropdownMenuItem
             onClick={() => onDoor(door.id, { doorState: state === "locked" ? "closed" : "locked" })}
           >
-            {state === "locked" ? `Unlock ${noun(door)}` : `Lock ${noun(door)}`}
+            {state === "locked"
+              ? `Unlock ${noun(door)}`
+              : state === "open"
+                ? `Close and lock ${noun(door)}`
+                : `Lock ${noun(door)}`}
           </DropdownMenuItem>
           {secret && (
             <DropdownMenuItem onClick={() => onDoor(door.id, { revealed: !door.revealed })}>

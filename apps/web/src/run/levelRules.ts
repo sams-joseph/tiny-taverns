@@ -15,6 +15,7 @@ import {
   runLevelSight,
   sensesOf,
   tableSight,
+  type WalkEnds,
 } from "@taverns/api";
 
 /**
@@ -72,10 +73,15 @@ export const sightLines = (
         ...(sight.targetSees ? [] : [`It cannot see ${attacker}: attacked at advantage`]),
       ];
 
-/** A level fight's board as a walk reads it: the layout and what the table knows of its secret doors. */
+/**
+ * A level fight's board as a walk reads it: the layout, what the table knows
+ * of its secret doors, and, for a party's walk (`playerWalk`), the dark edge
+ * a walk may end on and never go on from.
+ */
 export interface LevelWalk {
   readonly layout: LevelLayout;
   readonly sight: SightOptions;
+  readonly ends?: WalkEnds;
 }
 
 /** The DM's board's walk, or `undefined` on a plain grid. */

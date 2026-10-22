@@ -730,7 +730,9 @@ describeLayer("level-fights", shared, (it) => {
             payload: { revealed: true },
           }),
         );
-        expect((yield* walk(ilse, table, params, tamsin.id, { column: 6, row: 3 })).tag).toBe(
+        // Revealed and open, it is a doorway: she steps through it, as far as
+        // the party has seen and one step beyond, no further.
+        expect((yield* walk(ilse, table, params, tamsin.id, { column: 5, row: 3 })).tag).toBe(
           "succeeded",
         );
       }),

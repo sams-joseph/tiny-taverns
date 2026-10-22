@@ -27,7 +27,8 @@ import {
   type PlayerLiveToken,
   type PlayerLiveTurn,
   type PlayerMove,
-  pathCost,
+  partyPathCost,
+  partyWalk,
   tableSight,
   RollId,
   RollOutcome,
@@ -55,7 +56,7 @@ import {
   tokenShownTo,
 } from "./liveTables.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
-import { playerLevelColumn, refreshAndRing, runLevel } from "./levelFights.js";
+import { partySeen, playerLevelColumn, refreshAndRing, runLevel } from "./levelFights.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -713,29 +714,44 @@ export class PlayerTable extends Context.Service<
                     yield* ensureOnBoard(fight, to);
                     // On a level, a player walks: the square must be reachable
                     // from where the token stands, step by step over the
-                    // fight's copy (`pathCost`), through no wall, no door that
-                    // is not open, no secret door the DM has not revealed, no
-                    // blocking prop and no void. The DM still places freely.
+                    // fight's copy (`partyPathCost`), through no wall, no door
+                    // that is not open, no secret door the DM has not
+                    // revealed, no blocking prop and no void, and only over
+                    // squares the party has seen, the DM's fog taken out
+                    // (`partyWalk`): the walk may end one step into the dark
+                    // beyond them and goes no further. Every refusal says the
+                    // same thing, so none tells of what the party has not
+                    // seen. The DM still places freely.
                     const level = yield* runLevel(sql, runId);
-                    if (level !== null) {
+                    const walk =
+                      level === null ? null : partyWalk(level.layout, yield* partySeen(sql, runId));
+                    if (level !== null && walk !== null) {
                       if (row.board_column === null || row.board_row === null) {
                         return yield* new Conflict({
                           message: "your DM puts your token on the level first",
                         });
                       }
-                      const walk = pathCost(
-                        level.layout,
+                      const walked = partyPathCost(
+                        walk,
                         { column: row.board_column, row: row.board_row },
                         to,
                         tableSight(level.level),
                       );
-                      if (walk === null) {
+                      if (walked === null) {
                         return yield* new Conflict({
                           message: "you cannot get there from where you stand",
                         });
                       }
                     }
-                    const feet = feetWalked(fight, combatantId, row, to, level);
+                    const feet = feetWalked(
+                      fight,
+                      combatantId,
+                      row,
+                      to,
+                      level === null || walk === null
+                        ? null
+                        : { layout: walk.layout, level: level.level, ends: walk.ends },
+                    );
 
                     const moved = yield* sql<{
                       readonly visibility: "dm" | "shared";

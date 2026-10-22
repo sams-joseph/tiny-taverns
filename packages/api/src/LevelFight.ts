@@ -1,8 +1,17 @@
 import { Schema, Struct } from "effect";
 import { CampaignId, EncounterId } from "./Ids.js";
 import { LevelLight, LevelProp, LevelRegion, LevelWall } from "./Level.js";
-import type { LevelLayout, SightOptions } from "./LevelGeometry.js";
-import { LevelAmbient, LevelDoorState } from "./LevelKit.js";
+import type { BoardSquare } from "./Board.js";
+import {
+  type LevelLayout,
+  type ReachedSquare,
+  type SightOptions,
+  type WalkEnds,
+  type WalkRule,
+  pathCost,
+  reachableOnLevel,
+} from "./LevelGeometry.js";
+import { LEVEL_MATERIALS, LevelAmbient, LevelDoorState } from "./LevelKit.js";
 
 /**
  * A fight played on a level: the fight's own copy of it, the DM's live writes
@@ -108,7 +117,8 @@ export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
  * - `floor`, the material of each `seen` square, in `seen`'s order: no other
  *   square's floor is sent;
  * - walls touching a seen square; an unrevealed secret door is sent as a plain
- *   `wall` with no door state, and a revealed one as its `secretDoor`;
+ *   `wall` with no door state, and a revealed one as its `secretDoor`; a
+ *   locked door is sent `closed`, since the table learns a lock by trying it;
  * - props that are not DM-only whose footprint touches a seen square;
  * - lights that are lit and stand on a seen square;
  * - regions that are not secret, clipped to the seen squares.
@@ -151,6 +161,101 @@ export const playerLevelLayout = (
   };
 };
 
+/**
+ * A level as a party token walks it (the maintainer's rule): over only what
+ * the party has seen, plus one step into the dark.
+ *
+ * - `layout`: the level with every square the party has not seen made `void`,
+ *   save the **dark edge**: each unseen square on the board beside a seen one
+ *   (diagonals included). An edge square keeps the layout's floor, or
+ *   `darkFloor` where the layout has none to give (a player's layout, where
+ *   every unseen square is void);
+ * - `ends`: the dark edge. A walk may end on one of those squares and never
+ *   goes on from it, so a path crosses only seen squares.
+ *
+ * The server builds it over the fight's copy and the fog-free `party_seen`
+ * (so a dark square that is really void, or holds a blocking prop, refuses
+ * the step); the player's board over its `PlayerLiveLevel`, with a stand-in
+ * floor for the dark. Both then walk it with `partyPathCost` and
+ * `partyReach`, so the range, the ruler and the server's refusal agree.
+ */
+export interface PartyWalk {
+  readonly layout: LevelLayout;
+  readonly ends: WalkEnds;
+}
+
+export const partyWalk = (
+  layout: LevelLayout,
+  seen: Iterable<number>,
+  darkFloor?: number,
+): PartyWalk => {
+  const { columns, rows } = layout;
+  const squares = columns * rows;
+  const known = new Uint8Array(squares);
+  for (const square of seen) {
+    if (Number.isInteger(square) && square >= 0 && square < squares) known[square] = 1;
+  }
+  const floor = Array.from({ length: squares }, () => 0);
+  const ends = new Set<number>();
+  for (let at = 0; at < squares; at++) {
+    if (known[at] === 1) {
+      floor[at] = layout.floor[at] ?? 0;
+      continue;
+    }
+    const column = at % columns;
+    const row = Math.floor(at / columns);
+    let edge = false;
+    for (let down = -1; down <= 1 && !edge; down++) {
+      for (let across = -1; across <= 1 && !edge; across++) {
+        const c = column + across;
+        const r = row + down;
+        if ((across !== 0 || down !== 0) && c >= 0 && r >= 0 && c < columns && r < rows) {
+          edge = known[r * columns + c] === 1;
+        }
+      }
+    }
+    if (!edge) continue;
+    ends.add(at);
+    const own = layout.floor[at] ?? 0;
+    floor[at] = own === 0 && darkFloor !== undefined ? darkFloor : own;
+  }
+  return { layout: { ...layout, floor }, ends };
+};
+
+/**
+ * `pathCost` over a party's walk: `null` for a square no walk reaches, which
+ * is every square neither seen nor on the dark edge (they are void there).
+ */
+export const partyPathCost = (
+  walk: PartyWalk,
+  from: BoardSquare,
+  to: BoardSquare,
+  options: SightOptions,
+  rule: WalkRule = "five",
+): number | null => pathCost(walk.layout, from, to, options, rule, walk.ends);
+
+/** `reachableOnLevel` over a party's walk: seen squares, and the dark edge a step can end on. */
+export const partyReach = (
+  walk: PartyWalk,
+  from: BoardSquare,
+  feet: number,
+  options: SightOptions,
+  rule: WalkRule = "five",
+): ReadonlyArray<ReachedSquare> =>
+  reachableOnLevel(walk.layout, from, feet, options, rule, walk.ends);
+
+/**
+ * The party's walk as a seated player's board has it: `partyWalk` over the
+ * party's view (`playerLevelLayout`) and its `seen`. The table was sent no
+ * floor for the dark, so a step into it is drawn as onto plain flagstone; the
+ * server, which knows the square, has the last word.
+ */
+export const playerWalk = (
+  board: { readonly columns: number; readonly rows: number; readonly feetPerCell: number },
+  level: PlayerLiveLevel,
+): PartyWalk =>
+  partyWalk(playerLevelLayout(board, level), level.seen, LEVEL_MATERIALS.indexOf("flagstone"));
+
 /** What the table knows of the secret doors on its level: every one it was sent is revealed. */
 export const playerSight = (level: Pick<PlayerLiveLevel, "walls">): SightOptions => ({
   revealed: new Set(level.walls.filter((wall) => wall.kind === "secretDoor").map((w) => w.id)),
@@ -159,7 +264,8 @@ export const playerSight = (level: Pick<PlayerLiveLevel, "walls">): SightOptions
 const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128)));
 
 /**
- * The DM's hand on one door of a fight's level: open, close or lock it, and,
+ * The DM's hand on one door of a fight's level: open, close or lock it (a
+ * locked door is a closed one, so locking an open door shuts it), and,
  * for a secret door, reveal it to the table or hide it again. At least one of
  * the two. Answered with the board. `Conflict` for a fight that is over or has
  * no level, a wall that is not a door, and revealing a door that is not

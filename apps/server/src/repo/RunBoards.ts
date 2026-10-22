@@ -501,11 +501,24 @@ export class RunBoards extends Context.Service<
                       old.door_state as was_door_state, old.revealed as was_revealed
                   `;
                   // What the party sees through it now, then whether the table
-                  // is told: a plain door they have seen, on a board they are
-                  // shown. A secret door's line is the DM's whatever happens.
+                  // is told. The table knows a door as open or shut: a locked
+                  // door reads as closed to it (`playerLevelColumn`), so a lock
+                  // is never news to it. The line is shared for a door they
+                  // have seen, on a board they are shown, that opened or shut
+                  // with no lock in it: a plain door, or a secret door that
+                  // stood revealed before and after. Its finding or hiding,
+                  // and any lock, is the DM's line; the table is rung for
+                  // whatever it draws differently now.
+                  const after = changed[0]!;
                   const vision = yield* refreshPartyVision(sql, runId);
                   const seen = yield* partSeen(sql, runId, { wallId });
-                  const lineShared = vision?.shown === true && wall.kind === "door" && seen;
+                  const asTable = (state: "open" | "closed" | "locked") =>
+                    state === "locked" ? "closed" : state;
+                  const tableMoved = asTable(after.door_state) !== asTable(after.was_door_state);
+                  const noLock = after.door_state !== "locked" && after.was_door_state !== "locked";
+                  const knownDoor = wall.kind === "door" || (after.revealed && after.was_revealed);
+                  const lineShared =
+                    vision?.shown === true && seen && knownDoor && tableMoved && noLock;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-door-updated",
@@ -515,10 +528,10 @@ export class RunBoards extends Context.Service<
                     payload: {
                       wallId,
                       wallKind: wall.kind,
-                      doorState: changed[0]!.door_state,
-                      revealed: changed[0]!.revealed,
-                      wasDoorState: changed[0]!.was_door_state,
-                      wasRevealed: changed[0]!.was_revealed,
+                      doorState: after.door_state,
+                      revealed: after.revealed,
+                      wasDoorState: after.was_door_state,
+                      wasRevealed: after.was_revealed,
                     } satisfies typeof BoardDoorUpdatedPayload.Encoded,
                     requestId: update.requestId,
                     visibility: lineShared ? "shared" : "dm",
@@ -528,9 +541,13 @@ export class RunBoards extends Context.Service<
                     runId,
                     vision,
                     lineShared,
-                    // A secret door they have seen turned from wall to door,
-                    // or back: their table draws it differently now.
-                    force: seen && changed[0]!.revealed !== changed[0]!.was_revealed,
+                    // A door they have seen that their table draws
+                    // differently now: a secret door turned from wall to
+                    // door or back, or a door they know opened or shut.
+                    force:
+                      seen &&
+                      (after.revealed !== after.was_revealed ||
+                        ((wall.kind === "door" || after.revealed) && tableMoved)),
                   });
                   return yield* current;
                 }),

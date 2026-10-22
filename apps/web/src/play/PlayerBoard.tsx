@@ -8,6 +8,7 @@ import {
   BOARD_CELL_PX,
   boardPlane,
   playerLevelLayout,
+  playerWalk,
   playerSight,
 } from "@taverns/api";
 import { useMemo, useState } from "react";
@@ -107,20 +108,16 @@ function PlayerTokens(props: PlayerBoardProps) {
     ];
   });
   const mine = (token: TableToken) => token.row.kind === "you";
-  // On a level, the range and the ruler walk the party's view of it: a square
-  // the party has not seen is void, so the range never shows what they have not.
+  // On a level, the range and the ruler walk the party's view of it as the
+  // server holds a player's move to (`playerWalk`): over the squares the party
+  // has seen, and one step into the dark beyond them, no further.
   const level = board.level;
   const { columns, rows, feetPerCell } = board;
-  const walk = useMemo(
-    () =>
-      level === null
-        ? undefined
-        : {
-            layout: playerLevelLayout({ columns, rows, feetPerCell }, level),
-            sight: playerSight(level),
-          },
-    [level, columns, rows, feetPerCell],
-  );
+  const walk = useMemo(() => {
+    if (level === null) return undefined;
+    const party = playerWalk({ columns, rows, feetPerCell }, level);
+    return { layout: party.layout, ends: party.ends, sight: playerSight(level) };
+  }, [level, columns, rows, feetPerCell]);
   return (
     <TokenLayer
       board={board}

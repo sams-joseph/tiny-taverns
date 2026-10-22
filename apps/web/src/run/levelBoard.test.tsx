@@ -171,6 +171,26 @@ describe("a fight on a level, on the DM's canvas", () => {
     expect(doorWrites()).toHaveLength(2);
   });
 
+  it("says an open door's lock shuts it", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: withDoor("open") });
+    server.routes.set(`PATCH ${serverRunBase()}/board/doors/${runLevelDoorId}`, {
+      status: 200,
+      body: withDoor("locked"),
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await userEvent.click(await board().findByRole("button", { name: "More for the door" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Close and lock the door" }),
+    );
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/board/doors/${runLevelDoorId}`)).toMatchObject({
+        doorState: "locked",
+      }),
+    );
+    expect(await board().findByRole("button", { name: "Unlock the door" })).toBeInTheDocument();
+  });
+
   it("snuffs a light", async () => {
     server.routes.set(`PATCH ${serverRunBase()}/board/lights/${runLevelTorchId}`, {
       status: 200,

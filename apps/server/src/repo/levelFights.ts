@@ -16,9 +16,9 @@ import {
   tableSight,
 } from "@taverns/api";
 import { Effect, Schema } from "effect";
-import type { SqlClient, Statement } from "effect/sql";
+import type { SqlClient, SqlError, Statement } from "effect/sql";
 import { boardShown } from "./liveTables.js";
-import { intArray } from "./rows.js";
+import { intArray, uuidArray } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { levelOwned } from "./visibility.js";
 
@@ -400,6 +400,73 @@ export const refreshAndRing = (
     Effect.as(ringVision(sql, { ...args, vision }), vision),
   );
 
+/** A live fight on a level, by its run and its night. */
+export interface LevelFightRef {
+  readonly runId: EncounterRunId;
+  readonly sessionId: SessionId;
+}
+
+/**
+ * The live (not ended) level fights with a player character combatant for any
+ * of these characters: the fights whose party vision a seat's retirement can
+ * change, since only a live-seated character is a viewer
+ * (`refreshPartyVision`). Read before the write that retires the seat or
+ * deletes the character, so a deleted character's fights are still found.
+ */
+export const levelFightsOf = (
+  sql: SqlClient.SqlClient,
+  characterIds: ReadonlyArray<string>,
+): Effect.Effect<ReadonlyArray<LevelFightRef>, SqlError.SqlError> =>
+  characterIds.length === 0
+    ? Effect.succeed([])
+    : Effect.map(
+        sql<{ readonly run_id: EncounterRunId; readonly session_id: SessionId }>`
+          select distinct encounter_run.id as run_id, encounter_run.session_id
+          from combatant
+          join encounter_run on encounter_run.id = combatant.encounter_run_id
+          join encounter_run_board on encounter_run_board.run_id = encounter_run.id
+          where combatant.kind = 'pc'
+            and combatant.character_id = any(${uuidArray(characterIds)})
+            and encounter_run.ended_at is null
+            and encounter_run_board.floor is not null
+          order by encounter_run.id
+        `,
+        (rows) => rows.map((row) => ({ runId: row.run_id, sessionId: row.session_id })),
+      );
+
+/**
+ * Recompute each fight's party vision after a seat left the table, in the
+ * caller's transaction, ringing the players' doorbell where it changed.
+ * Answers the nights to `touched` once the caller has committed.
+ */
+export const refreshFights = (
+  sql: SqlClient.SqlClient,
+  fights: ReadonlyArray<LevelFightRef>,
+): Effect.Effect<ReadonlyArray<SessionId>, SqlError.SqlError> =>
+  Effect.as(
+    Effect.forEach(
+      fights,
+      (fight) =>
+        refreshAndRing(sql, { sessionId: fight.sessionId, runId: fight.runId, lineShared: false }),
+      { discard: true },
+    ),
+    [...new Set(fights.map((fight) => fight.sessionId))],
+  );
+
+/**
+ * The squares the party has seen of a fight's level with the DM's fog taken
+ * out: the `seen` a seated player's table is sent (`playerLevelColumn`), and
+ * what a player's walk is held to (`partyWalk`). Empty with no vision yet.
+ */
+export const partySeen = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
+  Effect.map(
+    sql<{ readonly seen: ReadonlyArray<number> | null }>`
+      select v.seen from encounter_run_board cross join lateral ${partyView(sql)}
+      where encounter_run_board.run_id = ${runId}
+    `,
+    (rows): ReadonlyArray<number> => rows[0]?.seen ?? [],
+  );
+
 /** Each prop kind's size, for the player's level read: the kit's (`PROP_KINDS`), as one parameter. */
 const PROP_SIZES = JSON.stringify(
   LEVEL_PROP_KINDS.map((kind) => ({
@@ -424,7 +491,8 @@ const PROP_SIZES = JSON.stringify(
  * - walls touching a seen square: an axis-aligned wall touches the squares it
  *   runs along or through, a slanted one the squares its line crosses inside
  *   (not those it only meets at a corner); an unrevealed secret door goes as a
- *   plain `wall` with no door state;
+ *   plain `wall` with no door state, and a locked door as `closed` (whether a
+ *   door is locked is learnt by trying it, at the table);
  * - props that are not DM-only with a footprint square seen;
  * - lights that are lit and stand on a seen square. A light's glow reaching a
  *   seen square does not send it: where a torch stands is learnt by seeing
@@ -452,7 +520,9 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
             'id', w.id, 'x1', w.x1, 'y1', w.y1, 'x2', w.x2, 'y2', w.y2,
             'kind', case when w.kind = 'secretDoor' and not w.revealed then 'wall' else w.kind end,
             'doorState',
-              case when w.kind = 'secretDoor' and not w.revealed then null else w.door_state end,
+              case when w.kind = 'secretDoor' and not w.revealed then null
+                   when w.door_state = 'locked' then 'closed'
+                   else w.door_state end,
             'low', w.low
           ) order by w.ordinal)
           from encounter_run_wall w

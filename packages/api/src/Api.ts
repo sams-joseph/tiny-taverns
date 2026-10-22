@@ -823,10 +823,12 @@ class MeGroup extends HttpApiGroup.make("me")
      * (`party.leave`), which answers *"somebody left and their character goes
      * with them"* without touching the character itself.
      *
-     * Like the PATCH beside it, one statement and no doorbell: nothing live
-     * moved, and the fight's copy of a character is a snapshot that reads
-     * nothing back. An open DM page stays stale until it refetches, exactly as
-     * it does for a level-up typed between games.
+     * The fight's copy of a character is a snapshot that reads nothing back,
+     * so an open DM page stays stale until it refetches, exactly as it does
+     * for a level-up typed between games. The one live thing that moves is
+     * party vision: a character that is gone is no longer one of the party's
+     * eyes, so each live level fight it stands in has its vision recomputed
+     * in the same transaction and its night's doorbell rung.
      */
     HttpApiEndpoint.delete("deleteCharacter", "/characters/:characterId", {
       params: { characterId: CharacterId },

@@ -88,6 +88,12 @@ export const doorSentence = (payload: unknown): string =>
       if (door.wasDoorState === "locked" && door.doorState === "closed") {
         return `${noun} was unlocked`;
       }
+      if (door.wasDoorState === "open" && door.doorState === "locked") {
+        return `${noun} was closed and locked`;
+      }
+      if (door.wasDoorState === "locked" && door.doorState === "open") {
+        return `${noun} was unlocked and opened`;
+      }
       return `${noun} was ${DOOR_VERB[door.doorState]}`;
     },
   });

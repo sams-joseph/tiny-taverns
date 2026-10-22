@@ -221,6 +221,42 @@ describe("a fight on a level, on a seated player's canvas", () => {
     expect(map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ })).toBeInTheDocument();
   });
 
+  it("tints the seen squares and one step into the dark, as the server allows", async () => {
+    // The seen row (4..6, 4) with the barrel's square open, and no walls: the
+    // range is the seen squares and the dark ring round them, no further.
+    const open = {
+      ...levelBoard,
+      level: {
+        ...partyLevel,
+        walls: [],
+        props: [],
+        regions: [],
+      },
+    };
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.filter((row) => row.kind !== "npc"),
+        board: open,
+      }),
+    );
+    await renderTable();
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    await userEvent.click(map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ }));
+    const range = () =>
+      [
+        ...new Set(
+          [...document.querySelectorAll<SVGElement>("[data-slot=range-square]")].map(
+            (square) => square.dataset.square!,
+          ),
+        ),
+      ].sort();
+    await waitFor(() => expect(range().length).toBeGreaterThan(0));
+    const ring = [3, 4, 5, 6, 7].flatMap((column) =>
+      [3, 4, 5].map((row) => `${String(column)},${String(row)}`),
+    );
+    expect(range()).toEqual(ring.filter((square) => square !== "5,4").sort());
+  });
+
   it("says why a move the level refuses did not happen", async () => {
     server.routes.set(
       ...playing(campaignId, {

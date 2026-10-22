@@ -18,7 +18,7 @@ import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
-import { aCharacterAt, admittedTo, aPerson } from "./support/actors.js";
+import { aCharacterAt, admittedTo, aPerson, type Person, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
@@ -559,6 +559,234 @@ describeLayer("party-vision", shared, (it) => {
         expect((yield* eventsOf(fight.id, "board-door-updated")).map((e) => e.visibility)).toEqual([
           "shared",
         ]);
+      }),
+    );
+  });
+
+  describe("doors as the table knows them", () => {
+    const door = (params: Params, wallId: typeof DOOR, payload: Record<string, unknown>) =>
+      Effect.flatMap(Fixture, ({ jo }) =>
+        as(jo.token, (client) =>
+          client.runs.updateDoor({ params: { ...params, wallId }, payload }),
+        ),
+      );
+    const tableDoor = (wallId: typeof DOOR) =>
+      Effect.map(tableOf, (read) => levelOf(read).walls.find((wall) => wall.id === wallId));
+
+    it.effect("sends a locked door as closed, in SQL, and keeps the lock the DM's line", () =>
+      Effect.gen(function* () {
+        const { fight, params } = yield* aFight();
+        const board = yield* door(params, DOOR, { doorState: "locked" });
+        expect(board?.level?.walls.find((wall) => wall.id === DOOR)?.doorState).toBe("locked");
+        expect((yield* tableDoor(DOOR))?.doorState).toBe("closed");
+        expect((yield* rawTable).body).not.toContain("locked");
+        expect((yield* eventsOf(fight.id, "board-door-updated")).at(-1)?.visibility).toBe("dm");
+      }),
+    );
+
+    it.effect("shuts an open door that is locked, and the table sees it shut", () =>
+      Effect.gen(function* () {
+        const { fight, params } = yield* aFight();
+        yield* openDoor(params);
+        expect(levelOf(yield* tableOf).sees).toContain(at(6, 2));
+        const rung = (yield* eventsOf(fight.id, "board-vision-updated")).length;
+        const board = yield* door(params, DOOR, { doorState: "locked" });
+        expect(board?.level?.walls.find((wall) => wall.id === DOOR)?.doorState).toBe("locked");
+        const read = levelOf(yield* tableOf);
+        expect(read.sees).toEqual(WEST);
+        expect(read.walls.find((wall) => wall.id === DOOR)?.doorState).toBe("closed");
+        // The line names the lock, so it is the DM's; the table is rung instead.
+        expect((yield* eventsOf(fight.id, "board-door-updated")).at(-1)?.visibility).toBe("dm");
+        expect(yield* eventsOf(fight.id, "board-vision-updated")).toHaveLength(rung + 1);
+      }),
+    );
+
+    it.effect("shares a revealed secret door's opening, and rings the table for it", () =>
+      Effect.gen(function* () {
+        const { fight, params } = yield* aFight();
+        yield* door(params, SECRET, { revealed: true });
+        yield* door(params, SECRET, { doorState: "open" });
+        expect((yield* tableDoor(SECRET))?.doorState).toBe("open");
+        expect(
+          (yield* eventsOf(fight.id, "board-door-updated")).map((event) => event.visibility),
+        ).toEqual(["dm", "shared"]);
+        // Hidden again, a change to it is the DM's alone.
+        yield* door(params, SECRET, { revealed: false });
+        yield* door(params, SECRET, { doorState: "closed" });
+        expect(
+          (yield* eventsOf(fight.id, "board-door-updated")).map((event) => event.visibility),
+        ).toEqual(["dm", "shared", "dm", "dm"]);
+      }),
+    );
+  });
+
+  describe("a player walks only where the party has seen, and one step beyond", () => {
+    const neighbours = (square: number) => {
+      const column = square % COLUMNS;
+      const row = Math.floor(square / COLUMNS);
+      return [-1, 0, 1].flatMap((down) =>
+        [-1, 0, 1].flatMap((across) => {
+          const c = column + across;
+          const r = row + down;
+          return (across !== 0 || down !== 0) && c >= 0 && r >= 0 && c < COLUMNS && r < 5
+            ? [at(c, r)]
+            : [];
+        }),
+      );
+    };
+    const squareOf = (square: number) => ({
+      column: square % COLUMNS,
+      row: Math.floor(square / COLUMNS),
+    });
+
+    /** Tamsin's own move, as the player asks it: the refusal's message, or `moved`. */
+    const walkTo = (params: Params, tamsin: CombatantId, square: number) =>
+      Effect.flatMap(Fixture, ({ ilse, table }) =>
+        Effect.flatMap(clientFor(ilse.token), (client) =>
+          client.table
+            .move({
+              params: { campaignId: table, runId: params.runId, combatantId: tamsin },
+              payload: { position: squareOf(square) },
+            })
+            .pipe(
+              Effect.match({
+                onFailure: (error): string =>
+                  error._tag === "Conflict" ? error.message : error._tag,
+                onSuccess: () => "moved",
+              }),
+            ),
+        ).pipe(Effect.orDie),
+      );
+
+    it.effect("refuses a square deeper in the dark, however open, the same as any refusal", () =>
+      Effect.gen(function* () {
+        const { params, tamsin } = yield* aFight();
+        yield* openDoor(params);
+        const seen = new Set(levelOf(yield* tableOf).seen);
+        // The east room past the doorway: squares the party has not seen
+        // with no seen square beside them, open floor the door leads to.
+        const deep = [...Array(COLUMNS * 5).keys()].filter(
+          (square) =>
+            square % COLUMNS >= 5 &&
+            !seen.has(square) &&
+            neighbours(square).every((next) => !seen.has(next)),
+        );
+        expect(deep.length).toBeGreaterThan(0);
+        for (const square of deep) {
+          expect(yield* walkTo(params, tamsin, square)).toBe(
+            "you cannot get there from where you stand",
+          );
+        }
+        // A square across the solid stretch of the wall is refused in the same words.
+        expect(yield* walkTo(params, tamsin, at(4, 0))).toBe(
+          "you cannot get there from where you stand",
+        );
+      }),
+    );
+
+    it.effect("walks one step into the dark past what the party has seen", () =>
+      Effect.gen(function* () {
+        const { params, tamsin } = yield* aFight();
+        yield* openDoor(params);
+        const seen = new Set(levelOf(yield* tableOf).seen);
+        const edge = [...Array(COLUMNS * 5).keys()].find(
+          (square) =>
+            square % COLUMNS >= 5 &&
+            !seen.has(square) &&
+            neighbours(square).some((next) => seen.has(next) && next % COLUMNS >= 5),
+        );
+        expect(edge).toBeDefined();
+        expect(yield* walkTo(params, tamsin, edge!)).toBe("moved");
+        // Standing there, the party sees it now.
+        expect(levelOf(yield* tableOf).sees).toContain(edge);
+      }),
+    );
+  });
+
+  describe("a seat that leaves takes its eyes with it", () => {
+    /**
+     * A second character of `owner`'s seated at the table, then a fight with
+     * it standing in the east room, where Tamsin (in the west) cannot see.
+     */
+    const aSecondViewer = (owner: Person) =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const scoped = scopedTo(owner.actor, table);
+        const seated = yield* aCharacterAt(
+          table,
+          scoped,
+          { name: `Wren ${nights}`, hpMax: 20 },
+          { seatVisibility: "shared" },
+        );
+        const fought = yield* aFight();
+        const order = yield* as(jo.token, (client) =>
+          client.combatants.list({ params: fought.params }),
+        );
+        const wren = order.find((row) => row.characterId === seated.character.id)!;
+        yield* place(fought.params, wren.id, 7, 1);
+        const sees = levelOf(yield* tableOf).sees;
+        expect(sees).toContain(at(7, 1));
+        const rung = (yield* eventsOf(fought.fight.id, "board-vision-updated")).length;
+        return { ...fought, seated, rung };
+      });
+
+    /** The east room is out of the party's sight again, and the table was rung. */
+    const westOnly = (runId: string, rung: number) =>
+      Effect.gen(function* () {
+        expect(levelOf(yield* tableOf).sees).toEqual(WEST);
+        const after = yield* eventsOf(runId, "board-vision-updated");
+        expect(after).toHaveLength(rung + 1);
+        expect(after.at(-1)?.visibility).toBe("shared");
+      });
+
+    it.effect("recomputes the party's vision when a seat leaves the table", () =>
+      Effect.gen(function* () {
+        const { ilse, table } = yield* Fixture;
+        const { fight, seated, rung } = yield* aSecondViewer(ilse);
+        yield* as(ilse.token, (client) =>
+          client.party.leave({
+            params: { campaignId: table, campaignCharacterId: seated.seatId },
+          }),
+        );
+        yield* westOnly(fight.id, rung);
+      }),
+    );
+
+    it.effect("recomputes it when the creator removes the player", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const pel = yield* aPerson("Pel");
+        yield* admittedTo(table, pel.actor, "Pel");
+        const { fight, rung } = yield* aSecondViewer(pel);
+        yield* as(jo.token, (client) =>
+          client.members.remove({ params: { campaignId: table, accountId: pel.actor.accountId } }),
+        );
+        yield* westOnly(fight.id, rung);
+      }),
+    );
+
+    it.effect("recomputes it when the owner deletes the character", () =>
+      Effect.gen(function* () {
+        const { ilse } = yield* Fixture;
+        const { fight, seated, rung } = yield* aSecondViewer(ilse);
+        yield* as(ilse.token, (client) =>
+          client.me.deleteCharacter({ params: { characterId: seated.character.id } }),
+        );
+        yield* westOnly(fight.id, rung);
+      }),
+    );
+
+    it.effect("is NotFound to a stranger deleting the character, and moves nothing", () =>
+      Effect.gen(function* () {
+        const { ilse, bo } = yield* Fixture;
+        const { fight, seated, rung } = yield* aSecondViewer(ilse);
+        expect(
+          yield* refusal(bo.token, (client) =>
+            client.me.deleteCharacter({ params: { characterId: seated.character.id } }),
+          ),
+        ).toBe("NotFound");
+        expect(levelOf(yield* tableOf).sees).toContain(at(7, 1));
+        expect(yield* eventsOf(fight.id, "board-vision-updated")).toHaveLength(rung);
       }),
     );
   });

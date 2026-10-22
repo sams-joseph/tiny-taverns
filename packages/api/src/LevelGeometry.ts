@@ -1148,12 +1148,18 @@ export const movementCost = (
 export type WalkRule = "five" | "alternating";
 
 /**
+ * Squares a walk may end on and never go on from (`row * columns + column`):
+ * a party token's one step into the dark (`partyWalk`, `LevelFight.ts`).
+ */
+export type WalkEnds = ReadonlySet<number>;
+
+/**
  * The fewest feet a creature walks from `from` to `to`, square by square,
  * each step what {@link movementCost} says it costs under the campaign's
  * diagonal rule: `0` to stay put, `null` when no walk gets there (walls, shut
  * doors, unfound secret doors, blocking props or void every way round). The
  * server refuses a player's move by it, and counts every move on a level by
- * it.
+ * it. A walk never steps on from a square in `ends`.
  */
 export const pathCost = (
   level: LevelLayout,
@@ -1161,11 +1167,12 @@ export const pathCost = (
   to: BoardSquare,
   options: SightOptions = {},
   rule: WalkRule = "five",
+  ends?: WalkEnds,
 ): number | null => {
   if (!onLevel(level, from) || !onLevel(level, to)) return null;
   if (from.column === to.column && from.row === to.row) return 0;
   const target = levelSquareIndex(level, to);
-  const feet = walkFrom(level, from, options, rule, { target });
+  const feet = walkFrom(level, from, options, rule, { target, ends });
   const found = feet[target]!;
   return Number.isFinite(found) ? found : null;
 };
@@ -1189,9 +1196,10 @@ export const reachableOnLevel = (
   feet: number,
   options: SightOptions = {},
   rule: WalkRule = "five",
+  ends?: WalkEnds,
 ): ReadonlyArray<ReachedSquare> => {
   if (!onLevel(level, from) || !(feet > 0)) return [];
-  const walked = walkFrom(level, from, options, rule, { budget: feet });
+  const walked = walkFrom(level, from, options, rule, { budget: feet, ends });
   const start = levelSquareIndex(level, from);
   const out: Array<ReachedSquare> = [];
   for (let at = 0; at < walked.length; at++) {
@@ -1221,7 +1229,11 @@ const walkFrom = (
   from: BoardSquare,
   options: SightOptions,
   rule: WalkRule,
-  stop: { readonly target?: number; readonly budget?: number },
+  stop: {
+    readonly target?: number;
+    readonly budget?: number;
+    readonly ends?: WalkEnds | undefined;
+  },
 ): Float64Array => {
   const { columns, rows } = level;
   const squares = columns * rows;
@@ -1307,6 +1319,7 @@ const walkFrom = (
     const at = state >> 1;
     const odd = state & 1;
     if (at === stop.target) break;
+    if (stop.ends?.has(at) === true && at !== start) continue;
     const here = { column: at % columns, row: Math.floor(at / columns) };
     for (let down = -1; down <= 1; down++) {
       for (let across = -1; across <= 1; across++) {

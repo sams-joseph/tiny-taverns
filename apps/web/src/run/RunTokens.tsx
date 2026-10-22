@@ -249,7 +249,7 @@ function Range<T extends LayerToken>({
           feetPerCell: board.feetPerCell,
           diagonals,
         })
-      : reachableOnLevel(walk.layout, from, left, walk.sight, diagonals)
+      : reachableOnLevel(walk.layout, from, left, walk.sight, diagonals, walk.ends)
           .map(({ square }) => square)
           .filter((square) => !occupied.some((taken) => same(taken, square)));
   if (squares.length === 0) return null;
@@ -589,6 +589,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
                   drag.over,
                   props.walk.sight,
                   diagonals,
+                  props.walk.ends,
                 ),
               }),
         })

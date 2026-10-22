@@ -21,6 +21,12 @@ describe("a level's log lines", () => {
     expect(doorLine(door({ doorState: "locked" }))).toBe("A door was locked");
     expect(doorLine(door({ doorState: "open" }))).toBe("A door was opened");
     expect(doorLine(door({ wasDoorState: "locked" }))).toBe("A door was unlocked");
+    expect(doorLine(door({ wasDoorState: "open", doorState: "locked" }))).toBe(
+      "A door was closed and locked",
+    );
+    expect(doorLine(door({ wasDoorState: "locked", doorState: "open" }))).toBe(
+      "A door was unlocked and opened",
+    );
     expect(doorLine(door({ wallKind: "secretDoor", revealed: true }))).toBe(
       "A secret door was found",
     );
