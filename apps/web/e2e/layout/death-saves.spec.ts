@@ -2,15 +2,17 @@ import type { Page } from "@playwright/test";
 import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
 /**
- * A downed party member's death saves on the runner's creature panel
- * (`run/CombatantPanel.tsx`), at every width: the block's tint running to the
- * card's edges, its dots and its roll inside them, each dot a target a pointer
+ * A downed party member's death saves at every width, where the DM rolls them
+ * on their turn: the runner's creature panel in the grid
+ * (`run/CombatantPanel.tsx`), and on the canvas the action bar
+ * (`run/TurnCard.tsx`), since the whole card is a closed drawer there. The
+ * block's tint running to the card's edges, its dots and its roll inside them, each dot a target a pointer
  * can hit and on top where it is drawn, and a press reaching the DM's
  * endpoint. Layout and hit-testing, which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`), with
- * Brannoc — who is up, so the panel follows him — answered in the page at zero
- * hit points with one success and one failure.
+ * Brannoc — who is up, so the panel and the bar are his — answered in the page
+ * at zero hit points with one success and one failure.
  */
 
 const run = screens.find((screen) => screen.name === "run")!;
@@ -54,7 +56,10 @@ for (const width of WIDTHS) {
       const sent: Array<Record<string, unknown>> = [];
       await downed(page, sent);
       await app.open(run);
-      const card = page.getByRole("region", { name: "Selected combatant" });
+      const canvas = (await page.locator("[data-slot=run-stage]").count()) > 0;
+      const card = page.getByRole("region", {
+        name: canvas ? "This turn of Brannoc" : "Selected combatant",
+      });
       const block = card.getByRole("region", { name: "Death saves of Brannoc" });
       await expect(block).toBeVisible();
       await block.scrollIntoViewIfNeeded();

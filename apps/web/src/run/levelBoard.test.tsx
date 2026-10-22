@@ -334,8 +334,9 @@ describe("the rules a level makes, on the DM's canvas", () => {
     await renderRunner();
     await screen.findByRole("region", { name: "Battle map" });
     await userEvent.click(await board().findByRole("button", { name: /^Goblin Boss, column/ }));
-    const card = within(await screen.findByRole("region", { name: "Selected combatant" }));
-    expect(await card.findByText("Half cover: +2 AC from Brannoc")).toBeInTheDocument();
+    // The canvas's target frame says it, as the whole card does.
+    const frame = within(await screen.findByRole("region", { name: "Target, Goblin Boss" }));
+    expect(await frame.findByText("Half cover: +2 AC from Brannoc")).toBeInTheDocument();
     expect(screen.getByText(/Targeting Goblin Boss, AC 19 \(half cover\)/)).toBeInTheDocument();
   });
 });

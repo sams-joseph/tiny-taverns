@@ -32,9 +32,16 @@ import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Icon,
   Label,
   Switch,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Toaster,
   TooltipProvider,
   toast,
@@ -52,6 +59,9 @@ import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
 import { useFullscreen, useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
+import { HudIconButton, HudIconSwitch, StageDrawerButton, hudSurface } from "./hud";
+import { HOB_DRAWER, SHEET_DRAWER, type StageDrawer } from "./stageDrawers";
+import { TargetFrame } from "./TargetFrame";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
@@ -70,7 +80,7 @@ import {
 import { AttackResultCard, TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CanvasTitle } from "./CanvasTitle";
-import { CombatantPanel } from "./CombatantPanel";
+import { CombatantPanel, DeathSaveBlock } from "./CombatantPanel";
 import { autopilotDriverId, useAutopilot } from "../hob/autopilot";
 import { useHobAvailable } from "../hob/fightTurn";
 import { AutopilotBar } from "./AutopilotBar";
@@ -287,115 +297,59 @@ function SessionNpcProposalWatch({
   );
 }
 
-function ShareNpcCard({ path }: { readonly path: RunPath }) {
-  const [resource, reload] = useApiAtom(runNpcsAtom(path));
-  const { failure, submit, busy } = useMutation();
-  const [selected, setSelected] = useState("");
-
-  if (resource.state === "loading") {
-    return (
-      <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <p className="text-body-s text-muted-foreground">Reading the cast…</p>
-      </section>
-    );
-  }
-  if (resource.state === "failed")
-    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
-
-  const shareable = resource.value.filter((npc: Npc) => npc.visibility === "shared");
-  if (shareable.length === 0) {
-    return (
-      <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <SectionHeading as="h3" size="title">
-          Open at the table
-        </SectionHeading>
-        <p className="mt-2 text-body-s text-muted-foreground">
-          Make an NPC player-facing in Cast before opening them at the table.
-        </p>
-      </section>
-    );
-  }
-
-  const chosen = shareable.find((npc) => npc.id === selected) ?? shareable[0]!;
-  return (
-    <section className="rounded-card border border-hairline bg-surface-card p-card">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <SectionHeading as="h3" size="title">
-            Open at the table
-          </SectionHeading>
-          <p className="text-caption text-muted-foreground">
-            Start the shared live-session conversation players see at the table.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => {
-            void submit(
-              (client) =>
-                client.npcs.openSession({
-                  params: {
-                    campaignId: path.campaignId,
-                    sessionId: path.sessionId,
-                    npcId: chosen.id,
-                  },
-                  payload: {},
-                }),
-              [reads.sessionNpcs(path.sessionId)],
-            );
-          }}
-        >
-          Open at the table
-        </Button>
-      </div>
-      <select
-        className="mt-3 w-full rounded-control border border-input bg-surface-sunken px-3 py-2 text-body-s text-foreground"
-        value={chosen.id}
-        onChange={(event) => setSelected(event.currentTarget.value)}
-      >
-        {shareable.map((npc) => (
-          <option key={npc.id} value={npc.id}>
-            {npc.name}
-          </option>
-        ))}
-      </select>
-      {failure !== undefined && <SaveFailure failure={failure} />}
-    </section>
-  );
-}
-
-function SessionNpcMonitorPanel({
+/**
+ * The NPCs the players can talk to in the table's shared chat (their side
+ * calls it *Open at the table*): who is in it, a way to bring another in, and
+ * for the one opened here its transcript with pause and close. The card is
+ * absent while the campaign has no player-facing NPC and none was brought in,
+ * which is most fights.
+ */
+function TableNpcsCard({
   path,
   refreshToken,
+  titled = true,
 }: {
   readonly path: RunPath;
   readonly refreshToken: number;
+  /** `false` in the canvas's drawer, which titles it and is its surface. */
+  readonly titled?: boolean;
 }) {
-  const [resource, reload] = useApiAtom(sessionNpcMonitorAtom(path));
+  const [npcs, reloadNpcs] = useApiAtom(runNpcsAtom(path));
+  const [monitor, reload] = useApiAtom(sessionNpcMonitorAtom(path));
   const { failure, submit, busy } = useMutation();
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [openId, setOpenId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (refreshToken > 0) reload();
   }, [refreshToken, reload]);
 
-  if (resource.state === "loading") {
-    return (
-      <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <SectionHeading as="h3" size="title">
-          Scene cast
-        </SectionHeading>
-        <p className="mt-2 text-body-s text-muted-foreground">Reading open NPC conversations…</p>
-      </section>
-    );
-  }
-  if (resource.state === "failed")
-    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
+  if (npcs.state === "failed")
+    return <ApiFailureNotice failure={npcs.failure} onRetry={reloadNpcs} />;
+  if (monitor.state === "failed")
+    return <ApiFailureNotice failure={monitor.failure} onRetry={reload} />;
+  if (npcs.state !== "ready" || monitor.state !== "ready") return null;
 
-  const rows = resource.value;
-  const selected = rows.find((row) => row.npc.id === selectedId) ?? rows[0];
+  const rows = monitor.value;
+  const inScene = new Set(
+    rows.filter((row) => row.thread.sessionState !== "closed").map((row) => row.npc.id),
+  );
+  const choosable = npcs.value.filter(
+    (npc: Npc) => npc.visibility === "shared" && !inScene.has(npc.id),
+  );
+  if (rows.length === 0 && choosable.length === 0) return null;
+
+  const bringIn = (npc: Npc) => {
+    void submit(
+      (client) =>
+        client.npcs.openSession({
+          params: { campaignId: path.campaignId, sessionId: path.sessionId, npcId: npc.id },
+          payload: {},
+        }),
+      [reads.sessionNpcs(path.sessionId)],
+    ).then((result) => {
+      if (Result.isSuccess(result)) setOpenId(npc.id);
+    });
+  };
   const control = (row: NpcSessionMonitor, action: "pause" | "resume" | "close", label: string) => {
     void submit(
       (client) => {
@@ -418,55 +372,87 @@ function SessionNpcMonitorPanel({
   };
 
   return (
-    <section className="rounded-card border border-hairline bg-surface-card p-card">
-      <div className="flex flex-col gap-3">
-        <div>
-          <SectionHeading as="h3" size="title">
-            Scene cast
-          </SectionHeading>
+    <section
+      aria-label="NPCs at the table"
+      className={cn(
+        titled
+          ? "rounded-card border border-hairline bg-surface-card shadow-1"
+          : "-mx-card -mt-card",
+      )}
+    >
+      <div className="flex items-start gap-2 px-panel py-3">
+        <div className="min-w-0 flex-1">
+          {titled && (
+            <SectionHeading as="h3" size="title">
+              NPCs at the table
+            </SectionHeading>
+          )}
           <p className="text-caption leading-snug text-muted-foreground">
-            Open NPCs, monitor shared table transcripts, and pause or close an NPC conversation
-            without editing its history.
+            Players talk to these NPCs in the table chat.
           </p>
         </div>
-        {rows.length === 0 ? (
-          <p className="text-body-s leading-body text-muted-foreground">
-            No NPC conversation is open in this session yet. Choose one above to bring them into the
-            scene.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {rows.map((row) => (
-                <Button
-                  key={row.thread.id}
-                  size="sm"
-                  variant={selected?.thread.id === row.thread.id ? "secondary" : "ghost"}
-                  onClick={() => setSelectedId(row.npc.id)}
+        {choosable.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" disabled={busy} />}>
+              <Icon name="plus" size={13} />
+              Bring in
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {choosable.map((npc) => (
+                <DropdownMenuItem key={npc.id} onClick={() => bringIn(npc)}>
+                  {npc.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      {rows.length > 0 && (
+        <ul className="divide-y divide-hairline border-t border-hairline">
+          {rows.map((row) => {
+            const expanded = openId === row.npc.id;
+            return (
+              <li key={row.thread.id}>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setOpenId(expanded ? undefined : row.npc.id)}
+                  className="flex w-full items-center gap-2 px-panel py-2.5 text-left hover:bg-surface-raised"
                 >
-                  {row.npc.name}
+                  <Icon
+                    name={expanded ? "chevron-down" : "chevron-right"}
+                    size={13}
+                    className="text-muted-foreground"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-body-s font-semibold text-heading">
+                    {row.npc.name}
+                  </span>
+                  {row.pendingProposals > 0 && (
+                    <Badge variant="magic">{row.pendingProposals} to review</Badge>
+                  )}
                   <Badge variant={badgeForSessionState(row.thread.sessionState)}>
                     {row.thread.sessionState}
                   </Badge>
-                  {row.pendingProposals > 0 && (
-                    <Badge variant="magic">{row.pendingProposals}</Badge>
-                  )}
-                </Button>
-              ))}
-            </div>
-            {selected !== undefined && (
-              <SessionNpcMonitorDetail
-                row={selected}
-                busy={busy}
-                onPause={() => control(selected, "pause", "NPC conversation paused")}
-                onResume={() => control(selected, "resume", "NPC conversation resumed")}
-                onClose={() => control(selected, "close", "NPC conversation closed")}
-              />
-            )}
-          </>
-        )}
-        {failure !== undefined && <SaveFailure failure={failure} />}
-      </div>
+                </button>
+                {expanded && (
+                  <SessionNpcMonitorDetail
+                    row={row}
+                    busy={busy}
+                    onPause={() => control(row, "pause", "NPC conversation paused")}
+                    onResume={() => control(row, "resume", "NPC conversation resumed")}
+                    onClose={() => control(row, "close", "NPC conversation closed")}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {failure !== undefined && (
+        <div className="border-t border-hairline px-panel py-3">
+          <SaveFailure failure={failure} />
+        </div>
+      )}
     </section>
   );
 }
@@ -492,21 +478,13 @@ function SessionNpcMonitorDetail({
 }) {
   const state = row.thread.sessionState;
   return (
-    <div className="rounded-card border border-hairline bg-surface-sunken p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <SectionHeading as="h4">{row.npc.name}</SectionHeading>
-            <Badge variant={badgeForSessionState(state)}>{state}</Badge>
-            <Badge variant={row.available ? "success" : "outline"}>
-              {row.available ? "available" : "unavailable"}
-            </Badge>
-          </div>
-          <p className="mt-1 text-caption leading-snug text-muted-foreground">
-            {row.npc.role || "Cast NPC"} · {row.model ?? "no model configured"}
-            {row.lastFailure === null ? "" : ` · ${row.lastFailure}`}
-          </p>
-        </div>
+    <div className="space-y-3 px-panel pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 text-caption leading-snug text-muted-foreground">
+          {row.npc.role || "Cast NPC"} · {row.model ?? "no model configured"}
+          {row.available ? "" : " · unavailable"}
+          {row.lastFailure === null ? "" : ` · ${row.lastFailure}`}
+        </p>
         <div className="flex flex-wrap gap-2">
           {state === "open" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={onPause}>
@@ -540,14 +518,14 @@ function SessionNpcMonitorDetail({
           )}
         </div>
       </div>
-      <div className="mt-3 space-y-2 rounded-control border border-hairline bg-surface-card p-2">
+      <div className="space-y-2 rounded-control border border-hairline bg-surface-sunken p-2">
         {row.turns.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
-            No one has spoken in this shared conversation yet.
+            No one has spoken to {row.npc.name} yet.
           </p>
         ) : (
           row.turns.map((turn) => (
-            <div key={turn.id} className="rounded-control bg-surface-sunken px-2.5 py-2">
+            <div key={turn.id} className="rounded-control bg-surface-card px-2.5 py-2">
               <p className="text-micro leading-snug tracking-caps uppercase text-faint">
                 {turn.who === "npc" ? row.npc.name : turn.speakerName || "Table participant"}
               </p>
@@ -630,27 +608,20 @@ function DiceTray({
 }
 
 /**
- * Whether Hob may spend a character's resources in this fight without asking,
- * and every spend it made, each with its undo.
+ * Every spend Hob made without asking in this fight, each with its undo. The
+ * switch that allows it is in the runner's controls (`HobSpendsSwitch`); the
+ * card is absent until there is a spend to list.
  */
 function HobSpendsCard({
-  allowed,
-  over,
   updates,
-  switchBusy,
   busy,
-  onAllow,
   onUndo,
 }: {
-  readonly allowed: boolean;
-  readonly over: boolean;
   readonly updates: ReadonlyArray<HobDirectResourceUpdate>;
-  readonly switchBusy: boolean;
   readonly busy: boolean;
-  readonly onAllow: (allowed: boolean) => void;
   readonly onUndo: (update: HobDirectResourceUpdate) => void;
 }) {
-  if (over && updates.length === 0) return null;
+  if (updates.length === 0) return null;
   return (
     <section
       aria-label="Hob's direct spends"
@@ -659,63 +630,134 @@ function HobSpendsCard({
       <div className="flex items-center gap-2 px-panel py-3">
         <Icon name="sparkles" size={13} className="text-magic-ink" />
         <SectionHeading as="h3" size="title" className="flex-1">
-          Hob's spends
+          Spent by Hob
         </SectionHeading>
-        {!over && (
-          <span className="flex items-center gap-2">
-            <Switch
-              id="run-hob-direct-writes"
-              checked={allowed}
-              disabled={switchBusy}
-              onCheckedChange={(next) => onAllow(next)}
-            />
-            <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
-          </span>
-        )}
       </div>
-      {updates.length === 0 ? (
-        <p className="mb-0 border-t border-hairline px-panel py-3 text-caption leading-body text-muted-foreground">
-          {allowed
-            ? "Hob may spend a character's resources in this fight without asking. Each spend is listed here, with its undo."
-            : "Off: Hob asks before it spends anything in this fight."}
-        </p>
-      ) : (
-        <div className="divide-y divide-hairline border-t border-hairline">
-          {updates.map((update) => {
-            const spent = update.afterUsed - update.beforeUsed;
-            const left = update.resourceMax - update.afterUsed;
-            return (
-              <article
-                key={update.id}
-                className="flex items-start justify-between gap-3 px-panel py-3"
-              >
-                <div className="min-w-0 space-y-1">
-                  <p className="text-body-s font-semibold leading-body text-foreground">
-                    {update.characterName} spent {spent} {update.resourceName}
-                  </p>
-                  <p className="text-caption leading-body text-muted-foreground">
-                    {left} of {update.resourceMax} left
-                    {update.undoneAt === null ? "" : " · undone"}
-                  </p>
-                </div>
-                {update.undoneAt === null && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => onUndo(update)}
-                    aria-label={`Undo ${update.resourceName} for ${update.characterName}`}
-                  >
-                    <Icon name="refresh-cw" size={13} />
-                    Undo
-                  </Button>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      )}
+      <div className="divide-y divide-hairline border-t border-hairline">
+        {updates.map((update) => {
+          const spent = update.afterUsed - update.beforeUsed;
+          const left = update.resourceMax - update.afterUsed;
+          return (
+            <article
+              key={update.id}
+              className="flex items-start justify-between gap-3 px-panel py-3"
+            >
+              <div className="min-w-0 space-y-1">
+                <p className="text-body-s font-semibold leading-body text-foreground">
+                  {update.characterName} spent {spent} {update.resourceName}
+                </p>
+                <p className="text-caption leading-body text-muted-foreground">
+                  {left} of {update.resourceMax} left
+                  {update.undoneAt === null ? "" : " · undone"}
+                </p>
+              </div>
+              {update.undoneAt === null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onUndo(update)}
+                  aria-label={`Undo ${update.resourceName} for ${update.characterName}`}
+                >
+                  <Icon name="refresh-cw" size={13} />
+                  Undo
+                </Button>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </section>
+  );
+}
+
+/** One of Hob's switches, with what it does in a line under it. */
+type HobSwitch = {
+  readonly on: boolean;
+  readonly busy: boolean;
+  readonly onChange: (on: boolean) => void;
+};
+
+/**
+ * Hob's two switches over this fight, each with a line saying what it does:
+ * the autopilot, which plays the monsters' turns, and whether Hob may mark a
+ * character's resources spent without a proposal (`docs/internals/hob.md`).
+ * Each is offered only with a model behind Hob, and once on can always be
+ * turned off. The header's *Hob* popover and the canvas's Hob drawer list the
+ * same rows.
+ */
+function HobSwitchRows({
+  autopilot,
+  spends,
+}: {
+  readonly autopilot: HobSwitch | undefined;
+  readonly spends: HobSwitch | undefined;
+}) {
+  const row = (id: string, label: string, line: string, value: HobSwitch) => (
+    <div className="flex items-start gap-3 rounded-control px-2 py-2">
+      <div className="min-w-0 flex-1">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="mt-0.5 text-caption leading-snug text-muted-foreground">{line}</p>
+      </div>
+      <Switch
+        id={id}
+        checked={value.on}
+        disabled={value.busy}
+        onCheckedChange={(next) => value.onChange(next)}
+      />
+    </div>
+  );
+  return (
+    <>
+      {autopilot !== undefined &&
+        row(
+          "run-hob-autopilot",
+          "Autopilot",
+          "Hob plays the monsters' turns on its own, one after another, until you stop it.",
+          autopilot,
+        )}
+      {spends !== undefined &&
+        row(
+          "run-hob-direct-writes",
+          "Hob spends",
+          "Hob marks spell slots and other uses spent without asking you first. Each spend is listed with an undo.",
+          spends,
+        )}
+    </>
+  );
+}
+
+/** How many of Hob's switches are on: the count its button wears. */
+const hobOn = (...switches: ReadonlyArray<HobSwitch | undefined>): number =>
+  switches.filter((one) => one?.on === true).length;
+
+/**
+ * The header's *Hob* button: the switches behind one button, so the controls
+ * stay narrow enough to leave the title its room. With neither on offer there
+ * is no button.
+ */
+function HobSwitches({
+  autopilot,
+  spends,
+}: {
+  readonly autopilot: HobSwitch | undefined;
+  readonly spends: HobSwitch | undefined;
+}) {
+  if (autopilot === undefined && spends === undefined) return null;
+  const on = hobOn(autopilot, spends);
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button variant="outline" size="sm" aria-label="Hob settings" />}>
+        <Icon name="sparkles" size={13} className="text-magic-ink" />
+        Hob
+        {on > 0 && <Badge variant="magic">{on} on</Badge>}
+        <Icon name="chevron-down" size={13} />
+      </PopoverTrigger>
+      {/* On the card surface: the switch's off track is the raised one's colour. */}
+      <PopoverContent align="end" className="w-72 bg-surface-card">
+        <HobSwitchRows autopilot={autopilot} spends={spends} />
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -802,6 +844,11 @@ export function RunScreen() {
   const [removing, setRemoving] = useState<Combatant | undefined>();
   const [ending, setEnding] = useState(false);
   const [npcProposalRefreshToken, setNpcProposalRefreshToken] = useState(0);
+  // The canvas's NPC drawer is on the rail only while it has someone in it or
+  // someone to bring in, and counts what waits for review: the card's own
+  // reads (`TableNpcsCard`), shared through the atoms rather than fetched twice.
+  const [tableNpcs] = useApiAtom(runNpcsAtom(path));
+  const [npcMonitor] = useApiAtom(sessionNpcMonitorAtom(path));
   // The attack (`attack.ts`): the line whose target is being picked, then what
   // it came to. Both are this tab's, and both go when the turn moves.
   const [targeting, setTargeting] = useState<
@@ -1780,16 +1827,11 @@ export function RunScreen() {
   const tableCards = state !== undefined && (
     <>
       <HobSpendsCard
-        allowed={state.run.allowHobDirectWrites}
-        over={over}
         updates={state.directUpdates}
-        switchBusy={direct.busy}
         busy={direct.busy}
-        onAllow={(allowed) => void setHobDirectWrites(allowed)}
         onUndo={(update) => void undoDirectUpdate(update)}
       />
-      {!over && <ShareNpcCard path={path} />}
-      {!over && <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />}
+      {!over && <TableNpcsCard path={path} refreshToken={npcProposalRefreshToken} />}
       {!over && <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />}
     </>
   );
@@ -1913,121 +1955,120 @@ export function RunScreen() {
   // panel is the target's, or the up creature's details without its turn.
   const turnShown = canvas && state !== undefined && !over && !rolling && active !== undefined;
   const selectedIsTurn = turnShown && selected !== undefined && selected.id === active?.id;
-  const card = state !== undefined && view !== undefined && (
-    <>
-      <CombatantPanel
-        variant={canvas ? "canvas" : "card"}
-        campaignId={path.campaignId}
-        combatant={selected}
-        hp={selected === undefined ? 0 : controller.hpOf(selected)}
-        label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
-        speed={selected === undefined ? undefined : speedOf(selected)}
-        // The target's cover from whoever is up, and who cannot see whom.
-        sight={
-          selected === undefined || active === undefined || selected.id === active.id
-            ? []
-            : sightLines(sightOf(active, selected), active.displayName)
-        }
-        // On the canvas whoever is up acts from the turn card.
-        actions={selected === undefined || selectedIsTurn ? [] : actionsOf(sourceOf(selected))}
-        multiattacks={
-          selected === undefined || selectedIsTurn ? [] : multiattacksOf(selectedOptions)
-        }
-        onMultiattack={
-          file === undefined ? undefined : (run) => selected && runMultiattack(selected, run)
-        }
-        creatures={view.creatures}
-        active={selected !== undefined && selected.id === state.run.activeCombatantId}
-        turn={
-          selected !== undefined && !over && !selectedIsTurn && isUp(selected, state.run)
-            ? {
-                busy: turnTicks.busy,
-                onTick: (ticks) => void turnTicks.tick(selected, ticks),
-              }
-            : undefined
-        }
-        resources={
-          selected === undefined || over
-            ? undefined
-            : {
-                busy: resources.busy,
-                onSet: (patch) => void resources.set(selected, patch),
-                // The DM's own d6, in the dock like every roll on this screen;
-                // on the face the stat block names it is ready again.
-                onRecharge:
-                  dice.roll === undefined
-                    ? undefined
-                    : (row) => {
-                        const rolled = dice.roll?.(
-                          `${selected.displayName} · ${row.label} recharge`,
-                          "1d6",
-                        );
-                        if (rolled !== undefined && rolled.total >= row.on) {
-                          void resources.set(selected, patchFor(selected, row, false));
-                        }
-                      },
-              }
-        }
-        following={selectedId === undefined}
-        disabled={frozen || share.busy}
-        conditionsBusy={conditions.busy}
-        deathSavesBusy={saves.busy}
-        hiding={hiding.busy}
-        rolling={rolling}
-        onTheirTurn={() => selected !== undefined && void setActive(selected)}
-        onEdit={() => setEditing(selected)}
-        onFollow={() => setSelectedId(undefined)}
-        onTakeOff={
-          // Only a token standing on a board the DM can play on: below `@3xl`
-          // the board is read-only, so its tokens stay where they stand.
-          selected !== undefined && selected.position !== null && stage.wide === true && boardReady
-            ? () => void move(selected, null)
-            : undefined
-        }
-        onRemove={() => setRemoving(selected)}
-        onDamage={(amount) => selected !== undefined && void damage(selected, amount, false)}
-        onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
-        onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
-        onRoll={dice.roll}
-        onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
-        onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
-        targeting={
-          picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
-        }
-        result={
-          attack !== undefined &&
-          !turnShown &&
-          attack.attackerId === selected?.id &&
-          attack.attackerId === active?.id
-            ? result
-            : undefined
-        }
-        onAttack={
-          file === undefined
-            ? undefined
-            : (line) => {
-                if (selected === undefined) return;
-                setSequence(undefined);
-                beginAttack(selected, line);
-              }
-        }
-        onRollAction={
-          file === undefined
-            ? undefined
-            : (line) => selected !== undefined && rollLine(selected, line)
-        }
-        onApplyResult={(amount) => void applyAttack(amount)}
-        onDismissResult={() => {
-          setAttack(undefined);
-          setSequence(undefined);
-        }}
-      />
-      {/* Hob choosing what the selected monster does: keyed by the creature,
-        so a card never carries one creature's offer onto another. */}
-      {selected !== undefined &&
-        selectedOptions !== undefined &&
-        !over &&
-        pilot.turn.combatantId === selected.id && (
+  /** The selected creature's whole card: the grid's aside, the canvas's *Sheet* drawer. */
+  const sheet = state !== undefined && view !== undefined && (
+    <CombatantPanel
+      campaignId={path.campaignId}
+      combatant={selected}
+      hp={selected === undefined ? 0 : controller.hpOf(selected)}
+      label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
+      speed={selected === undefined ? undefined : speedOf(selected)}
+      // The target's cover from whoever is up, and who cannot see whom.
+      sight={
+        selected === undefined || active === undefined || selected.id === active.id
+          ? []
+          : sightLines(sightOf(active, selected), active.displayName)
+      }
+      // On the canvas whoever is up acts from the turn card.
+      actions={selected === undefined || selectedIsTurn ? [] : actionsOf(sourceOf(selected))}
+      multiattacks={selected === undefined || selectedIsTurn ? [] : multiattacksOf(selectedOptions)}
+      onMultiattack={
+        file === undefined ? undefined : (run) => selected && runMultiattack(selected, run)
+      }
+      creatures={view.creatures}
+      active={selected !== undefined && selected.id === state.run.activeCombatantId}
+      turn={
+        selected !== undefined && !over && !selectedIsTurn && isUp(selected, state.run)
+          ? {
+              busy: turnTicks.busy,
+              onTick: (ticks) => void turnTicks.tick(selected, ticks),
+            }
+          : undefined
+      }
+      resources={
+        selected === undefined || over
+          ? undefined
+          : {
+              busy: resources.busy,
+              onSet: (patch) => void resources.set(selected, patch),
+              // The DM's own d6, in the dock like every roll on this screen;
+              // on the face the stat block names it is ready again.
+              onRecharge:
+                dice.roll === undefined
+                  ? undefined
+                  : (row) => {
+                      const rolled = dice.roll?.(
+                        `${selected.displayName} · ${row.label} recharge`,
+                        "1d6",
+                      );
+                      if (rolled !== undefined && rolled.total >= row.on) {
+                        void resources.set(selected, patchFor(selected, row, false));
+                      }
+                    },
+            }
+      }
+      following={selectedId === undefined}
+      disabled={frozen || share.busy}
+      conditionsBusy={conditions.busy}
+      deathSavesBusy={saves.busy}
+      hiding={hiding.busy}
+      rolling={rolling}
+      onTheirTurn={() => selected !== undefined && void setActive(selected)}
+      onEdit={() => setEditing(selected)}
+      onFollow={() => setSelectedId(undefined)}
+      onTakeOff={
+        // Only a token standing on a board the DM can play on: below `@3xl`
+        // the board is read-only, so its tokens stay where they stand.
+        selected !== undefined && selected.position !== null && stage.wide === true && boardReady
+          ? () => void move(selected, null)
+          : undefined
+      }
+      onRemove={() => setRemoving(selected)}
+      onDamage={(amount) => selected !== undefined && void damage(selected, amount, false)}
+      onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
+      onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
+      onRoll={dice.roll}
+      onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
+      onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
+      targeting={
+        picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
+      }
+      result={
+        attack !== undefined &&
+        !turnShown &&
+        attack.attackerId === selected?.id &&
+        attack.attackerId === active?.id
+          ? result
+          : undefined
+      }
+      onAttack={
+        file === undefined
+          ? undefined
+          : (line) => {
+              if (selected === undefined) return;
+              setSequence(undefined);
+              beginAttack(selected, line);
+            }
+      }
+      onRollAction={
+        file === undefined
+          ? undefined
+          : (line) => selected !== undefined && rollLine(selected, line)
+      }
+      onApplyResult={(amount) => void applyAttack(amount)}
+      onDismissResult={() => {
+        setAttack(undefined);
+        setSequence(undefined);
+      }}
+    />
+  );
+  /** Hob choosing what the selected monster does: under the card, or over the canvas's turn. */
+  const hobOffer =
+    state !== undefined && selected !== undefined && selectedOptions !== undefined && !over ? (
+      <>
+        {/* Hob choosing what the selected monster does: keyed by the creature,
+      so a card never carries one creature's offer onto another. */}
+        {pilot.turn.combatantId === selected.id && (
           // The autopilot's own hook, so what it asks and keeps is drawn here.
           <HobTurnCardView
             combatant={selected}
@@ -2037,10 +2078,7 @@ export function RunScreen() {
             driving={isWorking(pilot.loop)}
           />
         )}
-      {selected !== undefined &&
-        selectedOptions !== undefined &&
-        !over &&
-        pilot.turn.combatantId !== selected.id && (
+        {pilot.turn.combatantId !== selected.id && (
           <HobTurnCard
             key={selected.id}
             campaignId={campaignId}
@@ -2053,6 +2091,12 @@ export function RunScreen() {
             onChanged={refresh}
           />
         )}
+      </>
+    ) : null;
+  const card = (
+    <>
+      {sheet}
+      {hobOffer}
     </>
   );
   const banner =
@@ -2068,6 +2112,7 @@ export function RunScreen() {
     );
   const rollsDock = state !== undefined && (
     <RollsDock
+      variant={canvas ? "feed" : "card"}
       lines={dockLines({
         dm: dice.rolls,
         tray: trayRolls,
@@ -2087,6 +2132,11 @@ export function RunScreen() {
           return {
             id: combatant.id,
             displayName: combatant.displayName,
+            label: labels.get(combatant.id) ?? "",
+            portrait:
+              combatant.kind === "pc" && combatant.portrait !== null
+                ? combatant.portrait.thumbUrl
+                : undefined,
             subtitle: subtitleOf(combatant),
             ac: combatant.ac,
             health: { hp, max: combatant.hpMax },
@@ -2119,6 +2169,22 @@ export function RunScreen() {
     >
       {turn.busy ? "Advancing…" : "Next turn"}
       <Icon name="chevron-right" size={14} />
+    </Button>
+  );
+
+  /** The canvas's *Next turn*: the action bar's round button, the one peach on it. */
+  const nextTurnRound = !rolling && scene === undefined && (
+    <Button
+      aria-label="Next turn"
+      className="size-20 flex-col gap-0.5 rounded-full text-label leading-tight"
+      disabled={turn.busy || (driving && isWorking(pilot.loop) && pilot.loop.phase !== "counting")}
+      onClick={() => {
+        if (driving && pilot.endTurn()) return;
+        void advance();
+      }}
+    >
+      <Icon name="chevron-right" size={18} />
+      {turn.busy ? "Advancing…" : "Next turn"}
     </Button>
   );
 
@@ -2223,6 +2289,17 @@ export function RunScreen() {
         ]}
         tilesDisabled={frozen || file === undefined}
         result={attack?.attackerId === active.id ? resultCard : undefined}
+        downed={
+          active.deathSaves !== null && controller.hpOf(active) === 0 ? (
+            <DeathSaveBlock
+              name={active.displayName}
+              saves={active.deathSaves}
+              disabled={frozen || saves.busy}
+              onSet={(next) => void setDeathSaves(active, next)}
+              onRoll={() => void rollDeathSave(active)}
+            />
+          ) : undefined
+        }
         hint={
           picking !== undefined
             ? `Pick a target for ${picking.line.name}: a token, a name in the order or the party.`
@@ -2230,7 +2307,7 @@ export function RunScreen() {
               ? targetHint(target, sightOf(active, target)?.cover ?? "none")
               : "Select a creature to make it the target, or pick an attack and then its target. Drag a token to move it."
         }
-        action={nextTurn}
+        action={nextTurnRound}
       />
     ) : null;
 
@@ -2291,22 +2368,46 @@ export function RunScreen() {
             : upLine(state.combatants, state.run.activeCombatantId);
 
   /** The switches over what the table sees, and the way out of the fight: the header's, or the canvas's top right. */
-  const controls = (inHeader: boolean) => (
+  // Hob's switches, offered only with a model behind Hob (and once on, always
+  // there to turn off): the header's popover and the canvas's drawer list the
+  // same two.
+  const autopilotSwitch: HobSwitch | undefined =
+    state !== undefined &&
+    !over &&
+    scene === undefined &&
+    (hobAvailable === true || pilotDriver !== null)
+      ? {
+          on: pilotDriver !== null,
+          busy: pilotSwitch.busy,
+          onChange: (next) => void setAutopilot(next),
+        }
+      : undefined;
+  const spendsSwitch: HobSwitch | undefined =
+    state !== undefined && !over && (hobAvailable === true || state.run.allowHobDirectWrites)
+      ? {
+          on: state.run.allowHobDirectWrites,
+          busy: direct.busy,
+          onChange: (next) => void setHobDirectWrites(next),
+        }
+      : undefined;
+  const reconnect = state !== undefined && !over && connection.status !== "live" && (
+    <Button variant="outline" size="sm" onClick={connection.reconnect}>
+      <Icon name="octagon-x" size={13} />
+      {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
+    </Button>
+  );
+  const backToCampaign = over && (
+    <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
+      Back to the campaign
+    </Button>
+  );
+
+  /** The header's controls, off the canvas. */
+  const controls = (
     <>
-      {!inHeader && hobAvailable === true && showHob !== undefined && (
-        // The nav's *Ask Hob* is put away with it; ⌘K still reaches the panel.
-        <Button variant="outline" size="sm" onClick={showHob}>
-          Ask Hob
-        </Button>
-      )}
       {state !== undefined && !over && (
         <>
-          {connection.status !== "live" && (
-            <Button variant="outline" size="sm" onClick={connection.reconnect}>
-              <Icon name="octagon-x" size={13} />
-              {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
-            </Button>
-          )}
+          {reconnect}
           <span className="flex items-center gap-2">
             <Switch
               id="run-share"
@@ -2332,35 +2433,165 @@ export function RunScreen() {
               <Label htmlFor="run-share-map">Share map</Label>
             </span>
           )}
-          {scene === undefined && (hobAvailable === true || pilotDriver !== null) && (
-            // Offered only with a model behind Hob; once on, it can always
-            // be turned off.
-            <span className="flex items-center gap-2">
-              <Switch
-                id="run-hob-autopilot"
-                checked={pilotDriver !== null}
-                disabled={pilotSwitch.busy}
-                onCheckedChange={(next) => void setAutopilot(next)}
-              />
-              <Label htmlFor="run-hob-autopilot">Autopilot</Label>
-            </span>
-          )}
+          <HobSwitches autopilot={autopilotSwitch} spends={spendsSwitch} />
           {/* While rolling, the round's one start is the panel's *Start
-            round N*, so the bar carries no second peach button; on the
-            canvas *Next turn* is the turn card's. */}
-          {inHeader && nextTurn}
+            round N*, so the bar carries no second peach button. */}
+          {nextTurn}
           <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
             End
           </Button>
         </>
       )}
-      {over && (
-        <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
-          Back to the campaign
-        </Button>
-      )}
+      {backToCampaign}
     </>
   );
+
+  // Hob's drawer on the canvas: its switches, what it spent without asking,
+  // and the way to ask it, since the nav's *Ask Hob* is put away with the nav
+  // (⌘K still reaches the panel). While the fight is on it opens from the
+  // controls; once over, the controls are gone, so the rail carries it.
+  const askHob = hobAvailable === true && !over ? showHob : undefined;
+  const hobShown =
+    state !== undefined &&
+    (autopilotSwitch !== undefined ||
+      spendsSwitch !== undefined ||
+      askHob !== undefined ||
+      state.directUpdates.length > 0);
+
+  /** The canvas's controls: icons in one cluster, Hob's switches in its drawer. */
+  const canvasControls = (
+    <>
+      {reconnect}
+      {state !== undefined && !over && (
+        <div className={cn(hudSurface, "flex items-center gap-0.5 p-1")}>
+          <HudIconSwitch
+            icon="eye"
+            label="Share"
+            hint="Share the fight with the players"
+            checked={state.run.visibility === "shared"}
+            disabled={share.busy}
+            onCheckedChange={(next) => void setShown(share, { visibility: next ? "shared" : "dm" })}
+          />
+          {mapToShare && (
+            // A narrowing of *Share*, as the header's is.
+            <HudIconSwitch
+              icon="map"
+              label="Share map"
+              hint="Show the players the map while they see the fight"
+              checked={state.run.mapShown}
+              disabled={mapShare.busy || state.run.visibility !== "shared"}
+              onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
+            />
+          )}
+          {hobShown && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-6 w-px bg-hairline" />
+              <StageDrawerButton
+                drawer={HOB_DRAWER}
+                icon="sparkles"
+                label="Hob"
+                badge={hobOn(autopilotSwitch, spendsSwitch)}
+              />
+            </>
+          )}
+          <span aria-hidden="true" className="mx-1 h-6 w-px bg-hairline" />
+          <HudIconButton
+            icon="flag"
+            tone="danger"
+            label="End"
+            hint="End the fight"
+            onClick={() => setEnding(true)}
+          />
+        </div>
+      )}
+      {backToCampaign}
+    </>
+  );
+
+  /** On the canvas, what is selected when it is not whoever is up: the target frame's. */
+  const framed = selected !== undefined && selected.id !== active?.id ? selected : undefined;
+  const targetFrame = framed !== undefined && (
+    <TargetFrame
+      combatant={framed}
+      hp={controller.hpOf(framed)}
+      label={labels.get(framed.id) ?? ""}
+      portrait={
+        framed.kind === "pc" && framed.portrait !== null ? framed.portrait.thumbUrl : undefined
+      }
+      subtitle={subtitleOf(framed)}
+      sight={active === undefined ? [] : sightLines(sightOf(active, framed), active.displayName)}
+      disabled={frozen}
+      onDamage={(amount) => void damage(framed, amount, false)}
+      onClear={() => setSelectedId(undefined)}
+    />
+  );
+
+  const npcRows = npcMonitor.state === "ready" ? npcMonitor.value : [];
+  const npcsInScene = new Set(
+    npcRows.filter((row) => row.thread.sessionState !== "closed").map((row) => row.npc.id),
+  );
+  const npcsToBringIn =
+    tableNpcs.state === "ready"
+      ? tableNpcs.value.filter((npc) => npc.visibility === "shared" && !npcsInScene.has(npc.id))
+      : [];
+  /** The canvas's drawers: the selected card, the NPCs at the table, Hob. */
+  const drawers: ReadonlyArray<StageDrawer> = [
+    ...(selected !== undefined && sheet !== false
+      ? [
+          {
+            key: SHEET_DRAWER,
+            label: "Sheet",
+            icon: "scroll-text" as const,
+            // The card is its own surface and names the creature.
+            bare: true,
+            content: sheet,
+          },
+        ]
+      : []),
+    ...(!over && (npcRows.length > 0 || npcsToBringIn.length > 0)
+      ? [
+          {
+            key: "npcs",
+            label: "NPCs at the table",
+            icon: "message-circle" as const,
+            badge: npcRows.reduce((total, row) => total + row.pendingProposals, 0),
+            content: (
+              <TableNpcsCard path={path} refreshToken={npcProposalRefreshToken} titled={false} />
+            ),
+          },
+        ]
+      : []),
+    ...(hobShown && state !== undefined
+      ? [
+          {
+            key: HOB_DRAWER,
+            label: "Hob",
+            icon: "sparkles" as const,
+            rail: over,
+            content: (
+              <>
+                {(autopilotSwitch !== undefined || spendsSwitch !== undefined) && (
+                  <div className="-mx-2 flex flex-col">
+                    <HobSwitchRows autopilot={autopilotSwitch} spends={spendsSwitch} />
+                  </div>
+                )}
+                <HobSpendsCard
+                  updates={state.directUpdates}
+                  busy={direct.busy}
+                  onUndo={(update) => void undoDirectUpdate(update)}
+                />
+                {askHob !== undefined && (
+                  <Button variant="outline" size="sm" className="self-start" onClick={askHob}>
+                    <Icon name="sparkles" size={13} className="text-magic-ink" />
+                    Ask Hob
+                  </Button>
+                )}
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   const header = (
     <TopBar
@@ -2379,7 +2610,7 @@ export function RunScreen() {
         ),
       })}
     >
-      {controls(true)}
+      {controls}
     </TopBar>
   );
 
@@ -2485,18 +2716,22 @@ export function RunScreen() {
               <RunStage
                 title={canvasTitle}
                 strip={strip}
-                controls={controls(false)}
-                notices={notices}
-                rolling={rollPanel}
-                party={partyRail || null}
-                turn={turnCard}
-                banner={banner}
-                panel={
+                controls={canvasControls}
+                notices={
                   <>
-                    {card}
-                    {tableCards}
+                    {notices}
+                    {!over && (
+                      <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
+                    )}
                   </>
                 }
+                rolling={rollPanel}
+                party={partyRail || null}
+                target={targetFrame || null}
+                above={hobOffer}
+                turn={turnCard}
+                banner={banner}
+                drawers={drawers}
                 rolls={rollsDock}
                 board={(freeArea) => <RunBoardStage {...boardProps} freeArea={freeArea} />}
               />

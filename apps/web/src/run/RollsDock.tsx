@@ -51,54 +51,145 @@ function Line({ line, latest }: { readonly line: DockLine; readonly latest: bool
   );
 }
 
+/** The feed's lines over the latest while the log is folded, fading as they age. */
+const FADING = 2;
+const FADE = ["opacity-70", "opacity-40"] as const;
+
 export function RollsDock({
   lines,
   dice,
+  variant = "card",
 }: {
   /** Newest first (`dockLines`). */
   readonly lines: ReadonlyArray<DockLine>;
   readonly dice: DmDice;
+  /**
+   * `feed` is the canvas HUD's (the maintainer's call of 2026-10-22): no card,
+   * the latest lines standing on the board and fading as they age, as a
+   * game's combat log does, over the dice; the toggle opens the rest in a
+   * panel above them.
+   */
+  readonly variant?: "card" | "feed";
 }) {
   const [open, setOpen] = useState(false);
   const [latest, ...rest] = lines;
   const older = rest.slice(0, OLDER);
   const roll = dice.roll;
 
+  const toggle = (
+    <button
+      type="button"
+      data-slot="rolls-toggle"
+      aria-expanded={open}
+      onClick={() => setOpen((now) => !now)}
+      className={cn(
+        "flex items-center gap-2 text-left leading-none font-semibold text-heading outline-none focus-visible:ring-focus",
+        variant === "feed"
+          ? "h-control-sm rounded-control px-2 text-label-s hover:bg-surface-raised"
+          : "h-control px-3 text-label",
+      )}
+    >
+      <Icon name="dices" size={variant === "feed" ? 14 : 16} className="text-muted-foreground" />
+      <span className={cn(variant === "card" && "flex-1")}>Rolls</span>
+      <span className="text-label-s leading-none font-normal text-muted-foreground">
+        {open ? "Hide log" : `${String(lines.length)} in log`}
+      </span>
+      <Icon
+        name={open ? "chevron-down" : "chevron-up"}
+        size={15}
+        className="text-muted-foreground"
+      />
+    </button>
+  );
+  const earlier = open && older.length > 0 && (
+    <ol
+      aria-label="Earlier rolls"
+      className={cn(
+        "mb-0 flex flex-col",
+        variant === "feed"
+          ? "w-full overflow-y-auto rounded-card border border-hairline bg-surface-card/95 shadow-3"
+          : "border-t border-hairline",
+      )}
+    >
+      {older.map((line) => (
+        <li
+          key={line.key}
+          className="flex items-center gap-2.5 border-b border-hairline px-3 py-1.5 last:border-b-0"
+        >
+          <Line line={line} latest={false} />
+        </li>
+      ))}
+    </ol>
+  );
+  const diceRow = roll !== undefined && (
+    <div
+      className={cn(
+        "flex gap-1 p-2",
+        variant === "feed"
+          ? "w-full rounded-card border border-hairline bg-surface-card/90 shadow-3"
+          : "border-t border-hairline",
+      )}
+    >
+      {DICE.map((die) => (
+        <button
+          key={die}
+          type="button"
+          aria-label={`Roll a ${die}`}
+          onClick={() => roll(die, `1${die}`)}
+          className="h-control-sm min-w-0 flex-1 cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-label-s font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
+        >
+          {die}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (variant === "feed") {
+    return (
+      <section
+        aria-label="Rolls"
+        data-slot="rolls-feed"
+        className="flex flex-col items-end gap-1.5"
+      >
+        {earlier}
+        {!open &&
+          [...rest.slice(0, FADING)].reverse().map((line, index, shown) => (
+            <div
+              key={line.key}
+              className={cn(
+                "flex max-w-full items-center gap-2.5 rounded-control bg-surface-sunken/70 px-2.5 py-1",
+                FADE[shown.length - 1 - index],
+              )}
+            >
+              <Line line={line} latest={false} />
+            </div>
+          ))}
+        <div
+          role="status"
+          aria-label="Latest roll"
+          className="flex max-w-full items-center gap-2.5 rounded-control bg-surface-sunken/80 px-2.5 py-1.5"
+        >
+          {latest === undefined ? (
+            <p className="mb-0 text-caption leading-body text-muted-foreground">
+              Nothing rolled yet. The table's rolls and every hit land here.
+            </p>
+          ) : (
+            <Line line={latest} latest />
+          )}
+        </div>
+        {toggle}
+        {diceRow}
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label="Rolls"
       className="flex flex-col rounded-card border border-strong bg-surface-card shadow-3"
     >
-      <button
-        type="button"
-        data-slot="rolls-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((now) => !now)}
-        className="flex h-control items-center gap-2 px-3 text-left text-label leading-none font-semibold text-heading outline-none focus-visible:ring-focus"
-      >
-        <Icon name="dices" size={16} className="text-muted-foreground" />
-        <span className="flex-1">Rolls</span>
-        <span className="text-label-s leading-none font-normal text-muted-foreground">
-          {open ? "Hide log" : `${String(lines.length)} in log`}
-        </span>
-        <Icon
-          name={open ? "chevron-down" : "chevron-up"}
-          size={15}
-          className="text-muted-foreground"
-        />
-      </button>
-      {open && older.length > 0 && (
-        <ol aria-label="Earlier rolls" className="mb-0 flex flex-col border-t border-hairline">
-          {older.map((line) => (
-            <li
-              key={line.key}
-              className="flex items-center gap-2.5 border-b border-hairline px-3 py-1.5 last:border-b-0"
-            >
-              <Line line={line} latest={false} />
-            </li>
-          ))}
-        </ol>
-      )}
+      {toggle}
+      {earlier}
       <div
         role="status"
         aria-label="Latest roll"
@@ -113,21 +204,7 @@ export function RollsDock({
           <Line line={latest} latest />
         )}
       </div>
-      {roll !== undefined && (
-        <div className="flex gap-1 border-t border-hairline p-2">
-          {DICE.map((die) => (
-            <button
-              key={die}
-              type="button"
-              aria-label={`Roll a ${die}`}
-              onClick={() => roll(die, `1${die}`)}
-              className="h-control-sm min-w-0 flex-1 cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-label-s font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
-            >
-              {die}
-            </button>
-          ))}
-        </div>
-      )}
+      {diceRow}
     </section>
   );
 }

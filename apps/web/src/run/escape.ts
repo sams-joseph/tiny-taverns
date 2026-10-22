@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
 
+/** An Esc typed into a field is the field's: it clears its own text. */
+export const typedEscape = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null;
+
 /**
  * Esc puts away whatever the board is busy with — the attack's pick of a
  * target, the Fog brush, a tool's ruler, or Area's pinned area — wherever focus is,
@@ -16,8 +20,8 @@ export function useEscapeAway(active: boolean, away: () => void): void {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (
-        event.target instanceof Element &&
-        event.target.closest('section[aria-label="Hob"], input, textarea, [contenteditable="true"]')
+        typedEscape(event.target) ||
+        (event.target instanceof Element && event.target.closest('section[aria-label="Hob"]'))
       )
         return;
       event.preventDefault();

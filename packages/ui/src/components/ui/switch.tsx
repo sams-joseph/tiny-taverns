@@ -40,4 +40,30 @@ function Switch({ className, ...props }: SwitchPrimitive.Root.Props) {
   );
 }
 
-export { Switch };
+/**
+ * The same switch drawn as a square icon button (the encounter runner's
+ * canvas HUD, where the words would crowd the board): the icon lit in the
+ * accent while on, muted while off. Still a `switch` to assistive tech, named
+ * by `aria-label`, which a tooltip should show sighted readers too.
+ */
+function IconSwitch({ className, children, ...props }: SwitchPrimitive.Root.Props) {
+  return (
+    <SwitchPrimitive.Root
+      data-slot="icon-switch"
+      className={cn(
+        "relative inline-flex size-control shrink-0 items-center justify-center rounded-control",
+        "cursor-pointer text-muted-foreground outline-none",
+        "transition-control hover:bg-surface-raised hover:text-foreground",
+        "data-checked:text-accent-ink data-checked:hover:text-accent-ink",
+        "focus-visible:ring-focus",
+        "data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </SwitchPrimitive.Root>
+  );
+}
+
+export { IconSwitch, Switch };
