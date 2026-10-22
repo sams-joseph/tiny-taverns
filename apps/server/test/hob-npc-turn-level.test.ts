@@ -410,6 +410,24 @@ const refusedTurn = (
     return { answered: toolAnswers(requests), prompt: promptOf(requests) };
   });
 
+/**
+ * Ask for a turn of a creature that sees none of its foes: refused before the
+ * stream, and the model is never asked. How total cover and darkness leave a
+ * target out of the options is `NpcTurnLevel.test.ts`'.
+ */
+const unaware = (table: Table, fight: Fight, combatant: Pick<Combatant, "id">) =>
+  Effect.gen(function* () {
+    const before = model.requests().length;
+    const error = yield* Effect.flatMap(clientFor(table.dm.token), (client) =>
+      client.hobFight.turn({
+        params: { ...fight.params, combatantId: combatant.id },
+        payload: { moment: "turn" },
+      }),
+    ).pipe(Effect.flip, Effect.orDie);
+    expect(error).toMatchObject({ _tag: "Conflict", message: "it sees none of its foes yet" });
+    expect(model.requests().length).toBe(before);
+  });
+
 const kept = (table: Table, fight: Fight, turnId: AssistantTurnId) =>
   as(table.dm.token, (client) =>
     client.hobFight.keep({ params: { ...fight.params, turnId }, payload: {} }),
@@ -446,28 +464,19 @@ const shared = Layer.effect(Fixture)(aTable).pipe(Layer.provideMerge(application
 
 describeLayer("hob-npc-turn-level", shared, (it) => {
   describe("what a monster may target", () => {
-    it.effect("leaves a target behind total cover out, and refuses a shot at it", () =>
+    it.effect("takes no turn while its only foe is behind total cover", () =>
       Effect.gen(function* () {
         const table = yield* Fixture;
         const fight = yield* aFight(table, { walls: divide() }, [14, 5]);
-        const { answered, prompt } = yield* refusedTurn(table, fight, fight.goblin, [
-          { option: "actions/Shortbow", targets: [fight.place(fight.hero)] },
-        ]);
-        expect(prompt).toMatch(/Cannot target now: [^.]*Brannoc[^.]*\(total cover\)/);
-        expect(answered).toMatch(/has total cover from it and cannot be targeted/);
+        yield* unaware(table, fight, fight.goblin);
       }),
     );
 
-    it.effect("does not see a target in the dark without darkvision", () =>
+    it.effect("takes no turn while its only foe is in the dark and it has no darkvision", () =>
       Effect.gen(function* () {
         const table = yield* Fixture;
         const fight = yield* aFight(table, { ambient: "dark" }, [9, 8], "bandit");
-        const { answered, prompt } = yield* refusedTurn(table, fight, fight.bandit, [
-          { option: "actions/Scimitar", targets: [fight.place(fight.hero)] },
-        ]);
-        expect(prompt).toContain("it sees by light alone");
-        expect(prompt).toMatch(/Cannot target now: [^.]*Brannoc[^.]*\(out of sight\)/);
-        expect(answered).toMatch(/out of its sight/);
+        yield* unaware(table, fight, fight.bandit);
       }),
     );
 

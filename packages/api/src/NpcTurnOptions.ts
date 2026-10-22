@@ -270,6 +270,12 @@ export interface NpcTurnOptions {
       readonly combatantId: CombatantId;
       readonly reason: NpcHiddenReason;
     }>;
+    /**
+     * Whether it sees anyone on the other side (`Combatant.side`), past any
+     * cover. One that sees none of its foes has not found the party, and Hob
+     * takes no turn for it (`npcMomentRefusal`).
+     */
+    readonly seesFoe: boolean;
   };
   /** What was left out and why, by the id it would have had. */
   readonly omitted: ReadonlyArray<{
@@ -433,6 +439,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
   const ownSenses = level === undefined ? undefined : sensesOf(statBlock.senses);
   const aims = new Map<CombatantId, NpcAim>();
   const hidden: Array<{ combatantId: CombatantId; reason: NpcHiddenReason }> = [];
+  let seesFoe = false;
   if (level !== undefined && board !== undefined && from !== undefined) {
     const sight = runLevelSight(board, level);
     for (const { row, at } of placed) {
@@ -441,6 +448,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
         { square: from, senses: ownSenses!.senses },
         { square: at, senses: sensesFor(row) },
       );
+      if (seen.attackerSees && row.side !== self.side) seesFoe = true;
       if (seen.cover === "total") hidden.push({ combatantId: row.id, reason: "total cover" });
       else if (!seen.attackerSees) hidden.push({ combatantId: row.id, reason: "out of sight" });
       else {
@@ -982,7 +990,7 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
     ...(movement === undefined ? {} : { movement }),
     ...(ownSenses === undefined || from === undefined
       ? {}
-      : { sight: { senses: ownSenses.senses, unread: ownSenses.unread, hidden } }),
+      : { sight: { senses: ownSenses.senses, unread: ownSenses.unread, hidden, seesFoe } }),
     omitted,
   };
 };
