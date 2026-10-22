@@ -3,6 +3,7 @@ import {
   type EncounterChallenge,
   encounterKindLabel,
   type HobProposal,
+  type LevelSpec,
 } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import type { DateTime } from "effect";
@@ -69,6 +70,7 @@ export const ARTIFACT_KINDS = {
   levelUp: { icon: "arrow-big-up-dash", label: "Level up", variant: "magic" },
   location: { icon: "map-pin", label: "Place", variant: "default" },
   partyMove: { icon: "footprints", label: "Party move", variant: "secondary" },
+  level: { icon: "grid-3x3", label: "Level", variant: "default" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -238,6 +240,19 @@ export type HobArtifact =
   | (ArtifactBase & {
       /** The party travelling to a place at the table: its title is the place. */
       readonly kind: "partyMove";
+    })
+  | (ArtifactBase & {
+      /**
+       * A level for the asker's Library: its title is the level, its meta the
+       * board and the light. `spec` is the proposal's labels and seed, which
+       * the card lays out (`generateLevel`) and draws as its preview: the
+       * level the keep will write.
+       */
+      readonly kind: "level";
+      readonly spec: LevelSpec;
+      readonly description?: string;
+      /** Each room as the card lists it, `"The Chapel (large shrine)"`. */
+      readonly rooms: ReadonlyArray<string>;
     })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
@@ -465,6 +480,27 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
                 .join(", ")}`,
         ),
       };
+    case "level": {
+      const { target: _target, ...spec } = proposal;
+      return {
+        id: turnId,
+        kind: "level",
+        title: proposal.name,
+        meta: [
+          `${proposal.size[0]!.toUpperCase()}${proposal.size.slice(1)} board`,
+          `${String(proposal.rooms.length)} ${proposal.rooms.length === 1 ? "room" : "rooms"}`,
+          proposal.mood,
+        ].join(" · "),
+        chips: [],
+        spec,
+        ...(proposal.description === null ? {} : { description: proposal.description }),
+        rooms: proposal.rooms.map((room) =>
+          room.label === null
+            ? `${room.size[0]!.toUpperCase()}${room.size.slice(1)} ${room.purpose}`
+            : `${room.label} (${room.size} ${room.purpose})`,
+        ),
+      };
+    }
     case "partyMove":
       return {
         id: turnId,

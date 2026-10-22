@@ -353,6 +353,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                       ? [reads.acts(campaignId)]
                       : accepted.accepted === "location"
                         ? [reads.libraryLocations, reads.locations(campaignId)]
+                        : accepted.accepted === "level"
+                          ? [reads.libraryLevels]
                         : accepted.accepted === "partyMove"
                           ? [reads.partyTravel(campaignId), reads.locations(campaignId)]
                           : [
@@ -422,7 +424,9 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                 ? levelUpWrites(accepted.owned)
                 : accepted.accepted === "location"
                   ? [reads.libraryLocations]
-                  : [reads.myCharacters],
+                  : accepted.accepted === "level"
+                    ? [reads.libraryLevels]
+                    : [reads.myCharacters],
       };
   }
 };
