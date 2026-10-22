@@ -5,6 +5,7 @@ import type {
   EncounterId,
   EncounterRunId,
   FeatId,
+  LevelId,
   NpcId,
   RuleArticleId,
   SessionId,
@@ -350,6 +351,12 @@ export const reads = {
    * writes name `locations` and `worldLocations` as well.
    */
   libraryLocations: "library:locations" as ReadKey,
+
+  /** The account's own levels, on the Library's Levels shelf. */
+  libraryLevels: "library:levels" as ReadKey,
+
+  /** One of the account's levels, whole. */
+  libraryLevel: (levelId: LevelId): ReadKey => key`library:levels:${levelId}`,
 
   /**
    * The places at one table — the creator's `locations` and a player's

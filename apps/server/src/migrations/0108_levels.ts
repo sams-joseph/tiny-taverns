@@ -44,7 +44,7 @@ import { SqlClient } from "effect/sql";
  * The material count (`7 > all(floor)`), the kinds, and the prop footprints
  * (`level_prop_size`) restate `LevelKit.ts`: the kit appends, and an appended
  * material or prop kind needs a migration that widens these.
- * `level-schema.test.ts` holds the footprints to `PROP_KINDS`.
+ * `levels.test.ts` holds the footprints and kinds to `PROP_KINDS`.
  *
  * All five tables are in `NOT_CONTENT` (`schema.test.ts`).
  */

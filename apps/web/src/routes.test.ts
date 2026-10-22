@@ -383,6 +383,7 @@ describe("the route table", () => {
       { path: `/campaigns/${CAMPAIGN_ID}/cast/nope`, at: "/campaigns/$campaignId/cast/$" },
       { path: `/campaigns/${CAMPAIGN_ID}/cast/nope/talk`, at: "/campaigns/$campaignId/cast/$" },
       { path: "/library/npcs/nope", at: "/library/npcs/$" },
+      { path: "/library/levels/nope", at: "/library/levels/$" },
       { path: "/worlds/nope/chronicle", at: "/$" },
       { path: "/groups/nope", at: "/$" },
       { path: "/worlds/nope", at: "/$" },

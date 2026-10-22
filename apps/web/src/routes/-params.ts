@@ -4,6 +4,7 @@ import {
   CharacterId,
   EncounterId,
   EncounterRunId,
+  LevelId,
   LocationId,
   NoteId,
   NpcId,
@@ -79,6 +80,7 @@ export const seatIdParam = pathId("seatId", CampaignCharacterId);
 export const encounterIdParam = pathId("encounterId", EncounterId);
 export const npcIdParam = pathId("npcId", NpcId);
 export const locationIdParam = pathId("locationId", LocationId);
+export const levelIdParam = pathId("levelId", LevelId);
 
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);

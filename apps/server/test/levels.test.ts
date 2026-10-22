@@ -2,12 +2,13 @@ import { describe, expect } from "@effect/vitest";
 import {
   LEVEL_MATERIALS,
   type Level,
+  LevelPartId,
   type LevelSave,
   PROP_KINDS,
   type LevelPropKind,
   TavernsApi,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
@@ -72,7 +73,8 @@ class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture
 
 const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(application));
 
-const part = (n: number) => `1e7e1000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const part = (n: number) =>
+  Schema.decodeSync(LevelPartId)(`1e7e1000-0000-4000-8000-${String(n).padStart(12, "0")}`);
 
 /** A small crypt: a 6 × 4 board with a door, an altar, a torch and a trap. */
 const crypt = (level: Level): LevelSave => ({
@@ -271,7 +273,10 @@ describeLayer("levels", shared, (it) => {
     });
 
     const refused = <A, E, R>(statement: Effect.Effect<A, E, R>) =>
-      statement.pipe(Effect.exit, Effect.map((exit) => exit._tag));
+      statement.pipe(
+        Effect.exit,
+        Effect.map((exit) => exit._tag),
+      );
 
     it.effect("refuses an off-board wall, prop or light, and a wall that is a door", () =>
       Effect.gen(function* () {
@@ -343,7 +348,13 @@ describeLayer("levels", shared, (it) => {
         const top = LEVEL_MATERIALS.length - 1;
         expect(yield* floor(`{${Array(12).fill(top).join(",")}}`)).toBe("Success");
         expect(yield* floor(`{${Array(11).fill(0).join(",")}}`)).toBe("Failure");
-        expect(yield* floor(`{${Array(12).fill(top + 1).join(",")}}`)).toBe("Failure");
+        expect(
+          yield* floor(
+            `{${Array(12)
+              .fill(top + 1)
+              .join(",")}}`,
+          ),
+        ).toBe("Failure");
         expect(yield* floor(`{${[-1, ...Array(11).fill(0)].join(",")}}`)).toBe("Failure");
       }),
     );

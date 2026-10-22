@@ -14,6 +14,7 @@ import {
   worldId,
 } from "../test/ids";
 import { TEST_SESSION } from "../test/session";
+import { fullLevels } from "../levels/levels.fixtures";
 import { fullLocations } from "../locations/locations.fixtures";
 
 /**
@@ -1957,6 +1958,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     // The places at the table, on the shelf and in the world.
     ...fullLocations(),
+    // The levels on the shelf.
+    ...fullLevels(),
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
     [`GET /campaigns/${campaignId}/player-notes`, { status: 200, body: page([playerReadAloud]) }],

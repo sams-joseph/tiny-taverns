@@ -1,12 +1,6 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import {
-  type Level,
-  LEVEL_PROPS_MAX,
-  LEVEL_WALLS_MAX,
-  LevelCreate,
-  LevelSave,
-} from "./Level.js";
+import { type Level, LEVEL_PROPS_MAX, LEVEL_WALLS_MAX, LevelCreate, LevelSave } from "./Level.js";
 import type { LevelLayout } from "./LevelGeometry.js";
 import { LEVEL_MATERIALS } from "./LevelKit.js";
 
@@ -36,7 +30,9 @@ const board = {
       dmOnly: false,
     },
   ],
-  lights: [{ id: part(3), x: 4, y: 3, bright: 20, dim: 20, tone: "fire", flicker: false, lit: true }],
+  lights: [
+    { id: part(3), x: 4, y: 3, bright: 20, dim: 20, tone: "fire", flicker: false, lit: true },
+  ],
   regions: [{ id: part(4), kind: "difficult", squares: [0, 11], secret: false }],
   version: 1,
 };
@@ -65,9 +61,9 @@ describe("a level's save", () => {
     const wall = board.walls[0]!;
     expect(accepts({ ...board, walls: [{ ...wall, kind: "door" }] })).toBe(false);
     expect(accepts({ ...board, walls: [{ ...wall, doorState: "open" }] })).toBe(false);
-    expect(accepts({ ...board, walls: [{ ...wall, kind: "secretDoor", doorState: "locked" }] })).toBe(
-      true,
-    );
+    expect(
+      accepts({ ...board, walls: [{ ...wall, kind: "secretDoor", doorState: "locked" }] }),
+    ).toBe(true);
   });
 
   it("keeps a prop's turned footprint on the board", () => {

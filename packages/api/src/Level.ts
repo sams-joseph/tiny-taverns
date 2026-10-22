@@ -266,9 +266,7 @@ export const LevelSave = Schema.Struct({
   rows: squares,
   feetPerCell,
   ambient: LevelAmbient,
-  floor: Schema.Array(material).check(
-    Schema.isMaxLength(LEVEL_SQUARES_MAX * LEVEL_SQUARES_MAX),
-  ),
+  floor: Schema.Array(material).check(Schema.isMaxLength(LEVEL_SQUARES_MAX * LEVEL_SQUARES_MAX)),
   walls: Schema.Array(LevelWall).check(Schema.isMaxLength(LEVEL_WALLS_MAX)),
   props: Schema.Array(LevelProp).check(Schema.isMaxLength(LEVEL_PROPS_MAX)),
   lights: Schema.Array(LevelLight).check(Schema.isMaxLength(LEVEL_LIGHTS_MAX)),
