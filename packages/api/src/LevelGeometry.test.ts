@@ -9,6 +9,7 @@ import {
   type LevelPoint,
   cover,
   levelSight,
+  lowWallScreens,
   levelSquareIndex,
   NO_SENSES,
   reachableOnLevel,
@@ -360,6 +361,27 @@ describe("cover", () => {
     expect(cover(attacker, target, board([]), [prop("crate", 5, 8)])).toBe("none");
   });
 
+  it("gives none for a wall that only ends at the target's corner", () => {
+    // The wall down x = 8 stops at (8, 5), the target's top-left corner: no
+    // line from the attacker's corners passes it.
+    expect(cover(attacker, target, board([wall(8, 0, 8, 5)]), [])).toBe("none");
+    // Nor at the attacker's own corner, from the other side.
+    expect(cover(attacker, target, board([wall(3, 0, 3, 5)]), [])).toBe("none");
+  });
+
+  it("gives half for a low wall between them, as a crate does, and none past its end", () => {
+    const screens = (walls: ReadonlyArray<LayoutWall>) =>
+      cover(attacker, target, board(walls), [], lowWallScreens(walls));
+    expect(screens([wall(6, 0, 6, 20, { low: true })])).toBe("half");
+    expect(screens([wall(8, 5, 8, 6, { low: true })])).toBe("half");
+    // A low wall off to the side, and one that ends at the target's corner.
+    expect(screens([wall(6, 7, 6, 20, { low: true })])).toBe("none");
+    expect(screens([wall(8, 0, 8, 5, { low: true })])).toBe("none");
+    // The shared rule, as every reader asks it.
+    const walled = level({ columns: 20, rows: 20, walls: [wall(6, 0, 6, 20, { low: true })] });
+    expect(levelSight(walled).cover(attacker, target)).toBe("half");
+  });
+
   it("counts a sight-blocking prop by the lines it blocks, not by its kit cover", () => {
     const statue = [prop("statue", 5, 5)];
     expect(cover(attacker, target, board([], statue), statue)).toBe("half");
@@ -604,6 +626,25 @@ describe("a walk's cost", () => {
     const walls = [wall(6, 0, 6, 10)];
     // Down past the wall's end at row 10 and back up: not the straight 5 feet.
     expect(pathCost(open({ walls }), at(5, 5), at(6, 5))).toBeGreaterThan(5);
+  });
+
+  it("never traps a token on a wall through its square's centre, and keeps it a wall", () => {
+    // A half-square wall along row 5's centre line, and a slanted one along
+    // the diagonals of squares (2, 2) to (4, 4).
+    const half = open({ walls: [wall(0, 5.5, 12, 5.5)] });
+    // Standing on it, the token steps off north and south...
+    expect(movementCost(half, at(3, 5), at(3, 4))).toBe(5);
+    expect(movementCost(half, at(3, 5), at(3, 6))).toBe(5);
+    // ...not along it, and the wall still closes row 5 to a walk across it.
+    expect(movementCost(half, at(3, 5), at(4, 5))).toBeNull();
+    expect(movementCost(half, at(3, 4), at(3, 5))).toBeNull();
+    expect(pathCost(half, at(3, 3), at(3, 8))).toBeNull();
+
+    const slant = open({ walls: [wall(2, 2, 5, 5)] });
+    expect(reachableOnLevel(slant, at(3, 3), 5).length).toBeGreaterThan(0);
+    // Across the slant from one side to the other is still no walk.
+    expect(pathCost(slant, at(3, 3), at(3, 4))).toBe(5);
+    expect(movementCost(slant, at(4, 3), at(3, 4))).toBeNull();
   });
 
   it("is refused through a closed or locked door and a wall, and walks through an open one", () => {

@@ -667,8 +667,14 @@ export const withinVisibility = (polygon: VisibilityPolygon, point: LevelPoint):
 
 const COVERS: ReadonlyArray<LevelCover> = ["none", "half", "threeQuarters", "total"];
 const coverRank = (cover: LevelCover): number => COVERS.indexOf(cover);
-/** How far a corner is pulled into its own square, so a line from it starts on the creature's side of a wall along its edge. */
-const CORNER_INSET = 1e-3;
+const HALF = coverRank("half");
+/**
+ * How far a corner is pulled into its own square, so a line from it starts on
+ * the creature's side of a wall along its edge. Larger than `HAIR`, the
+ * length a sight segment runs past its end, so a wall that only ends at a
+ * creature's corner does not reach the lines drawn from that corner.
+ */
+const CORNER_INSET = 1e-2;
 /** How far a screening prop's footprint is shrunk, so a line that grazes its edge does not count. */
 const SCREEN_INSET = 0.01;
 
@@ -714,6 +720,34 @@ const crossesRect = (
   return true;
 };
 
+/** Whether the segment from `a` to `b` crosses `wall` at a point inside both, not touching or running along it. */
+const crossesSegment = (a: LevelPoint, b: LevelPoint, wall: SightSegment): boolean => {
+  const o1 = orientation(a.x, a.y, b.x, b.y, wall.x1, wall.y1);
+  const o2 = orientation(a.x, a.y, b.x, b.y, wall.x2, wall.y2);
+  const o3 = orientation(wall.x1, wall.y1, wall.x2, wall.y2, a.x, a.y);
+  const o4 = orientation(wall.x1, wall.y1, wall.x2, wall.y2, b.x, b.y);
+  return o1 * o2 < 0 && o3 * o4 < 0;
+};
+
+/** A low wall as a screen: shrunk by `SCREEN_INSET` at each end, so a line past its end does not count. */
+const lowScreen = (wall: LayoutWall): SightSegment | null => {
+  const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+  if (length <= SCREEN_INSET * 2) return null;
+  const ux = ((wall.x2 - wall.x1) / length) * SCREEN_INSET;
+  const uy = ((wall.y2 - wall.y1) / length) * SCREEN_INSET;
+  return { x1: wall.x1 + ux, y1: wall.y1 + uy, x2: wall.x2 - ux, y2: wall.y2 - uy };
+};
+
+/** The low walls of a level as cover's screens (`cover`'s `low`). */
+export const lowWallScreens = (
+  walls: ReadonlyArray<LayoutWall>,
+): ReadonlyArray<SightSegment> =>
+  walls.flatMap((wall) => {
+    if (!wall.low) return [];
+    const screen = lowScreen(wall);
+    return screen === null ? [] : [screen];
+  });
+
 /**
  * The cover `target` has from `attacker`, both one square, by the DMG's rule
  * on a grid. For each corner of the attacker's square, draw lines to the four
@@ -730,6 +764,11 @@ const crossesRect = (
  * that corner. A prop that blocks sight already counts through its outline in
  * `segments`; a prop on either creature's square does not screen.
  *
+ * A low wall (`low`, `lowWallScreens`: it stops feet, not sight) screens the
+ * same way with half cover, as a crate does: from a corner, if any of its
+ * four lines crosses the wall, the target has at least half cover from that
+ * corner. A line that runs along it or past its end does not count.
+ *
  * The attacker uses the corner that leaves the least cover.
  */
 export const cover = (
@@ -737,6 +776,7 @@ export const cover = (
   target: BoardSquare,
   segments: ReadonlyArray<SightSegment>,
   props: ReadonlyArray<LayoutProp>,
+  low: ReadonlyArray<SightSegment> = [],
 ): LevelCover => {
   const index = indexOf(segments);
   const screens = props.flatMap((prop) => {
@@ -767,6 +807,9 @@ export const cover = (
         ) {
           screened = rank;
         }
+      }
+      if (screened < HALF && low.some((wall) => crossesSegment(from, to, wall))) {
+        screened = HALF;
       }
     }
     const byLines = blocked === 0 ? 0 : blocked <= 2 ? 1 : blocked === 3 ? 2 : 3;
@@ -993,6 +1036,7 @@ const sightPoints = (square: BoardSquare): ReadonlyArray<LevelPoint> => [
 
 export const levelSight = (level: LevelLayout, options: SightOptions = {}): LevelSight => {
   const walls = sightSegments(level, options);
+  const low = lowWallScreens(level.walls);
   const fogged = obscuredSegments(level, options, ["heavyObscurement"]);
   const vision = visionSegments(level, options);
   const ranks = lightRanks(level, options);
@@ -1018,7 +1062,7 @@ export const levelSight = (level: LevelLayout, options: SightOptions = {}): Leve
       const perceived = ranks[at]! > 0 || (within(viewer.senses.darkvision) && dark[at] === 0);
       return perceived && lineTo(viewer.square, target, vision);
     },
-    cover: (attacker, target) => cover(attacker, target, walls, level.props),
+    cover: (attacker, target) => cover(attacker, target, walls, level.props, low),
     light: (square) =>
       onLevel(level, square) ? LIGHTS[ranks[levelSquareIndex(level, square)]!]! : "dark",
   };
@@ -1056,6 +1100,21 @@ const segmentsMeet = (a: LevelPoint, b: LevelPoint, wall: LayoutWall): boolean =
   return o1 * o2 <= 0 && o3 * o4 <= 0;
 };
 
+/**
+ * Whether a step from `a` (the centre of the square it leaves) to `b` meets
+ * `wall` anywhere but at `a` itself. A wall through the centre of the square a
+ * creature stands on (a half-square wall, or a slanted one across a square's
+ * diagonal) never holds it there: it may step off that square every way the
+ * wall does not run, and a wall through the centre of the square it steps
+ * into still closes that square.
+ */
+const stepMeets = (a: LevelPoint, b: LevelPoint, wall: LayoutWall): boolean => {
+  if (!segmentsMeet(a, b, wall)) return false;
+  if (distanceToSegment(a.x, a.y, wall) > 1e-9) return true;
+  const off = { x: a.x + (b.x - a.x) * 1e-6, y: a.y + (b.y - a.y) * 1e-6 };
+  return segmentsMeet(off, b, wall);
+};
+
 const stepBlocked = (
   walls: ReadonlyArray<LayoutWall>,
   from: BoardSquare,
@@ -1063,7 +1122,7 @@ const stepBlocked = (
 ): boolean => {
   const a = centreOf(from);
   const b = centreOf(to);
-  return walls.some((wall) => segmentsMeet(a, b, wall));
+  return walls.some((wall) => stepMeets(a, b, wall));
 };
 
 /**
@@ -1099,6 +1158,12 @@ export const standable = (
  *   ways round it: the step through either square beside the diagonal is
  *   blocked. A wall that only ends at the corner leaves one way round, and
  *   the step stands.
+ *
+ * A wall that passes through the centre of `from` (a half-square wall, or a
+ * slanted one along a square's diagonal) does not count where it only touches
+ * that centre: a creature standing on it steps off every way the wall does
+ * not run along, so no such wall traps a token. One through the centre of
+ * `to` blocks the step, as any wall the step meets does.
  */
 export const movementCost = (
   level: LevelLayout,
@@ -1131,7 +1196,7 @@ export const movementCost = (
     const a = centreOf(from);
     const b = centreOf(to);
     const throughCorner = (wall: LayoutWall) => distanceToSegment(corner.x, corner.y, wall) < 1e-6;
-    if (walls.some((wall) => !throughCorner(wall) && segmentsMeet(a, b, wall))) return null;
+    if (walls.some((wall) => !throughCorner(wall) && stepMeets(a, b, wall))) return null;
   }
   const difficult =
     DIFFICULT_MATERIALS.has(material) ||

@@ -1,6 +1,7 @@
 import {
   cover,
   LIGHT_PRESETS,
+  lowWallScreens,
   propFootprint,
   sightSegments,
   type LayoutProp,
@@ -397,6 +398,7 @@ export const coverFromParty = (
       square,
       segmentsFor(doc),
       doc.props.filter((p) => !p.dmOnly),
+      lowWallScreens(doc.walls),
     ),
   };
 };
