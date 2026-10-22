@@ -35,6 +35,7 @@ export * from "./Ids.js";
 export * from "./Level.js";
 export * from "./LevelKit.js";
 export * from "./LevelGeometry.js";
+export * from "./LevelGenerator.js";
 export * from "./ImageUpload.js";
 export * from "./Initiative.js";
 export * from "./SharedWorld.js";
