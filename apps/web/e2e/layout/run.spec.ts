@@ -6,8 +6,10 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The runner (`run/RunScreen.tsx`) at every width. From `@3xl` of `main` (1440
  * and 1024 here) it is a canvas (`run/RunStage.tsx`): the board fills the stage
  * under the header and pans and zooms (`run/BoardCanvas.tsx`), the panels float
- * over it on the `hud` rung — the initiative strip (`run/InitiativeStrip.tsx`)
- * across the top, the columns under it — and the window does not scroll.
+ * over it on the `hud` rung as a game's screen — the initiative strip
+ * (`run/InitiativeStrip.tsx`) across the top, the party's portraits down the
+ * left, the rail of drawers down the right, the tools, the action bar and the
+ * rolls along the foot — and the window does not scroll.
  * Below it (760 and 390) it is the window-scrolling grid of named areas
  * (`run/RunLayout.tsx`) with the board to look at, the strip heading it, which
  * re-deals the cards rather than leaving a blank beside any. Then the selected
@@ -164,7 +166,11 @@ for (const width of WIDTHS) {
       await app.open(run);
       const list = page.getByRole("region", { name: "Initiative", exact: true });
       const map = page.getByRole("region", { name: "Battle map" });
-      const card = page.getByRole("region", { name: "Selected combatant" });
+      // Whoever is up: the grid's selected card, the canvas's action bar (the
+      // whole card is a closed drawer there).
+      const card = page.getByRole("region", {
+        name: canvas ? "This turn of Brannoc" : "Selected combatant",
+      });
       const dice = page.getByRole("region", { name: "Rolls", exact: true });
       await expect(map).toBeVisible();
       await expect(card).toContainText("Brannoc");
@@ -214,10 +220,9 @@ for (const width of WIDTHS) {
             party: await box(page.getByRole("region", { name: "Party", exact: true })),
             corner: await box(page.locator('[data-slot="run-hud-corner"]')),
             turn: await box(page.locator('[data-slot="run-hud-turn"]')),
-            card: await box(card),
+            rail: await box(page.locator('[data-slot="run-hud-rail"]')),
             dice: await box(dice),
             rolls: await box(page.locator('[data-slot="run-hud-rolls"]')),
-            right: await box(page.locator('[data-slot="run-hud-right"]')),
           };
           // The ribbon, at the top: beside the title where there is room, under it where not.
           expect.soft(at.list.y, "ribbon in the top row").toBeLessThan(bottom(at.header));
@@ -227,21 +232,22 @@ for (const width of WIDTHS) {
               "ribbon centred",
             )
             .toBeLessThanOrEqual(width >= 1280 ? 200 : 1);
-          // The party down the left, the camera and tools in its corner.
+          // The party's portraits down the left, narrower than the old rail of cards.
           expect.soft(at.party.x - at.stage.x, "party from the left").toBeCloseTo(INSET, 0);
-          expect.soft(at.party.width, "party width").toBeCloseTo(RAIL, 0);
+          expect.soft(at.party.width, "party a column of portraits").toBeLessThan(RAIL / 2);
           expect.soft(at.party.y, "party under the top row").toBeGreaterThan(bottom(at.header));
+          // The tools in the bottom-left corner, under the party.
           expect.soft(at.corner.x - at.stage.x, "corner from the left").toBeCloseTo(INSET, 0);
           expect
             .soft(bottom(at.stage) - bottom(at.corner), "corner from the bottom")
             .toBeCloseTo(INSET, 0);
           expect.soft(at.corner.y, "corner under the party").toBeGreaterThan(bottom(at.party));
-          // The selected card and the rolls down the right, the rolls at its foot.
+          // The rail of drawers down the right, under the top row.
           expect
-            .soft(right(at.stage) - right(at.card), "card from the right")
+            .soft(right(at.stage) - right(at.rail), "rail from the right")
             .toBeCloseTo(INSET, 0);
-          expect.soft(at.card.width, "card width").toBeCloseTo(ASIDE, 0);
-          expect.soft(at.card.y, "card under the top row").toBeGreaterThan(bottom(at.header));
+          expect.soft(at.rail.y, "rail under the top row").toBeGreaterThan(bottom(at.header));
+          // The rolls in the bottom-right corner.
           expect.soft(at.dice.width, "dice width").toBeCloseTo(ASIDE, 0);
           expect
             .soft(right(at.stage) - right(at.dice), "dice from the right")
@@ -249,25 +255,32 @@ for (const width of WIDTHS) {
           expect
             .soft(bottom(at.stage) - bottom(at.rolls), "rolls from the bottom")
             .toBeCloseTo(INSET, 0);
-          expect.soft(at.rolls.y, "rolls under the card").toBeGreaterThanOrEqual(bottom(at.card));
-          // Whoever is up, at the foot between the columns.
-          expect
-            .soft(at.turn.x, "turn card after the party")
-            .toBeGreaterThanOrEqual(right(at.party) + INSET - 0.5);
-          expect
-            .soft(right(at.turn), "turn card before the right column")
-            .toBeLessThanOrEqual(at.right.x - INSET + 0.5);
+          expect.soft(at.rolls.y, "rolls under the rail").toBeGreaterThan(bottom(at.rail));
+          // Whoever is up: between the corners on one row where there is room,
+          // and on a row of its own over them where there is not.
           expect.soft(at.turn.width, "turn card at most its width").toBeLessThanOrEqual(TURN + 0.5);
-          expect
-            .soft(bottom(at.stage) - bottom(at.turn), "turn card from the bottom")
-            .toBeCloseTo(INSET, 0);
+          if (width >= 1280) {
+            expect
+              .soft(at.turn.x, "turn card after the corner")
+              .toBeGreaterThanOrEqual(right(at.corner) + INSET - 0.5);
+            expect
+              .soft(right(at.turn), "turn card before the rolls")
+              .toBeLessThanOrEqual(at.rolls.x - INSET + 0.5);
+            expect
+              .soft(bottom(at.stage) - bottom(at.turn), "turn card from the bottom")
+              .toBeCloseTo(INSET, 0);
+          } else {
+            expect
+              .soft(bottom(at.turn), "turn card over the corners")
+              .toBeLessThanOrEqual(Math.min(at.corner.y, at.rolls.y) - INSET + 0.5);
+          }
           await expect.soft(page.locator('[data-slot="run-hud"]')).toHaveCSS("z-index", "5");
           // Over the board: a point inside each panel lands in the panel.
           for (const [name, part] of [
             ["list", at.list],
             ["party", at.party],
             ["turn card", at.turn],
-            ["card", at.card],
+            ["rail", at.rail],
             ["the Rolls dock", at.dice],
           ] as const) {
             expect
@@ -460,14 +473,19 @@ for (const width of WIDTHS) {
           .toBeLessThanOrEqual(bottom(edge) + 0.5);
       });
 
+      // The selected creature's whole card: the grid's aside, or the canvas's
+      // *Sheet* drawer, opened from the target frame.
+      const sheet = page.getByRole("region", { name: "Selected combatant" });
       await test.step("the selected card's controls stay inside it", async () => {
         await page
           .getByRole("list", { name: "Initiative order" })
           .getByRole("button", { name: /^Goblin Boss,/ })
           .click();
-        await expect(card).toContainText("Goblin Boss");
-        const edge = await box(card);
-        const controls = await card.locator("button, input").evaluateAll((els) =>
+        // On the canvas the pick is framed under the ribbon; its sheet opens from the frame.
+        const selected = canvas ? page.getByRole("region", { name: "Target, Goblin Boss" }) : sheet;
+        await expect(selected).toContainText("Goblin Boss");
+        const edge = await box(selected);
+        const controls = await selected.locator("button, input").evaluateAll((els) =>
           els.map((el) => {
             const r = el.getBoundingClientRect();
             return {
@@ -486,7 +504,9 @@ for (const width of WIDTHS) {
       });
 
       await test.step("the panel's menu opens on top of everything, and its items take the click", async () => {
-        await card.getByRole("button", { name: "More for Goblin Boss" }).click();
+        if (canvas) await page.getByRole("button", { name: "Sheet of Goblin Boss" }).click();
+        await expect(sheet).toContainText("Goblin Boss");
+        await sheet.getByRole("button", { name: "More for Goblin Boss" }).click();
         const item = page.getByRole("menuitem", { name: "Follow the turn" });
         await expect(item).toBeVisible();
         const at = await box(item);
@@ -500,11 +520,9 @@ for (const width of WIDTHS) {
       });
 
       await test.step("a stat on the card rolls into the Rolls dock", async () => {
-        // On the canvas the target card folds everything but its numbers under *Details*.
-        if (canvas) await card.getByRole("button", { name: "Details" }).click();
         // The whole block is folded under the Actions until it is asked for.
-        await card.getByRole("button", { name: "Stat block" }).click();
-        const dex = card.getByRole("button", { name: "Roll DEX check, 1d20+2" });
+        await sheet.getByRole("button", { name: "Stat block" }).click();
+        const dex = sheet.getByRole("button", { name: "Roll DEX check, 1d20+2" });
         await dex.scrollIntoViewIfNeeded();
         const target = await box(dex);
         const hit = await page.evaluate(
@@ -519,8 +537,16 @@ for (const width of WIDTHS) {
         await expect(dice.getByRole("status", { name: "Latest roll" })).toContainText(
           "Goblin Boss · DEX",
         );
-        // On the canvas the panel scrolled itself to reach it; the window did not move.
-        if (canvas) expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+        // On the canvas the drawer scrolled itself to reach it; the window did not move.
+        if (canvas) {
+          expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+          // Put away again from the rail, as the DM would before playing on the board.
+          await page
+            .getByRole("navigation", { name: "Drawers" })
+            .getByRole("button", { name: "Sheet" })
+            .click();
+          await expect(sheet).toBeHidden();
+        }
       });
 
       if (canvas) {
@@ -675,8 +701,14 @@ for (const width of WIDTHS) {
         });
 
         await test.step("a wheel over a floating panel is the panel's, never the board's, and the window does not scroll", async () => {
-          for (const slot of ["run-hud-panel", "run-hud-rolls", "run-hud-tools"]) {
-            const region = page.locator(`[data-slot="${slot}"]`);
+          // An open drawer scrolls itself too, over the board.
+          const rail = page.getByRole("navigation", { name: "Drawers" });
+          await rail.getByRole("button", { name: "Sheet" }).click();
+          for (const slot of ["run-hud-party", "run-hud-rolls", "run-hud-tools", "run-drawer"]) {
+            const region =
+              slot === "run-drawer"
+                ? page.locator('[data-slot="run-drawer"]:not([hidden]) > div').last()
+                : page.locator(`[data-slot="${slot}"]`);
             const at = await box(region);
             await page.mouse.move(at.x + at.width / 2, at.y + at.height - 10);
             const view = await viewOf(page);
@@ -688,6 +720,7 @@ for (const width of WIDTHS) {
             expect.soft(await viewOf(page), `${slot}: the board did not zoom`).toEqual(view);
             expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
           }
+          await rail.getByRole("button", { name: "Sheet" }).click();
         });
       } else {
         await test.step("the board is to look at: nothing on it takes a pointer", async () => {
@@ -772,9 +805,15 @@ for (const width of WIDTHS) {
         // Enter on a chip selects it.
         await page.keyboard.press("Enter");
         await expect(chips.last()).toHaveAttribute("aria-pressed", "true");
-        await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
-          `Goblin ${String(extra)}`,
-        );
+        // The grid's card follows it; on the canvas the target frame does.
+        if (canvas)
+          await expect(
+            page.getByRole("region", { name: `Target, Goblin ${String(extra)}` }),
+          ).toBeVisible();
+        else
+          await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
+            `Goblin ${String(extra)}`,
+          );
       });
 
       // On the canvas no page scrolls under the pointer, so the wheel is the
@@ -1244,11 +1283,9 @@ for (const width of WIDTHS) {
           await expect(shapes).toContainText("10 ft");
           // The dock stays in its corner with Area's controls in it.
           const dock = await box(tools);
-          const left = await box(page.locator('[data-slot="run-hud-left"]'));
-          expect.soft(dock.x, "dock in the left column").toBeGreaterThanOrEqual(left.x - 0.5);
-          expect
-            .soft(right(dock), "dock inside the left column")
-            .toBeLessThanOrEqual(right(left) + 0.5);
+          const left = await box(page.locator('[data-slot="run-hud-corner"]'));
+          expect.soft(dock.x, "dock in the corner").toBeGreaterThanOrEqual(left.x - 0.5);
+          expect.soft(right(dock), "dock inside the corner").toBeLessThanOrEqual(right(left) + 0.5);
 
           await page.mouse.move(from(1, 0).x, from(1, 0).y);
           const preview = map.locator('[data-slot="board-area"][data-state="preview"]');
@@ -1270,10 +1307,8 @@ for (const width of WIDTHS) {
           const above = await box(banner);
           const under = await box(tools);
           expect.soft(above.y + above.height, "the banner over the dock").toBeLessThan(under.y);
-          expect.soft(above.x, "in the left column").toBeGreaterThanOrEqual(left.x - 0.5);
-          expect
-            .soft(right(above), "inside the left column")
-            .toBeLessThanOrEqual(right(left) + 0.5);
+          expect.soft(above.x, "in the corner").toBeGreaterThanOrEqual(left.x - 0.5);
+          expect.soft(right(above), "inside the corner").toBeLessThanOrEqual(right(left) + 0.5);
           const clear = banner.getByRole("button", { name: "Clear" });
           const press = await box(clear);
           expect
@@ -1317,8 +1352,8 @@ for (const width of WIDTHS) {
       });
 
       await test.step("the panel stands where the list does", async () => {
-        const at = { panel: await box(panel), map: await box(map), card: await box(card) };
         if (canvas) {
+          const at = { panel: await box(panel) };
           const stage = await box(page.locator('[data-slot="run-stage"]'));
           const header = await box(page.locator('[data-slot="run-hud-header"]'));
           await expect
@@ -1329,6 +1364,7 @@ for (const width of WIDTHS) {
           expect.soft(at.panel.x - stage.x, "panel from the left").toBeCloseTo(INSET, 0);
           expect.soft(at.panel.y - bottom(header), "panel under the header").toBeCloseTo(INSET, 0);
         } else {
+          const at = { panel: await box(panel), map: await box(map), card: await box(card) };
           const whole = await box(page.locator('[data-slot="run-layout"]'));
           if (width === 390) {
             expect.soft(at.panel.width, "panel width").toBeCloseTo(whole.width, 0);

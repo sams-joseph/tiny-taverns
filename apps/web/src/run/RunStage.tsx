@@ -1,5 +1,5 @@
 import { BOARD_CELL_PX, type PlaneRect, boardPlane, runLevelLayout } from "@taverns/api";
-import { cn } from "@taverns/ui";
+import { Icon, SectionHeading, cn } from "@taverns/ui";
 import {
   type ReactNode,
   createContext,
@@ -20,17 +20,22 @@ import { centreOf } from "./canvas";
 import { AreaBanner, AreaLayer, BoardToolPicker, ToolSurface } from "./BoardTools";
 import { CameraBar } from "./CameraBar";
 import { FogActions, FogBrush } from "./Fog";
+import { typedEscape } from "./escape";
 import { GridBoard } from "./GridBoard";
+import { HudIconButton, StageDrawerButton, hudSurface } from "./hud";
+import { type StageDrawer, StageDrawers, type StageDrawerState } from "./stageDrawers";
 import { useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens } from "./RunTokens";
 
 /**
  * The fight at a desktop width: **a canvas, not a page.** The board fills the
  * whole window, the DM pans and zooms it (`BoardCanvas.tsx`), and everything
- * else floats over it on the `hud` rung, laid out as the maintainer's
- * `Encounter Canvas.dc.html` draws it (2026-10-17). The screen holds the
- * window through `useFullscreen` (`shell/slots.ts`), so the shell draws no nav
- * rows while it is up; the title's back link is the way out.
+ * else floats over it on the `hud` rung as a game's screen does (the
+ * maintainer's call of 2026-10-22, after `Encounter Canvas.dc.html`): small
+ * pieces at the edges, and anything long in a drawer that is closed until it
+ * is wanted. The screen holds the window through `useFullscreen`
+ * (`shell/slots.ts`), so the shell draws no nav rows while it is up; the
+ * title's back link is the way out.
  *
  * This is the one screen that does not scroll with the window: the stage is
  * bounded to the viewport, and each panel scrolls inside itself. A table's DM
@@ -42,21 +47,26 @@ import { RunTokens } from "./RunTokens";
  * - **title** — top left: the way back, the fight's name and where it is.
  * - **strip** — top centre: the initiative ribbon while the fight takes turns
  *   (`InitiativeStrip.tsx`, `compact`).
- * - **controls** — top right: the switches over what the table sees, and the
- *   way to end the fight.
+ * - **controls** — top right: the icons over what the table sees, Hob, and
+ *   the way to end the fight.
  * - **notices** — under the top row: the autopilot's line, an ended or behind
  *   fight's.
  * - **rolling** — *Roll initiative* (`InitiativePhase.tsx`), on the left in the
- *   party rail's place while the fight rolls: a box per row needs a column.
- * - **party** — the party rail down the left (`PartyRail.tsx`).
- * - **corner** — bottom left: the camera (`CameraBar.tsx`) and the board's
- *   tools, which the board portals in (`StageCorner`), since they are the
- *   board's state.
- * - **turn** — bottom centre: whoever is up (`TurnCard.tsx`), with the attack's
- *   *Pick a target* banner over it while one is picked.
- * - **panel** — the right-hand column: the selected creature's card, then the
- *   table's own cards the drawing leaves out (Hob's spends, NPCs at the table).
- * - **rolls** — bottom right: the *Rolls* dock (`RollsDock.tsx`).
+ *   party's place while the fight rolls: a box per row needs a column.
+ * - **party** — the party's portraits down the left (`PartyRail.tsx`).
+ * - **target** — top centre, under the ribbon: the target frame, while
+ *   something other than whoever is up is selected (`TargetFrame.tsx`).
+ * - **corner** — bottom left: the board's tools and camera, which the board
+ *   portals in (`StageCorner`), since they are the board's state.
+ * - **turn** — bottom centre: whoever is up as an action bar (`TurnCard.tsx`),
+ *   with Hob's offer for the monster (**above**) and the attack's *Pick a
+ *   target* banner over it.
+ * - **rail** — the right edge: an icon per drawer (`StageDrawer`), opening it
+ *   over the board beside the rail. A drawer stays mounted while closed, so
+ *   what it watches (an NPC proposal's toast) keeps watching.
+ * - **panel** — a right-hand column of cards instead of the rail: a seated
+ *   player's table, until it takes the drawers too.
+ * - **rolls** — bottom right: the *Rolls* feed (`RollsDock.tsx`).
  *
  * Below `@3xl` of `main` the board is too small to play on and the runner is
  * the window-scrolling grid it always was (`RunLayout.tsx`); `useStage` asks
@@ -70,8 +80,11 @@ export function RunStage({
   notices,
   rolling,
   party,
+  target = null,
+  above = null,
   turn,
   banner,
+  drawers = [],
   panel,
   rolls,
   board,
@@ -84,13 +97,20 @@ export function RunStage({
   readonly notices: ReactNode;
   /** *Roll initiative*, on the left; `null` once turns are taken. */
   readonly rolling: ReactNode | null;
-  /** The party rail, on the left once turns are taken. */
+  /** The party's portraits, on the left once turns are taken. */
   readonly party: ReactNode | null;
+  /** The target frame, top centre under the ribbon; `null` with no target. */
+  readonly target?: ReactNode | null;
+  /** Over the turn: Hob's offer for the monster that is up. */
+  readonly above?: ReactNode | null;
   /** Whoever is up, bottom centre; `null` while nobody is. */
   readonly turn: ReactNode | null;
   /** A line over the turn card while a tool asks for a square: the attack's target. */
   readonly banner: ReactNode | undefined;
-  readonly panel: ReactNode;
+  /** The rail's drawers; none draws no rail. */
+  readonly drawers?: ReadonlyArray<StageDrawer>;
+  /** A right-hand column of cards in the rail's place. */
+  readonly panel?: ReactNode;
   readonly rolls: ReactNode;
   /** The board, told which part of the stage no panel covers. */
   readonly board: (freeArea: (canvas: DOMRect) => PlaneRect) => ReactNode;
@@ -100,9 +120,21 @@ export function RunStage({
   const right = useRef<HTMLDivElement>(null);
   const foot = useRef<HTMLDivElement>(null);
   const [corner, setCorner] = useState<HTMLDivElement | null>(null);
+  const [openKey, setOpenKey] = useState<string | undefined>(undefined);
+  // A drawer that is gone (its NPCs closed) is not left open behind the rail.
+  const open = drawers.some((drawer) => drawer.key === openKey) ? openKey : undefined;
+  const drawerState = useMemo<StageDrawerState>(
+    () => ({
+      open,
+      toggle: (key) => setOpenKey((now) => (now === key ? undefined : key)),
+      show: setOpenKey,
+    }),
+    [open],
+  );
+  const railed = drawers.filter((drawer) => drawer.rail !== false);
 
-  // Between the two columns, under the top row and over the turn card, inset
-  // as far as the HUD is from the stage's edge.
+  // Between the side columns, under the top row and over the bottom row,
+  // inset as far as the HUD is from the stage's edge.
   const freeArea = useCallback((canvas: DOMRect): PlaneRect => {
     const t = top.current?.getBoundingClientRect();
     const l = left.current?.getBoundingClientRect();
@@ -120,120 +152,220 @@ export function RunStage({
 
   return (
     <StageCorner.Provider value={corner}>
-      <div
-        data-slot="run-stage"
-        className="relative min-h-120 flex-1 overflow-clip bg-surface-sunken"
-      >
-        {board(freeArea)}
+      <StageDrawers.Provider value={drawerState}>
         <div
-          data-slot="run-hud"
-          className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3 @container/hud"
+          data-slot="run-stage"
+          className="relative min-h-120 flex-1 overflow-clip bg-surface-sunken"
         >
-          <div ref={top} className="flex min-w-0 shrink-0 flex-col gap-3">
-            {/* The ribbon sits between the title and the controls where there is
-                room, and on a row of its own under them where there is not. */}
-            <div
-              data-slot="run-hud-header"
-              className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-3"
-            >
-              <div data-slot="run-hud-title" className="pointer-events-auto min-w-0 shrink">
-                {title}
-              </div>
-              {strip !== null && (
-                <div
-                  data-slot="run-hud-strip"
-                  className="order-last flex min-w-0 basis-full justify-center *:pointer-events-auto @6xl/hud:order-none @6xl/hud:flex-1 @6xl/hud:basis-0"
-                >
-                  {strip}
-                </div>
-              )}
+          {board(freeArea)}
+          <div
+            data-slot="run-hud"
+            className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3 @container/hud"
+          >
+            <div ref={top} className="flex min-w-0 shrink-0 flex-col gap-3">
+              {/* The ribbon sits between the title and the controls where there is
+                  room, and on a row of its own under them where there is not. */}
               <div
-                data-slot="run-hud-controls"
-                className="pointer-events-auto flex shrink-0 flex-wrap items-center justify-end gap-2.5"
+                data-slot="run-hud-header"
+                className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-3"
               >
-                {controls}
+                <div data-slot="run-hud-title" className="pointer-events-auto min-w-0 shrink">
+                  {title}
+                </div>
+                {strip !== null && (
+                  <div
+                    data-slot="run-hud-strip"
+                    className="order-last flex min-w-0 basis-full justify-center *:pointer-events-auto @6xl/hud:order-none @6xl/hud:flex-1 @6xl/hud:basis-0"
+                  >
+                    {strip}
+                  </div>
+                )}
+                <div
+                  data-slot="run-hud-controls"
+                  className="pointer-events-auto flex shrink-0 flex-wrap items-center justify-end gap-2.5 empty:hidden"
+                >
+                  {controls}
+                </div>
+              </div>
+              <div
+                data-slot="run-hud-notices"
+                className="flex flex-col items-center gap-2 empty:hidden *:pointer-events-auto *:w-full *:max-w-run-turn"
+              >
+                {notices}
               </div>
             </div>
-            <div
-              data-slot="run-hud-notices"
-              className="flex flex-col items-center gap-2 empty:hidden *:pointer-events-auto *:w-full *:max-w-run-turn"
-            >
-              {notices}
-            </div>
-          </div>
-          <div className="flex min-h-0 flex-1 items-stretch justify-between gap-3">
-            {/* *Roll initiative* wants the inspector's width for a box per row. */}
-            <div
-              ref={left}
-              data-slot="run-hud-left"
-              className={cn(
-                "flex shrink-0 flex-col gap-3",
-                rolling !== null ? "w-aside" : "w-run-rail",
-              )}
-            >
-              {rolling !== null ? (
+            <div className="flex min-h-0 flex-1 items-stretch justify-between gap-3">
+              {/* *Roll initiative* wants the inspector's width for a box per row. */}
+              <div
+                ref={left}
+                data-slot="run-hud-left"
+                className={cn("flex shrink-0 flex-col gap-3", rolling !== null && "w-aside")}
+              >
+                {rolling !== null ? (
+                  <div
+                    data-slot="run-hud-rolling"
+                    className={cn(hudScroller, "min-h-0 shrink rounded-card shadow-3")}
+                  >
+                    {rolling}
+                  </div>
+                ) : (
+                  party !== null && (
+                    <div
+                      data-slot="run-hud-party"
+                      className={cn(hudScroller, "my-auto min-h-0 shrink")}
+                    >
+                      {party}
+                    </div>
+                  )
+                )}
+              </div>
+              <div
+                data-slot="run-hud-centre"
+                className="flex min-w-0 flex-1 flex-col items-center gap-2"
+              >
+                {target !== null && (
+                  <div
+                    data-slot="run-hud-target"
+                    className="pointer-events-auto flex w-full max-w-run-turn min-w-0 justify-center"
+                  >
+                    {target}
+                  </div>
+                )}
+              </div>
+              {panel !== undefined ? (
                 <div
-                  data-slot="run-hud-rolling"
-                  className={cn(hudScroller, "min-h-0 shrink rounded-card shadow-3")}
+                  ref={right}
+                  data-slot="run-hud-right"
+                  className="flex w-aside shrink-0 flex-col justify-end gap-3"
                 >
-                  {rolling}
+                  <div
+                    data-slot="run-hud-panel"
+                    className={cn(hudScroller, "flex min-h-0 shrink flex-col gap-3")}
+                  >
+                    {panel}
+                  </div>
                 </div>
               ) : (
-                party !== null && (
-                  <div
-                    data-slot="run-hud-party"
-                    className={cn(hudScroller, "my-auto min-h-0 shrink")}
-                  >
-                    {party}
+                drawers.length > 0 && (
+                  <div data-slot="run-hud-right" className="relative flex shrink-0 items-start">
+                    {railed.length > 0 && (
+                      <nav
+                        ref={right}
+                        aria-label="Drawers"
+                        data-slot="run-hud-rail"
+                        className={cn(hudSurface, "pointer-events-auto flex flex-col gap-1 p-1")}
+                      >
+                        {railed.map((drawer) => (
+                          <StageDrawerButton
+                            key={drawer.key}
+                            drawer={drawer.key}
+                            icon={drawer.icon}
+                            label={drawer.label}
+                            badge={drawer.badge}
+                            side="left"
+                          />
+                        ))}
+                      </nav>
+                    )}
+                    {/* Over the board beside the rail, as tall as the middle row. */}
+                    {drawers.map((drawer) => (
+                      <aside
+                        key={drawer.key}
+                        aria-label={drawer.label}
+                        data-slot="run-drawer"
+                        data-drawer={drawer.key}
+                        hidden={drawer.key !== open}
+                        // Esc closes the drawer it is pressed in, and nothing else;
+                        // one typed into a field is the field's (`typedEscape`).
+                        onKeyDown={(event) => {
+                          if (event.key !== "Escape" || event.defaultPrevented) return;
+                          if (typedEscape(event.target)) return;
+                          event.preventDefault();
+                          setOpenKey(undefined);
+                        }}
+                        className={cn(
+                          "pointer-events-auto absolute top-0 right-full mr-3 flex max-h-full w-aside flex-col",
+                          drawer.bare !== true && cn(hudSurface, "bg-surface-card"),
+                        )}
+                      >
+                        {drawer.bare !== true && (
+                          <header className="flex shrink-0 items-center gap-2 border-b border-hairline py-1 pr-1 pl-card">
+                            <Icon name={drawer.icon} size={15} className="text-muted-foreground" />
+                            <SectionHeading
+                              as="h2"
+                              size="title"
+                              className="min-w-0 flex-1 truncate"
+                            >
+                              {drawer.label}
+                            </SectionHeading>
+                            <HudIconButton
+                              icon="x"
+                              label={`Close ${drawer.label}`}
+                              onClick={() => setOpenKey(undefined)}
+                            />
+                          </header>
+                        )}
+                        <div
+                          className={cn(
+                            hudScroller,
+                            "flex min-h-0 flex-1 flex-col gap-3",
+                            drawer.bare !== true && "p-card",
+                          )}
+                        >
+                          {drawer.content}
+                        </div>
+                      </aside>
+                    ))}
                   </div>
                 )
               )}
+            </div>
+            <div
+              data-slot="run-hud-bottom"
+              className="flex min-w-0 shrink-0 flex-wrap items-end justify-between gap-3 @6xl/hud:flex-nowrap"
+            >
               <div
                 ref={setCorner}
                 data-slot="run-hud-corner"
-                className="pointer-events-auto mt-auto flex shrink-0 flex-col gap-2 empty:hidden"
+                className="pointer-events-auto flex shrink-0 flex-col gap-2 empty:hidden"
               />
-            </div>
-            <div
-              data-slot="run-hud-centre"
-              className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"
-            >
-              {banner !== undefined && (
-                <div data-slot="run-hud-banner" className="flex min-w-0 justify-center">
-                  {banner}
-                </div>
-              )}
-              {turn !== null && (
-                <div
-                  ref={foot}
-                  data-slot="run-hud-turn"
-                  className={cn(hudScroller, "max-h-full w-full max-w-run-turn shrink-0")}
-                >
-                  {turn}
-                </div>
-              )}
-            </div>
-            <div
-              ref={right}
-              data-slot="run-hud-right"
-              className="flex w-aside shrink-0 flex-col justify-end gap-3"
-            >
               <div
-                data-slot="run-hud-panel"
-                className={cn(hudScroller, "flex min-h-0 shrink flex-col gap-3")}
+                data-slot="run-hud-centre-foot"
+                className="order-first flex min-w-0 basis-full flex-col items-center gap-2 @6xl/hud:order-none @6xl/hud:flex-1 @6xl/hud:basis-0"
               >
-                {panel}
+                {above !== null && (
+                  <div
+                    data-slot="run-hud-above"
+                    className={cn(hudScroller, "max-h-80 w-full max-w-run-turn")}
+                  >
+                    {above}
+                  </div>
+                )}
+                {banner !== undefined && (
+                  <div data-slot="run-hud-banner" className="flex min-w-0 justify-center">
+                    {banner}
+                  </div>
+                )}
+                {turn !== null && (
+                  <div
+                    ref={foot}
+                    data-slot="run-hud-turn"
+                    className={cn(hudScroller, "w-full max-w-run-turn")}
+                  >
+                    {turn}
+                  </div>
+                )}
               </div>
               <div
                 data-slot="run-hud-rolls"
-                className={cn(hudScroller, "flex max-h-1/2 shrink-0 flex-col gap-3")}
+                className={cn(hudScroller, "ml-auto flex max-h-80 w-aside shrink-0 flex-col gap-3")}
               >
                 {rolls}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </StageDrawers.Provider>
     </StageCorner.Provider>
   );
 }
@@ -358,26 +490,26 @@ export function RunBoardStage({
             {tools.caught !== undefined && !over && (
               <AreaBanner line={tools.caught} onClear={tools.clear} />
             )}
+            {/* One strip, as a game's toolbar: the tools, then the camera. */}
             <div
               data-slot="run-hud-tools"
-              className="flex flex-col gap-2 rounded-card border border-strong bg-surface-card p-2 shadow-3"
+              className={cn(hudSurface, "flex min-w-0 flex-wrap items-center gap-1.5 p-1.5")}
             >
+              <BoardToolPicker
+                tool={tools.tool}
+                disabled={!tools.usable}
+                onTool={tools.choose}
+                shape={tools.shape}
+                feet={tools.feet}
+                onShape={tools.pickShape}
+                onStep={tools.step}
+                fog={<FogActions onWhole={fogTool.whole} />}
+              />
+              <span aria-hidden="true" className="mx-0.5 h-6 w-px bg-hairline" />
               <CameraBar
                 camera={at}
                 onCentre={activeAt === undefined ? undefined : () => at.centre(activeAt)}
               />
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-hairline pt-2">
-                <BoardToolPicker
-                  tool={tools.tool}
-                  disabled={!tools.usable}
-                  onTool={tools.choose}
-                  shape={tools.shape}
-                  feet={tools.feet}
-                  onShape={tools.pickShape}
-                  onStep={tools.step}
-                  fog={<FogActions onWhole={fogTool.whole} />}
-                />
-              </div>
             </div>
           </InStageCorner>
         )}

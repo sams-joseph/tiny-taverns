@@ -18,7 +18,7 @@ export function CameraBar({
   return (
     <div data-slot="run-camera" className="flex items-center gap-1">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         className="size-control-sm"
         aria-label="Zoom out"
@@ -36,7 +36,7 @@ export function CameraBar({
         {Math.round(camera.scale * 100)}%
       </Button>
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         className="size-control-sm"
         aria-label="Zoom in"
@@ -45,7 +45,7 @@ export function CameraBar({
         <Icon name="plus" size={14} />
       </Button>
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         className="size-control-sm"
         aria-label="Centre on whoever is up"

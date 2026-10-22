@@ -262,6 +262,7 @@ describe("Hob's autopilot in the runner", () => {
       body: { ...liveRun, activeCombatantId: goblinBoss.id, hobAutopilotDriver: OTHER_TAB },
     });
     await renderRunner();
+    await userEvent.click(await screen.findByRole("button", { name: "Hob settings" }));
     const toggle = await screen.findByRole("switch", { name: "Autopilot" });
     expect(screen.queryByRole("region", { name: "Hob's autopilot" })).toBeNull();
     await userEvent.click(toggle);
@@ -291,6 +292,8 @@ describe("Hob's autopilot in the runner", () => {
       ).toBeGreaterThan(0),
     );
     await screen.findByRole("region", { name: "Hob for Goblin Boss" }).catch(() => undefined);
+    // Nor the button it sits behind: the spending switch is Hob's too, and off.
+    expect(screen.queryByRole("button", { name: "Hob settings" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "Autopilot" })).toBeNull();
   });
 });

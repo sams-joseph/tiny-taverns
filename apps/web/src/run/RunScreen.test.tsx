@@ -59,12 +59,31 @@ const rowFor = (name: string): HTMLElement => {
 };
 const panel = () => within(screen.getByRole("region", { name: "Selected combatant" }));
 /** Open the panel's overflow menu, which portals to the body, and read it. */
+/**
+ * On the canvas the selected creature's whole card is the *Sheet* drawer's:
+ * open it from the rail, as the DM would. Off the canvas there is no rail and
+ * the card is always there.
+ */
+const openSheet = async () => {
+  const button = screen.queryByRole("button", { name: "Sheet" });
+  if (button !== null && button.getAttribute("aria-expanded") !== "true") {
+    await userEvent.click(button);
+  }
+};
+/** Of the elements a query found, the one on screen: not inside a closed drawer. */
+const shown = (elements: ReadonlyArray<HTMLElement>): HTMLElement => {
+  const found = elements.find((element) => element.closest("[hidden]") === null);
+  if (found === undefined) throw new Error("none of them is on screen");
+  return found;
+};
 const panelMenu = async (name: string) => {
+  await openSheet();
   await userEvent.click(panel().getByRole("button", { name: `More for ${name}` }));
   return within(await screen.findByRole("menu"));
 };
 /** Unfold the selected creature's stat block. */
 const openStatBlock = async () => {
+  await openSheet();
   await userEvent.click(panel().getByRole("button", { name: "Stat block" }));
 };
 /** The strip itself: the round, the order and its trailing controls. */
@@ -112,8 +131,9 @@ const serverRunBase = () =>
 /** Select the row, then type the hit into the selected card — the redesign's one place for it. */
 const damage = async (name: string, amount: string) => {
   await userEvent.click(rowFor(name));
+  // The grid's card, or on the canvas the target frame's box.
   await userEvent.type(
-    panel().getByLabelText(`Hit points to apply to ${name}`),
+    shown(screen.getAllByLabelText(`Hit points to apply to ${name}`)),
     `${amount}{Enter}`,
   );
 };
@@ -365,7 +385,18 @@ describe("the runner", () => {
     expect(screen.getByText("Brannoc is up · Goblin Boss next")).toBeInTheDocument();
   });
 
-  it("labels opening an NPC as Open at the table", async () => {
+  it("draws no NPC card while there is nobody to bring in and nobody in", async () => {
+    await renderRunner();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+    await waitFor(() =>
+      expect(server.calls.some((call) => call.pathname.endsWith("/monitor"))).toBe(true),
+    );
+    expect(screen.queryByRole("region", { name: "NPCs at the table" })).toBeNull();
+    // Nor a list of Hob's spends before it has made one.
+    expect(screen.queryByRole("region", { name: "Hob's direct spends" })).toBeNull();
+  });
+
+  it("brings a player-facing NPC into the table chat from NPCs at the table", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
       status: 200,
       body: [{ ...cazril, visibility: "shared" }],
@@ -390,9 +421,10 @@ describe("the runner", () => {
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
 
-    expect(screen.getAllByText("Open at the table").length).toBeGreaterThan(0);
-    expect(screen.getByText(/shared live-session conversation players see/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Open at the table" }));
+    const card = within(await screen.findByRole("region", { name: "NPCs at the table" }));
+    expect(card.getByText("Players talk to these NPCs in the table chat.")).toBeInTheDocument();
+    await userEvent.click(card.getByRole("button", { name: "Bring in" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Cazril" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/npcs/${cazril.id}/sessions/${session.id}/open`)).toEqual({}),
@@ -491,6 +523,11 @@ describe("the runner", () => {
     });
 
     await renderRunner();
+    // One line a conversation, its transcript opened from it.
+    const row = await screen.findByRole("button", { name: /Cazril/ });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Who paid you, Cazril?")).toBeNull();
+    await userEvent.click(row);
     expect(await screen.findByText("Who paid you, Cazril?")).toBeInTheDocument();
     expect(screen.getByText("Pim")).toBeInTheDocument();
     expect(screen.getByText("Names cost extra.")).toBeInTheDocument();
@@ -607,6 +644,11 @@ describe("the runner", () => {
   });
 
   it("keeps Hob's spending switch off by default and writes only that switch when toggled", async () => {
+    // Offered only with a model behind Hob.
+    server.routes.set(`GET /campaigns/${campaignId}/hob`, {
+      status: 200,
+      body: { available: true, model: "scripted", campaign: "The Salt Road" },
+    });
     server.routes.set(`PATCH ${serverRunBase()}`, {
       status: 200,
       body: { ...liveRun, allowHobDirectWrites: true },
@@ -615,7 +657,10 @@ describe("the runner", () => {
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
 
-    const hobSwitch = screen.getByRole("switch", { name: "Hob spends" });
+    // Behind the Hob button, beside the autopilot, so the controls stay narrow.
+    expect(screen.queryByRole("region", { name: "Hob's direct spends" })).toBeNull();
+    await userEvent.click(await screen.findByRole("button", { name: "Hob settings" }));
+    const hobSwitch = await screen.findByRole("switch", { name: "Hob spends" });
     expect(hobSwitch).toHaveAttribute("aria-checked", "false");
 
     await userEvent.click(hobSwitch);
@@ -826,6 +871,15 @@ describe("the runner", () => {
   // the runner is a document screen (no `fill`), so nothing between these
   // cards and the page may bound a height or scroll on its own.
   it("leads the aside with the sheet, and leaves the scrolling to the window", async () => {
+    // A spend to list and an NPC to bring in, or neither card is drawn.
+    server.routes.set(`GET ${serverRunBase()}/hob-direct-updates`, {
+      status: 200,
+      body: [directUpdate],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
     await renderRunner();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
 
@@ -838,7 +892,10 @@ describe("the runner", () => {
     expect(area.firstElementChild).toBe(sheet);
     const rest = area.nextElementSibling as HTMLElement;
     expect(rest.firstElementChild).toBe(log);
-    expect(rest).toContainElement(screen.getByRole("region", { name: "Hob's direct spends" }));
+    expect(rest).toContainElement(
+      await screen.findByRole("region", { name: "Hob's direct spends" }),
+    );
+    expect(rest).toContainElement(await screen.findByRole("region", { name: "NPCs at the table" }));
     // The players' tray and the log are the dock's now, not cards of their own.
     expect(screen.queryByRole("region", { name: "Dice tray" })).toBeNull();
     expect(screen.queryByRole("log", { name: "What just happened" })).toBeNull();
@@ -1348,7 +1405,7 @@ describe("the runner", () => {
 
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
-    expect(screen.getByRole("heading", { name: "Open at the table" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "NPCs at the table" })).toBeInTheDocument();
     expect(screen.queryByText("NPC proposals waiting")).toBeNull();
     await waitFor(() => expect(server.open()).toBeGreaterThan(0));
 
@@ -1734,6 +1791,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     await open();
     await waitFor(() => expect(token("Brannoc")).toBeInTheDocument());
     await userEvent.click(rowFor("Goblin Boss"));
+    await openSheet();
     await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
 
     await userEvent.click(token("Brannoc"));
@@ -1913,6 +1971,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
 
     // A creature whose turn it is not shows no range when selected.
     await userEvent.click(token("Goblin Boss"));
+    await openSheet();
     await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
     expect(range()).toEqual([]);
   });
@@ -2064,6 +2123,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
       body: { ...liveRun, activeCombatantId: guard },
     });
     await userEvent.click(token("Guard"));
+    await openSheet();
     await waitFor(() => expect(panel().getByText("Guard")).toBeInTheDocument());
     expect(range()).toEqual([]);
   });
@@ -2241,6 +2301,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
   it("takes a standing token off the board from the panel's menu, where the board is played on", async () => {
     server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
     await open();
+    await openSheet();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
     const menu = await panelMenu("Brannoc");
     if (!wide) {
@@ -2446,6 +2507,12 @@ describe("the canvas", () => {
     return found;
   };
   const board = () => screen.getByRole("region", { name: "Battle map" });
+  /** A drawer of the stage, open or not. */
+  const drawer = (key: string) => {
+    const found = document.querySelector<HTMLElement>(`[data-slot=run-drawer][data-drawer=${key}]`);
+    if (found === null) throw new Error(`no ${key} drawer on the stage`);
+    return found;
+  };
   const content = () =>
     document.querySelector<HTMLElement>("[data-slot=board-canvas-content]") as HTMLElement;
   const canvasEl = () => document.querySelector<HTMLElement>("[data-slot=board-canvas]")!;
@@ -2462,8 +2529,16 @@ describe("the canvas", () => {
   };
 
   it("floats every card the runner keeps over the board, each in its home", async () => {
+    server.routes.set(`GET ${serverRunBase()}/hob-direct-updates`, {
+      status: 200,
+      body: [directUpdate],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
     await open();
-    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    await waitFor(() => expect(hud("turn")).toHaveTextContent("Brannoc"));
 
     // No grid: the stage is the layout.
     expect(document.querySelector("[data-slot=run-layout]")).toBeNull();
@@ -2475,15 +2550,34 @@ describe("the canvas", () => {
     // Initiative, across the top; nothing rolls initiative in the column under it.
     expect(hud("strip")).toContainElement(screen.getByRole("list", { name: "Initiative order" }));
     expect(document.querySelector("[data-slot=run-hud-rolling]")).toBeNull();
-    // The selected creature leads the right-hand panel, the table's own cards under it.
-    const sheet = screen.getByRole("region", { name: "Selected combatant" });
-    expect(hud("panel").firstElementChild).toBe(sheet);
-    expect(hud("panel")).toContainElement(
-      screen.getByRole("region", { name: "Hob's direct spends" }),
+    // No target while the turn is followed; a creature picked is framed under the ribbon.
+    expect(document.querySelector("[data-slot=run-hud-target]")).toBeNull();
+    await userEvent.click(rowFor("Goblin Boss"));
+    expect(hud("target")).toContainElement(
+      screen.getByRole("region", { name: "Target, Goblin Boss" }),
     );
-    expect(hud("panel")).toContainElement(
-      screen.getByText("Open at the table", { selector: "h3" }),
-    );
+    // The rail opens the drawers over the board: the sheet, and the NPCs at the
+    // table while there is one to bring in. Each is closed until it is opened.
+    const rail = within(hud("rail"));
+    expect(rail.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Sheet",
+      "NPCs at the table",
+    ]);
+    expect(screen.queryByRole("region", { name: "Selected combatant" })).toBeNull();
+    await userEvent.click(rail.getByRole("button", { name: "Sheet" }));
+    expect(
+      within(drawer("sheet")).getByRole("region", { name: "Selected combatant" }),
+    ).toHaveTextContent("Goblin Boss");
+    await userEvent.click(rail.getByRole("button", { name: "NPCs at the table" }));
+    expect(drawer("sheet")).not.toBeVisible();
+    expect(
+      within(drawer("npcs")).getByRole("region", { name: "NPCs at the table" }),
+    ).toBeInTheDocument();
+    // Hob's drawer opens from the controls: its switches and what it spent.
+    await userEvent.click(within(hud("controls")).getByRole("button", { name: "Hob" }));
+    expect(
+      await within(drawer("hob")).findByRole("region", { name: "Hob's direct spends" }),
+    ).toBeInTheDocument();
     // The *Rolls* dock — the DM's dice, the players' tray and the log — bottom right.
     expect(hud("rolls").firstElementChild).toBe(screen.getByRole("region", { name: "Rolls" }));
     // The party down the left, and whoever is up at the foot.
@@ -2508,10 +2602,36 @@ describe("the canvas", () => {
     expect(hud("tools")).not.toHaveTextContent("squares ·");
     // The top right keeps the fight's switches; the turn card has its one peach.
     expect(hud("controls")).toContainElement(screen.getByRole("switch", { name: "Share" }));
+    expect(hud("controls")).toContainElement(screen.getByRole("button", { name: "End" }));
     expect(hud("turn")).toContainElement(screen.getByRole("button", { name: "Next turn" }));
     // Every floating region is on the one HUD rung.
-    for (const name of ["strip", "left", "panel", "turn", "corner"])
+    for (const name of ["strip", "left", "target", "rail", "turn", "corner"])
       expect(hud(name).closest(".z-hud")).not.toBeNull();
+  });
+
+  it("opens a drawer from the rail and closes it again, by the rail, its own Esc or nothing", async () => {
+    await open();
+    const sheet = () => within(hud("rail")).getByRole("button", { name: "Sheet" });
+    await waitFor(() => expect(sheet()).toHaveAttribute("aria-expanded", "false"));
+    await userEvent.click(sheet());
+    expect(sheet()).toHaveAttribute("aria-expanded", "true");
+    expect(drawer("sheet")).toBeVisible();
+    // The rail's button shuts what it opened.
+    await userEvent.click(sheet());
+    expect(drawer("sheet")).not.toBeVisible();
+
+    // Esc typed into a field is the field's: it clears the box and leaves the drawer.
+    await userEvent.click(sheet());
+    const box = within(drawer("sheet")).getByLabelText("Hit points to apply to Brannoc");
+    await userEvent.type(box, "4");
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(box).toHaveValue("");
+    expect(drawer("sheet")).toBeVisible();
+    // Anywhere else in the drawer, Esc closes it.
+    fireEvent.keyDown(within(drawer("sheet")).getByRole("region", { name: "Selected combatant" }), {
+      key: "Escape",
+    });
+    expect(drawer("sheet")).not.toBeVisible();
   });
 
   it("takes the whole window, and lets each panel scroll itself", async () => {
@@ -2525,7 +2645,7 @@ describe("the canvas", () => {
     // The header floats over the board, and its back link is the way out.
     expect(hud("header")).toContainElement(screen.getByRole("heading", { level: 1 }));
     expect(within(hud("header")).getByRole("link", { name: /Overview/ })).toBeInTheDocument();
-    for (const name of ["rolls", "panel"]) expect(hud(name).className).toMatch(/overflow-y-auto/);
+    for (const name of ["rolls", "party"]) expect(hud(name).className).toMatch(/overflow-y-auto/);
   });
 
   it("gives the window back to the shell when it leaves", async () => {
@@ -2588,7 +2708,7 @@ describe("the canvas", () => {
     await open();
     const zoom = zoomOf();
     const from = panOf();
-    for (const name of ["strip", "rolls", "panel", "tools"]) {
+    for (const name of ["strip", "rolls", "party", "tools"]) {
       expect(canvasEl().contains(hud(name))).toBe(false);
       expect(fireEvent.wheel(hud(name), { deltaY: 100 })).toBe(true);
     }
@@ -3017,6 +3137,8 @@ describe("the board's tools", () => {
     hob.remove();
     // An Esc typed into a field clears the field, not the board, and one
     // closing a menu closes the menu.
+    // Brannoc is up, so his damage box is his whole card's, in the *Sheet* drawer.
+    await openSheet();
     fireEvent.keyDown(panel().getByLabelText("Hit points to apply to Brannoc"), { key: "Escape" });
     const menu = await panelMenu("Brannoc");
     fireEvent.keyDown(menu.getAllByRole("menuitem")[0]!, { key: "Escape" });
@@ -3162,6 +3284,16 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  /**
+   * Who is selected: the grid's card names them; on the canvas the target
+   * frame does, and there is none while whoever is up (Brannoc) is.
+   */
+  const selectedIs = (name: string) => {
+    if (!wide) expect(panel().getByText(name)).toBeInTheDocument();
+    else if (name === "Brannoc")
+      expect(screen.queryByRole("region", { name: /^Target, / })).toBeNull();
+    else expect(screen.getByRole("region", { name: `Target, ${name}` })).toBeInTheDocument();
+  };
   /** Whoever is up acts from the turn card on the canvas, and from their panel in the grid. */
   const turnCard = () =>
     wide ? within(screen.getByRole("region", { name: "This turn of Brannoc" })) : panel();
@@ -3219,8 +3351,8 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     await pick("Goblin Boss");
 
     expect(banner()).toBeNull();
-    // The card is the attacker's: the panel still shows Brannoc.
-    expect(panel().getByText("Brannoc")).toBeInTheDocument();
+    // The selection is the attacker's still: the pick made nobody the target.
+    selectedIs("Brannoc");
     expect(result().getByText("Hit")).toBeInTheDocument();
     expect(result().getByText("d20 19 +7 = 26 vs AC 17")).toBeInTheDocument();
     expect(result().getByText("1d8+4 [5] = 9 slashing")).toBeInTheDocument();
@@ -3479,7 +3611,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(banner()).toBeNull();
     // With no pick, a click selects again.
     await pick("Goblin Boss");
-    expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
+    selectedIs("Goblin Boss");
   });
 
   it("ends the attack when Make it their turn moves the turn", async () => {
@@ -3521,9 +3653,9 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
 
   it.runIf(wide)("resolves against the selected creature at once, target first", async () => {
     await open();
-    // With no pick waiting, a token selects: the target card.
+    // With no pick waiting, a token selects: the target frame.
     await pick("Goblin Boss");
-    expect(panel().getByText("Target")).toBeInTheDocument();
+    const frame = within(screen.getByRole("region", { name: "Target, Goblin Boss" }));
     expect(turnCard().getByText(/Targeting Goblin Boss, AC 17/)).toBeInTheDocument();
     seed(0.9, 0.5);
     await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
@@ -3531,9 +3663,9 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Hit")).toBeInTheDocument();
     await waitFor(() => expect(damages()).toHaveLength(1));
     expect(sentBody(0)).toEqual({ amount: 9, requestId: expect.any(String) });
-    // *Clear target* hands the card back to whoever is up.
-    await userEvent.click(panel().getByRole("button", { name: "Clear target" }));
-    expect(panel().queryByText("Target")).toBeNull();
+    // *Clear target* hands the selection back to whoever is up.
+    await userEvent.click(frame.getByRole("button", { name: "Clear target" }));
+    selectedIs("Brannoc");
   });
 
   it.runIf(wide)("selects from the party rail, as from the strip", async () => {
@@ -3544,15 +3676,14 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
         name: /^Brannoc in the party/,
       }),
     );
-    expect(panel().queryByText("Target")).toBeNull();
-    expect(panel().getByText("Brannoc")).toBeInTheDocument();
+    selectedIs("Brannoc");
   });
 
   it("rolls for a creature that is not up, to-hit and damage together, with no target", async () => {
     await open();
     await pick("Goblin Boss");
-    // On the canvas the target card folds its lines under *Details*.
-    if (wide) await userEvent.click(panel().getByRole("button", { name: "Details" }));
+    // On the canvas its lines are its whole card's, in the *Sheet* drawer.
+    await openSheet();
     const lines = within(panel().getByRole("region", { name: "Actions of Goblin Boss" }));
     expect(lines.queryByRole("button", { name: /^Attack/ })).toBeNull();
     seed(0.5);

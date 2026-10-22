@@ -49,7 +49,7 @@ export {
   SelectTrigger,
   SelectValue,
 } from "./components/ui/select";
-export { Switch } from "./components/ui/switch";
+export { IconSwitch, Switch } from "./components/ui/switch";
 
 export {
   Tabs,

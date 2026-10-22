@@ -4,8 +4,9 @@ import { Icon } from "@taverns/ui";
 /**
  * The canvas's title, top left (`Encounter Canvas.dc.html`): the way back,
  * since the nav rows are put away while the canvas holds the window, then the
- * name and where it is. On a card, so it reads over any map. The DM's runner
- * and a seated player's table share it.
+ * name and where it is. Plain text on the board's dark edge, with no card, as
+ * a game's screen titles a level. The DM's runner and a seated player's table
+ * share it.
  */
 export function CanvasTitle({
   back,
@@ -17,7 +18,7 @@ export function CanvasTitle({
   readonly subtitle: string | undefined;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-card bg-surface-card/85 py-1.5 pr-4 pl-1.5 shadow-3">
+    <div className="flex min-w-0 items-center gap-1.5">
       <Link
         {...back}
         aria-label="Overview"
@@ -30,7 +31,9 @@ export function CanvasTitle({
           {title}
         </h1>
         {subtitle !== undefined && subtitle !== "" && (
-          <p className="mb-0 truncate text-body-s leading-snug text-muted-foreground">{subtitle}</p>
+          <p className="mb-0 truncate text-caption leading-snug text-muted-foreground">
+            {subtitle}
+          </p>
         )}
       </div>
     </div>

@@ -401,6 +401,9 @@ export function PlayerTableScreen() {
               {
                 id: row.combatantId,
                 displayName: row.displayName,
+                label: labels.get(row.combatantId) ?? "?",
+                // The table sends no portrait; the initials stand alone.
+                portrait: undefined,
                 subtitle:
                   [row.subtitle, row.kind === "ally" ? row.playerName : null]
                     .filter((part): part is string => part !== null && part !== "")
