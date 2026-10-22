@@ -198,6 +198,23 @@ export const levelMarks = (
   return marks;
 };
 
+/**
+ * The party's marks on a level, which a seated player's table draws: only the
+ * regions it was sent (none secret, each clipped to what the party has seen),
+ * tinted as the DM's are. No secret door, low wall, lock or DM-only prop is
+ * marked: the table is not told of them.
+ */
+export const partyMarks = (doc: Pick<LevelLayout, "columns" | "regions">): Array<Mark> =>
+  doc.regions
+    .filter((region) => !region.secret)
+    .map((region): Mark => ({
+      type: "squares",
+      squares: region.squares,
+      columns: doc.columns,
+      colour: REGION_COLOUR[region.kind],
+      opacity: 0.24,
+    }));
+
 /** The marks that hold until the level or the selection changes. */
 export const describeOverlay = (state: EditorState): ReadonlyArray<Mark> => {
   const doc = state.history.present;
