@@ -42,6 +42,18 @@ export const RunLevelWall = Schema.Struct({
 });
 export type RunLevelWall = typeof RunLevelWall.Type;
 
+/**
+ * A region of a fight's level, with `revealed`: whether the DM has shown a
+ * secret one (a trap, a hazard) to the table. Only a secret region is ever
+ * revealed; a revealed one is sent to a seated player's table as any region
+ * is (`PlayerLiveLevel`).
+ */
+export const RunLevelRegion = Schema.Struct({
+  ...LevelRegion.fields,
+  revealed: Schema.Boolean,
+});
+export type RunLevelRegion = typeof RunLevelRegion.Type;
+
 /** A fight's copy of its level: everything but the board's size, which the board carries. */
 export const RunBoardLevel = Schema.Struct({
   ambient: LevelAmbient,
@@ -51,7 +63,7 @@ export const RunBoardLevel = Schema.Struct({
   props: Schema.Array(LevelProp),
   /** `lit` is live: the DM lights and snuffs them. */
   lights: Schema.Array(LevelLight),
-  regions: Schema.Array(LevelRegion),
+  regions: Schema.Array(RunLevelRegion),
 });
 export type RunBoardLevel = typeof RunBoardLevel.Type;
 
@@ -102,7 +114,10 @@ export type PlayerLevelProp = typeof PlayerLevelProp.Type;
 export const PlayerLevelLight = Schema.Struct(Struct.omit(LevelLight.fields, ["lit"]));
 export type PlayerLevelLight = typeof PlayerLevelLight.Type;
 
-/** A region as the party sees it: never a secret one, and only its squares the party has seen. */
+/**
+ * A region as the party sees it: never a secret one the DM has not revealed,
+ * and only its squares the party has seen.
+ */
 export const PlayerLevelRegion = Schema.Struct(Struct.omit(LevelRegion.fields, ["secret"]));
 export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
 
@@ -121,7 +136,8 @@ export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
  *   locked door is sent `closed`, since the table learns a lock by trying it;
  * - props that are not DM-only whose footprint touches a seen square;
  * - lights that are lit and stand on a seen square;
- * - regions that are not secret, clipped to the seen squares.
+ * - regions that are not secret, or are secret and revealed by the DM,
+ *   clipped to the seen squares.
  */
 export const PlayerLiveLevel = Schema.Struct({
   ambient: LevelAmbient,
@@ -283,6 +299,18 @@ export const BoardDoorUpdate = Schema.Struct({
   ),
 );
 export type BoardDoorUpdate = typeof BoardDoorUpdate.Type;
+
+/**
+ * The DM reveals a secret region of a fight's level (a trap, a hazard) to the
+ * table, or hides it again. Answered with the board. `Conflict` for a fight
+ * that is over or has no level, and a region that is not secret; `NotFound`
+ * for a region the fight's level does not have.
+ */
+export const BoardRegionUpdate = Schema.Struct({
+  revealed: Schema.Boolean,
+  requestId,
+});
+export type BoardRegionUpdate = typeof BoardRegionUpdate.Type;
 
 /**
  * The DM lights or snuffs one light of a fight's level. Answered with the

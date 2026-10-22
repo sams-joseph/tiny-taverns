@@ -38,6 +38,17 @@ describe("a level's log lines", () => {
     );
   });
 
+  it("say which kind of secret region was shown to the table or hidden", () => {
+    const regionLine = (payload: unknown) =>
+      SENTENCE["board-region-updated"](undefined, "fight", payload);
+    const region = { regionId: "r", regionKind: "trap", revealed: true, wasRevealed: false };
+    expect(regionLine(region)).toBe("A trap was revealed to the table");
+    expect(regionLine({ ...region, regionKind: "hazard", revealed: false, wasRevealed: true })).toBe(
+      "A hazard was hidden from the table again",
+    );
+    expect(regionLine({})).toBe("A secret on the level was shown or hidden");
+  });
+
   it("name a light by its preset, or say a light", () => {
     expect(lightLine({ lightId: "l", lit: true, preset: "torch" })).toBe("A torch was lit");
     expect(lightLine({ lightId: "l", lit: false, preset: "lamp" })).toBe("A lamp was snuffed");

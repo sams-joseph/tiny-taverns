@@ -171,6 +171,48 @@ describe("a fight on a level, on the DM's canvas", () => {
     expect(doorWrites()).toHaveLength(2);
   });
 
+  it("reveals a secret trap to the table and hides it again", async () => {
+    const trapId = "1e7e3000-0000-4000-8000-000000000030";
+    const withTrap = (revealed: boolean) => ({
+      ...runLevelBoard,
+      level: {
+        ...runLevelBoard.level,
+        regions: [{ id: trapId, kind: "trap", squares: [10, 11], secret: true, revealed }],
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: withTrap(false) });
+    server.routes.set(`PATCH ${serverRunBase()}/board/regions/${trapId}`, {
+      status: 200,
+      body: withTrap(true),
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await userEvent.click(
+      await board().findByRole("button", { name: "Reveal the trap to the table" }),
+    );
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/board/regions/${trapId}`)).toMatchObject({
+        revealed: true,
+      }),
+    );
+    const hide = await board().findByRole("button", { name: "Hide the trap from the table" });
+    expect(hide).toHaveAttribute("aria-pressed", "true");
+
+    server.routes.set(`PATCH ${serverRunBase()}/board/regions/${trapId}`, {
+      status: 200,
+      body: withTrap(false),
+    });
+    await userEvent.click(hide);
+    const regionWrites = () =>
+      server.calls
+        .filter((call) => call.method === "PATCH" && call.pathname.includes("/board/regions/"))
+        .map((call) => (JSON.parse(call.body) as { readonly revealed: boolean }).revealed);
+    await waitFor(() => expect(regionWrites()).toEqual([true, false]));
+    expect(
+      await board().findByRole("button", { name: "Reveal the trap to the table" }),
+    ).toBeInTheDocument();
+  });
+
   it("says an open door's lock shuts it", async () => {
     server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: withDoor("open") });
     server.routes.set(`PATCH ${serverRunBase()}/board/doors/${runLevelDoorId}`, {

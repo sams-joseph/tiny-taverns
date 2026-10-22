@@ -356,7 +356,7 @@ describeLayer("level-fights", shared, (it) => {
         expect(copy.walls).toEqual(level.walls.map((wall) => ({ ...wall, revealed: false })));
         expect(copy.props).toEqual(level.props);
         expect(copy.lights).toEqual(level.lights);
-        expect(copy.regions).toEqual(level.regions);
+        expect(copy.regions).toEqual(level.regions.map((region) => ({ ...region, revealed: false })));
       }),
     );
 
@@ -388,7 +388,7 @@ describeLayer("level-fights", shared, (it) => {
       }),
     );
 
-    it.effect("carries its copy, doors and lights as left, to the fight that resumes it", () =>
+    it.effect("carries its copy, doors, lights and secrets as left, to the fight that resumes it", () =>
       Effect.gen(function* () {
         const { jo, table } = yield* Fixture;
         const level = yield* aHall();
@@ -404,6 +404,12 @@ describeLayer("level-fights", shared, (it) => {
           client.runs.updateLight({
             params: { ...params, lightId: TORCH },
             payload: { lit: false },
+          }),
+        );
+        yield* as(jo.token, (client) =>
+          client.runs.updateRegion({
+            params: { ...params, regionId: part(8) },
+            payload: { revealed: true },
           }),
         );
         const left = yield* boardOf(params);
@@ -427,6 +433,7 @@ describeLayer("level-fights", shared, (it) => {
         expect(carried?.level).toEqual(left?.level);
         expect(levelOf(carried).walls.find((wall) => wall.id === DOOR)?.doorState).toBe("open");
         expect(levelOf(carried).lights[0]?.lit).toBe(false);
+        expect(levelOf(carried).regions[0]?.revealed).toBe(true);
       }),
     );
   });

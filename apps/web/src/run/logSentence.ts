@@ -1,6 +1,8 @@
 import {
   BoardDoorUpdatedPayload,
   BoardLightUpdatedPayload,
+  BoardRegionUpdatedPayload,
+  type LevelRegionKind,
   type LightPreset,
   type SessionEventKind,
 } from "@taverns/api";
@@ -41,6 +43,7 @@ export const SENTENCE: Record<
   "board-area-updated": () => "An area on the board was pinned or cleared",
   "board-door-updated": (_who, _noun, payload) => doorSentence(payload),
   "board-light-updated": (_who, _noun, payload) => lightSentence(payload),
+  "board-region-updated": (_who, _noun, payload) => regionSentence(payload),
   "board-vision-updated": () => "What the party sees of the level changed",
   "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
   "run-escalated": () => "The conversation turned into a fight",
@@ -96,6 +99,30 @@ export const doorSentence = (payload: unknown): string =>
       }
       return `${noun} was ${DOOR_VERB[door.doorState]}`;
     },
+  });
+
+const decodeRegion = Schema.decodeUnknownOption(BoardRegionUpdatedPayload);
+
+const REGION_NOUN: Record<LevelRegionKind, string> = {
+  difficult: "Difficult ground",
+  magicalDarkness: "Magical darkness",
+  heavyObscurement: "Heavy obscurement",
+  hazard: "A hazard",
+  trap: "A trap",
+};
+
+/** A secret region's line: which kind, shown to the table or hidden again. */
+export const regionSentence = (payload: unknown): string =>
+  Option.match(decodeRegion(payload), {
+    onNone: () => "A secret on the level was shown or hidden",
+    onSome: (region) =>
+      `${REGION_NOUN[region.regionKind]} was ${
+        region.revealed === region.wasRevealed
+          ? "left as it was"
+          : region.revealed
+            ? "revealed to the table"
+            : "hidden from the table again"
+      }`,
   });
 
 const LIGHT_NOUN: Record<LightPreset, string> = {

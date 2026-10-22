@@ -5,6 +5,9 @@ import {
   type BoardDoorUpdate,
   type BoardFogUpdate,
   type BoardLightUpdate,
+  type BoardRegionUpdate,
+  BoardRegionUpdatedPayload,
+  type LevelRegionKind,
   Conflict,
   EncounterRunBoard,
   EncounterRunId,
@@ -32,8 +35,8 @@ import { nestedRowWritable } from "./visibility.js";
  * still composes the nested run's predicate beneath it. The player's view of
  * the board is `repo/PlayerTable.ts`'s, a schema of its own.
  *
- * Its fog of war, its pinned area template, and its level's doors and lights
- * are written here, because each write answers with the board.
+ * Its fog of war, its pinned area template, and its level's doors, lights
+ * and secret regions are written here, because each write answers with the board.
  */
 
 /**
@@ -161,6 +164,19 @@ export class RunBoards extends Context.Service<
       runId: EncounterRunId,
       lightId: LevelPartId,
       update: BoardLightUpdate,
+    ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
+    /**
+     * Reveal a secret region of the fight's level to the table, or hide it
+     * again: `updateDoor`'s rules, with `board-region-updated`, always the
+     * DM's line, and the table rung when the region has a square the party
+     * has seen.
+     */
+    readonly updateRegion: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      regionId: LevelPartId,
+      update: BoardRegionUpdate,
     ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
   }
 >()("RunBoards") {
@@ -617,6 +633,89 @@ export class RunBoards extends Context.Service<
                     visibility: lineShared ? "shared" : "dm",
                   });
                   yield* ringVision(sql, { sessionId, runId, vision, lineShared });
+                  return yield* current;
+                }),
+              )
+              .pipe(
+                // Two sends of one press that raced past the idempotency
+                // check; the unique index refuses the second, as for a move.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? current
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          );
+        },
+
+        updateRegion: (creator, sessionId, runId, regionId, update) => {
+          const current = Effect.flatMap(board({ runId }), (found) =>
+            Option.match(found, {
+              onNone: () => Effect.fail(new Conflict({ message: "this fight has no board" })),
+              onSome: Effect.succeed,
+            }),
+          );
+          return dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                    orNotFound("encounter_run", runId),
+                  );
+                  if (yield* requestAlreadyApplied(sql, runId, update.requestId)) {
+                    return yield* current;
+                  }
+                  yield* levelFight(runId);
+                  const regions = yield* sql<{
+                    readonly kind: LevelRegionKind;
+                    readonly secret: boolean;
+                    readonly revealed: boolean;
+                  }>`
+                    select encounter_run_region.kind, encounter_run_region.secret,
+                           encounter_run_region.revealed
+                    from encounter_run_region
+                    where encounter_run_region.run_id = ${runId}
+                      and encounter_run_region.id = ${regionId}
+                    for update
+                  `;
+                  const region = regions[0];
+                  if (region === undefined) {
+                    return yield* new NotFound({ resource: "region", id: regionId });
+                  }
+                  if (!region.secret) {
+                    return yield* new Conflict({ message: "only a secret region is revealed" });
+                  }
+                  yield* sql`
+                    update encounter_run_region set revealed = ${update.revealed}
+                    where encounter_run_region.run_id = ${runId}
+                      and encounter_run_region.id = ${regionId}
+                  `;
+                  // The line is the DM's whatever happens: a shared one would
+                  // say where a secret was. The table is rung when it draws
+                  // the region differently now: one it has seen a square of.
+                  const vision = yield* refreshPartyVision(sql, runId);
+                  const seen = yield* partSeen(sql, runId, { regionId });
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "board-region-updated",
+                    encounterRunId: runId,
+                    payload: {
+                      regionId,
+                      regionKind: region.kind,
+                      revealed: update.revealed,
+                      wasRevealed: region.revealed,
+                    } satisfies typeof BoardRegionUpdatedPayload.Encoded,
+                    requestId: update.requestId,
+                    visibility: "dm",
+                  });
+                  yield* ringVision(sql, {
+                    sessionId,
+                    runId,
+                    vision,
+                    lineShared: false,
+                    force: seen && region.revealed !== update.revealed,
+                  });
                   return yield* current;
                 }),
               )

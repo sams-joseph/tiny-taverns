@@ -206,7 +206,7 @@ import {
   WorldLocation,
 } from "./Location.js";
 import { Level, LevelCreate, LevelSave, LevelSummary } from "./Level.js";
-import { BoardDoorUpdate, BoardLightUpdate, LevelUse } from "./LevelFight.js";
+import { BoardDoorUpdate, BoardLightUpdate, BoardRegionUpdate, LevelUse } from "./LevelFight.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
 import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
@@ -3630,6 +3630,23 @@ class RunsGroup extends HttpApiGroup.make("runs")
         wallId: LevelPartId,
       },
       payload: BoardDoorUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Reveal a secret region of the fight's level (a trap, a hazard) to the
+     * table, or hide it again, answered with the board. `NotFound` for a
+     * region the level does not have; `Conflict` for a fight that is over or
+     * has no level, and a region that is not secret. See `BoardRegionUpdate`.
+     */
+    HttpApiEndpoint.patch("updateRegion", "/:runId/board/regions/:regionId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        regionId: LevelPartId,
+      },
+      payload: BoardRegionUpdate,
       success: EncounterRunBoard,
       error: [NotFound, Conflict],
     }),

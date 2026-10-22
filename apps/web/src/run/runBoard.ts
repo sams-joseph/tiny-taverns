@@ -69,6 +69,8 @@ export interface RunBoardProps {
     update: Omit<BoardDoorUpdate, "requestId">,
   ) => Promise<void>;
   readonly onLight: (lightId: LevelPartId, lit: boolean) => Promise<void>;
+  /** A secret region of the level (a trap, a hazard) revealed to the table, or hidden again. */
+  readonly onRegion: (regionId: LevelPartId, revealed: boolean) => Promise<void>;
 }
 
 /**

@@ -1,4 +1,11 @@
-import type { BoardDoorUpdate, LevelPartId, RunBoardLevel, RunLevelWall } from "@taverns/api";
+import type {
+  BoardDoorUpdate,
+  LevelPartId,
+  LevelRegionKind,
+  RunBoardLevel,
+  RunLevelRegion,
+  RunLevelWall,
+} from "@taverns/api";
 import {
   Button,
   cn,
@@ -15,9 +22,11 @@ import {
  * (a locked one unlocks); its ⋯ locks or unlocks it (locking an open door
  * shuts it: a locked door is a closed one) and, for a secret door,
  * reveals it to the table or hides it again. Pressing a light lights or
- * snuffs it. Each press is the live write (`runs.updateDoor`,
- * `runs.updateLight`), and the board shows the server's answer, and every
- * other tab's after the doorbell's re-read.
+ * snuffs it. A secret region (a trap, a hazard) has a switch on its first
+ * square that reveals it to the table or hides it again. Each press is the
+ * live write (`runs.updateDoor`, `runs.updateLight`, `runs.updateRegion`), and
+ * the board shows the server's answer, and every other tab's after the
+ * doorbell's re-read.
  *
  * DOM over the board, not a pick in the renderer, so it is a button a
  * keyboard reaches and a test presses, and the board canvas's pan never
@@ -31,6 +40,7 @@ export function LevelSwitches({
   disabled,
   onDoor,
   onLight,
+  onRegion,
 }: {
   readonly level: RunBoardLevel;
   readonly columns: number;
@@ -38,10 +48,22 @@ export function LevelSwitches({
   readonly disabled: boolean;
   readonly onDoor: (wallId: LevelPartId, update: Omit<BoardDoorUpdate, "requestId">) => void;
   readonly onLight: (lightId: LevelPartId, lit: boolean) => void;
+  readonly onRegion: (regionId: LevelPartId, revealed: boolean) => void;
 }) {
   const doors = level.walls.filter((wall) => wall.kind !== "wall");
+  const secrets = level.regions.filter((region) => region.secret);
   return (
     <div data-slot="level-switches" className="pointer-events-none absolute inset-0">
+      {secrets.map((region) => (
+        <RegionSwitch
+          key={region.id}
+          region={region}
+          columns={columns}
+          rows={rows}
+          disabled={disabled}
+          onRegion={onRegion}
+        />
+      ))}
       {doors.map((door) => (
         <DoorSwitch
           key={door.id}
@@ -84,9 +106,65 @@ export function LevelSwitches({
   );
 }
 
-/** How much of a square a door's and a light's switch spans: the board's own units. */
+/** How much of a square a door's, a light's and a region's switch spans: the board's own units. */
 const DOOR_SQUARES = 0.5;
 const LIGHT_SQUARES = 0.4;
+const REGION_SQUARES = 0.4;
+
+const REGION_NOUN: Record<LevelRegionKind, string> = {
+  difficult: "the difficult ground",
+  magicalDarkness: "the magical darkness",
+  heavyObscurement: "the heavy obscurement",
+  hazard: "the hazard",
+  trap: "the trap",
+};
+
+/**
+ * A secret region's switch, at the top-left corner of its first square:
+ * reveal it to the table, or hide it again.
+ */
+function RegionSwitch({
+  region,
+  columns,
+  rows,
+  disabled,
+  onRegion,
+}: {
+  readonly region: RunLevelRegion;
+  readonly columns: number;
+  readonly rows: number;
+  readonly disabled: boolean;
+  readonly onRegion: (regionId: LevelPartId, revealed: boolean) => void;
+}) {
+  const first = Math.min(...region.squares);
+  const column = first % columns;
+  const row = Math.floor(first / columns);
+  const noun = REGION_NOUN[region.kind];
+  const label = region.revealed ? `Hide ${noun} from the table` : `Reveal ${noun} to the table`;
+  return (
+    <Button
+      variant="secondary"
+      size="icon"
+      data-region={region.id}
+      aria-label={label}
+      title={label}
+      aria-pressed={region.revealed}
+      disabled={disabled}
+      style={{
+        left: percent((column + 0.25) / columns),
+        top: percent((row + 0.25) / rows),
+        width: percent(REGION_SQUARES / columns),
+      }}
+      className={cn(
+        "pointer-events-auto absolute aspect-square h-auto min-h-0 min-w-0 -translate-x-1/2 -translate-y-1/2 rounded-full border border-magic p-0",
+        region.revealed ? "text-magic" : "text-muted-foreground",
+      )}
+      onClick={() => onRegion(region.id, !region.revealed)}
+    >
+      <Icon name={region.revealed ? "eye" : "eye-off"} size={12} />
+    </Button>
+  );
+}
 
 /** A share of the board as a CSS percentage. */
 const percent = (share: number) => `${String(share * 100)}%`;

@@ -1878,6 +1878,11 @@ const RunsLive = HttpApiBuilder.group(
           boards.updateLight(as, params.sessionId, params.runId, params.lightId, payload),
         ),
       )
+      .handle("updateRegion", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          boards.updateRegion(as, params.sessionId, params.runId, params.regionId, payload),
+        ),
+      )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),
       )

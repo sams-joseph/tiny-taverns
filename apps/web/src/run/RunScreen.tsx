@@ -1677,16 +1677,17 @@ export function RunScreen() {
     });
 
   /**
-   * A door or a light of the fight's level, in the board's line with the
-   * fog's: its answer is the board, written straight into the board's atom,
-   * so the door swings as soon as the server has it.
+   * A door, a light or a secret region of the fight's level, in the board's
+   * line with the fog's: its answer is the board, written straight into the
+   * board's atom, so the door swings as soon as the server has it. A
+   * player's table re-reads, since its level is narrowed through them.
    */
   const switchLevel = (
     write: (client: TavernsClient) => Effect.Effect<EncounterRunBoard, unknown>,
     refused: string,
   ): Promise<void> =>
     inBoardLine(async () => {
-      const saved = await levelSwitches.submit(write, boardLevelWrites).catch(() => undefined);
+      const saved = await levelSwitches.submit(write, boardLevelWrites(campaignId)).catch(() => undefined);
       if (saved !== undefined && Result.isSuccess(saved)) {
         writeBoard((current) => AsyncResult.map(current, () => saved.success));
         return;
@@ -1714,6 +1715,15 @@ export function RunScreen() {
           payload: { lit, requestId: newRequestId() },
         }),
       lit ? "The light was not lit" : "The light was not snuffed",
+    );
+  const onRegion = (regionId: LevelPartId, revealed: boolean) =>
+    switchLevel(
+      (client) =>
+        client.runs.updateRegion({
+          params: { ...path, regionId },
+          payload: { revealed, requestId: newRequestId() },
+        }),
+      revealed ? "The table was not shown it" : "It was not hidden again",
     );
 
   /**
@@ -2254,6 +2264,7 @@ export function RunScreen() {
           onArea: pinArea,
           onDoor,
           onLight,
+          onRegion,
         };
 
   // On the canvas the screen holds the whole window: the shell puts its nav

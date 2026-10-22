@@ -410,6 +410,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 109, name: "level_fights" },
         { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
+        { migration_id: 112, name: "run_region_reveal" },
       ]);
     }),
   );
@@ -531,6 +532,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 109, name: "level_fights" },
         { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
+        { migration_id: 112, name: "run_region_reveal" },
       ]);
     }),
   );

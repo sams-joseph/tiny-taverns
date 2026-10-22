@@ -145,8 +145,8 @@ export const carryLevel = (
       from encounter_run_light where encounter_run_light.run_id = ${fromRunId}
     `;
     yield* sql`
-      insert into encounter_run_region (run_id, id, ordinal, kind, squares, secret)
-      select ${runId}, id, ordinal, kind, squares, secret
+      insert into encounter_run_region (run_id, id, ordinal, kind, squares, secret, revealed)
+      select ${runId}, id, ordinal, kind, squares, secret, revealed
       from encounter_run_region where encounter_run_region.run_id = ${fromRunId}
     `;
     // What the party explored stays explored (`0110_party_vision.ts`); what
@@ -194,7 +194,8 @@ export const levelColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql
     ), '[]'::json),
     'regions', coalesce((
       select json_agg(json_build_object(
-        'id', r.id, 'kind', r.kind, 'squares', to_json(r.squares), 'secret', r.secret
+        'id', r.id, 'kind', r.kind, 'squares', to_json(r.squares), 'secret', r.secret,
+        'revealed', r.revealed
       ) order by r.ordinal)
       from encounter_run_region r where r.run_id = encounter_run_board.run_id
     ), '[]'::json)
@@ -506,7 +507,9 @@ const PROP_SIZES = JSON.stringify(
  * - lights that are lit and stand on a seen square. A light's glow reaching a
  *   seen square does not send it: where a torch stands is learnt by seeing
  *   its square, as a lit room is seen without its lamp;
- * - regions that are not secret, clipped to the seen squares, none left empty.
+ * - regions that are not secret, or are secret and revealed by the DM
+ *   (`0112_run_region_reveal.ts`), clipped to the seen squares, none left
+ *   empty.
  *
  * `seen_at` is the seen set as one flag per square, so each part's test is a
  * subscript rather than a scan of the array.
@@ -575,7 +578,7 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
                    array(select square from unnest(g.squares) square
                          where v.seen_at[square + 1] order by square) as squares
             from encounter_run_region g
-            where g.run_id = encounter_run_board.run_id and not g.secret
+            where g.run_id = encounter_run_board.run_id and (not g.secret or g.revealed)
           ) clipped
           where cardinality(clipped.squares) > 0
         ), '[]'::json)
@@ -656,14 +659,18 @@ const lightOnSeen = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
 
 /**
  * Whether the party has seen a part of the fight's level, with the DM's fog
- * taken out: the wall touches a seen square, or the light stands on one. What
- * a door's or a light's log line is shared under, so the table is told of a
- * change to a part it has seen, and of no other.
+ * taken out: the wall touches a seen square, the light stands on one, or the
+ * region has one. What a door's or a light's log line is shared under, and
+ * what rings the table for a region revealed or hidden, so the table is told
+ * of a change to a part it has seen, and of no other.
  */
 export const partSeen = (
   sql: SqlClient.SqlClient,
   runId: EncounterRunId,
-  part: { readonly wallId: string } | { readonly lightId: string },
+  part:
+    | { readonly wallId: string }
+    | { readonly lightId: string }
+    | { readonly regionId: string },
 ) =>
   Effect.map(
     "wallId" in part
@@ -674,7 +681,17 @@ export const partSeen = (
           cross join lateral ${partyView(sql)}
           where w.run_id = ${runId} and w.id = ${part.wallId}
         `
-      : sql<{ readonly seen: boolean }>`
+      : "regionId" in part
+        ? sql<{ readonly seen: boolean }>`
+          select exists (
+                   select 1 from unnest(g.squares) square where v.seen_at[square + 1]
+                 ) as seen
+          from encounter_run_region g
+          join encounter_run_board on encounter_run_board.run_id = g.run_id
+          cross join lateral ${partyView(sql)}
+          where g.run_id = ${runId} and g.id = ${part.regionId}
+        `
+        : sql<{ readonly seen: boolean }>`
           select ${lightOnSeen(sql)} as seen
           from encounter_run_light l
           join encounter_run_board on encounter_run_board.run_id = l.run_id

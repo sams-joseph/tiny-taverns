@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { LevelRegionKind } from "./LevelKit.js";
 
 /**
  * The few `SessionEvent.payload` shapes a client reads: the hit-point, death
@@ -89,6 +90,15 @@ export const BoardDoorUpdatedPayload = Schema.Struct({
   wasRevealed: Schema.Boolean,
 });
 export type BoardDoorUpdatedPayload = typeof BoardDoorUpdatedPayload.Type;
+
+/** `board-region-updated`: which region, of what kind, and whether the table is shown it now and was before. */
+export const BoardRegionUpdatedPayload = Schema.Struct({
+  regionId: Schema.String,
+  regionKind: LevelRegionKind,
+  revealed: Schema.Boolean,
+  wasRevealed: Schema.Boolean,
+});
+export type BoardRegionUpdatedPayload = typeof BoardRegionUpdatedPayload.Type;
 
 /** `board-light-updated`: which light, by the preset it matches (`lightPresetOf`), lit or snuffed. */
 export const BoardLightUpdatedPayload = Schema.Struct({

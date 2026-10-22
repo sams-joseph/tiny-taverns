@@ -620,6 +620,59 @@ describeLayer("party-vision", shared, (it) => {
     );
   });
 
+  describe("a secret region revealed mid-fight", () => {
+    const region = (token: string, params: Params, regionId: typeof TRAP, revealed: boolean) =>
+      Effect.flatMap(clientFor(token), (client) =>
+        client.runs
+          .updateRegion({ params: { ...params, regionId }, payload: { revealed } })
+          .pipe(Effect.match({ onFailure: (error) => error._tag, onSuccess: () => "updated" })),
+      ).pipe(Effect.orDie);
+    const regionIds = Effect.map(tableOf, (read) => levelOf(read).regions.map((g) => g.id));
+
+    it.effect("goes to the table once the DM reveals it, and away when it is hidden", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        const { fight, params } = yield* aFight();
+        expect(yield* regionIds).not.toContain(TRAP);
+        const rung = (yield* eventsOf(fight.id, "board-vision-updated")).length;
+
+        expect(yield* region(jo.token, params, TRAP, true)).toBe("updated");
+        const shown = levelOf(yield* tableOf).regions.find((g) => g.id === TRAP);
+        expect(shown).toEqual({ id: TRAP, kind: "trap", squares: [at(1, 1)] });
+        expect((yield* rawTable).body).not.toContain("revealed");
+        // The line is the DM's; the table is rung without it.
+        expect((yield* eventsOf(fight.id, "board-region-updated")).at(-1)?.visibility).toBe("dm");
+        expect(yield* eventsOf(fight.id, "board-vision-updated")).toHaveLength(rung + 1);
+        const board = yield* as(jo.token, (client) => client.runs.board({ params }));
+        expect(board?.level?.regions.find((g) => g.id === TRAP)?.revealed).toBe(true);
+
+        expect(yield* region(jo.token, params, TRAP, false)).toBe("updated");
+        expect(yield* regionIds).not.toContain(TRAP);
+        expect(yield* eventsOf(fight.id, "board-vision-updated")).toHaveLength(rung + 2);
+      }),
+    );
+
+    it.effect("is NotFound to a seated player and a stranger, and writes nothing", () =>
+      Effect.gen(function* () {
+        const { ilse, bo } = yield* Fixture;
+        const { fight, params } = yield* aFight();
+        expect(yield* region(ilse.token, params, TRAP, true)).toBe("NotFound");
+        expect(yield* region(bo.token, params, TRAP, true)).toBe("NotFound");
+        expect(yield* regionIds).not.toContain(TRAP);
+        expect(yield* eventsOf(fight.id, "board-region-updated")).toHaveLength(0);
+      }),
+    );
+
+    it.effect("refuses a region that is not secret, and one the level does not have", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* Fixture;
+        const { params } = yield* aFight();
+        expect(yield* region(jo.token, params, MUD, true)).toBe("Conflict");
+        expect(yield* region(jo.token, params, part(99), true)).toBe("NotFound");
+      }),
+    );
+  });
+
   describe("a player walks only where the party has seen, and one step beyond", () => {
     const neighbours = (square: number) => {
       const column = square % COLUMNS;

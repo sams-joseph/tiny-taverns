@@ -400,6 +400,7 @@ export function RunBoardStage({
               disabled={over}
               onDoor={(wallId, update) => void props.onDoor(wallId, update)}
               onLight={(lightId, lit) => void props.onLight(lightId, lit)}
+              onRegion={(regionId, revealed) => void props.onRegion(regionId, revealed)}
             />
           )}
           {tools.tool === "fog" && <FogBrush board={board} stroke={fogTool.stroke} />}

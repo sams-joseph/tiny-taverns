@@ -198,12 +198,13 @@ export const liveStateAtom = Atom.family((path: RunPath) =>
  * draws that answer straight away rather than re-reading it (`RunScreen.tsx`'s
  * `paintFog` and `pinArea`).
  *
- * Names no reads: the fog, the pin, and the level's doors and lights are the
- * only things the product writes on a fight's board, and only this screen
- * writes them, so a key would have no other writer; another of the DM's tabs
- * is heard through the doorbell's `board-fog-updated`, `board-area-updated`,
- * `board-door-updated` and `board-light-updated`. An edit to the encounter's
- * level is the next fight's, by design (`EncounterRunBoard`).
+ * Names no reads: the fog, the pin, and the level's doors, lights and secret
+ * regions are the only things the product writes on a fight's board, and only
+ * this screen writes them, so a key would have no other writer; another of
+ * the DM's tabs is heard through the doorbell's `board-fog-updated`,
+ * `board-area-updated`, `board-door-updated`, `board-light-updated` and
+ * `board-region-updated`. An edit to the encounter's level is the next
+ * fight's, by design (`EncounterRunBoard`).
  */
 export const runBoardAtom = Atom.family((path: RunPath) =>
   writableApiAtom(
@@ -317,12 +318,14 @@ export const boardFogWrites = (campaignId: CampaignId): Invalidation => [
 ];
 
 /**
- * What a door or a light of a fight's level changes outside the fight:
- * nothing anybody reads. The DM's own board takes the write's answer
- * (`runBoardAtom`), and a player's table carries no level yet
- * (`0109_level_fights.ts`).
+ * What a door, a light or a secret region of a fight's level changes outside
+ * the fight: the seated player's table, whose level is the party's view of it
+ * (`PlayerLiveLevel`), narrowed by what the party sees through the doors and
+ * by the lights. The DM's own board takes the write's answer (`runBoardAtom`).
  */
-export const boardLevelWrites: Invalidation = [];
+export const boardLevelWrites = (campaignId: CampaignId): Invalidation => [
+  reads.playerTable(campaignId),
+];
 
 /**
  * What pinning or clearing an area template changes outside the fight: only

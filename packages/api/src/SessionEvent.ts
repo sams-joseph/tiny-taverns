@@ -48,11 +48,21 @@ export const SessionEventKind = Schema.Literals([
   /**
    * The DM opened, closed or locked a door of a fight's level, or revealed or
    * hid a secret one. Carries `{wallId, doorState, revealed}`. Shared only
-   * for a plain door touching a square the party has seen, while the table is
-   * shown the board; a secret door's line is always the DM's own, since a
-   * shared line about one would say there is one.
+   * for a door touching a square the party has seen, while the table is shown
+   * the board, that opened or shut with no lock in it (a locked door reads as
+   * closed to the table): a plain door, or a secret door revealed before and
+   * after. A secret door's finding or hiding, and any lock, is the DM's own
+   * line, since a shared one would say what the table was not told.
    */
   "board-door-updated",
+  /**
+   * The DM revealed a secret region of a fight's level (a trap, a hazard) to
+   * the table, or hid it again. Carries `{regionId, regionKind, revealed,
+   * wasRevealed}`. Always the DM's own line, as a secret door's is; the table
+   * is rung with `board-vision-updated` when the region touches a square the
+   * party has seen.
+   */
+  "board-region-updated",
   /**
    * The DM lit or snuffed a light of a fight's level. Carries `{lightId, lit}`.
    * Shared only for a light standing on a square the party has seen, while the
@@ -61,7 +71,8 @@ export const SessionEventKind = Schema.Literals([
   "board-light-updated",
   /**
    * What the party sees of a fight's level changed (`party_sees`,
-   * `party_seen`), a secret door they have seen was revealed or hidden, or a
+   * `party_seen`), a secret door or region they have seen was revealed or
+   * hidden, a door they know opened or shut, or a
    * creature they saw walked out of their sight, while the table is shown the
    * board and the write's own line is not shared. Carries nothing: it is the
    * players' doorbell, so their table re-reads what the party sees.
