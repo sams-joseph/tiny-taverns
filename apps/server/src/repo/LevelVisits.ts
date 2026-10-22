@@ -89,9 +89,9 @@ export const refreshVisitVision = (sql: SqlClient.SqlClient, visitId: string) =>
 
 /**
  * A seat left its table (`Party.leave`, a revoked membership, a deleted
- * character): its token on every visit goes, and each visit on its table
- * looks again without it. In the retiring write's transaction. A seat
- * retires rather than being deleted, so its token's key does not cascade;
+ * character): its token on every visit goes, and each of those visits, on
+ * the table or not, looks again without it. In the retiring write's
+ * transaction. A seat retires rather than being deleted, so its token's key does not cascade;
  * this is the delete.
  */
 export const dropSeatTokens = (
@@ -106,16 +106,11 @@ export const dropSeatTokens = (
           where level_visit_token.seat_id = any(${uuidArray([...seatIds])})
           returning level_visit_token.visit_id
         `;
+        // Every visit it stood on, on the table or not, so none keeps a
+        // `party_sees` drawn from a token that is gone. Sorted, so two
+        // retiring writes lock the boards in one order.
         const visits = [...new Set(gone.map((row) => row.visit_id))].sort();
-        if (visits.length === 0) return;
-        const onTable = yield* sql<{ readonly id: string }>`
-          select level_visit.id from level_visit
-          join campaign on campaign.table_visit_id = level_visit.id
-            and campaign.id = level_visit.campaign_id
-          where level_visit.id = any(${uuidArray(visits)})
-          order by level_visit.id
-        `;
-        yield* Effect.forEach(onTable, (row) => refreshVisitVision(sql, row.id), {
+        yield* Effect.forEach(visits, (visitId) => refreshVisitVision(sql, visitId), {
           discard: true,
         });
       });

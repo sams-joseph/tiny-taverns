@@ -681,7 +681,7 @@ describeLayer("level-visits", shared, (it) => {
   });
 
   describe("a seat", () => {
-    it.effect("leaving drops its token, and the visit on the table looks again", () =>
+    it.effect("leaving drops its token, and every visit it stood on looks again", () =>
       Effect.gen(function* () {
         const { jo } = yield* Fixture;
         const pim = yield* aPerson("Pim");
@@ -712,11 +712,12 @@ describeLayer("level-visits", shared, (it) => {
         // Nobody is looking now; what the party saw stays seen.
         expect(onTable.partySees).toEqual([]);
         expect(onTable.partySeen).toEqual(shown.partySeen);
-        // A visit off the table loses the token and keeps its vision until
-        // somebody looks again.
+        // A visit off the table looks again too, so none keeps a view drawn
+        // from a token that is gone.
         const offTable = yield* visitOf(jo.token, campaignId, shelved.id);
         expect(offTable.tokens).toEqual([]);
-        expect(offTable.partySees).toEqual(shelved.partySees);
+        expect(offTable.partySees).toEqual([]);
+        expect(offTable.partySeen).toEqual(shelved.partySeen);
       }),
     );
   });
