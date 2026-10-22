@@ -336,16 +336,31 @@ export class Levels extends Context.Service<
 
         remove: (id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              // Every part's key cascades from the level.
-              const gone = yield* sql<{ readonly id: string }>`
-                delete from level
-                where level.id = ${id} and ${levelOwned(sql, actor)}
-                returning level.id
-              `;
-              if (gone.length === 0) return yield* new NotFound({ resource: "level", id });
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                // Each encounter naming it goes back to none, so its placed
+                // creatures' squares go first (`0113_level_visits.ts`): they
+                // were squares of this level.
+                yield* sql`
+                  delete from encounter_creature_spot
+                  using encounter_creature, encounter, level
+                  where encounter_creature_spot.encounter_creature_id = encounter_creature.id
+                    and encounter_creature.encounter_id = encounter.id
+                    and encounter.level_id = level.id
+                    and encounter.level_owner_id = level.account_id
+                    and level.id = ${id} and ${levelOwned(sql, actor)}
+                `;
+                // Every part's key cascades from the level. A visit of it
+                // keeps its own copy (`on delete set null`).
+                const gone = yield* sql<{ readonly id: string }>`
+                  delete from level
+                  where level.id = ${id} and ${levelOwned(sql, actor)}
+                  returning level.id
+                `;
+                if (gone.length === 0) return yield* new NotFound({ resource: "level", id });
+              }),
+            ),
           ),
 
         uses: (id) =>

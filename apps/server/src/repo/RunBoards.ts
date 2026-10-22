@@ -42,16 +42,20 @@ import { nestedRowWritable } from "./visibility.js";
 /**
  * A fight's fog as the wire spells it: the squares in `fog_hidden`, each
  * `row * board_columns + column` (`0087_run_board_fog.ts`), as `{column, row}`
- * in reading order. `encounter_run_board` must be in scope.
+ * in reading order. The board's table (`encounter_run_board`, or a visit's
+ * `level_visit`, which spells its fog the same) must be in scope.
  */
-export const fogColumn = (sql: SqlClient.SqlClient) => sql`
+export const fogColumn = (
+  sql: SqlClient.SqlClient,
+  board: "encounter_run_board" | "level_visit",
+) => sql`
   coalesce(
     (select jsonb_agg(
        jsonb_build_object(
-         'column', square % encounter_run_board.board_columns,
-         'row', square / encounter_run_board.board_columns)
+         'column', square % ${sql(board)}.board_columns,
+         'row', square / ${sql(board)}.board_columns)
        order by square)
-     from unnest(encounter_run_board.fog_hidden) as square),
+     from unnest(${sql(board)}.fog_hidden) as square),
     '[]'::jsonb
   ) as fog
 `;
@@ -202,7 +206,7 @@ export class RunBoards extends Context.Service<
         Result: RunBoardRow,
         execute: ({ runId }) => sql`
           select encounter_run_board.board_columns, encounter_run_board.board_rows,
-                 encounter_run_board.feet_per_cell, ${fogColumn(sql)},
+                 encounter_run_board.feet_per_cell, ${fogColumn(sql, "encounter_run_board")},
                  ${areaColumn(sql)}, ${levelColumn(sql)}
           from encounter_run_board
           where encounter_run_board.run_id = ${runId}

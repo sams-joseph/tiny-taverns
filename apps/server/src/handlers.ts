@@ -52,6 +52,7 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Levels } from "./repo/Levels.js";
+import { LevelVisits } from "./repo/LevelVisits.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -749,6 +750,33 @@ const PartyTravelLive = HttpApiBuilder.group(
       )
       .handle("remove", ({ params }) =>
         asDm(params.campaignId, (creator) => travel.remove(creator, params.moveId)),
+      );
+  }),
+);
+
+/** A table's visits of its creator's levels: the creator's alone, behind the proof. */
+const LevelVisitsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "levelVisits",
+  Effect.fnUntraced(function* (handlers) {
+    const visits = yield* LevelVisits;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => asDm(params.campaignId, (creator) => visits.list(creator)))
+      .handle("open", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => visits.open(creator, payload)),
+      )
+      .handle("findById", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.findById(creator, params.visitId)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.remove(creator, params.visitId)),
+      )
+      .handle("putOnTable", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => visits.putOnTable(creator, payload.visitId)),
+      )
+      .handle("takeOffTable", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.takeOffTable(creator)),
       );
   }),
 );
@@ -2123,6 +2151,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     PlayerLocationsLive,
     PartyTravelLive,
     PlayerPartyTravelLive,
+    LevelVisitsLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

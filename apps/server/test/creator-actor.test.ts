@@ -618,9 +618,13 @@ describeLayer("creator-actor", shared, (it) => {
       // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
       // A hundred and seventy to seventy-two are `RunBoards.updateDoor`,
       // `updateLight` and `updateRegion`: the DM's hand on a fight's level,
-      // the board's like fog. Less the three unused ordinals, that is a
-      // hundred and sixty-nine.
-      expect(gated).toBe(169);
+      // the board's like fog. A hundred and seventy-three to seventy-nine are
+      // a table's level visits: `LevelVisits.list`, `findById`, `open`,
+      // `remove`, `putOnTable`, `takeOffTable` and the read they share. A
+      // visit is live-play state with no player read yet, the creator's from
+      // the day it was declared. Less the three unused ordinals, that is a
+      // hundred and seventy-six.
+      expect(gated).toBe(176);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

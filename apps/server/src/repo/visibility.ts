@@ -1883,3 +1883,22 @@ export const locationShownToPlayer = (
 /** Rows of `level` the actor owns: the Library's read and every write. */
 export const levelOwned = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fragment =>
   sql`level.account_id = ${actor.accountId}`;
+
+// ---------------------------------------------------------------------------
+// Level visits (`0113_level_visits.ts`)
+//
+// A visit is a campaign's live state of one of its creator's levels, and in
+// this phase its creator is its only reader and writer. Its parts and tokens
+// are read only by walking a visit this fragment returned.
+// ---------------------------------------------------------------------------
+
+/** Rows of `level_visit` at this campaign, when the actor is its creator. */
+export const levelVisitWritable = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`level_visit.campaign_id = ${campaignId}`,
+    campaignWritableById(sql, campaignId, actor),
+  ]);

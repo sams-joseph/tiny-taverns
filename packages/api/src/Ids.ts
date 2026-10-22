@@ -247,6 +247,13 @@ export const LevelId = id("LevelId");
 export type LevelId = typeof LevelId.Type;
 
 /**
+ * A campaign's visit of one of its creator's levels (`level_visit`): the live
+ * state of that dungeon, one per campaign and level, which outlives nights.
+ */
+export const LevelVisitId = id("LevelVisitId");
+export type LevelVisitId = typeof LevelVisitId.Type;
+
+/**
  * One wall, prop, light or region of a level. Unique within its level only:
  * the editor mints a new part's id, and a save writes the parts whole.
  */

@@ -214,6 +214,7 @@ describeLayer("migrations", database, (it) => {
         "effect_sql_migrations",
         "encounter",
         "encounter_creature",
+        "encounter_creature_spot",
         "encounter_prep",
         "encounter_run",
         "encounter_run_board",
@@ -248,6 +249,12 @@ describeLayer("migrations", database, (it) => {
         "level_light",
         "level_prop",
         "level_region",
+        "level_visit",
+        "level_visit_light",
+        "level_visit_prop",
+        "level_visit_region",
+        "level_visit_token",
+        "level_visit_wall",
         "level_wall",
         "location",
         "location_image",
@@ -411,6 +418,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
         { migration_id: 112, name: "run_region_reveal" },
+        { migration_id: 113, name: "level_visits" },
       ]);
     }),
   );
@@ -533,6 +541,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
         { migration_id: 112, name: "run_region_reveal" },
+        { migration_id: 113, name: "level_visits" },
       ]);
     }),
   );

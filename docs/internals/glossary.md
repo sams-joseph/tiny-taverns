@@ -54,6 +54,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 - **placement**: a row putting one of an account's places, with everything under it, into a context (`context_location`), so every campaign in that Shared World (or the one table of a hidden context) has it. Only the place's owner places it.
 - **reveal**: one table's showing of a place in its context to its players (`campaign_location_reveal`). Inert once the place leaves the context.
 - **level**: an account's own battle map (`level`), built of a floor and the walls, doors, props, lights and regions on it, top-level like a location. Only its owner reads it. See [Data model](data-model.md), _Levels_.
+- **level visit**: a campaign's live state of one of its creator's levels (`level_visit`, `apps/server/src/repo/LevelVisits.ts`): a copy of the level with its doors, lights, reveals, fog, what the party has seen and where each seat stands, one per campaign and level for good. At most one is on the table (`campaign.table_visit_id`); _Reset level_ deletes it. The creator's alone. See [Data model](data-model.md), _Levels_.
 - **travel log**: where a table's party has been (`campaign_party_move`); the newest move is where it is now, and taking a move back is the undo. A move reveals its place and, during an open night, rings the doorbell (`party-moved`).
 - **option**: a class, race (containing subraces) or background (`character_option`). The vocabulary the create form and Hob draft from.
 

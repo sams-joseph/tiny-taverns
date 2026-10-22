@@ -3,6 +3,7 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/ht
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { BoardAreaSet, BoardFogUpdate, EncounterRunBoard } from "./Board.js";
+import { LevelVisit, LevelVisitOpen, LevelVisitSummary, TableVisitSet } from "./LevelVisit.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import {
   ImageSubject,
@@ -180,6 +181,7 @@ import {
   RollId,
   SpellId,
   LevelId,
+  LevelVisitId,
   LevelPartId,
   LocationId,
   NoteId,
@@ -1155,6 +1157,58 @@ class LocationsGroup extends HttpApiGroup.make("locations")
     }),
   )
   .prefix("/campaigns/:campaignId/locations")
+  .middleware(Authorization) {}
+
+/**
+ * A table's level visits, as its **creator** runs them: the campaign's live
+ * state of each of the creator's levels it has been to, one per level, for
+ * good (`LevelVisit.ts`). Behind the creator proof, so a player and a stranger
+ * are `NotFound` at every endpoint.
+ *
+ * `open` copies one of the creator's own levels into a new visit, the party
+ * standing down its left edge; another account's level is `NotFound`, and a
+ * level the campaign already has a visit of is a `Conflict`. `remove` is the
+ * DM's *Reset level*: a real delete of the visit and everything on it, which
+ * takes it off the table, and is refused with a `Conflict` while a live fight
+ * is played on it. `putOnTable` makes a visit the one on the campaign's table,
+ * and `takeOffTable` leaves none there.
+ */
+class LevelVisitsGroup extends HttpApiGroup.make("levelVisits")
+  .add(
+    HttpApiEndpoint.get("list", "/visits", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(LevelVisitSummary),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("open", "/visits", {
+      params: { campaignId: CampaignId },
+      payload: LevelVisitOpen,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("findById", "/visits/:visitId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      success: LevelVisit,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/visits/:visitId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.put("putOnTable", "/table-visit", {
+      params: { campaignId: CampaignId },
+      payload: TableVisitSet,
+      success: LevelVisit,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("takeOffTable", "/table-visit", {
+      params: { campaignId: CampaignId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
   .middleware(Authorization) {}
 
 /**
@@ -3907,6 +3961,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PlayerLocationsGroup)
   .add(PartyTravelGroup)
   .add(PlayerPartyTravelGroup)
+  .add(LevelVisitsGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
   .add(EncounterPrepGroup)

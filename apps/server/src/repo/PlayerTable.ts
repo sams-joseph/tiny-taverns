@@ -450,7 +450,7 @@ export class PlayerTable extends Context.Service<
         execute: ({ runId }) => sql`
           select encounter_run_board.board_columns, encounter_run_board.board_rows,
                  encounter_run_board.feet_per_cell, ${playerLevelColumn(sql)},
-                 ${fogColumn(sql)}, ${areaColumn(sql)}
+                 ${fogColumn(sql, "encounter_run_board")}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
           where encounter_run_board.run_id = ${runId}

@@ -239,6 +239,11 @@ describe("the reach seam, enforced rather than asserted", () => {
       // `campaign (id, creator_account_id)` refuses any other; the daily cap
       // counts by it. Never a caller-supplied account.
       "repo/Images.ts",
+      // A visit's level owner is copied from the level row the same statement
+      // reads through `levelOwned`, and the keys to the level's owner and to
+      // the campaign's creator refuse any other, as an encounter's do. Never
+      // a caller-supplied account.
+      "repo/LevelVisits.ts",
       // A level's owner is written from `CurrentActor` at create and compared
       // only through `levelOwned` in `repo/visibility.ts`.
       "repo/Levels.ts",
@@ -1087,6 +1092,18 @@ describeLayer("membership", shared, (it) => {
               'encounter_run_prop',
               'encounter_run_region',
               'encounter_run_wall',
+              -- A level visit, its parts and its tokens are read only through
+              -- the creator's visit reads, behind the creator proof; a
+              -- player's and a stranger's refusals are covered in
+              -- level-visits.test.ts. A placed creature's square is read by
+              -- nothing yet.
+              'level_visit',
+              'level_visit_light',
+              'level_visit_prop',
+              'level_visit_region',
+              'level_visit_token',
+              'level_visit_wall',
+              'encounter_creature_spot',
               'campaign_member',
               -- A banner is read only as a field of the character, beside its
               -- portrait, through the character's own shipped reads.

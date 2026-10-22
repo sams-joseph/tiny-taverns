@@ -5,6 +5,7 @@ import {
   type EncounterId,
   type EncounterRunId,
   LEVEL_PROP_KINDS,
+  type LevelId,
   type LevelLayout,
   PROP_KINDS,
   partyVision,
@@ -25,20 +26,117 @@ import { levelOwned } from "./visibility.js";
 /**
  * A fight's copy of its level (`0109_level_fights.ts`): the copy at start and
  * at resume, the board column that reads it back, and what a move or a start
- * needs of it. The DM's live writes to it are `RunBoards`'.
+ * needs of it. The DM's live writes to it are `RunBoards`'. A campaign's visit
+ * of a level (`0113_level_visits.ts`) is the same copy in tables of its own,
+ * so the copy, the read and the vision here take either (`BoardTables`).
  *
  * Every statement here is beneath its caller's gate, which has already proved
- * the run (and, at start, the encounter) the creator's in this transaction.
+ * the run or the visit (and, at start, the encounter) the creator's in this
+ * transaction.
  */
 
 /**
- * Copy the encounter's level onto a new fight's board, in one
- * `insert … select` per table: the board row with the level's size, scale,
- * ambient and floor, then its walls, props, lights and regions with their ids
- * and order. The level is read through the encounter's own pointer and the
- * owner's predicate, so a pointer can reach only the creator's level. Answers
- * whether a level was copied: `false` for an encounter that names none, whose
- * fight gets the plain grid instead.
+ * Where a copy of a level lives: a fight's board (`encounter_run_board` and
+ * its parts, `0109_level_fights.ts`) or a campaign's visit (`level_visit` and
+ * its parts, `0113_level_visits.ts`). Both spell the board's size, scale,
+ * ambient, floor, fog and vision with the same columns, and their part tables
+ * mirror each other, so one statement serves either, named through these
+ * identifiers. Never built from input: the two values below are the only ones.
+ */
+export interface BoardTables {
+  /** The board row's table, and its key column the parts point at. */
+  readonly board: string;
+  readonly boardKey: string;
+  readonly wall: string;
+  readonly prop: string;
+  readonly light: string;
+  readonly region: string;
+  /** Each part table's column naming its board row. */
+  readonly partKey: string;
+}
+
+export const RUN_BOARD: BoardTables = {
+  board: "encounter_run_board",
+  boardKey: "run_id",
+  wall: "encounter_run_wall",
+  prop: "encounter_run_prop",
+  light: "encounter_run_light",
+  region: "encounter_run_region",
+  partKey: "run_id",
+};
+
+export const VISIT_BOARD: BoardTables = {
+  board: "level_visit",
+  boardKey: "id",
+  wall: "level_visit_wall",
+  prop: "level_visit_prop",
+  light: "level_visit_light",
+  region: "level_visit_region",
+  partKey: "visit_id",
+};
+
+/**
+ * Copy a level's walls, props, lights and regions beside a board row the
+ * caller has just written from it, in one `insert … select` per table, with
+ * their ids and order; `revealed` starts false. The caller holds the level
+ * `for share` until its transaction ends, so the copy is of one level, whole,
+ * and each statement names the owner's predicate again. The one copy of a
+ * level that a fight's start and a visit's open both take.
+ */
+export const copyLevelParts = (
+  sql: SqlClient.SqlClient,
+  target: BoardTables,
+  targetId: string,
+  levelId: LevelId,
+  actor: Actor,
+) =>
+  Effect.gen(function* () {
+    const owned = sql`level.id = ${levelId} and ${levelOwned(sql, actor)}`;
+    const key = sql(target.partKey);
+    yield* sql`
+      insert into ${sql(target.wall)} (${key}, id, ordinal, x1, y1, x2, y2, kind, door_state, low)
+      select ${targetId}, level_wall.id, level_wall.ordinal, level_wall.x1, level_wall.y1,
+             level_wall.x2, level_wall.y2, level_wall.kind, level_wall.door_state, level_wall.low
+      from level_wall join level on level.id = level_wall.level_id
+      where ${owned}
+    `;
+    yield* sql`
+      insert into ${sql(target.prop)} (
+        ${key}, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
+        difficult, dm_only
+      )
+      select ${targetId}, level_prop.id, level_prop.ordinal, level_prop.kind, level_prop.x,
+             level_prop.y, level_prop.rotation, level_prop.blocks_movement,
+             level_prop.blocks_sight, level_prop.cover, level_prop.difficult, level_prop.dm_only
+      from level_prop join level on level.id = level_prop.level_id
+      where ${owned}
+    `;
+    yield* sql`
+      insert into ${sql(target.light)} (
+        ${key}, id, ordinal, x, y, bright, dim, tone, flicker, lit
+      )
+      select ${targetId}, level_light.id, level_light.ordinal, level_light.x, level_light.y,
+             level_light.bright, level_light.dim, level_light.tone, level_light.flicker,
+             level_light.lit
+      from level_light join level on level.id = level_light.level_id
+      where ${owned}
+    `;
+    yield* sql`
+      insert into ${sql(target.region)} (${key}, id, ordinal, kind, squares, secret)
+      select ${targetId}, level_region.id, level_region.ordinal, level_region.kind,
+             level_region.squares, level_region.secret
+      from level_region join level on level.id = level_region.level_id
+      where ${owned}
+    `;
+  });
+
+/**
+ * Copy the encounter's level onto a new fight's board: the board row with the
+ * level's size, scale, ambient and floor, then its parts (`copyLevelParts`).
+ * The level is read through the encounter's own pointer and the owner's
+ * predicate, so a pointer can reach only the creator's level. Answers whether
+ * a level was copied: `false` for an encounter that names none, whose fight
+ * gets the plain grid instead.
  */
 export const copyLevel = (
   sql: SqlClient.SqlClient,
@@ -51,7 +149,7 @@ export const copyLevel = (
     // level waits, so every statement below copies the one level the lookup
     // found, whole. A level deleted first is no longer named, and the fight
     // gets the plain grid.
-    const named = yield* sql<{ readonly id: string }>`
+    const named = yield* sql<{ readonly id: LevelId }>`
       select level.id from encounter
       join level on level.id = encounter.level_id and level.account_id = encounter.level_owner_id
       where encounter.id = ${encounterId} and ${levelOwned(sql, actor)}
@@ -59,54 +157,19 @@ export const copyLevel = (
     `;
     const levelId = named[0]?.id;
     if (levelId === undefined) return false;
-    const owned = sql`level.id = ${levelId} and ${levelOwned(sql, actor)}`;
     const boards = yield* sql<{ readonly run_id: string }>`
       insert into encounter_run_board (
         run_id, board_columns, board_rows, feet_per_cell, ambient, floor
       )
       select ${runId}, level.columns, level.rows, level.feet_per_cell, level.ambient, level.floor
       from level
-      where ${owned}
+      where level.id = ${levelId} and ${levelOwned(sql, actor)}
       returning encounter_run_board.run_id
     `;
     // No board row copied: the level went between the lookup and the copy.
     // The caller writes the plain grid, and no part is copied without it.
     if (boards.length === 0) return false;
-    yield* sql`
-      insert into encounter_run_wall (run_id, id, ordinal, x1, y1, x2, y2, kind, door_state, low)
-      select ${runId}, level_wall.id, level_wall.ordinal, level_wall.x1, level_wall.y1,
-             level_wall.x2, level_wall.y2, level_wall.kind, level_wall.door_state, level_wall.low
-      from level_wall join level on level.id = level_wall.level_id
-      where ${owned}
-    `;
-    yield* sql`
-      insert into encounter_run_prop (
-        run_id, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
-        difficult, dm_only
-      )
-      select ${runId}, level_prop.id, level_prop.ordinal, level_prop.kind, level_prop.x,
-             level_prop.y, level_prop.rotation, level_prop.blocks_movement,
-             level_prop.blocks_sight, level_prop.cover, level_prop.difficult, level_prop.dm_only
-      from level_prop join level on level.id = level_prop.level_id
-      where ${owned}
-    `;
-    yield* sql`
-      insert into encounter_run_light (
-        run_id, id, ordinal, x, y, bright, dim, tone, flicker, lit
-      )
-      select ${runId}, level_light.id, level_light.ordinal, level_light.x, level_light.y,
-             level_light.bright, level_light.dim, level_light.tone, level_light.flicker,
-             level_light.lit
-      from level_light join level on level.id = level_light.level_id
-      where ${owned}
-    `;
-    yield* sql`
-      insert into encounter_run_region (run_id, id, ordinal, kind, squares, secret)
-      select ${runId}, level_region.id, level_region.ordinal, level_region.kind,
-             level_region.squares, level_region.secret
-      from level_region join level on level.id = level_region.level_id
-      where ${owned}
-    `;
+    yield* copyLevelParts(sql, RUN_BOARD, runId, levelId, actor);
     return true;
   });
 
@@ -162,61 +225,78 @@ export const carryLevel = (
   });
 
 /**
- * The fight's level as one `json` column, `level`, in the wire's spelling
- * (`RunBoardLevel`), or `null` on the plain grid. `encounter_run_board` must
- * be in scope. **The creator's board read only**: no player read names it.
+ * A board's level as one `json` column, `level`, in the wire's spelling
+ * (`RunBoardLevel`), or `null` on the plain grid. The board's table must be in
+ * scope. **The creator's read only**: no player read names it.
  */
-export const levelColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
-  case when encounter_run_board.floor is null then null else json_build_object(
-    'ambient', encounter_run_board.ambient,
-    'floor', to_json(encounter_run_board.floor),
-    'walls', coalesce((
-      select json_agg(json_build_object(
-        'id', w.id, 'x1', w.x1, 'y1', w.y1, 'x2', w.x2, 'y2', w.y2, 'kind', w.kind,
-        'doorState', w.door_state, 'low', w.low, 'revealed', w.revealed
-      ) order by w.ordinal)
-      from encounter_run_wall w where w.run_id = encounter_run_board.run_id
-    ), '[]'::json),
-    'props', coalesce((
-      select json_agg(json_build_object(
-        'id', p.id, 'kind', p.kind, 'x', p.x, 'y', p.y, 'rotation', p.rotation,
-        'blocksMovement', p.blocks_movement, 'blocksSight', p.blocks_sight, 'cover', p.cover,
-        'difficult', p.difficult, 'dmOnly', p.dm_only
-      ) order by p.ordinal)
-      from encounter_run_prop p where p.run_id = encounter_run_board.run_id
-    ), '[]'::json),
-    'lights', coalesce((
-      select json_agg(json_build_object(
-        'id', l.id, 'x', l.x, 'y', l.y, 'bright', l.bright, 'dim', l.dim, 'tone', l.tone,
-        'flicker', l.flicker, 'lit', l.lit
-      ) order by l.ordinal)
-      from encounter_run_light l where l.run_id = encounter_run_board.run_id
-    ), '[]'::json),
-    'regions', coalesce((
-      select json_agg(json_build_object(
-        'id', r.id, 'kind', r.kind, 'squares', to_json(r.squares), 'secret', r.secret,
-        'revealed', r.revealed
-      ) order by r.ordinal)
-      from encounter_run_region r where r.run_id = encounter_run_board.run_id
-    ), '[]'::json)
-  ) end as level
-`;
+export const boardLevelColumn = (
+  sql: SqlClient.SqlClient,
+  tables: BoardTables,
+): Statement.Fragment => {
+  const board = sql(tables.board);
+  const owner = sql`${board}.${sql(tables.boardKey)}`;
+  const key = sql(tables.partKey);
+  return sql`
+    case when ${board}.floor is null then null else json_build_object(
+      'ambient', ${board}.ambient,
+      'floor', to_json(${board}.floor),
+      'walls', coalesce((
+        select json_agg(json_build_object(
+          'id', w.id, 'x1', w.x1, 'y1', w.y1, 'x2', w.x2, 'y2', w.y2, 'kind', w.kind,
+          'doorState', w.door_state, 'low', w.low, 'revealed', w.revealed
+        ) order by w.ordinal)
+        from ${sql(tables.wall)} w where w.${key} = ${owner}
+      ), '[]'::json),
+      'props', coalesce((
+        select json_agg(json_build_object(
+          'id', p.id, 'kind', p.kind, 'x', p.x, 'y', p.y, 'rotation', p.rotation,
+          'blocksMovement', p.blocks_movement, 'blocksSight', p.blocks_sight, 'cover', p.cover,
+          'difficult', p.difficult, 'dmOnly', p.dm_only
+        ) order by p.ordinal)
+        from ${sql(tables.prop)} p where p.${key} = ${owner}
+      ), '[]'::json),
+      'lights', coalesce((
+        select json_agg(json_build_object(
+          'id', l.id, 'x', l.x, 'y', l.y, 'bright', l.bright, 'dim', l.dim, 'tone', l.tone,
+          'flicker', l.flicker, 'lit', l.lit
+        ) order by l.ordinal)
+        from ${sql(tables.light)} l where l.${key} = ${owner}
+      ), '[]'::json),
+      'regions', coalesce((
+        select json_agg(json_build_object(
+          'id', r.id, 'kind', r.kind, 'squares', to_json(r.squares), 'secret', r.secret,
+          'revealed', r.revealed
+        ) order by r.ordinal)
+        from ${sql(tables.region)} r where r.${key} = ${owner}
+      ), '[]'::json)
+    ) end as level
+  `;
+};
+
+/** A fight's level (`boardLevelColumn` over `encounter_run_board`). */
+export const levelColumn = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  boardLevelColumn(sql, RUN_BOARD);
 
 const decodeLevel = Schema.decodeUnknownEffect(Schema.NullOr(RunBoardLevel));
 
 /** The fight's level as the geometry reads it, or `null` on the plain grid or no board. */
 export const runLevel = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
+  boardLevel(sql, RUN_BOARD, runId);
+
+/** A board's level as the geometry reads it, or `null` on the plain grid or no board. */
+export const boardLevel = (sql: SqlClient.SqlClient, tables: BoardTables, id: string) =>
   Effect.gen(function* () {
+    const board = sql(tables.board);
     const rows = yield* sql<{
       readonly board_columns: number;
       readonly board_rows: number;
       readonly feet_per_cell: number;
       readonly level: unknown;
     }>`
-      select encounter_run_board.board_columns, encounter_run_board.board_rows,
-             encounter_run_board.feet_per_cell, ${levelColumn(sql)}
-      from encounter_run_board
-      where encounter_run_board.run_id = ${runId}
+      select ${board}.board_columns, ${board}.board_rows, ${board}.feet_per_cell,
+             ${boardLevelColumn(sql, tables)}
+      from ${board}
+      where ${board}.${sql(tables.boardKey)} = ${id}
     `;
     const row = rows[0];
     if (row === undefined) return null;
@@ -289,37 +369,85 @@ export const traitsOf = (
       )
     : [];
 
+/** Where one of the party's eyes stands, with its character's sheet traits. */
+export interface VisionViewer {
+  readonly board_column: number;
+  readonly board_row: number;
+  readonly traits: unknown;
+}
+
 /**
- * Recompute what the party sees of a fight's level and write it through:
- * `party_sees` to `partyVision` over the fight's copy, as the table knows its
- * secret doors (`tableSight`), and `party_seen` to itself with that added. In
- * the caller's transaction, after its own write, so the vision is the board's
- * as that write leaves it. `null` on a fight with no level.
+ * Recompute what the party sees of a board's level and write it through:
+ * `party_sees` to `partyVision` over the copy, as the table knows its secret
+ * doors (`tableSight`), and `party_seen` to itself with that added. In the
+ * caller's transaction, after its own write, so the vision is the board's as
+ * that write leaves it. `null` on a board with no level.
  *
- * **The viewers** are the fight's player characters standing on the board
- * whose character still holds a live seat at the campaign: a seat is how a
- * person is at the table, and an allied NPC looks for nobody. Each sees with
- * its character's darkvision (`darkvisionOf` over the sheet's traits). The
- * traits are read here for the geometry and never returned.
+ * `viewers` answers where the party's eyes stand. Each sees with its
+ * character's darkvision (`darkvisionOf` over the sheet's traits); the traits
+ * are read here for the geometry and never returned. `shown`, over the board
+ * row, is whether a player's table shows the board.
  *
- * The board row is locked first, so two writes in one fight compute their
+ * The board row is locked first, so two writes on one board compute their
  * vision one after the other, each over what the other committed.
  */
-export const refreshPartyVision = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
+export const refreshBoardVision = (
+  sql: SqlClient.SqlClient,
+  args: {
+    readonly tables: BoardTables;
+    readonly id: string;
+    readonly viewers: Effect.Effect<ReadonlyArray<VisionViewer>, SqlError.SqlError>;
+    readonly shown: Statement.Fragment;
+  },
+) =>
   Effect.gen(function* () {
-    const locked = yield* sql<{ readonly run_id: string }>`
-      select encounter_run_board.run_id from encounter_run_board
-      where encounter_run_board.run_id = ${runId} and encounter_run_board.floor is not null
-      for update
+    const board = sql(args.tables.board);
+    const where = sql`${board}.${sql(args.tables.boardKey)} = ${args.id}`;
+    const locked = yield* sql`
+      select 1 from ${board} where ${where} and ${board}.floor is not null for update
     `;
     if (locked.length === 0) return null;
-    const level = yield* runLevel(sql, runId);
+    const level = yield* boardLevel(sql, args.tables, args.id);
     if (level === null) return null;
-    const viewers = yield* sql<{
-      readonly board_column: number;
-      readonly board_row: number;
-      readonly traits: unknown;
-    }>`
+    const viewers = yield* args.viewers;
+    const sees = partyVision(
+      level.layout,
+      viewers.map((viewer) => ({
+        square: { column: viewer.board_column, row: viewer.board_row },
+        darkvision: darkvisionOf(traitsOf(viewer.traits)),
+      })),
+      tableSight(level.level),
+    );
+    const rows = yield* sql<{ readonly changed: boolean; readonly shown: boolean }>`
+      update ${board}
+      set party_sees = ${intArray([...sees])},
+          party_seen = array(
+            select square
+            from unnest(coalesce(${board}.party_seen, '{}') || ${intArray([...sees])}) square
+            group by square order by square
+          )
+      where ${where}
+      returning (old.party_sees is distinct from new.party_sees
+                 or old.party_seen is distinct from new.party_seen) as changed,
+        ${args.shown} as shown
+    `;
+    const row = rows[0];
+    const refreshed: PartyVisionRefresh | null =
+      row === undefined ? null : { changed: row.changed, shown: row.shown };
+    return refreshed;
+  });
+
+/**
+ * `refreshBoardVision` over a fight's copy. **The viewers** are the fight's
+ * player characters standing on the board whose character still holds a live
+ * seat at the campaign: a seat is how a person is at the table, and an allied
+ * NPC looks for nobody.
+ */
+export const refreshPartyVision = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
+  refreshBoardVision(sql, {
+    tables: RUN_BOARD,
+    id: runId,
+    viewers: sql<VisionViewer>`
       select combatant.board_column, combatant.board_row, character.body -> 'traits' as traits
       from combatant
       join encounter_run on encounter_run.id = combatant.encounter_run_id
@@ -334,35 +462,9 @@ export const refreshPartyVision = (sql: SqlClient.SqlClient, runId: EncounterRun
             and seat.character_id = combatant.character_id
             and seat.left_at is null
         )
-    `;
-    const sees = partyVision(
-      level.layout,
-      viewers.map((viewer) => ({
-        square: { column: viewer.board_column, row: viewer.board_row },
-        darkvision: darkvisionOf(traitsOf(viewer.traits)),
-      })),
-      tableSight(level.level),
-    );
-    const rows = yield* sql<{ readonly changed: boolean; readonly shown: boolean }>`
-      update encounter_run_board
-      set party_sees = ${intArray([...sees])},
-          party_seen = array(
-            select square
-            from unnest(
-              coalesce(encounter_run_board.party_seen, '{}') || ${intArray([...sees])}
-            ) square
-            group by square order by square
-          )
-      where encounter_run_board.run_id = ${runId}
-      returning (old.party_sees is distinct from new.party_sees
-                 or old.party_seen is distinct from new.party_seen) as changed,
-        (select ${boardShown(sql)} from encounter_run
-          where encounter_run.id = encounter_run_board.run_id) as shown
-    `;
-    const row = rows[0];
-    const refreshed: PartyVisionRefresh | null =
-      row === undefined ? null : { changed: row.changed, shown: row.shown };
-    return refreshed;
+    `,
+    shown: sql`(select ${boardShown(sql)} from encounter_run
+                where encounter_run.id = encounter_run_board.run_id)`,
   });
 
 /**

@@ -467,23 +467,41 @@ export class EncounterCreatures extends Context.Service<
 
         update: (campaignId, encounterId, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              if (patch.count !== undefined && patch.count !== 1) {
-                const [row] = yield* namesNpc({ campaignId, encounterId, id });
-                if (row?.npcId !== null && row?.npcId !== undefined) {
-                  return yield* Effect.fail(npcIsOne);
+            sql.withTransaction(
+              Effect.gen(function* () {
+                if (patch.count !== undefined && patch.count !== 1) {
+                  const [row] = yield* namesNpc({ campaignId, encounterId, id });
+                  if (row?.npcId !== null && row?.npcId !== undefined) {
+                    return yield* Effect.fail(npcIsOne);
+                  }
                 }
-              }
-              const columns = defined({
-                count: patch.count,
-                side: patch.side,
-                visibility: patch.visibility,
-              });
-              yield* change({ campaignId, encounterId, id, columns }).pipe(
-                orNotFound("encounter_creature", id),
-              );
-              return yield* readBack(id);
-            }),
+                // A placed instance past the new count goes first: each spot
+                // carries the line's count through its key, and its check
+                // would refuse the cascade (`0113_level_visits.ts`).
+                if (patch.count !== undefined) {
+                  const actor = yield* CurrentActor;
+                  yield* sql`
+                    delete from encounter_creature_spot
+                    where encounter_creature_spot.encounter_creature_id = ${id}
+                      and encounter_creature_spot.ordinal >= ${patch.count}
+                      and exists (
+                        select 1 from encounter_creature
+                        where encounter_creature.id = ${id}
+                          and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
+                      )
+                  `;
+                }
+                const columns = defined({
+                  count: patch.count,
+                  side: patch.side,
+                  visibility: patch.visibility,
+                });
+                yield* change({ campaignId, encounterId, id, columns }).pipe(
+                  orNotFound("encounter_creature", id),
+                );
+                return yield* readBack(id);
+              }),
+            ),
           ),
 
         remove: (campaignId, encounterId, id) =>

@@ -335,6 +335,9 @@ describe("the API declaration", () => {
       "images",
       "invitePreview",
       "join",
+      // A table's live state of each of its creator's levels: the creator's
+      // alone, like a fight's board.
+      "levelVisits",
       // The Library: where every corpus original is authored and managed, read
       // with no campaign in the path. The campaign-scoped spells / equipment /
       // magic-items / compendium / feats groups are gone with the copy model —

@@ -20,6 +20,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { levelFightsOf, refreshFights } from "./levelFights.js";
+import { dropSeatTokens } from "./LevelVisits.js";
 import {
   characterRow,
   claimCharacterRequest,
@@ -552,6 +553,11 @@ export class Party extends Context.Service<
                   // eyes on any level fight it stands in.
                   const characters = rows.flatMap((row) =>
                     row.character_id === null ? [] : [row.character_id],
+                  );
+                  // Nor does it stand on any of the table's level visits.
+                  yield* dropSeatTokens(
+                    sql,
+                    rows.map((row) => row.id),
                   );
                   return yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
                 }),

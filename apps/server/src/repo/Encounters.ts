@@ -771,12 +771,28 @@ export class Encounters extends Context.Service<
                       and encounter_prep.challenge ->> 'kind' <> ${patch.kind}
                   `;
                 }
+                const level =
+                  patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId);
+                // A placed creature's square is a square of the encounter's
+                // level (`0113_level_visits.ts`): another level, or none,
+                // clears every placement on the roster.
+                if ("level_id" in level) {
+                  yield* sql`
+                    delete from encounter_creature_spot
+                    using encounter_creature, encounter
+                    where encounter_creature_spot.encounter_creature_id = encounter_creature.id
+                      and encounter_creature.encounter_id = encounter.id
+                      and encounter.id = ${id}
+                      and encounter.level_id is distinct from ${level.level_id}
+                      and ${rowWritable(sql, "encounter", campaignId, actor)}
+                  `;
+                }
                 const columns = defined({
                   name: patch.name,
                   kind: patch.kind,
                   tags: textArray(patch.tags),
                   visibility: patch.visibility,
-                  ...(patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId)),
+                  ...level,
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));
                 const prep = prepColumns(patch);

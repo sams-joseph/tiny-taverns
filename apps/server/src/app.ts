@@ -65,6 +65,7 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Levels } from "./repo/Levels.js";
+import { LevelVisits } from "./repo/LevelVisits.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -516,6 +517,7 @@ export const servicesOver = <E>(
   | MagicItems
   | Memberships
   | Levels
+  | LevelVisits
   | Locations
   | PartyTravel
   | Notes
@@ -668,6 +670,10 @@ export const servicesOver = <E>(
     // `levelOwned`. The handlers hold it, and the accept writes a kept Hob
     // level through it; `proposeLevel` itself reads nothing.
     Levels.layer,
+    // A campaign's visits of its creator's levels: creator-only, every method
+    // behind the `CampaignCreatorActor` proof. Only the handlers hold it; Hob
+    // opens no visit, which is a live-play record.
+    LevelVisits.layer,
     // The party's travels: a move during an open night rings its doorbell.
     PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,
@@ -941,6 +947,7 @@ export const applicationOver = <E>(
     | MagicItems
     | Memberships
     | Levels
+    | LevelVisits
     | Locations
     | PartyTravel
     | Notes
