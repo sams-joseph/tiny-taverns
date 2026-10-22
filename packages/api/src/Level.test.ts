@@ -1,12 +1,13 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
+  type Level,
   LEVEL_PROPS_MAX,
   LEVEL_WALLS_MAX,
   LevelCreate,
   LevelSave,
-  propFootprint,
 } from "./Level.js";
+import type { LevelLayout } from "./LevelGeometry.js";
 import { LEVEL_MATERIALS } from "./LevelKit.js";
 
 const part = (n: number) => `1e7e1000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -113,11 +114,14 @@ describe("a new level", () => {
   });
 });
 
-describe("propFootprint", () => {
-  it("swaps width and height on odd quarter turns", () => {
-    expect(propFootprint("rug", 0)).toEqual({ width: 2, height: 3 });
-    expect(propFootprint("rug", 1)).toEqual({ width: 3, height: 2 });
-    expect(propFootprint("rug", 2)).toEqual({ width: 2, height: 3 });
-    expect(propFootprint("rug", 3)).toEqual({ width: 3, height: 2 });
+describe("the geometry's layout", () => {
+  it("is what the wire's level and its save already are", () => {
+    // Type-level: either assignment stops compiling if the wire drifts from
+    // what `LevelGeometry.ts` reads.
+    const fromLevel = (level: Level): LevelLayout => level;
+    const fromSave = (save: LevelSave): LevelLayout => save;
+    const save = Schema.decodeUnknownSync(LevelSave)(board);
+    expect(fromSave(save).walls).toHaveLength(1);
+    expect(typeof fromLevel).toBe("function");
   });
 });

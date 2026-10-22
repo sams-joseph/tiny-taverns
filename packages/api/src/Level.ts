@@ -11,8 +11,8 @@ import {
   LevelPropKind,
   LevelRegionKind,
   LevelWallKind,
-  PROP_KINDS,
 } from "./LevelKit.js";
+import { type LevelLayout, propFootprint } from "./LevelGeometry.js";
 
 /**
  * A level: a top-down battle map built of floors, walls, doors, props, lights
@@ -148,28 +148,6 @@ export const LevelRegion = Schema.Struct({
 });
 export type LevelRegion = typeof LevelRegion.Type;
 
-/** A prop kind's footprint in squares at a rotation: odd quarter turns swap width and height. */
-export const propFootprint = (
-  kind: LevelPropKind,
-  rotation: 0 | 1 | 2 | 3,
-): { readonly width: number; readonly height: number } => {
-  const spec = PROP_KINDS[kind];
-  return rotation % 2 === 0
-    ? { width: spec.width, height: spec.height }
-    : { width: spec.height, height: spec.width };
-};
-
-/** What a whole level document holds, the shape {@link levelIssues} reads. */
-interface LevelDocument {
-  readonly columns: number;
-  readonly rows: number;
-  readonly floor: ReadonlyArray<number>;
-  readonly walls: ReadonlyArray<LevelWall>;
-  readonly props: ReadonlyArray<LevelProp>;
-  readonly lights: ReadonlyArray<LevelLight>;
-  readonly regions: ReadonlyArray<LevelRegion>;
-}
-
 /**
  * Everything that keeps a level on its own board, which no single field can
  * say: the floor has one material per square; walls, props' rotated
@@ -177,7 +155,7 @@ interface LevelDocument {
  * part's id is unique within the level. The tables state the same
  * (`0108_levels.ts`); this is what turns a refusal there into a `400` here.
  */
-export const levelIssues = (level: LevelDocument): Array<Schema.FilterIssue> => {
+export const levelIssues = (level: LevelLayout): Array<Schema.FilterIssue> => {
   const issues: Array<Schema.FilterIssue> = [];
   const { columns, rows } = level;
   if (level.floor.length !== columns * rows) {
@@ -198,7 +176,7 @@ export const levelIssues = (level: LevelDocument): Array<Schema.FilterIssue> => 
     }
   });
   level.props.forEach((prop, index) => {
-    const { width, height } = propFootprint(prop.kind, prop.rotation);
+    const { width, height } = propFootprint(prop);
     if (prop.x + width > columns || prop.y + height > rows) {
       issues.push({ path: ["props", index], issue: "a prop's footprint is on the board" });
     }
