@@ -242,6 +242,11 @@ describeLayer("migrations", database, (it) => {
         "image_spend",
         "image_upload",
         "language",
+        "level",
+        "level_light",
+        "level_prop",
+        "level_region",
+        "level_wall",
         "location",
         "location_image",
         "magic_item",
@@ -399,6 +404,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
+        { migration_id: 108, name: "levels" },
       ]);
     }),
   );
@@ -516,6 +522,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 105, name: "locations" },
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
+        { migration_id: 108, name: "levels" },
       ]);
     }),
   );

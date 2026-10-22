@@ -64,6 +64,7 @@ import { Groups } from "./repo/Groups.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Levels } from "./repo/Levels.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -514,6 +515,7 @@ export const servicesOver = <E>(
   | LiveEvents
   | MagicItems
   | Memberships
+  | Levels
   | Locations
   | PartyTravel
   | Notes
@@ -664,6 +666,9 @@ export const servicesOver = <E>(
     // `Locations.layer` Hob reads for `listLocations` and the accept writes
     // through must never hold a bearer URL.
     Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
+    // Account-owned levels: the owner's alone, every method behind
+    // `levelOwned`. Only the handlers hold it; no toolkit has a level tool yet.
+    Levels.layer,
     // The party's travels: a move during an open night rings its doorbell.
     PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
     Notes.layer,
@@ -933,6 +938,7 @@ export const applicationOver = <E>(
     | LiveEvents
     | MagicItems
     | Memberships
+    | Levels
     | Locations
     | PartyTravel
     | Notes

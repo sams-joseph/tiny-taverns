@@ -52,6 +52,7 @@ import { NpcTurns } from "./repo/NpcTurns.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
+import { Levels } from "./repo/Levels.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -709,6 +710,21 @@ const LibraryLocationsLive = HttpApiBuilder.group(
             ),
         )
     );
+  }),
+);
+
+/** The owner's Levels shelf: every method answers the asker's own levels only. */
+const LibraryLevelsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "libraryLevels",
+  Effect.fnUntraced(function* (handlers) {
+    const levels = yield* Levels;
+    return handlers
+      .handle("list", () => levels.library)
+      .handle("create", ({ payload }) => levels.create(payload))
+      .handle("findById", ({ params }) => levels.findById(params.levelId))
+      .handle("save", ({ params, payload }) => levels.save(params.levelId, payload))
+      .handle("remove", ({ params }) => levels.remove(params.levelId));
   }),
 );
 
@@ -2139,6 +2155,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldMembersLive,
     SharedWorldLocationsLive,
     LibraryLocationsLive,
+    LibraryLevelsLive,
     InvitePreviewLive,
     ImagesLive,
     UploadsLive,

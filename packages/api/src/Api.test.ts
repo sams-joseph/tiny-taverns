@@ -344,6 +344,9 @@ describe("the API declaration", () => {
       // those corpora have no per-campaign consumer, so the Library is their
       // whole surface now.
       "library",
+      // An account's own levels, top-level like a place: the owner's shelf,
+      // with no campaign in the path.
+      "libraryLevels",
       // An account's own places, top-level like a character: the owner's
       // shelf, with no campaign in the path.
       "libraryLocations",

@@ -135,6 +135,15 @@ const NOT_CONTENT = [
   // own account's apply. See 0091_image_uploads.ts.
   "image_upload",
   "language",
+  // An account's level and its parts: who may read one is its owner, never a
+  // dm/shared switch, and a part is its level's. The level carries the
+  // provenance pair because a person may keep a Hob draft of one. See
+  // 0108_levels.ts.
+  "level",
+  "level_light",
+  "level_prop",
+  "level_region",
+  "level_wall",
   // An account's place: who may read it is its owner, a member of a world it
   // is placed in, or a player of a table that revealed it — never a dm/shared
   // switch. It carries the provenance pair because a person may keep a Hob

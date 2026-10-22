@@ -251,6 +251,17 @@ export type NpcId = typeof NpcId.Type;
 export const LocationId = id("LocationId");
 export type LocationId = typeof LocationId.Type;
 
+/** An account's level (`level`): a battle map built of floors, walls, props and lights. */
+export const LevelId = id("LevelId");
+export type LevelId = typeof LevelId.Type;
+
+/**
+ * One wall, prop, light or region of a level. Unique within its level only:
+ * the editor mints a new part's id, and a save writes the parts whole.
+ */
+export const LevelPartId = id("LevelPartId");
+export type LevelPartId = typeof LevelPartId.Type;
+
 /** One move of a party on its campaign's travel log (`campaign_party_move`). */
 export const PartyMoveId = id("PartyMoveId");
 export type PartyMoveId = typeof PartyMoveId.Type;

@@ -185,6 +185,7 @@ import {
   RuleArticleId,
   RollId,
   SpellId,
+  LevelId,
   LocationId,
   NoteId,
   PartyMoveId,
@@ -209,6 +210,7 @@ import {
   PlayerLocation,
   WorldLocation,
 } from "./Location.js";
+import { Level, LevelCreate, LevelSave, LevelSummary } from "./Level.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
 import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
@@ -1064,6 +1066,44 @@ class LibraryLocationsGroup extends HttpApiGroup.make("libraryLocations")
     }),
   )
   .prefix("/library/locations")
+  .middleware(Authorization) {}
+
+/**
+ * The owner's Levels shelf: a level is account-owned and top-level, like a
+ * place, so the shelf answers the asker's own and nobody else's. Another
+ * account's level is `NotFound` at every endpoint.
+ *
+ * `save` replaces the whole document and is refused with a `Conflict`,
+ * writing nothing, when its `version` is not the level's. `remove` is a hard
+ * delete of the level and every part of it.
+ */
+class LibraryLevelsGroup extends HttpApiGroup.make("libraryLevels")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      success: Schema.Array(LevelSummary),
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      payload: LevelCreate,
+      success: Level,
+    }),
+    HttpApiEndpoint.get("findById", "/:levelId", {
+      params: { levelId: LevelId },
+      success: Level,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("save", "/:levelId", {
+      params: { levelId: LevelId },
+      payload: LevelSave,
+      success: Level,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("remove", "/:levelId", {
+      params: { levelId: LevelId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/library/levels")
   .middleware(Authorization) {}
 
 /**
@@ -3832,6 +3872,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SharedWorldMembersGroup)
   .add(SharedWorldLocationsGroup)
   .add(LibraryLocationsGroup)
+  .add(LibraryLevelsGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)
   .add(CampaignInvitesGroup)
