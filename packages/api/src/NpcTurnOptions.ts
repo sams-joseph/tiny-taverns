@@ -240,8 +240,8 @@ export interface NpcTurnOptions {
   readonly options: ReadonlyArray<NpcTurnOption>;
   /**
    * Where it can still walk this turn; absent off its turn, off the board or
-   * with no speed. On a level each square is reached by a walk (`feet`, the
-   * fewest it costs); on a plain grid by straight distance.
+   * with no speed. On a level each is a square a walk within the feet left
+   * reaches (`reachableOnLevel`); on a plain grid, by straight distance.
    */
   readonly movement?: {
     readonly feetLeft: number;
