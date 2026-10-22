@@ -773,8 +773,7 @@ export class PlayerTable extends Context.Service<
                     // in the party's sight once the move is done.
                     const vision = yield* refreshPartyVision(sql, runId);
                     const lineShared =
-                      moved[0]!.visibility === "shared" &&
-                      (yield* tokenShownNow(sql, combatantId));
+                      moved[0]!.visibility === "shared" && (yield* tokenShownNow(sql, combatantId));
                     yield* appendEvent(sql, {
                       sessionId: row.session_id,
                       kind: "combatant-moved",

@@ -43,9 +43,9 @@ describe("a level's log lines", () => {
       SENTENCE["board-region-updated"](undefined, "fight", payload);
     const region = { regionId: "r", regionKind: "trap", revealed: true, wasRevealed: false };
     expect(regionLine(region)).toBe("A trap was revealed to the table");
-    expect(regionLine({ ...region, regionKind: "hazard", revealed: false, wasRevealed: true })).toBe(
-      "A hazard was hidden from the table again",
-    );
+    expect(
+      regionLine({ ...region, regionKind: "hazard", revealed: false, wasRevealed: true }),
+    ).toBe("A hazard was hidden from the table again");
     expect(regionLine({})).toBe("A secret on the level was shown or hidden");
   });
 

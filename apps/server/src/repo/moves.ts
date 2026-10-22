@@ -103,14 +103,7 @@ export const feetWalked = (
   const walked =
     level === null
       ? null
-      : pathCost(
-          level.layout,
-          start,
-          to,
-          tableSight(level.level),
-          fight.diagonal_rule,
-          level.ends,
-        );
+      : pathCost(level.layout, start, to, tableSight(level.level), fight.diagonal_rule, level.ends);
   return (
     walked ??
     feetBetween(start, to, { feetPerCell: fight.feet_per_cell, diagonals: fight.diagonal_rule })

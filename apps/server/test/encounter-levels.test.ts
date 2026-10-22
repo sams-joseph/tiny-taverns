@@ -396,7 +396,10 @@ describeLayer("encounter-levels", shared, (it) => {
         const { jo, table } = yield* Fixture;
         const sql = yield* SqlClient.SqlClient;
         const made = yield* as(jo.token, (client) =>
-          client.encounters.create({ params: { campaignId: table }, payload: { name: "Mid-edit" } }),
+          client.encounters.create({
+            params: { campaignId: table },
+            payload: { name: "Mid-edit" },
+          }),
         );
         const session = yield* night();
         // A save's write to the level row, held open until `gate`: the

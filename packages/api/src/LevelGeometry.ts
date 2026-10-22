@@ -739,9 +739,7 @@ const lowScreen = (wall: LayoutWall): SightSegment | null => {
 };
 
 /** The low walls of a level as cover's screens (`cover`'s `low`). */
-export const lowWallScreens = (
-  walls: ReadonlyArray<LayoutWall>,
-): ReadonlyArray<SightSegment> =>
+export const lowWallScreens = (walls: ReadonlyArray<LayoutWall>): ReadonlyArray<SightSegment> =>
   walls.flatMap((wall) => {
     if (!wall.low) return [];
     const screen = lowScreen(wall);

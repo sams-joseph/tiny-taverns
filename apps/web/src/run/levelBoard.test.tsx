@@ -222,9 +222,7 @@ describe("a fight on a level, on the DM's canvas", () => {
     await renderRunner();
     await screen.findByRole("region", { name: "Battle map" });
     await userEvent.click(await board().findByRole("button", { name: "More for the door" }));
-    await userEvent.click(
-      await screen.findByRole("menuitem", { name: "Close and lock the door" }),
-    );
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Close and lock the door" }));
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/board/doors/${runLevelDoorId}`)).toMatchObject({
         doorState: "locked",

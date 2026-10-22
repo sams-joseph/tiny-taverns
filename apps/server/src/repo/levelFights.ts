@@ -667,10 +667,7 @@ const lightOnSeen = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
 export const partSeen = (
   sql: SqlClient.SqlClient,
   runId: EncounterRunId,
-  part:
-    | { readonly wallId: string }
-    | { readonly lightId: string }
-    | { readonly regionId: string },
+  part: { readonly wallId: string } | { readonly lightId: string } | { readonly regionId: string },
 ) =>
   Effect.map(
     "wallId" in part

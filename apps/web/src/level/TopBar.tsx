@@ -165,16 +165,16 @@ export function TopBar({
           </Button>
         </>
       ) : (
-      <Button
-        variant={status === "failed" ? "default" : "secondary"}
-        size="sm"
-        disabled={status === "saved" || status === "saving"}
-        onClick={() => void store.saveNow()}
-        title="Save now (Ctrl+S)"
-      >
-        <Icon name="save" size={14} />
-        {status === "failed" ? "Try again" : "Save"}
-      </Button>
+        <Button
+          variant={status === "failed" ? "default" : "secondary"}
+          size="sm"
+          disabled={status === "saved" || status === "saving"}
+          onClick={() => void store.saveNow()}
+          title="Save now (Ctrl+S)"
+        >
+          <Icon name="save" size={14} />
+          {status === "failed" ? "Try again" : "Save"}
+        </Button>
       )}
     </header>
   );

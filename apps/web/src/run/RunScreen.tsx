@@ -1687,7 +1687,9 @@ export function RunScreen() {
     refused: string,
   ): Promise<void> =>
     inBoardLine(async () => {
-      const saved = await levelSwitches.submit(write, boardLevelWrites(campaignId)).catch(() => undefined);
+      const saved = await levelSwitches
+        .submit(write, boardLevelWrites(campaignId))
+        .catch(() => undefined);
       if (saved !== undefined && Result.isSuccess(saved)) {
         writeBoard((current) => AsyncResult.map(current, () => saved.success));
         return;

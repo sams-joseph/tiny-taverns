@@ -312,28 +312,32 @@ export class Invites extends Context.Service<
 
         revokeForCampaign: (creator, inviteId) =>
           dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const granted = yield* withdraw({
-                  ...asked(creator),
-                  group: creator.group,
-                  id: inviteId,
-                }).pipe(orNotFound("invite", inviteId));
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const granted = yield* withdraw({
+                    ...asked(creator),
+                    group: creator.group,
+                    id: inviteId,
+                  }).pipe(orNotFound("invite", inviteId));
 
-                const revoked =
-                  granted.redeemedBy !== null && granted.grantedCampaignMembership
-                    ? yield* revokeMemberAt(sql, creator.campaign, granted.redeemedBy)
-                    : { revoked: 0, sessions: [] };
+                  const revoked =
+                    granted.redeemedBy !== null && granted.grantedCampaignMembership
+                      ? yield* revokeMemberAt(sql, creator.campaign, granted.redeemedBy)
+                      : { revoked: 0, sessions: [] };
 
-                // Withdrawn above, in this transaction; not reading it back is a defect.
-                const invite = yield* withdrawn(inviteId).pipe(
-                  Effect.catchTag("NoSuchElementError", Effect.die),
-                );
-                return { invite, revoked };
-              }),
-            ).pipe(
-              Effect.flatMap(({ invite, revoked }) => Effect.as(ringRevoked(live, revoked), invite)),
-            ),
+                  // Withdrawn above, in this transaction; not reading it back is a defect.
+                  const invite = yield* withdrawn(inviteId).pipe(
+                    Effect.catchTag("NoSuchElementError", Effect.die),
+                  );
+                  return { invite, revoked };
+                }),
+              )
+              .pipe(
+                Effect.flatMap(({ invite, revoked }) =>
+                  Effect.as(ringRevoked(live, revoked), invite),
+                ),
+              ),
           ),
 
         preview: (token) =>

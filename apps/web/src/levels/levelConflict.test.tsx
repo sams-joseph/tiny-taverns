@@ -80,9 +80,9 @@ describe("a level saved elsewhere since the editor read it", () => {
     await renameIntoConflict();
     await userEvent.click(screen.getByRole("button", { name: "Load the saved level" }));
     await waitFor(() =>
-      expect(
-        (screen.getByRole("textbox", { name: "Level name" }) as HTMLInputElement).value,
-      ).toBe("The Flooded Crypt"),
+      expect((screen.getByRole("textbox", { name: "Level name" }) as HTMLInputElement).value).toBe(
+        "The Flooded Crypt",
+      ),
     );
     expect(screen.getByRole("status")).toHaveTextContent("Saved");
     // Nothing more was sent: the editor's copy is dropped, not saved.

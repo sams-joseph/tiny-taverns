@@ -47,7 +47,6 @@ import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
 import type { ConversationReach } from "./visibility.js";
 
-
 const decodeLevelSave = Schema.decodeUnknownEffect(LevelSave);
 /**
  * Where a proposal becomes a row, and the only place `origin = 'assistant'` is

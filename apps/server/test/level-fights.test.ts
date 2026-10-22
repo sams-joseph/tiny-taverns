@@ -356,7 +356,9 @@ describeLayer("level-fights", shared, (it) => {
         expect(copy.walls).toEqual(level.walls.map((wall) => ({ ...wall, revealed: false })));
         expect(copy.props).toEqual(level.props);
         expect(copy.lights).toEqual(level.lights);
-        expect(copy.regions).toEqual(level.regions.map((region) => ({ ...region, revealed: false })));
+        expect(copy.regions).toEqual(
+          level.regions.map((region) => ({ ...region, revealed: false })),
+        );
       }),
     );
 
@@ -388,53 +390,55 @@ describeLayer("level-fights", shared, (it) => {
       }),
     );
 
-    it.effect("carries its copy, doors, lights and secrets as left, to the fight that resumes it", () =>
-      Effect.gen(function* () {
-        const { jo, table } = yield* Fixture;
-        const level = yield* aHall();
-        const session = yield* night();
-        const { fight, params } = yield* aFightOn(level, session);
-        yield* as(jo.token, (client) =>
-          client.runs.updateDoor({
-            params: { ...params, wallId: DOOR },
-            payload: { doorState: "open" },
-          }),
-        );
-        yield* as(jo.token, (client) =>
-          client.runs.updateLight({
-            params: { ...params, lightId: TORCH },
-            payload: { lit: false },
-          }),
-        );
-        yield* as(jo.token, (client) =>
-          client.runs.updateRegion({
-            params: { ...params, regionId: part(8) },
-            payload: { revealed: true },
-          }),
-        );
-        const left = yield* boardOf(params);
-        yield* endNight(session);
+    it.effect(
+      "carries its copy, doors, lights and secrets as left, to the fight that resumes it",
+      () =>
+        Effect.gen(function* () {
+          const { jo, table } = yield* Fixture;
+          const level = yield* aHall();
+          const session = yield* night();
+          const { fight, params } = yield* aFightOn(level, session);
+          yield* as(jo.token, (client) =>
+            client.runs.updateDoor({
+              params: { ...params, wallId: DOOR },
+              payload: { doorState: "open" },
+            }),
+          );
+          yield* as(jo.token, (client) =>
+            client.runs.updateLight({
+              params: { ...params, lightId: TORCH },
+              payload: { lit: false },
+            }),
+          );
+          yield* as(jo.token, (client) =>
+            client.runs.updateRegion({
+              params: { ...params, regionId: part(8) },
+              payload: { revealed: true },
+            }),
+          );
+          const left = yield* boardOf(params);
+          yield* endNight(session);
 
-        // The level changes between nights; the fight does not.
-        yield* as(jo.token, (client) =>
-          client.libraryLevels.save({
-            params: { levelId: level.id },
-            payload: { ...hall(level), walls: [] },
-          }),
-        );
-        const next = yield* night();
-        const resumed = yield* as(jo.token, (client) =>
-          client.runs.resume({
-            params: { campaignId: table, sessionId: next },
-            payload: { continuedFrom: fight.id },
-          }),
-        );
-        const carried = yield* boardOf({ campaignId: table, sessionId: next, runId: resumed.id });
-        expect(carried?.level).toEqual(left?.level);
-        expect(levelOf(carried).walls.find((wall) => wall.id === DOOR)?.doorState).toBe("open");
-        expect(levelOf(carried).lights[0]?.lit).toBe(false);
-        expect(levelOf(carried).regions[0]?.revealed).toBe(true);
-      }),
+          // The level changes between nights; the fight does not.
+          yield* as(jo.token, (client) =>
+            client.libraryLevels.save({
+              params: { levelId: level.id },
+              payload: { ...hall(level), walls: [] },
+            }),
+          );
+          const next = yield* night();
+          const resumed = yield* as(jo.token, (client) =>
+            client.runs.resume({
+              params: { campaignId: table, sessionId: next },
+              payload: { continuedFrom: fight.id },
+            }),
+          );
+          const carried = yield* boardOf({ campaignId: table, sessionId: next, runId: resumed.id });
+          expect(carried?.level).toEqual(left?.level);
+          expect(levelOf(carried).walls.find((wall) => wall.id === DOOR)?.doorState).toBe("open");
+          expect(levelOf(carried).lights[0]?.lit).toBe(false);
+          expect(levelOf(carried).regions[0]?.revealed).toBe(true);
+        }),
     );
   });
 

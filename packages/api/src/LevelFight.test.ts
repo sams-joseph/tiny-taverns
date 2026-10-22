@@ -101,9 +101,7 @@ describe("partyWalk", () => {
     expect(partyPathCost(walk, at(0), at(2), {})).toBe(10);
     // Two squares into the dark is not a walk, however open the floor really is.
     expect(partyPathCost(walk, at(0), at(3), {})).toBeNull();
-    expect(partyReach(walk, at(0), 30, {}).map((reached) => reached.square.column)).toEqual([
-      1, 2,
-    ]);
+    expect(partyReach(walk, at(0), 30, {}).map((reached) => reached.square.column)).toEqual([1, 2]);
   });
 
   it("never walks on through a dark square to reach another", () => {

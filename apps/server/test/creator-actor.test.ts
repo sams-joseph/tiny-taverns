@@ -616,10 +616,11 @@ describeLayer("creator-actor", shared, (it) => {
       // `PartyTravel.list`, `move`, `moveForAccept`, `remove`, and the record
       // `move` and `moveForAccept` share. Moving the party is the creator's;
       // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
-      // A hundred and seventy and seventy-one are `RunBoards.updateDoor` and
-      // `updateLight`: the DM's hand on a fight's level, the board's like fog.
-      // Less the three unused ordinals, that is a hundred and sixty-eight.
-      expect(gated).toBe(168);
+      // A hundred and seventy to seventy-two are `RunBoards.updateDoor`,
+      // `updateLight` and `updateRegion`: the DM's hand on a fight's level,
+      // the board's like fog. Less the three unused ordinals, that is a
+      // hundred and sixty-nine.
+      expect(gated).toBe(169);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

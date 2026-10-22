@@ -546,9 +546,7 @@ export class Party extends Context.Service<
                     returning campaign_character.id, campaign_character.character_id
                   `;
                   if (rows.length === 0) {
-                    return yield* Effect.fail(
-                      new NotFound({ resource: "campaign_character", id }),
-                    );
+                    return yield* Effect.fail(new NotFound({ resource: "campaign_character", id }));
                   }
                   // A character that left is no longer one of the party's
                   // eyes on any level fight it stands in.

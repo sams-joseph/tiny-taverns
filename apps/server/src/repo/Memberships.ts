@@ -389,20 +389,22 @@ export class Memberships extends Context.Service<
             // — the revoke and the seat retirement — and the deferred
             // participation key checks them together at COMMIT. Under
             // autocommit the first alone would be refused on the spot.
-            sql.withTransaction(
-              Effect.gen(function* () {
-                if (accountId === creator.actor.accountId) {
-                  return yield* new Conflict({
-                    message: "a campaign cannot lose its creator; archive the campaign instead",
-                  });
-                }
-                const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
-                if (revoked.revoked === 0) {
-                  return yield* new NotFound({ resource: "member", id: accountId });
-                }
-                return revoked;
-              }),
-            ).pipe(Effect.flatMap((revoked) => ringRevoked(live, revoked))),
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  if (accountId === creator.actor.accountId) {
+                    return yield* new Conflict({
+                      message: "a campaign cannot lose its creator; archive the campaign instead",
+                    });
+                  }
+                  const revoked = yield* revokeMemberAt(sql, creator.campaign, accountId);
+                  if (revoked.revoked === 0) {
+                    return yield* new NotFound({ resource: "member", id: accountId });
+                  }
+                  return revoked;
+                }),
+              )
+              .pipe(Effect.flatMap((revoked) => ringRevoked(live, revoked))),
           ),
       };
     }),
