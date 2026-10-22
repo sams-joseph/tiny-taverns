@@ -13,9 +13,9 @@ import type { HobStarter } from "./transcript";
  *   The delivered starters, unchanged.
  * - **sharedWorld** — the world's canonical history: never campaign prep.
  * - **account** — every screen outside both: the panel drafts a campaign, a
- *   Shared World or a character, and nothing that needs a campaign (no
- *   encounter, no note), which is exactly `proposeCampaign`,
- *   `proposeSharedWorld` and `proposeCharacter`.
+ *   Shared World, a character or a level, and nothing that needs a campaign
+ *   (no encounter, no note), which is exactly `proposeCampaign`,
+ *   `proposeSharedWorld`, `proposeCharacter` and `proposeLevel`.
  *
  * Within the account arm the order and the wording follow the screen and what
  * already exists there: on the Campaigns list a campaign comes first, on the
@@ -97,6 +97,13 @@ const draftCharacter = (known: HobKnown): HobStarter => ({
       : "From the core rules, ready to seat at any table",
 });
 
+/** A level is a Library object, so the Library offers one first. */
+const buildLevel: HobStarter = {
+  icon: "grid-3x3",
+  title: "Build a battle map level",
+  sub: "Rooms, doors, props and lights, laid out to edit",
+};
+
 /** The account arm's starters, in the order the screen puts first. */
 const accountStarters = (screen: AccountScreen, known: HobKnown): ReadonlyArray<HobStarter> => {
   const inAWorld = (known.sharedWorlds ?? 0) > 0 ? [draftInAWorld] : [];
@@ -105,8 +112,9 @@ const accountStarters = (screen: AccountScreen, known: HobKnown): ReadonlyArray<
       return [draftCampaign(known), ...inAWorld, draftCharacter(known)];
     case "sharedWorlds":
       return [draftSharedWorld(known), ...inAWorld, draftCampaign(known), draftCharacter(known)];
-    case "characters":
     case "library":
+      return [buildLevel, draftCharacter(known), draftCampaign(known)];
+    case "characters":
     case "elsewhere":
       return [draftCharacter(known), draftCampaign(known)];
   }
@@ -127,7 +135,7 @@ export const hobOpeningFor = (place: HobPlace): HobOpening => {
         title: "What shall we start?",
         description:
           "I can draft a campaign for you to run, a Shared World for your campaigns to " +
-          "share, or a character to play. I can’t see inside your campaigns from here: " +
+          "share, a character to play, or a battle map level. I can’t see inside your campaigns from here: " +
           "open one to plan in it.",
         starters: accountStarters(place.screen, place.known),
       };

@@ -65,7 +65,7 @@ export function TopBar({
           }}
           className={cn(
             sectionHeadingVariants({ size: "subtitle" }),
-            "h-control-sm max-w-64 min-w-0 border-transparent bg-transparent hover:border-strong",
+            "h-control-sm w-64 max-w-full min-w-32 border-transparent bg-transparent hover:border-strong",
           )}
         />
       </div>
