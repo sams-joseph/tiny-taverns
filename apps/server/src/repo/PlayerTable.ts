@@ -52,11 +52,17 @@ import {
   hiddenByFog,
   initiativeOrder,
   RUNS,
-  tokenShown,
+  tokenShownNow,
   tokenShownTo,
 } from "./liveTables.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
-import { partySeen, playerLevelColumn, refreshAndRing, runLevel } from "./levelFights.js";
+import {
+  partySeen,
+  playerLevelColumn,
+  refreshPartyVision,
+  ringVision,
+  runLevel,
+} from "./levelFights.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -753,22 +759,22 @@ export class PlayerTable extends Context.Service<
                         : { layout: walk.layout, level: level.level, ends: walk.ends },
                     );
 
-                    const moved = yield* sql<{
-                      readonly visibility: "dm" | "shared";
-                      readonly token_shown: boolean;
-                    }>`
+                    const moved = yield* sql<{ readonly visibility: "dm" | "shared" }>`
                       update combatant
                       set board_column = ${to.column},
                           board_row = ${to.row},
                           feet_moved = combatant.feet_moved + ${feet},
                           updated_at = now()
                       where combatant.id = ${combatantId}
-                      returning combatant.visibility,
-                        (select ${tokenShown(sql)} from encounter_run
-                          where encounter_run.id = combatant.encounter_run_id) as token_shown
+                      returning combatant.visibility
                     `;
-                    const shown = moved[0]!;
-                    const lineShared = shown.visibility === "shared" && shown.token_shown;
+                    // A party token moved: what the party sees moves with it,
+                    // first, so the line is shared by where the token stands
+                    // in the party's sight once the move is done.
+                    const vision = yield* refreshPartyVision(sql, runId);
+                    const lineShared =
+                      moved[0]!.visibility === "shared" &&
+                      (yield* tokenShownNow(sql, combatantId));
                     yield* appendEvent(sql, {
                       sessionId: row.session_id,
                       kind: "combatant-moved",
@@ -785,10 +791,10 @@ export class PlayerTable extends Context.Service<
                       requestId: payload.requestId,
                       visibility: lineShared ? "shared" : "dm",
                     });
-                    // A party token moved: what the party sees moves with it.
-                    yield* refreshAndRing(sql, {
+                    yield* ringVision(sql, {
                       sessionId: row.session_id,
                       runId,
+                      vision,
                       lineShared,
                     });
                     return row.session_id;

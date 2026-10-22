@@ -1,4 +1,5 @@
 import type { Actor, CampaignId } from "@taverns/api";
+import { Effect } from "effect";
 import type { SqlClient, Statement } from "effect/sql";
 import {
   campaignWritableById,
@@ -87,6 +88,22 @@ export const initiativeOrderKeys = (sql: SqlClient.SqlClient): Statement.Fragmen
 export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`(encounter_run.mode = 'combat'
     and encounter_run.visibility = 'shared' and encounter_run.map_shown)`;
+
+/**
+ * Whether a seated player's board shows this combatant's token now
+ * (`tokenShown`), read after the write that moved it and after the party's
+ * vision was recomputed for that write, so a move's line is shared by where
+ * the party's eyes are once it is done.
+ */
+export const tokenShownNow = (sql: SqlClient.SqlClient, id: string) =>
+  Effect.map(
+    sql<{ readonly shown: boolean }>`
+      select (select ${tokenShown(sql)} from encounter_run
+               where encounter_run.id = combatant.encounter_run_id) as shown
+      from combatant where combatant.id = ${id}
+    `,
+    (rows) => rows[0]?.shown === true,
+  );
 
 /**
  * Over `combatant` in scope: the party cannot see where its token stands. The

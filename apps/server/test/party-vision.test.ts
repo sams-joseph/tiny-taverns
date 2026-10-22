@@ -697,8 +697,27 @@ describeLayer("party-vision", shared, (it) => {
         );
         expect(edge).toBeDefined();
         expect(yield* walkTo(params, tamsin, edge!)).toBe("moved");
-        // Standing there, the party sees it now.
+        // Standing there, the party sees it now, and the move's line is the
+        // table's: it is asked where she stands once her eyes moved with her.
         expect(levelOf(yield* tableOf).sees).toContain(edge);
+        expect((yield* eventsOf(params.runId, "combatant-moved")).at(-1)?.visibility).toBe(
+          "shared",
+        );
+      }),
+    );
+  });
+
+  describe("a move's line is shared by the vision the move leaves", () => {
+    it.effect("shares the DM's move of a party member into a room nobody had seen", () =>
+      Effect.gen(function* () {
+        const { params, tamsin } = yield* aFight();
+        // The east room, out of the party's sight before the move.
+        expect(levelOf(yield* tableOf).sees).not.toContain(at(7, 1));
+        yield* place(params, tamsin, 7, 1);
+        expect(levelOf(yield* tableOf).sees).toContain(at(7, 1));
+        expect((yield* eventsOf(params.runId, "combatant-moved")).at(-1)?.visibility).toBe(
+          "shared",
+        );
       }),
     );
   });

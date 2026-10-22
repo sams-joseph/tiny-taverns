@@ -37,7 +37,15 @@ import {
   seatedPortraitColumn,
 } from "./Characters.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { COMBATANT, freshTurn, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
+import {
+  COMBATANT,
+  freshTurn,
+  initiativeOrder,
+  RUN,
+  RUNS,
+  tokenShown,
+  tokenShownNow,
+} from "./liveTables.js";
 import {
   classFromColumns,
   defined,
@@ -728,7 +736,7 @@ export class Combatants extends Context.Service<
             to === null ? null : yield* runLevel(sql, runId),
           );
 
-          const { tokenShown: shown, ...moved } = yield* place({
+          const { tokenShown: _before, ...moved } = yield* place({
             campaignId,
             actor,
             runId,
@@ -737,6 +745,11 @@ export class Combatants extends Context.Service<
             feet,
           }).pipe(orNotFound("combatant", id));
           const combatant = new Combatant(moved, { disableChecks: true });
+          // A party token's move moves what the party sees: the vision first,
+          // so whether the table sees the token where it landed is asked of
+          // the party's eyes as this move leaves them.
+          const vision = yield* refreshPartyVision(sql, runId);
+          const shown = yield* tokenShownNow(sql, id);
           const lineShared = combatant.visibility === "shared" && shown;
           yield* appendEvent(sql, {
             sessionId,
@@ -753,10 +766,8 @@ export class Combatants extends Context.Service<
             visibility: lineShared ? "shared" : "dm",
             ...stamped(args),
           });
-          // A party token's move moves what the party sees; and a creature
-          // that walked out of it on a level is gone from the table's board,
-          // which rings without saying where it went.
-          const vision = yield* refreshPartyVision(sql, runId);
+          // A creature that walked out of the party's sight on a level is
+          // gone from the table's board, which rings without saying where.
           yield* ringVision(sql, {
             sessionId,
             runId,
