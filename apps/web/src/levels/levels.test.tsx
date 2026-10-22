@@ -64,6 +64,9 @@ describe("the Library's Levels shelf", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Delete The Crypt" }));
     const dialog = await screen.findByRole("dialog", { name: /Delete The Crypt/ });
     expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
+    // Where it is used, read before the delete is offered.
+    expect(await within(dialog).findByText("The Salt Road: Ambush in the reeds")).toBeTruthy();
+    expect(within(dialog).getByText(/go back to their battle maps/)).toBeTruthy();
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete level" }));
     await waitFor(() =>
@@ -71,6 +74,17 @@ describe("the Library's Levels shelf", () => {
         server.calls.filter((call) => call.method === "DELETE").map((call) => call.pathname),
       ).toEqual([`/library/levels/${cryptLevelId}`]),
     );
+  });
+
+  it("says a level used nowhere is used nowhere", async () => {
+    await at("/library/levels");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Ford" }));
+    const dialog = await screen.findByRole("dialog", { name: /Delete Ford/ });
+    expect(await within(dialog).findByText("No encounter is played on it.")).toBeTruthy();
+    expect(
+      (within(dialog).getByRole("button", { name: "Delete level" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
 

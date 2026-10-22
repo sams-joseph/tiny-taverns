@@ -186,6 +186,7 @@ import {
   RollId,
   SpellId,
   LevelId,
+  LevelPartId,
   LocationId,
   NoteId,
   PartyMoveId,
@@ -211,6 +212,7 @@ import {
   WorldLocation,
 } from "./Location.js";
 import { Level, LevelCreate, LevelSave, LevelSummary } from "./Level.js";
+import { BoardDoorUpdate, BoardLightUpdate, LevelUse } from "./LevelFight.js";
 import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
 import { PartyMove, PartyMoveCreate, PlayerPartyMove } from "./PartyTravel.js";
 import {
@@ -1100,6 +1102,16 @@ class LibraryLevelsGroup extends HttpApiGroup.make("libraryLevels")
     HttpApiEndpoint.delete("remove", "/:levelId", {
       params: { levelId: LevelId },
       success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * The encounters that name the level, with their campaigns, by campaign
+     * then encounter: what the delete confirmation lists, since the delete
+     * takes the level off each. Fights already started keep their own copy.
+     */
+    HttpApiEndpoint.get("uses", "/:levelId/uses", {
+      params: { levelId: LevelId },
+      success: Schema.Array(LevelUse),
       error: NotFound,
     }),
   )
@@ -3642,6 +3654,40 @@ class RunsGroup extends HttpApiGroup.make("runs")
     HttpApiEndpoint.put("setArea", "/:runId/board/area", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: BoardAreaSet,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Open, close or lock a door of the fight's level, or reveal or hide a
+     * secret one, answered with the board. `NotFound` for a wall the level
+     * does not have; `Conflict` for a fight that is over or has no level, a
+     * wall that is not a door, and a reveal of a door that is not secret. See
+     * `BoardDoorUpdate`.
+     */
+    HttpApiEndpoint.patch("updateDoor", "/:runId/board/doors/:wallId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        wallId: LevelPartId,
+      },
+      payload: BoardDoorUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Light or snuff a light of the fight's level, answered with the board.
+     * `NotFound` for a light the level does not have; `Conflict` for a fight
+     * that is over or has no level. See `BoardLightUpdate`.
+     */
+    HttpApiEndpoint.patch("updateLight", "/:runId/board/lights/:lightId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        lightId: LevelPartId,
+      },
+      payload: BoardLightUpdate,
       success: EncounterRunBoard,
       error: [NotFound, Conflict],
     }),

@@ -33,6 +33,7 @@ export * from "./HouseStyle.js";
 export * from "./HobDirectResourceUpdate.js";
 export * from "./Ids.js";
 export * from "./Level.js";
+export * from "./LevelFight.js";
 export * from "./LevelKit.js";
 export * from "./LevelGeometry.js";
 export * from "./LevelGenerator.js";

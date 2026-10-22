@@ -12,6 +12,7 @@ import {
   LevelRegion,
   type LevelSave,
   LevelSummary,
+  LevelUse,
   LevelWall,
   NotFound,
 } from "@taverns/api";
@@ -60,6 +61,8 @@ const SummaryRow = classFromColumns(LevelSummary, {
   ...timestampColumns,
 });
 
+const UseRow = classFromColumns(LevelUse, LevelUse.fields);
+
 const OwnedRequest = Schema.toType(Schema.Struct({ actor: Actor, id: LevelId }));
 
 /**
@@ -92,8 +95,18 @@ export class Levels extends Context.Service<
       id: LevelId,
       payload: LevelSave,
     ) => Effect.Effect<Level, NotFound | Conflict, CurrentActor>;
-    /** The level and every part of it. */
+    /**
+     * The level and every part of it. Each encounter naming it goes back to
+     * its picture board (`on delete set null`); a fight already started keeps
+     * its own copy (`0109_level_fights.ts`).
+     */
     readonly remove: (id: LevelId) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * The encounters naming the level, with their campaigns, by campaign then
+     * encounter: what the delete confirmation lists. An encounter may name
+     * only its campaign's creator's level, so each is the owner's own.
+     */
+    readonly uses: (id: LevelId) => Effect.Effect<ReadonlyArray<LevelUse>, NotFound, CurrentActor>;
   }
 >()("Levels") {
   static readonly layer = Layer.effect(this)(
@@ -141,6 +154,22 @@ export class Levels extends Context.Service<
             order by ${sql(table)}.ordinal
           `,
         });
+      // The encounters pointing at a level `header` has just returned to this
+      // actor: the owner key makes each its campaign's creator's, who is them.
+      const usedBy = SqlSchema.findAll({
+        Request: OwnedRequest,
+        Result: UseRow,
+        execute: ({ actor, id }) => sql`
+          select encounter.id as encounter_id, encounter.name as encounter_name,
+                 campaign.id as campaign_id, campaign.name as campaign_name
+          from level
+          join encounter on encounter.level_id = level.id
+            and encounter.level_owner_id = level.account_id
+          join campaign on campaign.id = encounter.campaign_id
+          where level.id = ${id} and ${levelOwned(sql, actor)}
+          order by lower(campaign.name), campaign.id, lower(encounter.name), encounter.id
+        `,
+      });
       const walls = partsOf("level_wall", WallRow);
       const props = partsOf("level_prop", PropRow);
       const lights = partsOf("level_light", LightRow);
@@ -313,6 +342,15 @@ export class Levels extends Context.Service<
                 returning level.id
               `;
               if (gone.length === 0) return yield* new NotFound({ resource: "level", id });
+            }),
+          ),
+
+        uses: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* header({ actor, id }).pipe(orNotFound("level", id));
+              return yield* usedBy({ actor, id });
             }),
           ),
       };

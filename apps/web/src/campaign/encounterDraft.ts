@@ -20,6 +20,7 @@ import {
   type EncounterPrep,
   type EncounterUpdate,
   ENCOUNTER_ROSTER_MAX,
+  type LevelId,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_SKILL_MAX,
   ENCOUNTER_SKILLS_MAX,
@@ -84,7 +85,9 @@ export type SavedReadAloud = Pick<Note, "id" | "body">;
 
 /** Everything a draft is made from, and what a save is measured against. */
 export interface SavedEncounter {
-  readonly encounter: Pick<Encounter, "id" | "name" | "kind" | "tags" | "visibility"> | undefined;
+  readonly encounter:
+    | Pick<Encounter, "id" | "name" | "kind" | "tags" | "visibility" | "levelId">
+    | undefined;
   readonly prep: Prep;
   readonly roster: ReadonlyArray<SavedLine>;
   /** The map's setting line as stored; `""` for none. */
@@ -163,6 +166,8 @@ export interface EncounterDraft {
   readonly ready: boolean;
   /** The map's setting line — the builder's *Location*. */
   readonly setting: string;
+  /** The creator's own level a fight on it is played on, or `null` for the battle map. */
+  readonly levelId: LevelId | null;
   readonly readAloud: string;
   /** As typed: `"Marsh, Night"`. */
   readonly tags: string;
@@ -297,6 +302,7 @@ export const draftFrom = (saved: SavedEncounter): EncounterDraft => ({
   kind: saved.encounter?.kind ?? "combat",
   ready: saved.prep.ready,
   setting: saved.setting,
+  levelId: saved.encounter?.levelId ?? null,
   readAloud: saved.readAloud?.body ?? "",
   tags: saved.encounter?.tags.join(", ") ?? "",
   // `dm` for a new encounter: the column default, and the only safe one to fail to.
@@ -655,6 +661,7 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
     visibility: draft.visibility,
     ready: draft.ready,
     ...(setting === "" ? {} : { setting }),
+    ...(draft.levelId === null ? {} : { levelId: draft.levelId }),
     ...(tactics.length === 0 ? {} : { tactics }),
     ...(treasure === "" ? {} : { treasure }),
     ...(challenge === null ? {} : { challenge }),
@@ -687,6 +694,8 @@ export const updatePayload = (draft: EncounterDraft, saved: SavedEncounter): Enc
     tags: parseTags(draft.tags),
     visibility: draft.visibility,
     ...(setting === saved.setting.trim() ? {} : { setting: setting === "" ? null : setting }),
+    // Sent only when it moved, as the setting line is: an untouched level is not a write.
+    ...(draft.levelId === (saved.encounter?.levelId ?? null) ? {} : { levelId: draft.levelId }),
     kind: draft.kind,
     ready: draft.ready,
     tactics: tacticsOf(draft.tactics),

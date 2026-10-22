@@ -58,6 +58,7 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
+import { carryLevel, copyLevel, runLevel, unstandable } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   campaignWritableById,
@@ -690,18 +691,26 @@ export class EncounterRuns extends Context.Service<
                     // is read through the creator's predicate, beneath the
                     // proof, and every encounter has one — `insert … select`
                     // simply copies none if it somehow does not.
-                    yield* sql`
-                      insert into encounter_run_board (
-                        run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
-                        cell_px, offset_x_px, offset_y_px
-                      )
-                      select ${run.id}, battle_map.id, battle_map.grid, battle_map.board_columns,
-                             battle_map.board_rows, battle_map.feet_per_cell, battle_map.cell_px,
-                             battle_map.offset_x_px, battle_map.offset_y_px
-                      from battle_map
-                      where battle_map.encounter_id = ${encounter.id}
-                        and ${rowWritable(sql, "battle_map", campaignId, actor)}
-                    `;
+                    //
+                    // An encounter that names a level is played on a copy of
+                    // the level instead (`0109_level_fights.ts`), taken here,
+                    // so editing or deleting the level never moves this fight.
+                    const onLevel = yield* copyLevel(sql, run.id, encounter.id, actor);
+                    if (!onLevel) {
+                      yield* sql`
+                        insert into encounter_run_board (
+                          run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
+                          cell_px, offset_x_px, offset_y_px
+                        )
+                        select ${run.id}, battle_map.id, battle_map.grid,
+                               battle_map.board_columns, battle_map.board_rows,
+                               battle_map.feet_per_cell, battle_map.cell_px,
+                               battle_map.offset_x_px, battle_map.offset_y_px
+                        from battle_map
+                        where battle_map.encounter_id = ${encounter.id}
+                          and ${rowWritable(sql, "battle_map", campaignId, actor)}
+                      `;
+                    }
 
                     // The scene: the prep's tactic lines as beats, none ticked,
                     // and its challenge, copied so a later edit to the prep is
@@ -885,8 +894,14 @@ export class EncounterRuns extends Context.Service<
                     }
                     if (grid !== undefined) {
                       const board = { columns: grid.board_columns, rows: grid.board_rows };
-                      const left = startingSquares(board, "party", sides.party.length, []);
-                      const right = startingSquares(board, "foes", sides.foes.length, left);
+                      // On a level, no token starts in rock or on a crate.
+                      const level = onLevel ? yield* runLevel(sql, run.id) : null;
+                      const blocked = level === null ? [] : unstandable(level.layout);
+                      const left = startingSquares(board, "party", sides.party.length, blocked);
+                      const right = startingSquares(board, "foes", sides.foes.length, [
+                        ...blocked,
+                        ...left,
+                      ]);
                       for (const [rows, squares] of [
                         [sides.party, left],
                         [sides.foes, right],
@@ -1006,13 +1021,18 @@ export class EncounterRuns extends Context.Service<
                     yield* sql`
                       insert into encounter_run_board (
                         run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
-                        cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start
+                        cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start, ambient, floor
                       )
                       select ${run.id}, map_id, grid, board_columns, board_rows, feet_per_cell,
-                             cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start
+                             cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start, ambient,
+                             floor
                       from encounter_run_board
                       where encounter_run_board.run_id = ${from.id}
                     `;
+                    // And its level, if it is on one: the predecessor's copy,
+                    // doors and lights as the DM left them, never the level
+                    // as it stands tonight (`0109_level_fights.ts`).
+                    yield* carryLevel(sql, run.id, from.id);
 
                     // The writable predicate, not the readable one, for the
                     // reason `advance` uses it: what carries across must not

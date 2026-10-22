@@ -14,6 +14,7 @@ import {
   type EncounterPlacement,
   EncounterPrep,
   type EncounterUpdate,
+  type LevelId,
   NotFound,
   type Page,
   type PlannedOrder,
@@ -51,6 +52,7 @@ import {
   containedRowReadable,
   ensureCampaignReadable,
   ensureCampaignWritable,
+  levelOwned,
   type NestedTable,
   nestedRowReadableWithin,
   ownedRowReadable,
@@ -489,6 +491,27 @@ export class Encounters extends Context.Service<
           ),
       });
 
+      /**
+       * The two columns that point an encounter at a level, for a level this
+       * actor owns and that is the campaign's creator's (`0109_level_fights.ts`):
+       * the keys refuse any other, and this answers it `NotFound` first,
+       * since saying it exists would be a disclosure. `null` takes it off.
+       */
+      const levelColumns = (actor: Actor, levelId: LevelId | null) =>
+        Effect.gen(function* () {
+          if (levelId === null) return { level_id: null, level_owner_id: null };
+          // The actor's own level: only the creator writes an encounter, which
+          // the caller's gate proves, and the owner key to the campaign's
+          // creator (`encounter_level_owner_fkey`) holds the rest.
+          const owned = yield* sql<{ readonly id: LevelId; readonly account_id: string }>`
+            select level.id, level.account_id from level
+            where level.id = ${levelId} and ${levelOwned(sql, actor)}
+          `;
+          const level = owned[0];
+          if (level === undefined) return yield* new NotFound({ resource: "level", id: levelId });
+          return { level_id: level.id, level_owner_id: level.account_id };
+        });
+
       /** The slot after the campaign's last, read under the order lock. */
       const nextSlot = SqlSchema.findOne({
         Request: Schema.toType(CampaignId),
@@ -624,6 +647,10 @@ export class Encounters extends Context.Service<
                 const { next } = yield* nextSlot(campaignId).pipe(
                   Effect.catchTag("NoSuchElementError", Effect.die),
                 );
+                const level =
+                  payload.levelId === undefined || payload.levelId === null
+                    ? {}
+                    : yield* levelColumns(actor, payload.levelId);
                 const { id, kind } = yield* insert(
                   defined({
                     campaign_id: campaignId,
@@ -631,6 +658,7 @@ export class Encounters extends Context.Service<
                     kind: payload.kind,
                     tags: textArray(payload.tags),
                     visibility: payload.visibility,
+                    ...level,
                     ...assistantColumns(from),
                   }),
                 ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
@@ -709,6 +737,7 @@ export class Encounters extends Context.Service<
                   kind: patch.kind,
                   tags: textArray(patch.tags),
                   visibility: patch.visibility,
+                  ...(patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId)),
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));
                 // The setting line lives on the map, the creator's alone; the

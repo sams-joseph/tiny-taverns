@@ -5,6 +5,7 @@ import {
   sightSegments,
   type LayoutProp,
   type LevelCover,
+  type LevelLayout,
   type LevelLightTone,
   type LevelRegionKind,
   type SightSegment,
@@ -110,12 +111,19 @@ export const outline = (squares: ReadonlyArray<number>, columns: number): Array<
 /** Width of a wall drawn as a preview, in squares (the wall's own stone). */
 const WALL_WIDTH = 0.32;
 
-/** The marks that hold until the level or the selection changes. */
-export const describeOverlay = (state: EditorState): ReadonlyArray<Mark> => {
-  const doc = state.history.present;
+/**
+ * The DM's marks on a level, which the party never sees: regions (secret ones
+ * outlined), secret doors, low walls, locked doors, DM-only props, and, when
+ * `lights` is asked for, each light's spot. The editor draws them under its
+ * selection; the run board's play mode draws them without the lights, whose
+ * switches are its own (`run/LevelBoard.tsx`).
+ */
+export const levelMarks = (
+  doc: Pick<LevelLayout, "columns" | "walls" | "props" | "lights" | "regions">,
+  { lights }: { readonly lights: boolean },
+): Array<Mark> => {
   const marks: Array<Mark> = [];
-  const viewing = state.tool === "party";
-  if (!viewing) {
+  {
     for (const region of doc.regions) {
       marks.push({
         type: "squares",
@@ -181,10 +189,22 @@ export const describeOverlay = (state: EditorState): ReadonlyArray<Mark> => {
         opacity: 0.7,
       });
     }
-    for (const light of doc.lights) {
-      marks.push({ type: "light", x: light.x, y: light.y, tone: light.tone });
+    if (lights) {
+      for (const light of doc.lights) {
+        marks.push({ type: "light", x: light.x, y: light.y, tone: light.tone });
+      }
     }
-    marks.push(...selectionMarks(state));
+  }
+  return marks;
+};
+
+/** The marks that hold until the level or the selection changes. */
+export const describeOverlay = (state: EditorState): ReadonlyArray<Mark> => {
+  const doc = state.history.present;
+  const marks: Array<Mark> = [];
+  const viewing = state.tool === "party";
+  if (!viewing) {
+    marks.push(...levelMarks(doc, { lights: true }), ...selectionMarks(state));
   }
   if (viewing) {
     state.viewers.forEach((viewer, index) => {

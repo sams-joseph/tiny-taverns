@@ -27,6 +27,8 @@ import {
   type PlayerLiveToken,
   type PlayerLiveTurn,
   type PlayerMove,
+  pathCost,
+  tableSight,
   RollId,
   RollOutcome,
   SessionId,
@@ -61,6 +63,7 @@ import {
   tokenShownTo,
 } from "./liveTables.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
+import { runLevel } from "./levelFights.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -727,6 +730,30 @@ export class PlayerTable extends Context.Service<
                     const fight = yield* fightForMove(sql, runId);
                     const to = payload.position;
                     yield* ensureOnBoard(fight, to);
+                    // On a level, a player walks: the square must be reachable
+                    // from where the token stands, step by step over the
+                    // fight's copy (`pathCost`), through no wall, no door that
+                    // is not open, no secret door the DM has not revealed, no
+                    // blocking prop and no void. The DM still places freely.
+                    const level = yield* runLevel(sql, runId);
+                    if (level !== null) {
+                      if (row.board_column === null || row.board_row === null) {
+                        return yield* new Conflict({
+                          message: "your DM puts your token on the level first",
+                        });
+                      }
+                      const walk = pathCost(
+                        level.layout,
+                        { column: row.board_column, row: row.board_row },
+                        to,
+                        tableSight(level.level),
+                      );
+                      if (walk === null) {
+                        return yield* new Conflict({
+                          message: "you cannot get there from where you stand",
+                        });
+                      }
+                    }
                     const feet = feetWalked(fight, combatantId, row, to);
 
                     const moved = yield* sql<{

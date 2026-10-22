@@ -1,4 +1,4 @@
-import { cryptLevelId, fordLevelId } from "../test/ids";
+import { campaignId, cryptLevelId, encounterId, fordLevelId } from "../test/ids";
 
 /**
  * Two levels on the creator's shelf: a crypt with a wall, a door, an altar, a
@@ -88,6 +88,16 @@ const summary = (level: typeof crypt | typeof ford) => ({
 /** The shelf, as `GET /library/levels` encodes it: by name. */
 export const levelShelf = [summary(ford), summary(crypt)];
 
+/** Where the crypt is used: the campaign's ambush is played on it. The ford is used nowhere. */
+export const cryptUses = [
+  {
+    encounterId,
+    encounterName: "Ambush in the reeds",
+    campaignId,
+    campaignName: "The Salt Road",
+  },
+];
+
 /** Every level read the fixture wire answers. */
 export const fullLevels = (): ReadonlyArray<
   readonly [string, { status: number; body: unknown }]
@@ -95,4 +105,6 @@ export const fullLevels = (): ReadonlyArray<
   ["GET /library/levels", { status: 200, body: levelShelf }],
   [`GET /library/levels/${cryptLevelId}`, { status: 200, body: crypt }],
   [`GET /library/levels/${fordLevelId}`, { status: 200, body: ford }],
+  [`GET /library/levels/${cryptLevelId}/uses`, { status: 200, body: cryptUses }],
+  [`GET /library/levels/${fordLevelId}/uses`, { status: 200, body: [] }],
 ];

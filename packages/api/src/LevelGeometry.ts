@@ -969,6 +969,24 @@ const stepBlocked = (
 };
 
 /**
+ * Whether a creature may stand on `square`: it is on the board, has floor
+ * (not `void`), and holds no prop that blocks movement. Where a fight's
+ * tokens start on a level, and the end of every step {@link movementCost}
+ * allows.
+ */
+export const standable = (
+  level: Pick<LevelLayout, "columns" | "rows" | "floor" | "props">,
+  square: BoardSquare,
+): boolean => {
+  if (!onLevel(level, square)) return false;
+  const material = LEVEL_MATERIALS[level.floor[levelSquareIndex(level, square)] ?? 0] ?? "void";
+  if (material === "void") return false;
+  return !level.props.some(
+    (prop) => footprintHas(propFootprint(prop), square) && propBehaviour(prop).blocksMovement,
+  );
+};
+
+/**
  * What one step from `from` to an adjacent square `to` (diagonals included)
  * costs in feet: one square's worth, or twice that when `to` is difficult
  * terrain (a difficult material, a difficult prop on it, or a `difficult`
@@ -994,11 +1012,10 @@ export const movementCost = (
   const across = to.column - from.column;
   const down = to.row - from.row;
   if (Math.max(Math.abs(across), Math.abs(down)) !== 1) return null;
+  if (!standable(level, to)) return null;
   const at = levelSquareIndex(level, to);
   const material = LEVEL_MATERIALS[level.floor[at] ?? 0] ?? "void";
-  if (material === "void") return null;
   const standing = level.props.filter((prop) => footprintHas(propFootprint(prop), to));
-  if (standing.some((prop) => propBehaviour(prop).blocksMovement)) return null;
   const walls = level.walls.filter((wall) => wallBlocksMovement(wall, options));
   if (across === 0 || down === 0) {
     if (stepBlocked(walls, from, to)) return null;
@@ -1023,4 +1040,134 @@ export const movementCost = (
     standing.some((prop) => propBehaviour(prop).difficult) ||
     level.regions.some((region) => region.kind === "difficult" && region.squares.includes(at));
   return difficult ? level.feetPerCell * 2 : level.feetPerCell;
+};
+
+/**
+ * The fewest feet a creature walks from `from` to `to`, square by square,
+ * each step what {@link movementCost} says it costs: `0` to stay put, `null`
+ * when no walk gets there (walls, shut doors, unfound secret doors, blocking
+ * props or void every way round). The server refuses a player's move by it.
+ *
+ * Cheapest first (Dijkstra). Each step is costed against only the walls near
+ * the square it leaves and the props and regions on the square it enters, so
+ * a 200 × 200 dungeon walks in milliseconds rather than testing every wall at
+ * every step; what {@link movementCost} decides is unchanged.
+ */
+export const pathCost = (
+  level: LevelLayout,
+  from: BoardSquare,
+  to: BoardSquare,
+  options: SightOptions = {},
+): number | null => {
+  if (!onLevel(level, from) || !onLevel(level, to)) return null;
+  if (from.column === to.column && from.row === to.row) return 0;
+  const { columns, rows } = level;
+  const squares = columns * rows;
+  const bucket = <T>(buckets: Array<Array<T> | undefined>, at: number, item: T) => {
+    const list = buckets[at];
+    if (list === undefined) buckets[at] = [item];
+    else list.push(item);
+  };
+
+  // A step from a square meets only walls inside the 3 × 3 block about it.
+  const wallsNear: Array<Array<LayoutWall> | undefined> = Array.from({ length: squares });
+  for (const wall of level.walls) {
+    if (!wallBlocksMovement(wall, options)) continue;
+    const c0 = Math.max(0, Math.floor(Math.min(wall.x1, wall.x2) - 1e-6) - 1);
+    const c1 = Math.min(columns - 1, Math.floor(Math.max(wall.x1, wall.x2) + 1e-6) + 1);
+    const r0 = Math.max(0, Math.floor(Math.min(wall.y1, wall.y2) - 1e-6) - 1);
+    const r1 = Math.min(rows - 1, Math.floor(Math.max(wall.y1, wall.y2) + 1e-6) + 1);
+    for (let row = r0; row <= r1; row++) {
+      for (let column = c0; column <= c1; column++) bucket(wallsNear, row * columns + column, wall);
+    }
+  }
+  const propsOn: Array<Array<LayoutProp> | undefined> = Array.from({ length: squares });
+  for (const prop of level.props) {
+    const footprint = propFootprint(prop);
+    for (let row = footprint.row; row < footprint.row + footprint.height; row++) {
+      for (let column = footprint.column; column < footprint.column + footprint.width; column++) {
+        if (onLevel(level, { column, row })) bucket(propsOn, row * columns + column, prop);
+      }
+    }
+  }
+  const regionsOn: Array<Array<LayoutRegion> | undefined> = Array.from({ length: squares });
+  for (const region of level.regions) {
+    for (const square of new Set(region.squares)) {
+      if (square >= 0 && square < squares) bucket(regionsOn, square, region);
+    }
+  }
+
+  const target = levelSquareIndex(level, to);
+  const best = new Float64Array(squares).fill(Number.POSITIVE_INFINITY);
+  const start = levelSquareIndex(level, from);
+  best[start] = 0;
+  // A binary heap of [feet, square], cheapest on top.
+  const heap: Array<readonly [number, number]> = [[0, start]];
+  const swap = (i: number, j: number) => {
+    const held = heap[i]!;
+    heap[i] = heap[j]!;
+    heap[j] = held;
+  };
+  const push = (entry: readonly [number, number]) => {
+    heap.push(entry);
+    let k = heap.length - 1;
+    while (k > 0) {
+      const parent = (k - 1) >> 1;
+      if (heap[parent]![0] <= heap[k]![0]) break;
+      swap(parent, k);
+      k = parent;
+    }
+  };
+  const pop = (): readonly [number, number] => {
+    const top = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let k = 0;
+      for (;;) {
+        const left = k * 2 + 1;
+        const right = left + 1;
+        let least = k;
+        if (left < heap.length && heap[left]![0] < heap[least]![0]) least = left;
+        if (right < heap.length && heap[right]![0] < heap[least]![0]) least = right;
+        if (least === k) break;
+        swap(least, k);
+        k = least;
+      }
+    }
+    return top;
+  };
+
+  while (heap.length > 0) {
+    const [feet, at] = pop();
+    if (feet > best[at]!) continue;
+    if (at === target) return feet;
+    const here = { column: at % columns, row: Math.floor(at / columns) };
+    for (let down = -1; down <= 1; down++) {
+      for (let across = -1; across <= 1; across++) {
+        if (across === 0 && down === 0) continue;
+        const next = { column: here.column + across, row: here.row + down };
+        if (!onLevel(level, next)) continue;
+        const into = next.row * columns + next.column;
+        const step = movementCost(
+          {
+            ...level,
+            walls: wallsNear[at] ?? [],
+            props: propsOn[into] ?? [],
+            regions: regionsOn[into] ?? [],
+          },
+          here,
+          next,
+          options,
+        );
+        if (step === null) continue;
+        const total = feet + step;
+        if (total < best[into]!) {
+          best[into] = total;
+          push([total, into]);
+        }
+      }
+    }
+  }
+  return null;
 };

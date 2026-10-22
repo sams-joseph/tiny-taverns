@@ -1069,6 +1069,20 @@ describeLayer("membership", shared, (it) => {
               -- and a player's travel reads; a stranger's refusal is covered
               -- in party-travel.test.ts.
               'campaign_party_move',
+              -- A level and its parts are account-owned and read only by the
+              -- owner (levelOwned); a fight's copy of one is read only
+              -- through the creator's board read, behind the creator proof.
+              -- A second account's and a stranger's refusals are covered in
+              -- levels.test.ts and level-fights.test.ts.
+              'level',
+              'level_light',
+              'level_prop',
+              'level_region',
+              'level_wall',
+              'encounter_run_light',
+              'encounter_run_prop',
+              'encounter_run_region',
+              'encounter_run_wall',
               'campaign_member',
               -- A banner is read only as a field of the character, beside its
               -- portrait, through the character's own shipped reads.

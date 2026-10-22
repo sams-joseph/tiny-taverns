@@ -15,6 +15,7 @@ import {
   lineOfSight,
   movementCost,
   partyVision,
+  pathCost,
   propBehaviour,
   propFootprint,
   sightSegments,
@@ -572,6 +573,71 @@ describe("a step's cost", () => {
     expect(step([wall(6, 2, 6, 6)])).toBe(5);
     // A wall at an angle across the diagonal, clear of the corner.
     expect(step([wall(5.2, 6, 6, 5.2)])).toBeNull();
+  });
+});
+
+describe("a walk's cost", () => {
+  const open = (parts: Partial<LevelLayout> = {}) => level({ columns: 12, rows: 12, ...parts });
+  /** A wall down column line 6 with a door in it at row 5. */
+  const divided = (doorState: "open" | "closed" | "locked", kind: "door" | "secretDoor" = "door") =>
+    open({
+      walls: [
+        wall(6, 0, 6, 5),
+        wall(6, 5, 6, 6, { id: "door", kind, doorState }),
+        wall(6, 6, 6, 12),
+      ],
+    });
+
+  it("is nothing to stay put, and the longer side across open floor", () => {
+    expect(pathCost(open(), at(5, 5), at(5, 5))).toBe(0);
+    expect(pathCost(open(), at(0, 0), at(3, 7))).toBe(35);
+  });
+
+  it("is no walk off the board", () => {
+    expect(pathCost(open(), at(0, 0), at(12, 0))).toBeNull();
+  });
+
+  it("goes round a wall that does not close the way", () => {
+    const walls = [wall(6, 0, 6, 10)];
+    // Down past the wall's end at row 10 and back up: not the straight 5 feet.
+    expect(pathCost(open({ walls }), at(5, 5), at(6, 5))).toBeGreaterThan(5);
+  });
+
+  it("is refused through a closed or locked door and a wall, and walks through an open one", () => {
+    expect(pathCost(divided("closed"), at(2, 5), at(9, 5))).toBeNull();
+    expect(pathCost(divided("locked"), at(2, 5), at(9, 5))).toBeNull();
+    expect(pathCost(divided("open"), at(2, 5), at(9, 5))).toBe(35);
+  });
+
+  it("is refused through a secret door until it is found", () => {
+    expect(pathCost(divided("open", "secretDoor"), at(2, 5), at(9, 5))).toBeNull();
+    expect(
+      pathCost(divided("open", "secretDoor"), at(2, 5), at(9, 5), { revealed: new Set(["door"]) }),
+    ).toBe(35);
+  });
+
+  it("will not end on void or a blocking prop, and pays double through difficult terrain", () => {
+    const floor = open().floor.map((material, square) =>
+      square === levelSquareIndex({ columns: 12 }, at(4, 4)) ? VOID : material,
+    );
+    expect(pathCost(open({ floor }), at(0, 0), at(4, 4))).toBeNull();
+    expect(pathCost(open({ props: [prop("crate", 4, 4)] }), at(0, 0), at(4, 4))).toBeNull();
+    // A row of water across a corridor one square wide must be waded.
+    const corridor = level({
+      columns: 5,
+      rows: 1,
+      floor: [FLAGSTONE, FLAGSTONE, WATER, FLAGSTONE, FLAGSTONE],
+    });
+    expect(pathCost(corridor, at(0, 0), at(4, 0))).toBe(25);
+  });
+
+  it("answers across a 200 × 200 dungeon in well under a second", () => {
+    const board = dungeon("dark");
+    const started = performance.now();
+    const feet = pathCost(board, at(1, 1), at(198, 198));
+    const took = performance.now() - started;
+    expect(feet === null || feet > 0).toBe(true);
+    expect(took).toBeLessThan(1000);
   });
 });
 

@@ -5,11 +5,14 @@ import {
   BattleMapImages,
   type BattleMapUpdate,
   type BoardAreaSet,
+  type BoardDoorUpdate,
   type BoardFogUpdate,
+  type BoardLightUpdate,
   Conflict,
   EncounterId,
   EncounterRunBoard,
   EncounterRunId,
+  type LevelPartId,
   NotFound,
   SessionId,
 } from "@taverns/api";
@@ -29,6 +32,7 @@ import {
   setClause,
   timestampColumns,
 } from "./rows.js";
+import { levelColumn } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { nestedRowWritable, rowWritable } from "./visibility.js";
 
@@ -276,6 +280,33 @@ export class BattleMaps extends Context.Service<
       runId: EncounterRunId,
       update: BoardAreaSet,
     ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
+    /**
+     * Open, close or lock a door of the fight's level, or reveal or hide a
+     * secret one — the DM's alone, as the board is, written through in one
+     * transaction with a `board-door-updated` line and the doorbell.
+     * `NotFound` for a wall the fight's level does not have; `Conflict` for a
+     * fight that is over or not on a level, a plain wall, and a reveal of a
+     * door that is not secret. A repeated `requestId` changes nothing.
+     *
+     * The line is the DM's own (`0109_level_fights.ts`): a player's table
+     * draws nothing of a level yet, and a shared line about a secret door
+     * would say there is one.
+     */
+    readonly updateDoor: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      wallId: LevelPartId,
+      update: BoardDoorUpdate,
+    ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
+    /** Light or snuff a light of the fight's level: `updateDoor`'s rules, with `board-light-updated`. */
+    readonly updateLight: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      lightId: LevelPartId,
+      update: BoardLightUpdate,
+    ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
   }
 >()("BattleMaps") {
   static readonly layer = Layer.effect(this)(
@@ -356,13 +387,35 @@ export class BattleMaps extends Context.Service<
                  encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
                  ${alignmentColumn(sql, "encounter_run_board")},
                  ${battleMapPicture(sql)}, ${battleMapPending(sql)}, ${fogColumn(sql)},
-                 ${areaColumn(sql)}
+                 ${areaColumn(sql)}, ${levelColumn(sql)}
           from encounter_run_board
           left join battle_map on battle_map.id = encounter_run_board.map_id
             and ${rowWritable(sql, "battle_map", campaign, actor)}
           where encounter_run_board.run_id = ${runId}
         `,
       });
+
+      /**
+       * The fight as a door or light write finds it, held `for share` so it
+       * cannot end under the write (`end` waits), as `setArea` holds it.
+       * Beneath the caller's proof that the run is this creator's.
+       */
+      const levelFight = (runId: EncounterRunId) =>
+        Effect.gen(function* () {
+          const fights = yield* sql<{ readonly ended: boolean; readonly on_level: boolean }>`
+            select encounter_run.ended_at is not null as ended,
+                   coalesce(encounter_run_board.floor is not null, false) as on_level
+            from encounter_run
+            left join encounter_run_board on encounter_run_board.run_id = encounter_run.id
+            where encounter_run.id = ${runId}
+            for share of encounter_run
+          `;
+          const fight = fights[0]!;
+          if (fight.ended) return yield* new Conflict({ message: "this fight is over" });
+          if (!fight.on_level) {
+            return yield* new Conflict({ message: "this fight is not on a level" });
+          }
+        });
 
       /**
        * The fight's fog, rewritten as one set: the whole-board change first,
@@ -625,6 +678,127 @@ export class BattleMaps extends Context.Service<
               .pipe(
                 // Two sends of one pin that raced past the idempotency check;
                 // the unique index refuses the second, as for a move.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? current
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          );
+        },
+
+        updateDoor: (creator, sessionId, runId, wallId, update) => {
+          const current = Effect.flatMap(board({ ...asked(creator), runId }), (found) =>
+            Option.match(found, {
+              onNone: () => Effect.fail(new Conflict({ message: "this fight has no board" })),
+              onSome: Effect.succeed,
+            }),
+          );
+          return dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                    orNotFound("encounter_run", runId),
+                  );
+                  if (yield* requestAlreadyApplied(sql, runId, update.requestId)) {
+                    return yield* current;
+                  }
+                  yield* levelFight(runId);
+                  const walls = yield* sql<{ readonly kind: string }>`
+                    select encounter_run_wall.kind from encounter_run_wall
+                    where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
+                    for update
+                  `;
+                  const wall = walls[0];
+                  if (wall === undefined)
+                    return yield* new NotFound({ resource: "wall", id: wallId });
+                  if (wall.kind === "wall") {
+                    return yield* new Conflict({ message: "that wall is not a door" });
+                  }
+                  if (update.revealed !== undefined && wall.kind !== "secretDoor") {
+                    return yield* new Conflict({ message: "only a secret door is revealed" });
+                  }
+                  const changed = yield* sql<{
+                    readonly door_state: string;
+                    readonly revealed: boolean;
+                  }>`
+                    update encounter_run_wall
+                    set door_state = coalesce(${update.doorState ?? null}::text, door_state),
+                        revealed = coalesce(${update.revealed ?? null}::boolean, revealed)
+                    where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
+                    returning encounter_run_wall.door_state, encounter_run_wall.revealed
+                  `;
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "board-door-updated",
+                    encounterRunId: runId,
+                    payload: {
+                      wallId,
+                      doorState: changed[0]!.door_state,
+                      revealed: changed[0]!.revealed,
+                    },
+                    requestId: update.requestId,
+                    visibility: "dm",
+                  });
+                  return yield* current;
+                }),
+              )
+              .pipe(
+                // Two sends of one press that raced past the idempotency
+                // check; the unique index refuses the second, as for a move.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? current
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          );
+        },
+
+        updateLight: (creator, sessionId, runId, lightId, update) => {
+          const current = Effect.flatMap(board({ ...asked(creator), runId }), (found) =>
+            Option.match(found, {
+              onNone: () => Effect.fail(new Conflict({ message: "this fight has no board" })),
+              onSome: Effect.succeed,
+            }),
+          );
+          return dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                    orNotFound("encounter_run", runId),
+                  );
+                  if (yield* requestAlreadyApplied(sql, runId, update.requestId)) {
+                    return yield* current;
+                  }
+                  yield* levelFight(runId);
+                  const changed = yield* sql<{ readonly id: string }>`
+                    update encounter_run_light set lit = ${update.lit}
+                    where encounter_run_light.run_id = ${runId}
+                      and encounter_run_light.id = ${lightId}
+                    returning encounter_run_light.id
+                  `;
+                  if (changed.length === 0) {
+                    return yield* new NotFound({ resource: "light", id: lightId });
+                  }
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "board-light-updated",
+                    encounterRunId: runId,
+                    payload: { lightId, lit: update.lit },
+                    requestId: update.requestId,
+                    visibility: "dm",
+                  });
+                  return yield* current;
+                }),
+              )
+              .pipe(
+                // Two sends of one press that raced past the idempotency
+                // check; the unique index refuses the second, as for a move.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
                     ? current

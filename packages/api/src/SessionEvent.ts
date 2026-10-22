@@ -45,6 +45,15 @@ export const SessionEventKind = Schema.Literals([
    * Carries `{area}`, the template now pinned or `null`.
    */
   "board-area-updated",
+  /**
+   * The DM opened, closed or locked a door of a fight's level, or revealed or
+   * hid a secret one. Carries `{wallId, doorState, revealed}`. Always the DM's
+   * own line: a player's table draws nothing of a level yet, and a shared line
+   * about a secret door would say there is one.
+   */
+  "board-door-updated",
+  /** The DM lit or snuffed a light of a fight's level. Carries `{lightId, lit}`; the DM's own line. */
+  "board-light-updated",
   "turn-advanced",
   /** A conversation turned into a fight: the run's mode became `combat`. */
   "run-escalated",

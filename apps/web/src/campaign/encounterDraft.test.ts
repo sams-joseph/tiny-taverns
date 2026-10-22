@@ -96,6 +96,7 @@ const savedAmbush: SavedEncounter = {
     kind: "combat",
     tags: ["Marsh", "Night"],
     visibility: "dm",
+    levelId: null,
   },
   prep: {
     ready: true,
