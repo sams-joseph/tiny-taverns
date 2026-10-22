@@ -53,13 +53,15 @@ import type { Spell } from "./Spell.js";
  * see (`LevelSight.sees`, by its stat block's senses) and that have less than
  * total cover from it; each says its cover and whether it cannot see the
  * attacker back (advantage). The rest are listed in `sight.hidden`. An area
- * centred on a point is centred only on a creature it can see. Where it can
+ * centred on a point is centred only on a creature it can see, and catches
+ * nobody with total cover from its origin; a placement's `covers` says whom it
+ * catches with half or three-quarters cover from there. Where it can
  * walk is reachability over the level (`reachableOnLevel`: walls, shut
  * doors, blocking props, difficult terrain at double), not a radius.
  *
  * Not modelled, and so never refused or offered on their account: creature
  * size (every token is one square), line of sight and cover on a plain grid,
- * walls between an area's origin and whom it catches, a reaction's or a
+ * a reaction's or a
  * triggered bonus action's trigger (offered and flagged `triggered`, for the
  * chooser to judge), and conditions beyond the ones that stop a creature
  * acting or moving.
@@ -158,7 +160,16 @@ export interface NpcPlacement {
   readonly catches: ReadonlyArray<CombatantId>;
   /** The ones it catches on the creature's own side, so a chooser can see what it costs its friends. */
   readonly allies: ReadonlyArray<CombatantId>;
+  /**
+   * On a level, each caught creature with half or three-quarters cover from
+   * the origin: what it adds to a Dexterity save (`saveCoverBonus`). One
+   * behind total cover is not caught at all.
+   */
+  readonly covers?: Readonly<Record<CombatantId, AreaCover>>;
 }
+
+/** Cover from an area's origin that still lets it reach: what a Dexterity save adds. */
+export type AreaCover = Exclude<LevelCover, "none" | "total">;
 
 /** What taking an option spends, beyond its slot. */
 export interface NpcSpend {
@@ -503,16 +514,34 @@ export const npcTurnOptions = (fight: NpcTurnFight, combatantId: CombatantId): N
       });
     const out: Array<NpcPlacement> = [];
     const seen = new Set<string>();
+    // On a level, the cover each creature has from the area's origin: total
+    // cover is out of the area, and the rest adds to a Dexterity save.
+    const sight = level === undefined ? undefined : runLevelSight(board, level);
     const add = (origin: BoardSquare, toward: BoardSquare, excludeSelf: boolean) => {
       const squares = cover(origin, toward);
-      const catches = catchesIn(squares, excludeSelf);
+      const covers: Record<CombatantId, AreaCover> = {};
+      const catches = catchesIn(squares, excludeSelf).filter((id) => {
+        const at = fight.combatants.find((row) => row.id === id)?.position;
+        if (sight === undefined || at == null) return true;
+        const from = sight.cover(origin, at);
+        if (from === "total") return false;
+        if (from !== "none") covers[id] = from;
+        return true;
+      });
       const key = [...catches].sort().join(",");
       if (catches.length === 0 || seen.has(key)) return;
       seen.add(key);
       const allies = catches.filter(
         (id) => fight.combatants.find((row) => row.id === id)?.side === self.side,
       );
-      out.push({ origin, toward, squares, catches, allies });
+      out.push({
+        origin,
+        toward,
+        squares,
+        catches,
+        allies,
+        ...(Object.keys(covers).length === 0 ? {} : { covers }),
+      });
     };
     if (area.origin === "self") {
       if (area.shape === "cone" || area.shape === "line") {

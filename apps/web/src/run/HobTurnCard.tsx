@@ -14,6 +14,7 @@ import {
   type NpcTurnSave,
   type SessionId,
   damageAfterSave,
+  saveCoverLine,
   signed,
 } from "@taverns/api";
 import { Button, Card, CardContent, Input, SectionHeading } from "@taverns/ui";
@@ -340,12 +341,16 @@ function SaveLine({
 }) {
   const [total, setTotal] = useState("");
   const name = save.target.name;
+  // On a level, its cover from the area's origin (`saveCoverLine`): in a
+  // rolled save's modifier already, and the DM's to add to a pending one.
+  const cover = save.cover === undefined ? undefined : saveCoverLine(save.cover);
   if (save.roll !== null) {
     return (
       <li className="text-body-s leading-body">
         {name}: {String(save.roll.total)} (d20 {String(save.roll.d20)} {signed(save.roll.modifier)}
         ), {save.succeeded === true ? "saved" : "failed"}
         {save.hit === undefined ? ", no damage" : ` · took ${hitText(save.hit)}`}
+        {cover !== undefined && ` · ${cover}, included`}
       </li>
     );
   }
@@ -373,6 +378,11 @@ function SaveLine({
       <span>
         {name}: waiting on a {pending.ability} save, DC {String(pending.dc)}
       </span>
+      {cover !== undefined && (
+        <span data-slot="save-cover" className="text-caption leading-snug text-info-ink">
+          {cover} from the origin: add it to the total.
+        </span>
+      )}
       <Input
         aria-label={`${name}'s ${pending.ability} save total`}
         inputMode="numeric"

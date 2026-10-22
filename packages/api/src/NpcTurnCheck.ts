@@ -6,6 +6,7 @@ import { runLevelLayout, tableSight } from "./LevelFight.js";
 import { pathCost } from "./LevelGeometry.js";
 import {
   type NpcAim,
+  type NpcPlacement,
   type NpcSlot,
   type NpcSpend,
   type NpcTarget,
@@ -104,6 +105,8 @@ export type NpcTurnResolvedStep =
         readonly origin: BoardSquare;
         readonly toward: BoardSquare;
         readonly catches: ReadonlyArray<CombatantId>;
+        /** On a level, whom it catches with cover from its origin (`NpcPlacement.covers`). */
+        readonly covers?: NpcPlacement["covers"];
       };
       /** A multiattack's strikes, one per swing, each at its target. */
       readonly strikes?: ReadonlyArray<{
@@ -396,7 +399,12 @@ export const npcTurnCheck = (
               (fromSelf ? " (the square it points toward)" : " (the square it is centred on)"),
           );
         }
-        placement = { origin: chosen.origin, toward: chosen.toward, catches: chosen.catches };
+        placement = {
+          origin: chosen.origin,
+          toward: chosen.toward,
+          catches: chosen.catches,
+          ...(chosen.covers === undefined ? {} : { covers: chosen.covers }),
+        };
         aimed = chosen.catches;
       }
     } else {

@@ -75,6 +75,12 @@ export const NpcTurnSave = Schema.Struct({
   hit: Schema.optional(NpcTurnHit),
   /** The save left to the DM when the server could not roll it (`HobPendingSave`). */
   pendingSaveId: Schema.optional(HobPendingSaveId),
+  /**
+   * On a level, the cover it had from the area's origin, when that adds to
+   * this save (a Dexterity save: `saveCoverBonus`). A rolled save's
+   * `modifier` already includes it; a pending one is the DM's to add.
+   */
+  cover: Schema.optional(Schema.Literals(["half", "threeQuarters"])),
 });
 export type NpcTurnSave = typeof NpcTurnSave.Type;
 

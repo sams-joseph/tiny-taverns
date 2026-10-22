@@ -11,7 +11,16 @@ import {
 } from "@taverns/api";
 import { useEffect, useRef, useState } from "react";
 import type { Resource } from "../api/failure";
-import { areaAt, caughtBy, caughtLine, sameArea, squaresOf, startingFeet, stepFeet } from "./area";
+import {
+  areaAt,
+  caughtBy,
+  caughtLine,
+  coverFromOrigin,
+  sameArea,
+  squaresOf,
+  startingFeet,
+  stepFeet,
+} from "./area";
 import type { BoardTool, ToolPointer } from "./BoardTools";
 import { useEscapeAway } from "./escape";
 import { type FogEdit, fogAfter, squareKey, squaresBetween } from "./fog";
@@ -258,10 +267,19 @@ function useBoardTools({
         }
       : undefined;
 
+  // On a level, by cover from the template's origin: total cover is not
+  // affected, and the rest says what it adds to a Dex save.
   const caught =
     board === null || pinned === null
       ? undefined
-      : caughtLine(caughtBy(squaresOf(board, pinned), tokens.combatants, tokens.hpOf));
+      : (() => {
+          const { reached, sheltered } = coverFromOrigin(
+            board,
+            pinned,
+            caughtBy(squaresOf(board, pinned), tokens.combatants, tokens.hpOf),
+          );
+          return caughtLine(reached, sheltered);
+        })();
 
   return {
     tool,

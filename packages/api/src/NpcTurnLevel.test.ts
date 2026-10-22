@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { CombatantId } from "./Ids.js";
-import type { RunBoardLevel } from "./LevelFight.js";
+import type { PlayerLiveLevel, RunBoardLevel } from "./LevelFight.js";
 import { LEVEL_MATERIALS, type LevelAmbient } from "./LevelKit.js";
-import { combineModes, coverBonus, coveredAc, sensesOf, sightMode } from "./LevelRules.js";
+import {
+  combineModes,
+  coverBonus,
+  coveredAc,
+  playerCover,
+  saveCoverBonus,
+  saveCoverLine,
+  sensesOf,
+  sightMode,
+} from "./LevelRules.js";
 import { npcTurnCheck } from "./NpcTurnCheck.js";
 import { fightOf, option } from "./testing/npcFight.js";
 
@@ -85,6 +94,84 @@ describe("the level rules", () => {
     expect(sightMode({ attackerSees: false, targetSees: true })).toBe("disadvantage");
     expect(sightMode({ attackerSees: true, targetSees: false })).toBe("advantage");
   });
+
+  it("adds cover from an area's origin to a Dexterity save alone, and total cover is out", () => {
+    expect(saveCoverBonus("half", "DEX")).toBe(2);
+    expect(saveCoverBonus("threeQuarters", "Dexterity")).toBe(5);
+    expect(saveCoverBonus("half", "WIS")).toBe(0);
+    expect(saveCoverBonus("none", "DEX")).toBe(0);
+    expect(saveCoverBonus("total", "WIS")).toBeNull();
+    expect(saveCoverLine("half")).toBe("Half cover: +2 to a Dex save");
+    expect(saveCoverLine("threeQuarters")).toBe("Three-quarters cover: +5 to a Dex save");
+    expect(saveCoverLine("none")).toBeUndefined();
+  });
+});
+
+describe("cover as a player's table can tell it", () => {
+  const board = { columns: 10, rows: 10, feetPerCell: 5 };
+  /** The party's view: `seen` squares of flagstone, these walls and props. */
+  const view = (
+    seen: ReadonlyArray<number>,
+    parts: Partial<Pick<PlayerLiveLevel, "walls" | "props">> = {},
+  ): PlayerLiveLevel => ({
+    ambient: "bright",
+    sees: seen,
+    seen,
+    floor: seen.map(() => FLAGSTONE),
+    walls: [],
+    props: [],
+    lights: [],
+    regions: [],
+    ...parts,
+  });
+  const row = (r: number, from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, k) => r * 10 + from + k);
+  const strip = [...row(4, 0, 9), ...row(5, 0, 9), ...row(6, 0, 9)];
+  const me = { column: 1, row: 5 };
+  const it5 = { column: 6, row: 5 };
+
+  it("reads the party's view as the server reads the fight's copy", () => {
+    expect(playerCover(board, view(strip), me, it5)).toBe("none");
+    const crated = view(strip, {
+      props: [
+        {
+          id: "c" as never,
+          kind: "crate",
+          x: 3,
+          y: 5,
+          rotation: 0,
+          blocksMovement: null,
+          blocksSight: null,
+          cover: null,
+          difficult: null,
+        },
+      ],
+    });
+    expect(playerCover(board, crated, me, it5)).toBe("half");
+    const walled = view(strip, {
+      walls: [
+        {
+          id: "w" as never,
+          x1: 4,
+          y1: 0,
+          x2: 4,
+          y2: 10,
+          kind: "wall",
+          doorState: null,
+          low: false,
+        },
+      ],
+    });
+    expect(playerCover(board, walled, me, it5)).toBe("total");
+  });
+
+  it("says nothing when the party has not seen every square between", () => {
+    const gap = strip.filter((square) => square !== 5 * 10 + 4);
+    expect(playerCover(board, view(gap), me, it5)).toBeUndefined();
+    // Squares off the rectangle the two span do not matter.
+    const narrow = row(5, 1, 6);
+    expect(playerCover(board, view(narrow), me, it5)).toBe("none");
+  });
 });
 
 describe("a monster's options on a level", () => {
@@ -158,6 +245,66 @@ describe("a monster's options on a level", () => {
     // 5 feet to column 6? No: into the water is 10, then 10 a square, so 30
     // feet takes it three squares east (to column 8), not six.
     expect(Math.max(...reach.filter((square) => square.row === 5).map((s) => s.column))).toBe(8);
+  });
+});
+
+describe("an area on a level", () => {
+  /**
+   * The dragon at (2,5) breathes east. Tamsin at (6,5) has a crate at (4,5)
+   * between them; Ilse at (7,4) stands in the open; Bo at (8,7) is boxed in
+   * by four walls.
+   */
+  const breath = () => {
+    const box = [wall(8, 7, 9, 7), wall(9, 7, 9, 8), wall(8, 8, 9, 8), wall(8, 7, 8, 8)];
+    return fightOf(
+      [
+        { name: "Dragon", creature: "Adult Red Dragon", at: [2, 5] },
+        { name: "Tamsin", at: [6, 5] },
+        { name: "Ilse", at: [7, 4] },
+        { name: "Bo", at: [8, 7] },
+      ],
+      { level: levelOf({ walls: box, props: [crate(4, 5)] }) },
+    );
+  };
+
+  it("catches nobody behind total cover from its origin, and says who has cover", () => {
+    const { optionsOf, byName } = breath();
+    const placements = option(optionsOf("Dragon").options, "actions/Fire Breath").placements!;
+    const toward = placements.find(
+      (placement) => placement.toward.column === 6 && placement.toward.row === 5,
+    );
+    expect(toward).toBeDefined();
+    expect(toward!.squares).toContainEqual({ column: 8, row: 7 });
+    expect([...toward!.catches].sort()).toEqual([byName("Tamsin").id, byName("Ilse").id].sort());
+    expect(toward!.covers).toEqual({ [byName("Tamsin").id]: "half" });
+    // Bo is in nobody's catch, wherever it goes.
+    expect(placements.some((placement) => placement.catches.includes(byName("Bo").id))).toBe(false);
+  });
+
+  it("carries the covers into the checked step", () => {
+    const { fight, byName } = breath();
+    const check = npcTurnCheck(
+      fight,
+      byName("Dragon").id,
+      "turn",
+      [{ option: "actions/Fire Breath", square: { column: 6, row: 5 } }],
+      named,
+    );
+    expect(check.ok).toBe(true);
+    if (!check.ok) return;
+    expect(check.steps[0]).toMatchObject({
+      placement: { covers: { [byName("Tamsin").id]: "half" } },
+    });
+  });
+
+  it("is the plain template on a plain grid", () => {
+    const { optionsOf, byName } = fightOf([
+      { name: "Dragon", creature: "Adult Red Dragon", at: [2, 5] },
+      { name: "Bo", at: [8, 7] },
+    ]);
+    const [placement] = option(optionsOf("Dragon").options, "actions/Fire Breath").placements!;
+    expect(placement?.catches).toEqual([byName("Bo").id]);
+    expect(placement?.covers).toBeUndefined();
   });
 });
 

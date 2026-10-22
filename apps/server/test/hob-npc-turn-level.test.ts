@@ -47,7 +47,10 @@ import { describeLayer } from "./support/suite.js";
  *   attacker back is attacked at **advantage**, by the server's dice;
  * - **cover** adds to the AC a kept attack rolls against, and says so;
  * - a **move through a wall** is refused, and a kept move's feet are the
- *   walk's, **difficult terrain at double**; so are the DM's own moves.
+ *   walk's, **difficult terrain at double**; so are the DM's own moves;
+ * - an **area** catches nobody behind total cover from its origin, and cover
+ *   from there adds to a **Dexterity save**: in the modifier of one the server
+ *   rolls, and said on a party member's save the DM enters.
  */
 const script: Array<Round> = [];
 const model = scriptedModel({ model: "scripted-level-turn", maxTokens: 512, rounds: script });
@@ -150,25 +153,35 @@ const aTable = Effect.gen(function* () {
   );
   const goblin = yield* libraryCreature(dm, "Ash Goblin", srd("Goblin"));
   const bandit = yield* libraryCreature(dm, "Reed Captain", srd("Bandit Captain"));
+  const dragon = yield* libraryCreature(dm, "Cinder", srd("Adult Red Dragon"));
   return {
     dm,
     campaignId,
-    creatures: { goblin: goblin.id, bandit: bandit.id },
+    creatures: { goblin: goblin.id, bandit: bandit.id, dragon: dragon.id },
     nights: { count: 0 },
   };
 });
 type Table = Effect.Success<typeof aTable>;
 
+/** Where `aFight` puts the goblin and the bandit captain instead, and a dragon that goes first. */
+interface Placing {
+  readonly goblin?: readonly [number, number];
+  readonly bandit?: readonly [number, number];
+  readonly dragon?: readonly [number, number];
+}
+
 /**
  * A fight on a fresh level and a fresh night: the goblin at (5,5), the
  * bandit captain at (5,8) and Brannoc where the case puts him, placed while
- * initiative is rolled, then `first` up.
+ * initiative is rolled, then `first` up. `placing` moves the goblin and the
+ * captain, and brings in a dragon, first in the order.
  */
 const aFight = (
   table: Table,
   level: LevelParts,
   brannoc: readonly [number, number],
   first: "goblin" | "bandit" = "goblin",
+  placing: Placing = {},
 ) =>
   Effect.gen(function* () {
     const { dm, campaignId } = table;
@@ -220,6 +233,9 @@ const aFight = (
           creatures: [
             { creatureId: table.creatures.goblin, count: 1 },
             { creatureId: table.creatures.bandit, count: 1 },
+            ...(placing.dragon === undefined
+              ? []
+              : [{ creatureId: table.creatures.dragon, count: 1 }]),
           ],
         },
       }),
@@ -235,6 +251,7 @@ const aFight = (
     const goblin = seeded.find((row) => row.displayName === "Ash Goblin")!;
     const bandit = seeded.find((row) => row.displayName === "Reed Captain")!;
     const hero = seeded.find((row) => row.kind === "pc")!;
+    const dragon = seeded.find((row) => row.displayName === "Cinder");
     yield* as(dm.token, (client) =>
       client.combatants.damage({
         params: { ...params, combatantId: hero.id },
@@ -242,13 +259,19 @@ const aFight = (
       }),
     );
     // Out of the way first, so nobody's start square is taken.
+    const goblinAt = placing.goblin ?? [5, 5];
+    const banditAt = placing.bandit ?? [5, 8];
     for (const [row, column, line] of [
       [goblin, 0, 0],
       [bandit, 0, 1],
       [hero, 0, 2],
-      [goblin, 5, 5],
-      [bandit, 5, 8],
+      ...(dragon === undefined ? [] : [[dragon, 0, 3] as const]),
+      [goblin, goblinAt[0], goblinAt[1]],
+      [bandit, banditAt[0], banditAt[1]],
       [hero, brannoc[0], brannoc[1]],
+      ...(dragon === undefined || placing.dragon === undefined
+        ? []
+        : [[dragon, placing.dragon[0], placing.dragon[1]] as const]),
     ] as const) {
       yield* as(dm.token, (client) =>
         client.combatants.move({
@@ -265,6 +288,7 @@ const aFight = (
             { combatantId: goblin.id, initiative: first === "goblin" ? 20 : 15 },
             { combatantId: bandit.id, initiative: first === "bandit" ? 20 : 14 },
             { combatantId: hero.id, initiative: 10 },
+            ...(dragon === undefined ? [] : [{ combatantId: dragon.id, initiative: 25 }]),
           ],
         },
       }),
@@ -273,7 +297,7 @@ const aFight = (
     const order = yield* as(dm.token, (client) => client.combatants.list({ params }));
     const place = (row: Pick<Combatant, "id">) =>
       order.findIndex((other) => other.id === row.id) + 1;
-    return { params, goblin, bandit, hero, place };
+    return { params, goblin, bandit, hero, dragon, place };
   });
 type Fight = Effect.Success<ReturnType<typeof aFight>>;
 
@@ -317,6 +341,39 @@ const toolAnswers = (requests: ReadonlyArray<ChatRequest>): string =>
         .map((message) => String(message.content)),
     )
     .join("\n");
+
+const crateAt = (x: number, y: number) => ({
+  id: part(),
+  kind: "crate" as const,
+  x,
+  y,
+  rotation: 0 as const,
+  blocksMovement: null,
+  blocksSight: null,
+  cover: null,
+  difficult: null,
+  dmOnly: false,
+});
+
+/** Four walls round square (x, y): from outside, nothing reaches it. */
+const boxAround = (x: number, y: number) =>
+  (
+    [
+      [x, y, x + 1, y],
+      [x + 1, y, x + 1, y + 1],
+      [x, y + 1, x + 1, y + 1],
+      [x, y, x, y + 1],
+    ] as const
+  ).map(([x1, y1, x2, y2]) => ({
+    id: part(),
+    x1,
+    y1,
+    x2,
+    y2,
+    kind: "wall" as const,
+    doorState: null,
+    low: false,
+  }));
 
 /** Ask, expecting an offer; answers the turn that holds it. */
 const proposed = (
@@ -465,6 +522,64 @@ describeLayer("hob-npc-turn-level", shared, (it) => {
         const [rolled] = yield* attackRolls(turnId);
         expect(rolled?.target_ac).toBe(16);
       }),
+    );
+  });
+
+  describe("an area on a level", () => {
+    it.effect(
+      "catches nobody behind total cover, and adds cover from its origin to a Dex save",
+      () =>
+        Effect.gen(function* () {
+          const table = yield* Fixture;
+          // The dragon at (2,5) breathes east toward the goblin at (6,5), a
+          // crate on (4,5) between them; Brannoc at (7,3) has a crate on (5,3)
+          // between them; the captain at (8,7) is walled in on every side.
+          const fight = yield* aFight(
+            table,
+            { walls: boxAround(8, 7), props: [crateAt(4, 5), crateAt(5, 3)] },
+            [7, 3],
+            "goblin",
+            { goblin: [6, 5], bandit: [8, 7], dragon: [2, 5] },
+          );
+          const turnId = yield* proposed(table, fight, fight.dragon!, [
+            { option: "actions/Fire Breath", square: { column: 6, row: 5 } },
+          ]);
+          faces.length = 0;
+          roll(6, ...Array.from({ length: 18 }, () => 1));
+          // The goblin's Dexterity save: 17 + 2, and +2 for half cover, is
+          // DC 21 made; without the cover it would have failed.
+          roll(20, 17);
+          const outcome = yield* kept(table, fight, turnId);
+          const breath = optionStep(outcome, 0);
+          const byName = Object.fromEntries(
+            (breath.save?.targets ?? []).map((target) => [target.target.name, target]),
+          );
+          expect(Object.keys(byName).sort()).toEqual(["Ash Goblin", "Brannoc"]);
+          expect(byName["Ash Goblin"]).toMatchObject({
+            roll: { d20: 17, modifier: 4, total: 21 },
+            succeeded: true,
+            cover: "half",
+            hit: { amount: 9 },
+          });
+          expect(breath.notes).toContain(
+            "Ash Goblin: Half cover: +2 to a Dex save from the origin.",
+          );
+          // Brannoc's save is the player's, and says the cover for the DM to add.
+          expect(byName["Brannoc"]).toMatchObject({ roll: null, cover: "half" });
+          expect(byName["Brannoc"]?.pendingSaveId).toBeDefined();
+          // Behind its walls the captain was never touched.
+          expect((yield* rowNow(table, fight, fight.bandit.id)).hpCurrent).toBe(
+            fight.bandit.hpCurrent,
+          );
+          const saves = yield* Effect.flatMap(
+            SqlClient.SqlClient,
+            (sql) => sql<{ readonly label: string; readonly modifier: number }>`
+              select label, modifier from character_roll
+              where assistant_turn_id = ${turnId} and kind = 'save'
+            `,
+          ).pipe(Effect.orDie);
+          expect(saves).toEqual([{ label: "Ash Goblin · DEX save, DC 21", modifier: 4 }]);
+        }),
     );
   });
 
