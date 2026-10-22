@@ -1,4 +1,4 @@
-import type { BoardSquare, CombatantId } from "@taverns/api";
+import type { BoardSquare } from "@taverns/api";
 import { animates, beatsAt, type Beats } from "./motion";
 
 /**
@@ -23,7 +23,7 @@ export interface BoardStage {
   readonly hitStop: (duration: number) => Promise<void>;
   /** `flash: false` for an attacker drawing back, which no blow has touched. */
   readonly recoil: (
-    tokens: ReadonlyArray<CombatantId>,
+    tokens: ReadonlyArray<string>,
     away: { readonly x: number; readonly y: number },
     strength: number,
     flash?: boolean,
@@ -31,7 +31,7 @@ export interface BoardStage {
   /** Who stands on these squares, and where, for an area's knock-back. */
   readonly standing: (
     squares: ReadonlyArray<BoardSquare>,
-  ) => ReadonlyArray<{ readonly id: CombatantId; readonly square: BoardSquare }>;
+  ) => ReadonlyArray<{ readonly id: string; readonly square: BoardSquare }>;
   readonly expect: (at: BoardSquare) => void;
   readonly landed: (at: BoardSquare) => void;
   readonly landing: (at: BoardSquare) => Promise<void>;

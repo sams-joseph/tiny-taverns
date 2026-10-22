@@ -1,4 +1,4 @@
-import type { BoardSquare, CombatantId, DamageType } from "@taverns/api";
+import type { BoardSquare, DamageType } from "@taverns/api";
 import * as THREE from "three";
 import type { BlastPlay, StrikePlay } from "../useBoardEffects";
 import { EASE, type FxEngine, rnd } from "./engine";
@@ -33,7 +33,7 @@ const land = (
   fx: FxEngine,
   at: number,
   squares: ReadonlyArray<BoardSquare>,
-  hits: ReadonlyArray<{ readonly id: CombatantId; readonly away: { x: number; y: number } }>,
+  hits: ReadonlyArray<{ readonly id: string; readonly away: { x: number; y: number } }>,
   shake: number,
   crit: boolean,
 ) => {
@@ -48,7 +48,7 @@ const land = (
 };
 
 /** The attacker drawing back, then lunging (`lunge`) or holding while its spell flies. */
-const windup = (fx: FxEngine, id: CombatantId, dir: THREE.Vector3): number => {
+const windup = (fx: FxEngine, id: string, dir: THREE.Vector3): number => {
   fx.stage.recoil([id], { x: -dir.x, y: -dir.z }, 3, false);
   return fx.beats.anticipate;
 };

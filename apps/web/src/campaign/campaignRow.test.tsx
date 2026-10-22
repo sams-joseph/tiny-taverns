@@ -78,12 +78,13 @@ describe("the campaign's chrome, across every destination it offers", () => {
 
   it("carries the night and the campaign's own press on the row, on every tab", async () => {
     const where = await destinations();
-    // Overview, Encounters, Party, Cast, Notes, Locations, Chronicle.
+    // Overview, Encounters, Levels, Party, Cast, Notes, Locations, Chronicle.
     // Named so that a row that silently lost an item is a failure rather than a
     // smaller loop.
     expect(where.map((entry) => entry.label)).toEqual([
       "Overview",
       "Encounters",
+      "Levels",
       "Party",
       "Cast",
       "Notes",
@@ -110,7 +111,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       cleanup();
     }
 
-    // One value, rendered seven times — not six branches that happen to agree.
+    // One value, rendered eight times — not six branches that happen to agree.
     // `act.tsx`'s `actFor` computes the press once; a screen that decided for
     // itself is exactly what this is here to catch. And one each: the
     // Overview's *Tonight* card used to carry a second, which two peach
@@ -118,6 +119,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
     expect(seen).toEqual([
       { label: "Overview", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Encounters", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Levels", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Party", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Cast", badge: "Session 12", acts: ["Start an encounter"] },
       { label: "Notes", badge: "Session 12", acts: ["Start an encounter"] },
@@ -155,6 +157,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
     expect(seen).toEqual([
       { label: "Overview", badges: 0, acts: ["Start session"] },
       { label: "Encounters", badges: 0, acts: ["Start session"] },
+      { label: "Levels", badges: 0, acts: ["Start session"] },
       { label: "Party", badges: 0, acts: ["Start session"] },
       { label: "Cast", badges: 0, acts: ["Start session"] },
       { label: "Notes", badges: 0, acts: ["Start session"] },

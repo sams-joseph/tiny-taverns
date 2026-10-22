@@ -163,7 +163,7 @@ export interface TokenProps {
  * disagree about a move.
  */
 export interface LayerToken extends Omit<TokenState, "health"> {
-  readonly id: CombatantId;
+  readonly id: string;
   readonly displayName: string;
   readonly position: BoardSquare | null;
   /** The party's colour rather than everyone else's. */
@@ -185,9 +185,9 @@ export interface LayerToken extends Omit<TokenState, "health"> {
 export interface TokenLayerProps<T extends LayerToken> {
   readonly board: DrawnBoard;
   readonly tokens: ReadonlyArray<T>;
-  readonly labels: ReadonlyMap<CombatantId, string>;
+  readonly labels: ReadonlyMap<string, string>;
   readonly selected: T | undefined;
-  readonly activeId: CombatantId | null;
+  readonly activeId: string | null;
   readonly feetLeftOf: (token: T) => number | undefined;
   readonly diagonals: DiagonalRule;
   /** Whether this token may be dragged, stepped or put down now. */
@@ -218,7 +218,7 @@ const same = (a: BoardSquare, b: BoardSquare): boolean => a.column === b.column 
 
 /** A token being dragged: from its square, over the one under the pointer. */
 interface Drag {
-  readonly id: CombatantId;
+  readonly id: string;
   readonly pointerId: number;
   readonly from: BoardSquare;
   readonly over: BoardSquare;
@@ -452,7 +452,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const layer = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>();
   /** A dropped token, held on its square until the server answers the move. */
-  const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
+  const [landing, setLanding] = useState<{ readonly id: string; readonly at: BoardSquare }>();
 
   const standing = placed(tokens);
   /** Where everyone stands now, for an area's knock-back. */
@@ -473,7 +473,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     [],
   );
   /** Squares this board dropped a token on, until the server's answer puts it there. */
-  const dropped = useRef(new Map<CombatantId, BoardSquare>());
+  const dropped = useRef(new Map<string, BoardSquare>());
   const effects = useBoardEffects(
     standing.map((token) => ({
       id: token.id,
@@ -496,7 +496,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         ? landing.at
         : combatant.position;
   /** The squares other tokens hold, where they are drawn. */
-  const heldBesides = (id: CombatantId): ReadonlyArray<BoardSquare> =>
+  const heldBesides = (id: string): ReadonlyArray<BoardSquare> =>
     standing.filter((other) => other.id !== id).map(squareOf);
 
   // A token in the tray goes down on the square clicked.

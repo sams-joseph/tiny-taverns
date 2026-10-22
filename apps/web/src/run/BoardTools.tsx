@@ -37,6 +37,9 @@ import { Ruler } from "./RunTokens";
 /** The dock's tools, one at a time. Fog's brush is `Fog.tsx`'s. */
 export type BoardTool = "move" | "measure" | "area" | "fog";
 
+/** Every tool, in the dock's order. */
+const BOARD_TOOLS: ReadonlyArray<BoardTool> = ["move", "measure", "area", "fog"];
+
 export type DrawnBoard = BoardSize & { readonly feetPerCell: number };
 
 /**
@@ -230,6 +233,7 @@ export function ToolSurface({
  */
 export function BoardToolPicker({
   tool,
+  offered = BOARD_TOOLS,
   disabled,
   onTool,
   shape,
@@ -239,6 +243,8 @@ export function BoardToolPicker({
   fog,
 }: {
   readonly tool: BoardTool;
+  /** The tools this board offers, in the dock's order: a fight's all four, a level visit's fewer. */
+  readonly offered?: ReadonlyArray<BoardTool>;
   readonly disabled: boolean;
   readonly onTool: (tool: BoardTool) => void;
   readonly shape: AreaShape;
@@ -275,10 +281,10 @@ export function BoardToolPicker({
         aria-label="Tools"
         className="flex flex-wrap items-center justify-center gap-1.5"
       >
-        {choice("move", "Move", "move")}
-        {choice("measure", "Measure", "ruler")}
-        {choice("area", "Area", "circle-dashed")}
-        {choice("fog", "Fog", "cloud")}
+        {offered.includes("move") && choice("move", "Move", "move")}
+        {offered.includes("measure") && choice("measure", "Measure", "ruler")}
+        {offered.includes("area") && choice("area", "Area", "circle-dashed")}
+        {offered.includes("fog") && choice("fog", "Fog", "cloud")}
       </div>
       {tool === "fog" && fog}
       {tool === "area" && (

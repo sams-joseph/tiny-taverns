@@ -43,16 +43,16 @@ export const tokenLabels = (
  * follow. A player's board has no creation time to go by, only the order its
  * table answered (`play/PlayerBoard.tsx`).
  */
-export const labelsInOrder = (
-  rows: ReadonlyArray<{ readonly id: CombatantId; readonly displayName: string }>,
-): ReadonlyMap<CombatantId, string> => {
-  const byName = new Map<string, Array<CombatantId>>();
+export const labelsInOrder = <I extends string>(
+  rows: ReadonlyArray<{ readonly id: I; readonly displayName: string }>,
+): ReadonlyMap<I, string> => {
+  const byName = new Map<string, Array<I>>();
   for (const row of rows) {
     const same = byName.get(row.displayName) ?? [];
     same.push(row.id);
     byName.set(row.displayName, same);
   }
-  const labels = new Map<CombatantId, string>();
+  const labels = new Map<I, string>();
   for (const [name, same] of byName) {
     const words = name.trim().split(/\s+/);
     const last = words.at(-1) ?? "";

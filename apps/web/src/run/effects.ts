@@ -26,7 +26,7 @@ import type {
 
 /** One token as the effects read it. */
 export interface EffectToken {
-  readonly id: CombatantId;
+  readonly id: string;
   readonly square: BoardSquare;
   /** Hit points over maximum, 0–1, when this reader may know them. */
   readonly health: number | undefined;
@@ -37,14 +37,14 @@ export interface EffectToken {
 export type BoardEffect =
   | {
       readonly kind: "hurt" | "heal";
-      readonly id: CombatantId;
+      readonly id: string;
       readonly at: BoardSquare;
       /** The hit points it moved by, when this reader may know them. */
       readonly amount: number | undefined;
     }
   | {
       readonly kind: "moved";
-      readonly id: CombatantId;
+      readonly id: string;
       readonly from: BoardSquare;
       readonly to: BoardSquare;
     };

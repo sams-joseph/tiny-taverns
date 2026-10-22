@@ -1854,6 +1854,8 @@ export const encounterShelf = (): Map<string, Answer> => {
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+    // The party has been to no level at this table yet.
+    [`GET /campaigns/${campaignId}/visits`, { status: 200, body: [] }],
     // The membership list decides which projection a campaign URL renders —
     // the relation replaced the global mode. A test that wants the player
     // side re-aims this at `relation: "player"`, which makes the same URL

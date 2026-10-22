@@ -55,6 +55,9 @@ import { Route as ShellCampaignsCampaignIdEncountersIndexRouteImport } from "./r
 import { Route as ShellCampaignsCampaignIdEncountersSplatRouteImport } from "./routes/_shell/campaigns/$campaignId/encounters/$";
 import { Route as ShellCampaignsCampaignIdEncountersEncounterIdRouteRouteImport } from "./routes/_shell/campaigns/$campaignId/encounters/$encounterId/route";
 import { Route as ShellCampaignsCampaignIdEncountersNewRouteImport } from "./routes/_shell/campaigns/$campaignId/encounters/new";
+import { Route as ShellCampaignsCampaignIdLevelsIndexRouteImport } from "./routes/_shell/campaigns/$campaignId/levels/index";
+import { Route as ShellCampaignsCampaignIdLevelsSplatRouteImport } from "./routes/_shell/campaigns/$campaignId/levels/$";
+import { Route as ShellCampaignsCampaignIdLevelsVisitIdRouteImport } from "./routes/_shell/campaigns/$campaignId/levels/$visitId";
 import { Route as ShellCampaignsCampaignIdPartyIndexRouteImport } from "./routes/_shell/campaigns/$campaignId/party/index";
 import { Route as ShellCampaignsCampaignIdPartySplatRouteImport } from "./routes/_shell/campaigns/$campaignId/party/$";
 import { Route as ShellCampaignsCampaignIdPartySeatIdRouteImport } from "./routes/_shell/campaigns/$campaignId/party/$seatId";
@@ -315,6 +318,24 @@ const ShellCampaignsCampaignIdEncountersNewRoute =
     path: "/encounters/new",
     getParentRoute: () => ShellCampaignsCampaignIdRouteRoute,
   } as any);
+const ShellCampaignsCampaignIdLevelsIndexRoute =
+  ShellCampaignsCampaignIdLevelsIndexRouteImport.update({
+    id: "/levels/",
+    path: "/levels/",
+    getParentRoute: () => ShellCampaignsCampaignIdRouteRoute,
+  } as any);
+const ShellCampaignsCampaignIdLevelsSplatRoute =
+  ShellCampaignsCampaignIdLevelsSplatRouteImport.update({
+    id: "/levels/$",
+    path: "/levels/$",
+    getParentRoute: () => ShellCampaignsCampaignIdRouteRoute,
+  } as any);
+const ShellCampaignsCampaignIdLevelsVisitIdRoute =
+  ShellCampaignsCampaignIdLevelsVisitIdRouteImport.update({
+    id: "/levels/$visitId",
+    path: "/levels/$visitId",
+    getParentRoute: () => ShellCampaignsCampaignIdRouteRoute,
+  } as any);
 const ShellCampaignsCampaignIdPartyIndexRoute =
   ShellCampaignsCampaignIdPartyIndexRouteImport.update({
     id: "/party/",
@@ -409,10 +430,13 @@ export interface FileRoutesByFullPath {
   "/campaigns/$campaignId/characters/new": typeof ShellCampaignsCampaignIdCharactersNewRoute;
   "/campaigns/$campaignId/encounters/$": typeof ShellCampaignsCampaignIdEncountersSplatRoute;
   "/campaigns/$campaignId/encounters/new": typeof ShellCampaignsCampaignIdEncountersNewRoute;
+  "/campaigns/$campaignId/levels/$": typeof ShellCampaignsCampaignIdLevelsSplatRoute;
+  "/campaigns/$campaignId/levels/$visitId": typeof ShellCampaignsCampaignIdLevelsVisitIdRoute;
   "/campaigns/$campaignId/party/$": typeof ShellCampaignsCampaignIdPartySplatRoute;
   "/campaigns/$campaignId/party/$seatId": typeof ShellCampaignsCampaignIdPartySeatIdRoute;
   "/campaigns/$campaignId/cast/": typeof ShellCampaignsCampaignIdCastIndexRoute;
   "/campaigns/$campaignId/encounters/": typeof ShellCampaignsCampaignIdEncountersIndexRoute;
+  "/campaigns/$campaignId/levels/": typeof ShellCampaignsCampaignIdLevelsIndexRoute;
   "/campaigns/$campaignId/party/": typeof ShellCampaignsCampaignIdPartyIndexRoute;
   "/campaigns/$campaignId/cast/$npcId/talk": typeof ShellCampaignsCampaignIdCastNpcIdTalkRoute;
   "/campaigns/$campaignId/encounters/$encounterId/edit": typeof ShellCampaignsCampaignIdEncountersEncounterIdEditRoute;
@@ -459,10 +483,13 @@ export interface FileRoutesByTo {
   "/campaigns/$campaignId/characters/new": typeof ShellCampaignsCampaignIdCharactersNewRoute;
   "/campaigns/$campaignId/encounters/$": typeof ShellCampaignsCampaignIdEncountersSplatRoute;
   "/campaigns/$campaignId/encounters/new": typeof ShellCampaignsCampaignIdEncountersNewRoute;
+  "/campaigns/$campaignId/levels/$": typeof ShellCampaignsCampaignIdLevelsSplatRoute;
+  "/campaigns/$campaignId/levels/$visitId": typeof ShellCampaignsCampaignIdLevelsVisitIdRoute;
   "/campaigns/$campaignId/party/$": typeof ShellCampaignsCampaignIdPartySplatRoute;
   "/campaigns/$campaignId/party/$seatId": typeof ShellCampaignsCampaignIdPartySeatIdRoute;
   "/campaigns/$campaignId/cast": typeof ShellCampaignsCampaignIdCastIndexRoute;
   "/campaigns/$campaignId/encounters": typeof ShellCampaignsCampaignIdEncountersIndexRoute;
+  "/campaigns/$campaignId/levels": typeof ShellCampaignsCampaignIdLevelsIndexRoute;
   "/campaigns/$campaignId/party": typeof ShellCampaignsCampaignIdPartyIndexRoute;
   "/campaigns/$campaignId/cast/$npcId/talk": typeof ShellCampaignsCampaignIdCastNpcIdTalkRoute;
   "/campaigns/$campaignId/encounters/$encounterId/edit": typeof ShellCampaignsCampaignIdEncountersEncounterIdEditRoute;
@@ -516,10 +543,13 @@ export interface FileRoutesById {
   "/_shell/campaigns/$campaignId/characters/new": typeof ShellCampaignsCampaignIdCharactersNewRoute;
   "/_shell/campaigns/$campaignId/encounters/$": typeof ShellCampaignsCampaignIdEncountersSplatRoute;
   "/_shell/campaigns/$campaignId/encounters/new": typeof ShellCampaignsCampaignIdEncountersNewRoute;
+  "/_shell/campaigns/$campaignId/levels/$": typeof ShellCampaignsCampaignIdLevelsSplatRoute;
+  "/_shell/campaigns/$campaignId/levels/$visitId": typeof ShellCampaignsCampaignIdLevelsVisitIdRoute;
   "/_shell/campaigns/$campaignId/party/$": typeof ShellCampaignsCampaignIdPartySplatRoute;
   "/_shell/campaigns/$campaignId/party/$seatId": typeof ShellCampaignsCampaignIdPartySeatIdRoute;
   "/_shell/campaigns/$campaignId/cast/": typeof ShellCampaignsCampaignIdCastIndexRoute;
   "/_shell/campaigns/$campaignId/encounters/": typeof ShellCampaignsCampaignIdEncountersIndexRoute;
+  "/_shell/campaigns/$campaignId/levels/": typeof ShellCampaignsCampaignIdLevelsIndexRoute;
   "/_shell/campaigns/$campaignId/party/": typeof ShellCampaignsCampaignIdPartyIndexRoute;
   "/_shell/campaigns/$campaignId/cast/$npcId/talk": typeof ShellCampaignsCampaignIdCastNpcIdTalkRoute;
   "/_shell/campaigns/$campaignId/encounters/$encounterId/edit": typeof ShellCampaignsCampaignIdEncountersEncounterIdEditRoute;
@@ -572,10 +602,13 @@ export interface FileRouteTypes {
     | "/campaigns/$campaignId/characters/new"
     | "/campaigns/$campaignId/encounters/$"
     | "/campaigns/$campaignId/encounters/new"
+    | "/campaigns/$campaignId/levels/$"
+    | "/campaigns/$campaignId/levels/$visitId"
     | "/campaigns/$campaignId/party/$"
     | "/campaigns/$campaignId/party/$seatId"
     | "/campaigns/$campaignId/cast/"
     | "/campaigns/$campaignId/encounters/"
+    | "/campaigns/$campaignId/levels/"
     | "/campaigns/$campaignId/party/"
     | "/campaigns/$campaignId/cast/$npcId/talk"
     | "/campaigns/$campaignId/encounters/$encounterId/edit"
@@ -622,10 +655,13 @@ export interface FileRouteTypes {
     | "/campaigns/$campaignId/characters/new"
     | "/campaigns/$campaignId/encounters/$"
     | "/campaigns/$campaignId/encounters/new"
+    | "/campaigns/$campaignId/levels/$"
+    | "/campaigns/$campaignId/levels/$visitId"
     | "/campaigns/$campaignId/party/$"
     | "/campaigns/$campaignId/party/$seatId"
     | "/campaigns/$campaignId/cast"
     | "/campaigns/$campaignId/encounters"
+    | "/campaigns/$campaignId/levels"
     | "/campaigns/$campaignId/party"
     | "/campaigns/$campaignId/cast/$npcId/talk"
     | "/campaigns/$campaignId/encounters/$encounterId/edit"
@@ -678,10 +714,13 @@ export interface FileRouteTypes {
     | "/_shell/campaigns/$campaignId/characters/new"
     | "/_shell/campaigns/$campaignId/encounters/$"
     | "/_shell/campaigns/$campaignId/encounters/new"
+    | "/_shell/campaigns/$campaignId/levels/$"
+    | "/_shell/campaigns/$campaignId/levels/$visitId"
     | "/_shell/campaigns/$campaignId/party/$"
     | "/_shell/campaigns/$campaignId/party/$seatId"
     | "/_shell/campaigns/$campaignId/cast/"
     | "/_shell/campaigns/$campaignId/encounters/"
+    | "/_shell/campaigns/$campaignId/levels/"
     | "/_shell/campaigns/$campaignId/party/"
     | "/_shell/campaigns/$campaignId/cast/$npcId/talk"
     | "/_shell/campaigns/$campaignId/encounters/$encounterId/edit"
@@ -1019,6 +1058,27 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ShellCampaignsCampaignIdEncountersNewRouteImport;
       parentRoute: typeof ShellCampaignsCampaignIdRouteRoute;
     };
+    "/_shell/campaigns/$campaignId/levels/": {
+      id: "/_shell/campaigns/$campaignId/levels/";
+      path: "/levels";
+      fullPath: "/campaigns/$campaignId/levels/";
+      preLoaderRoute: typeof ShellCampaignsCampaignIdLevelsIndexRouteImport;
+      parentRoute: typeof ShellCampaignsCampaignIdRouteRoute;
+    };
+    "/_shell/campaigns/$campaignId/levels/$": {
+      id: "/_shell/campaigns/$campaignId/levels/$";
+      path: "/levels/$";
+      fullPath: "/campaigns/$campaignId/levels/$";
+      preLoaderRoute: typeof ShellCampaignsCampaignIdLevelsSplatRouteImport;
+      parentRoute: typeof ShellCampaignsCampaignIdRouteRoute;
+    };
+    "/_shell/campaigns/$campaignId/levels/$visitId": {
+      id: "/_shell/campaigns/$campaignId/levels/$visitId";
+      path: "/levels/$visitId";
+      fullPath: "/campaigns/$campaignId/levels/$visitId";
+      preLoaderRoute: typeof ShellCampaignsCampaignIdLevelsVisitIdRouteImport;
+      parentRoute: typeof ShellCampaignsCampaignIdRouteRoute;
+    };
     "/_shell/campaigns/$campaignId/party/": {
       id: "/_shell/campaigns/$campaignId/party/";
       path: "/party";
@@ -1129,10 +1189,13 @@ interface ShellCampaignsCampaignIdRouteRouteChildren {
   ShellCampaignsCampaignIdCharactersNewRoute: typeof ShellCampaignsCampaignIdCharactersNewRoute;
   ShellCampaignsCampaignIdEncountersSplatRoute: typeof ShellCampaignsCampaignIdEncountersSplatRoute;
   ShellCampaignsCampaignIdEncountersNewRoute: typeof ShellCampaignsCampaignIdEncountersNewRoute;
+  ShellCampaignsCampaignIdLevelsSplatRoute: typeof ShellCampaignsCampaignIdLevelsSplatRoute;
+  ShellCampaignsCampaignIdLevelsVisitIdRoute: typeof ShellCampaignsCampaignIdLevelsVisitIdRoute;
   ShellCampaignsCampaignIdPartySplatRoute: typeof ShellCampaignsCampaignIdPartySplatRoute;
   ShellCampaignsCampaignIdPartySeatIdRoute: typeof ShellCampaignsCampaignIdPartySeatIdRoute;
   ShellCampaignsCampaignIdCastIndexRoute: typeof ShellCampaignsCampaignIdCastIndexRoute;
   ShellCampaignsCampaignIdEncountersIndexRoute: typeof ShellCampaignsCampaignIdEncountersIndexRoute;
+  ShellCampaignsCampaignIdLevelsIndexRoute: typeof ShellCampaignsCampaignIdLevelsIndexRoute;
   ShellCampaignsCampaignIdPartyIndexRoute: typeof ShellCampaignsCampaignIdPartyIndexRoute;
   ShellCampaignsCampaignIdSessionsSessionIdRunsRunIdRoute: typeof ShellCampaignsCampaignIdSessionsSessionIdRunsRunIdRoute;
 }
@@ -1163,6 +1226,10 @@ const ShellCampaignsCampaignIdRouteRouteChildren: ShellCampaignsCampaignIdRouteR
       ShellCampaignsCampaignIdEncountersSplatRoute,
     ShellCampaignsCampaignIdEncountersNewRoute:
       ShellCampaignsCampaignIdEncountersNewRoute,
+    ShellCampaignsCampaignIdLevelsSplatRoute:
+      ShellCampaignsCampaignIdLevelsSplatRoute,
+    ShellCampaignsCampaignIdLevelsVisitIdRoute:
+      ShellCampaignsCampaignIdLevelsVisitIdRoute,
     ShellCampaignsCampaignIdPartySplatRoute:
       ShellCampaignsCampaignIdPartySplatRoute,
     ShellCampaignsCampaignIdPartySeatIdRoute:
@@ -1171,6 +1238,8 @@ const ShellCampaignsCampaignIdRouteRouteChildren: ShellCampaignsCampaignIdRouteR
       ShellCampaignsCampaignIdCastIndexRoute,
     ShellCampaignsCampaignIdEncountersIndexRoute:
       ShellCampaignsCampaignIdEncountersIndexRoute,
+    ShellCampaignsCampaignIdLevelsIndexRoute:
+      ShellCampaignsCampaignIdLevelsIndexRoute,
     ShellCampaignsCampaignIdPartyIndexRoute:
       ShellCampaignsCampaignIdPartyIndexRoute,
     ShellCampaignsCampaignIdSessionsSessionIdRunsRunIdRoute:

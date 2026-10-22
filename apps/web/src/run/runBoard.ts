@@ -333,12 +333,13 @@ type Stroke = FogEdit & { readonly kind: "hide" | "reveal" };
  * that never reached the server, leaves the queue too, and the board shows the
  * fog the server holds.
  */
-function useFogTool({
+export function useFogTool({
   board,
   on,
   onFog,
 }: {
-  readonly board: EncounterRunBoard | null;
+  /** A fight's board, or a level visit (`visits/VisitBoard.tsx`): any board with fog. */
+  readonly board: (BoardSize & { readonly fog: ReadonlyArray<BoardSquare> }) | null;
   readonly on: boolean;
   readonly onFog: (edit: FogEdit) => Promise<void>;
 }) {

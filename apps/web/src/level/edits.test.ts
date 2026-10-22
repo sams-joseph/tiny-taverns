@@ -17,6 +17,7 @@ import {
   toggleSecret,
   unpaintRegions,
   updateProp,
+  updateRegion,
   updateWall,
   addProp,
 } from "./edits";
@@ -194,6 +195,16 @@ describe("regions", () => {
       rough.squares[1],
     ]);
     expect(unpaintRegions(doc, rough.squares, null).regions).toEqual([]);
+  });
+
+  it("never makes the way in secret, painted or changed into one", () => {
+    expect(newRegion("entry", true).secret).toBe(false);
+    const doc = paintRegion(blank(), newRegion("trap", true), [2]);
+    const trap = doc.regions[0]!;
+    expect(updateRegion(doc, trap.id, { kind: "entry" }).regions[0]).toMatchObject({
+      kind: "entry",
+      secret: false,
+    });
   });
 });
 

@@ -65,7 +65,7 @@ Four facts the library does not advertise:
 
 `run/load.ts` cuts the fight along what a hit changes: `runFrameAtom` (campaign, night, stat blocks; read once), `liveStateAtom` (run, combatants, Hob's audit rows; refreshed by the doorbell), and `runViewAtom`, derived from both with a refresh callback naming both.
 
-**The runner's two live reads are the product's only writable ones** (`writableApiAtom`): `liveStateAtom`, and `runBoardAtom`, whose fog the Fog tool writes and whose area template the Area tool pins. The runner learns what it just did from its own write's answer, which keeps it usable with the connection down; before the atom was writable that answer lived in a second `useState` copy of the fight, and two copies could disagree. The write is the whole `AsyncResult`, because `useAtomSet` treats a function argument as a functional update: `set((current) => AsyncResult.map(current, edit))`, which carries the edit into a failure's previous success too.
+**The runner's two live reads and a level visit's are the product's only writable ones** (`writableApiAtom`): `liveStateAtom`, `runBoardAtom`, whose fog the Fog tool writes and whose area template the Area tool pins, and `visits/load.ts`'s `levelVisitAtom`, which every exploring write answers into, in one line with the doorbell's re-reads as the runner's board line is. The runner learns what it just did from its own write's answer, which keeps it usable with the connection down; before the atom was writable that answer lived in a second `useState` copy of the fight, and two copies could disagree. The write is the whole `AsyncResult`, because `useAtomSet` treats a function argument as a functional update: `set((current) => AsyncResult.map(current, edit))`, which carries the edit into a failure's previous success too.
 
 **A failure with a previous success is a staleness banner, not an error card.** `runViewAtom` contributes the previous success; a failure with none is the first load failing.
 
@@ -81,7 +81,7 @@ Three things stay in React in `run/state.ts`:
 
 ### The connection stays a hook
 
-`run/stream.ts`'s `useLiveStream` must not be turned into an atom. `Atom.make` over a `Stream` keeps `Arr.lastNonEmpty` of each pulled chunk, so three rows arriving together (a reconnect replay) reach an atom as one, and every event is a log row; `stream.test.ts`'s last test pins it. A refresh is also how an atom reopens, and its read starts from the top, so the cursor would reset.
+`run/stream.ts`'s `useLiveStream` (and `useVisitStream`, the same connection over a level visit's lines; both are `useLogStream`) must not be turned into an atom. `Atom.make` over a `Stream` keeps `Arr.lastNonEmpty` of each pulled chunk, so three rows arriving together (a reconnect replay) reach an atom as one, and every event is a log row; `stream.test.ts`'s last test pins it. A refresh is also how an atom reopens, and its read starts from the top, so the cursor would reset.
 
 - The cursor lives in a `useRef` and every attempt opens with `?since=<cursor>` (a plain `fetch` does not resend `Last-Event-ID`). Heartbeats carry no `id` and must not move it.
 - `onReconnected` fires on every connection after the first, so the rows are re-read too; resuming the log alone leaves a client that missed a re-read quietly behind.

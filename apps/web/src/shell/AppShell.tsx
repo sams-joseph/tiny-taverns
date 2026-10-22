@@ -203,6 +203,12 @@ const campaignNavFor = (
       section: "encounters",
     },
     {
+      label: "Levels",
+      link: { to: "/campaigns/$campaignId/levels", params: { campaignId } },
+      section: "levels",
+      collapse: "xl",
+    },
+    {
       label: "Party",
       link: { to: "/campaigns/$campaignId/party", params: { campaignId } },
       section: "party",
