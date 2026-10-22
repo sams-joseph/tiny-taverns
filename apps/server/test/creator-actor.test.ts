@@ -952,7 +952,12 @@ describeLayer("creator-actor", shared, (it) => {
       // `create`, `save`, `remove` and `uses`, the owner's shelf, for
       // `Locations.library`'s reason: a level is in no campaign, and
       // `levelOwned` is already the owner predicate.
-      expect(ungated).toBe(206);
+      // `PlayerTable.moveOnVisit` is the two hundred and seventh, a player's
+      // own token on the level visit on the table, for `PlayerTable.move`'s
+      // reason: it reaches exactly the token `ownVisitToken` allows on the
+      // visit `levelVisitAtPlayerTable` shows them, and the DM, who holds no
+      // seat, moves tokens through the gated `LevelVisits` instead.
+      expect(ungated).toBe(207);
     });
   });
 });

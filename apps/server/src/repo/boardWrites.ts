@@ -70,6 +70,40 @@ export const writeDoor = (
   });
 
 /**
+ * What the table is told of a door write, either board's: `shared`, whether
+ * the write's own line is the table's, and `force`, whether the table is rung
+ * anyway because it draws the door differently now. `seen` is whether the
+ * party has seen the door (`partSeen`, after the vision was recomputed);
+ * `shown`, whether a player's table shows the board.
+ *
+ * The table knows a door as open or shut: a locked door reads as closed to it
+ * (`playerLevelColumn`), so a lock is never news to it. The line is shared
+ * for a door they have seen, on a board they are shown, that opened or shut
+ * with no lock in it: a plain door, or a secret door that stood revealed
+ * before and after. Its finding or hiding, and any lock, is the DM's line,
+ * and the table is rung for a door it has seen that it draws differently: a
+ * secret door turned from wall to door or back, or a door it knows opened or
+ * shut.
+ */
+export const doorTold = (
+  after: DoorChange,
+  seen: boolean,
+  shown: boolean,
+): { readonly shared: boolean; readonly force: boolean } => {
+  const asTable = (state: LevelDoorState) => (state === "locked" ? "closed" : state);
+  const tableMoved = asTable(after.door_state) !== asTable(after.was_door_state);
+  const noLock = after.door_state !== "locked" && after.was_door_state !== "locked";
+  const knownDoor = after.kind === "door" || (after.revealed && after.was_revealed);
+  return {
+    shared: shown && seen && knownDoor && tableMoved && noLock,
+    force:
+      seen &&
+      (after.revealed !== after.was_revealed ||
+        ((after.kind === "door" || after.revealed) && tableMoved)),
+  };
+};
+
+/**
  * Light or snuff a light of the board's level, answering what it is (for its
  * log line's preset). `NotFound` for a light the board does not have.
  */

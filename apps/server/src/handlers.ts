@@ -1255,6 +1255,9 @@ const PlayerTableLive = HttpApiBuilder.group(
       .handle("turn", ({ params, payload }) =>
         table.turn(params.campaignId, params.runId, params.combatantId, payload),
       )
+      .handle("moveOnVisit", ({ params, payload }) =>
+        table.moveOnVisit(params.campaignId, params.visitId, params.seatId, payload),
+      )
       .handle("events", ({ params, query, request }) =>
         Effect.gen(function* () {
           const actor = yield* CurrentActor;

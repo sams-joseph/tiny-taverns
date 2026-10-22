@@ -22,7 +22,7 @@ import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { boardShown, clearArea, RUNS } from "./liveTables.js";
-import { writeDoor, writeFog, writeLight, writeRegion } from "./boardWrites.js";
+import { doorTold, writeDoor, writeFog, writeLight, writeRegion } from "./boardWrites.js";
 import { classFromColumns, dieOnSqlError, fromColumns, orNotFound } from "./rows.js";
 import { levelColumn, partSeen, RUN_BOARD, refreshPartyVision, ringVision } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -428,23 +428,11 @@ export class RunBoards extends Context.Service<
                   yield* levelFight(runId);
                   const after = yield* writeDoor(sql, RUN_BOARD, runId, wallId, update);
                   // What the party sees through it now, then whether the table
-                  // is told. The table knows a door as open or shut: a locked
-                  // door reads as closed to it (`playerLevelColumn`), so a lock
-                  // is never news to it. The line is shared for a door they
-                  // have seen, on a board they are shown, that opened or shut
-                  // with no lock in it: a plain door, or a secret door that
-                  // stood revealed before and after. Its finding or hiding,
-                  // and any lock, is the DM's line; the table is rung for
-                  // whatever it draws differently now.
+                  // is told (`doorTold`, the rule a visit's door shares).
                   const vision = yield* refreshPartyVision(sql, runId);
-                  const seen = yield* partSeen(sql, runId, { wallId });
-                  const asTable = (state: "open" | "closed" | "locked") =>
-                    state === "locked" ? "closed" : state;
-                  const tableMoved = asTable(after.door_state) !== asTable(after.was_door_state);
-                  const noLock = after.door_state !== "locked" && after.was_door_state !== "locked";
-                  const knownDoor = after.kind === "door" || (after.revealed && after.was_revealed);
-                  const lineShared =
-                    vision?.shown === true && seen && knownDoor && tableMoved && noLock;
+                  const seen = yield* partSeen(sql, RUN_BOARD, runId, { wallId });
+                  const told = doorTold(after, seen, vision?.shown === true);
+                  const lineShared = told.shared;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-door-updated",
@@ -467,13 +455,7 @@ export class RunBoards extends Context.Service<
                     runId,
                     vision,
                     lineShared,
-                    // A door they have seen that their table draws
-                    // differently now: a secret door turned from wall to
-                    // door or back, or a door they know opened or shut.
-                    force:
-                      seen &&
-                      (after.revealed !== after.was_revealed ||
-                        ((after.kind === "door" || after.revealed) && tableMoved)),
+                    force: told.force,
                   });
                   return yield* current;
                 }),
@@ -515,7 +497,7 @@ export class RunBoards extends Context.Service<
                   // they are shown.
                   const vision = yield* refreshPartyVision(sql, runId);
                   const lineShared =
-                    vision?.shown === true && (yield* partSeen(sql, runId, { lightId }));
+                    vision?.shown === true && (yield* partSeen(sql, RUN_BOARD, runId, { lightId }));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-light-updated",
@@ -575,7 +557,7 @@ export class RunBoards extends Context.Service<
                   // say where a secret was. The table is rung when it draws
                   // the region differently now: one it has seen a square of.
                   const vision = yield* refreshPartyVision(sql, runId);
-                  const seen = yield* partSeen(sql, runId, { regionId });
+                  const seen = yield* partSeen(sql, RUN_BOARD, runId, { regionId });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-region-updated",

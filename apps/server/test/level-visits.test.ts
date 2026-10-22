@@ -699,19 +699,25 @@ describeLayer("level-visits", shared, (it) => {
         expect(shown.tokens.map((token) => token.seatId)).toEqual([pims.seatId]);
         expect(shown.partySees.length).toBeGreaterThan(0);
 
-        // A seat joining while the visits stand gets no token yet.
+        // A seat joining while the visits stand gets a token on the one on the
+        // table, and none on the other until it is put on
+        // (`level-visit-players.test.ts`).
         yield* admittedTo(campaignId, quill.actor, "Quill");
-        yield* aCharacterAt(campaignId, quill.actor, { name: "Quen", hpMax: 9 });
-        expect((yield* visitOf(jo.token, campaignId, shown.id)).tokens).toEqual(shown.tokens);
+        const quens = yield* aCharacterAt(campaignId, quill.actor, { name: "Quen", hpMax: 9 });
+        expect(
+          (yield* visitOf(jo.token, campaignId, shown.id)).tokens.map((token) => token.seatId),
+        ).toEqual([pims.seatId, quens.seatId]);
+        expect(
+          (yield* visitOf(jo.token, campaignId, shelved.id)).tokens.map((token) => token.seatId),
+        ).toEqual([pims.seatId]);
 
         yield* as(pim.token, (client) =>
           client.party.leave({ params: { campaignId, campaignCharacterId: pims.seatId } }),
         );
         const onTable = yield* visitOf(jo.token, campaignId, shown.id);
-        expect(onTable.tokens).toEqual([]);
-        // Nobody is looking now; what the party saw stays seen.
-        expect(onTable.partySees).toEqual([]);
-        expect(onTable.partySeen).toEqual(shown.partySeen);
+        expect(onTable.tokens.map((token) => token.seatId)).toEqual([quens.seatId]);
+        // What the party saw stays seen.
+        expect(onTable.partySeen).toEqual(expect.arrayContaining([...shown.partySeen]));
         // A visit off the table looks again too, so none keeps a view drawn
         // from a token that is gone.
         const offTable = yield* visitOf(jo.token, campaignId, shelved.id);

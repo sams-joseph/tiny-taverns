@@ -795,7 +795,7 @@ describeLayer("level-visit-explore", shared, (it) => {
       }),
     );
 
-    it.effect("logs each write the DM's own line on the open night, naming the visit", () =>
+    it.effect("logs each write's line on the open night, naming the visit", () =>
       Effect.gen(function* () {
         const { jo, table } = yield* Fixture;
         const sessionId = yield* openNight;
@@ -839,7 +839,11 @@ describeLayer("level-visit-explore", shared, (it) => {
           client.levelVisits.takeOffTable({ params: { campaignId } }),
         );
 
-        const lines = yield* linesOf(visit.id);
+        // Which lines are the table's, and the rings beside the DM's own
+        // (`visit-vision-updated`), are `level-visit-players.test.ts`'.
+        const lines = (yield* linesOf(visit.id)).filter(
+          (line) => line.kind !== "visit-vision-updated",
+        );
         expect(lines.map((line) => line.kind)).toEqual([
           "visit-opened",
           "visit-tabled",
@@ -850,7 +854,6 @@ describeLayer("level-visit-explore", shared, (it) => {
           "visit-fog-updated",
           "visit-tabled",
         ]);
-        expect(new Set(lines.map((line) => line.visibility))).toEqual(new Set(["dm"]));
         expect(new Set(lines.map((line) => line.session_id))).toEqual(new Set([sessionId]));
         expect(lines[2]!.payload).toEqual({
           seatId,
@@ -863,13 +866,14 @@ describeLayer("level-visit-explore", shared, (it) => {
 
         // Once the night is over a write logs nothing again.
         yield* endNight(sessionId);
+        const logged = (yield* linesOf(visit.id)).length;
         yield* as(jo.token, (client) =>
           client.levelVisits.updateDoor({
             params: { ...on(table, visit), wallId: DOOR },
             payload: { doorState: "closed" },
           }),
         );
-        expect(yield* linesOf(visit.id)).toHaveLength(8);
+        expect(yield* linesOf(visit.id)).toHaveLength(logged);
       }),
     );
 

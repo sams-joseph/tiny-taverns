@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { CombatantPosition } from "./Combatant.js";
 import { CampaignCharacterId, LevelId, LevelVisitId } from "./Ids.js";
-import { RunBoardLevel } from "./LevelFight.js";
+import { PlayerLiveLevel, RunBoardLevel } from "./LevelFight.js";
 
 /**
  * A level visit: a campaign's live state of one of its creator's levels, the
@@ -14,8 +14,9 @@ import { RunBoardLevel } from "./LevelFight.js";
  * deleted level leaves `levelId` `null`. Hob does not open one: a visit is a
  * live-play record.
  *
- * **The creator's whole.** Every field here is the DM's; a player's view of a
- * visit, when there is one, is a distinct schema narrowed in SQL.
+ * **The creator's whole.** Every field here is the DM's; a seated player's
+ * view of the visit on the table is `PlayerLevelVisit`, a distinct schema
+ * narrowed in SQL.
  */
 
 /** One seat's character standing on the visit. */
@@ -101,3 +102,43 @@ export type LevelVisitTokenMove = typeof LevelVisitTokenMove.Type;
 /** Put one of the campaign's visits on its table, taking off whichever was there. */
 export const TableVisitSet = Schema.Struct({ visitId: LevelVisitId });
 export type TableVisitSet = typeof TableVisitSet.Type;
+
+/**
+ * One of the party's tokens on the visit as a seated player's table has it: a
+ * live seat this player may see (shared, or their own), and not one the DM's
+ * fog covers unless it is their own. `own` marks the asker's own seats, the
+ * only tokens they walk (`table.moveOnVisit`).
+ */
+export const PlayerLevelVisitToken = Schema.Struct({
+  seatId: CampaignCharacterId,
+  /** The seat's name at this table (`PartySeat.displayName`). */
+  name: Schema.String,
+  own: Schema.Boolean,
+  column: Schema.Int,
+  row: Schema.Int,
+});
+export type PlayerLevelVisitToken = typeof PlayerLevelVisitToken.Type;
+
+/**
+ * The visit on the table as a seated player sees it (`PlayerLiveTable.visit`).
+ *
+ * A distinct schema, not `LevelVisit` with fields taken off: no `levelId` and
+ * no name (the level is the DM's to name, as a fight's encounter is), and the
+ * level is the party's view of the copy (`PlayerLiveLevel`), narrowed in SQL
+ * by what the party has seen with the DM's fog taken out, as a fight's player
+ * board is: no `entry` region, no DM-only prop, no unrevealed secret, nothing
+ * on a square the party has not seen. The size and scale mean what they mean
+ * on `LevelVisit`.
+ */
+export const PlayerLevelVisit = Schema.Struct({
+  id: LevelVisitId,
+  columns: Schema.Int,
+  rows: Schema.Int,
+  feetPerCell: Schema.Int,
+  level: PlayerLiveLevel,
+  /** The squares under the DM's fog, in reading order, drawn opaque as a fight's player board draws them. */
+  fog: Schema.Array(CombatantPosition),
+  /** The party's tokens this player may see, in seat order. */
+  tokens: Schema.Array(PlayerLevelVisitToken),
+});
+export type PlayerLevelVisit = typeof PlayerLevelVisit.Type;

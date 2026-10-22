@@ -6,6 +6,7 @@ import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
 import { PlayerLiveLevel } from "./LevelFight.js";
+import { PlayerLevelVisit } from "./LevelVisit.js";
 import { RollOutcome } from "./Roll.js";
 import {
   CampaignCharacterId,
@@ -280,6 +281,13 @@ export class PlayerLiveTable extends Schema.Class<PlayerLiveTable>("PlayerLiveTa
   /** *"Session 12"* — the number, not the whole `Session`, which carries the DM's title. */
   sessionNumber: Schema.Int,
   fight: Schema.NullOr(PlayerLiveFight),
+  /**
+   * The level visit on the table as the party has seen it
+   * (`PlayerLevelVisit`), or `null`: none is on the table, the night is not
+   * open (started and not ended), or a live fight borrows the visit, when
+   * the fight is what the table plays on.
+   */
+  visit: Schema.NullOr(PlayerLevelVisit),
 }) {}
 
 /** A contentless player live doorbell. Clients re-read the narrow table/log. */

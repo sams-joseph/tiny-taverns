@@ -2798,6 +2798,25 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
       success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),
+    /**
+     * Walk your own character's token on the level visit on the table.
+     *
+     * It reaches one token: one of your own live seats, on the visit
+     * `read` shows you (`PlayerLiveTable.visit`), on the campaign's open
+     * night. Any other seat, visit or asker is `NotFound`, as the read would
+     * be. There is no speed limit, but the square must be one a token may
+     * stand on and reachable by a walk from where the token stands over the
+     * visit's copy and what the party has seen, as a fight's walk is
+     * (`partyPathCost`); otherwise a `Conflict`, *No way there*, in the same
+     * words whatever stood in the way. `Conflict` too while a fight borrows
+     * the visit. A repeated `requestId` changes nothing.
+     */
+    HttpApiEndpoint.put("moveOnVisit", "/table/visits/:visitId/tokens/:seatId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, seatId: CampaignCharacterId },
+      payload: PlayerMove,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
   )
   .prefix("/campaigns/:campaignId")
   .middleware(Authorization) {}

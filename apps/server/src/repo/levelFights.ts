@@ -574,18 +574,20 @@ export const refreshFights = (
   );
 
 /**
- * The squares the party has seen of a fight's level with the DM's fog taken
+ * The squares the party has seen of a board's level with the DM's fog taken
  * out: the `seen` a seated player's table is sent (`playerLevelColumn`), and
  * what a player's walk is held to (`partyWalk`). Empty with no vision yet.
  */
-export const partySeen = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
-  Effect.map(
+export const partySeen = (sql: SqlClient.SqlClient, tables: BoardTables, id: string) => {
+  const board = sql(tables.board);
+  return Effect.map(
     sql<{ readonly seen: ReadonlyArray<number> | null }>`
-      select v.seen from encounter_run_board cross join lateral ${partyView(sql)}
-      where encounter_run_board.run_id = ${runId}
+      select v.seen from ${board} cross join lateral ${partyView(sql, tables)}
+      where ${board}.${sql(tables.boardKey)} = ${id}
     `,
     (rows): ReadonlyArray<number> => rows[0]?.seen ?? [],
   );
+};
 
 /** Each prop kind's size, for the player's level read: the kit's (`PROP_KINDS`), as one parameter. */
 const PROP_SIZES = JSON.stringify(
@@ -597,9 +599,10 @@ const PROP_SIZES = JSON.stringify(
 );
 
 /**
- * The fight's level as a seated player's table has it (`PlayerLiveLevel`), as
- * one `json` column, `level`, or `null` on the plain grid.
- * `encounter_run_board` must be in scope.
+ * A board's level as a seated player's table has it (`PlayerLiveLevel`), as
+ * one `json` column, `level`, or `null` on the plain grid: a fight's
+ * (`PlayerLiveBoard.level`) or the visit on the table's
+ * (`PlayerLevelVisit.level`). The board's table must be in scope.
  *
  * Narrowed here, in SQL, against the board's arrays with the DM's fog taken
  * out (`seen`, `sees`). Every part is selected only through them, and the
@@ -624,17 +627,23 @@ const PROP_SIZES = JSON.stringify(
  * `seen_at` is the seen set as one flag per square, so each part's test is a
  * subscript rather than a scan of the array.
  */
-export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment => {
-  const columns = sql`encounter_run_board.board_columns`;
-  const rows = sql`encounter_run_board.board_rows`;
+export const playerLevelColumn = (
+  sql: SqlClient.SqlClient,
+  tables: BoardTables,
+): Statement.Fragment => {
+  const board = sql(tables.board);
+  const owner = sql`${board}.${sql(tables.boardKey)}`;
+  const key = sql(tables.partKey);
+  const columns = sql`${board}.board_columns`;
+  const rows = sql`${board}.board_rows`;
   return sql`
-    case when encounter_run_board.floor is null then null else (
+    case when ${board}.floor is null then null else (
       select json_build_object(
-        'ambient', encounter_run_board.ambient,
+        'ambient', ${board}.ambient,
         'sees', to_json(v.sees),
         'seen', to_json(v.seen),
         'floor', to_json(array(
-          select encounter_run_board.floor[square + 1] from unnest(v.seen) square
+          select ${board}.floor[square + 1] from unnest(v.seen) square
           order by square
         )),
         'walls', coalesce((
@@ -647,8 +656,8 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
                    else w.door_state end,
             'low', w.low
           ) order by w.ordinal)
-          from encounter_run_wall w
-          where w.run_id = encounter_run_board.run_id and ${wallTouchesSeen(sql)}
+          from ${sql(tables.wall)} w
+          where w.${key} = ${owner} and ${wallTouchesSeen(sql, tables)}
         ), '[]'::json),
         'props', coalesce((
           select json_agg(json_build_object(
@@ -656,10 +665,10 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
             'blocksMovement', p.blocks_movement, 'blocksSight', p.blocks_sight,
             'cover', p.cover, 'difficult', p.difficult
           ) order by p.ordinal)
-          from encounter_run_prop p
+          from ${sql(tables.prop)} p
           join jsonb_to_recordset(${PROP_SIZES}::jsonb) as kit(kind text, width int, height int)
             on kit.kind = p.kind
-          where p.run_id = encounter_run_board.run_id
+          where p.${key} = ${owner}
             and not p.dm_only
             and exists (
               select 1
@@ -676,8 +685,8 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
             'id', l.id, 'x', l.x, 'y', l.y, 'bright', l.bright, 'dim', l.dim, 'tone', l.tone,
             'flicker', l.flicker
           ) order by l.ordinal)
-          from encounter_run_light l
-          where l.run_id = encounter_run_board.run_id and l.lit and ${lightOnSeen(sql)}
+          from ${sql(tables.light)} l
+          where l.${key} = ${owner} and l.lit and ${lightOnSeen(sql, tables)}
         ), '[]'::json),
         'regions', coalesce((
           select json_agg(json_build_object(
@@ -687,30 +696,32 @@ export const playerLevelColumn = (sql: SqlClient.SqlClient): Statement.Fragment 
             select g.id, g.kind, g.ordinal,
                    array(select square from unnest(g.squares) square
                          where v.seen_at[square + 1] order by square) as squares
-            from encounter_run_region g
-            where g.run_id = encounter_run_board.run_id and (not g.secret or g.revealed)
+            from ${sql(tables.region)} g
+            where g.${key} = ${owner} and (not g.secret or g.revealed)
               and g.kind <> 'entry'
           ) clipped
           where cardinality(clipped.squares) > 0
         ), '[]'::json)
       )
-      from ${partyView(sql)}
+      from ${partyView(sql, tables)}
     ) end as level
   `;
 };
 
 /**
- * Over `encounter_run_board`: what the party has seen of its level with the
- * DM's fog taken out, as a row source `v (seen, sees, seen_at)`: the explored
+ * Over the board's row: what the party has seen of its level with the DM's
+ * fog taken out, as a row source `v (seen, sees, seen_at)`: the explored
  * squares and those in sight now, ascending, and `seen_at`, one flag per
  * square (`seen_at[square + 1]`). Empty while the board has no vision yet.
  */
-const partyView = (sql: SqlClient.SqlClient): Statement.Fragment => sql`(
+const partyView = (sql: SqlClient.SqlClient, tables: BoardTables): Statement.Fragment => {
+  const board = sql(tables.board);
+  return sql`(
   select fogless.seen, fogless.sees,
          array(
            select seen_square.square is not null
            from generate_series(
-             0, encounter_run_board.board_columns * encounter_run_board.board_rows - 1
+             0, ${board}.board_columns * ${board}.board_rows - 1
            ) every_square
            left join unnest(fogless.seen) as seen_square(square)
              on seen_square.square = every_square
@@ -718,25 +729,27 @@ const partyView = (sql: SqlClient.SqlClient): Statement.Fragment => sql`(
          ) as seen_at
   from (
     select array(
-             select unnest(encounter_run_board.party_seen)
-             except select unnest(encounter_run_board.fog_hidden)
+             select unnest(${board}.party_seen)
+             except select unnest(${board}.fog_hidden)
              order by 1) as seen,
            array(
-             select unnest(encounter_run_board.party_sees)
-             except select unnest(encounter_run_board.fog_hidden)
+             select unnest(${board}.party_sees)
+             except select unnest(${board}.fog_hidden)
              order by 1) as sees
   ) fogless
 ) v`;
+};
 
 /**
- * Over `encounter_run_wall w`, `encounter_run_board` and `partyView`'s `v`:
- * the wall touches a seen square. An axis-aligned wall touches the squares it
- * runs along or through; a slanted one, the squares its line crosses inside,
- * not those it only meets at a corner. Only the squares about the wall's box
- * are asked.
+ * Over a board's wall `w`, its board row and `partyView`'s `v`: the wall
+ * touches a seen square. An axis-aligned wall touches the squares it runs
+ * along or through; a slanted one, the squares its line crosses inside, not
+ * those it only meets at a corner. Only the squares about the wall's box are
+ * asked.
  */
-const wallTouchesSeen = (sql: SqlClient.SqlClient): Statement.Fragment => {
-  const columns = sql`encounter_run_board.board_columns`;
+const wallTouchesSeen = (sql: SqlClient.SqlClient, tables: BoardTables): Statement.Fragment => {
+  const board = sql(tables.board);
+  const columns = sql`${board}.board_columns`;
   const x0 = sql`least(w.x1, w.x2)`;
   const x1 = sql`greatest(w.x1, w.x2)`;
   const y0 = sql`least(w.y1, w.y2)`;
@@ -751,7 +764,7 @@ const wallTouchesSeen = (sql: SqlClient.SqlClient): Statement.Fragment => {
            greatest(0, floor(${x0})::int - 1), least(${columns} - 1, ceil(${x1})::int)) c,
          generate_series(
            greatest(0, floor(${y0})::int - 1),
-           least(encounter_run_board.board_rows - 1, ceil(${y1})::int)) r
+           least(${board}.board_rows - 1, ceil(${y1})::int)) r
     where (case when w.x1 = w.x2 then c <= ${x0} and c + 1 >= ${x0}
                 else c < ${x1} and c + 1 > ${x0} end)
       and (case when w.y1 = w.y2 then r <= ${y0} and r + 1 >= ${y0}
@@ -762,14 +775,17 @@ const wallTouchesSeen = (sql: SqlClient.SqlClient): Statement.Fragment => {
   )`;
 };
 
-/** Over `encounter_run_light l`, `encounter_run_board` and `partyView`'s `v`: the light stands on a seen square. */
-const lightOnSeen = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
-  v.seen_at[least(floor(l.y)::int, encounter_run_board.board_rows - 1)
-              * encounter_run_board.board_columns
-            + least(floor(l.x)::int, encounter_run_board.board_columns - 1) + 1]`;
+/** Over a board's light `l`, its board row and `partyView`'s `v`: the light stands on a seen square. */
+const lightOnSeen = (sql: SqlClient.SqlClient, tables: BoardTables): Statement.Fragment => {
+  const board = sql(tables.board);
+  return sql`
+  v.seen_at[least(floor(l.y)::int, ${board}.board_rows - 1)
+              * ${board}.board_columns
+            + least(floor(l.x)::int, ${board}.board_columns - 1) + 1]`;
+};
 
 /**
- * Whether the party has seen a part of the fight's level, with the DM's fog
+ * Whether the party has seen a part of a board's level, with the DM's fog
  * taken out: the wall touches a seen square, the light stands on one, or the
  * region has one. What a door's or a light's log line is shared under, and
  * what rings the table for a region revealed or hidden, so the table is told
@@ -777,34 +793,35 @@ const lightOnSeen = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
  */
 export const partSeen = (
   sql: SqlClient.SqlClient,
-  runId: EncounterRunId,
+  tables: BoardTables,
+  id: string,
   part: { readonly wallId: string } | { readonly lightId: string } | { readonly regionId: string },
-) =>
-  Effect.map(
+) => {
+  const board = sql(tables.board);
+  const key = sql(tables.partKey);
+  const onBoard = (alias: string) =>
+    sql`join ${board} on ${board}.${sql(tables.boardKey)} = ${sql(alias)}.${key}
+        cross join lateral ${partyView(sql, tables)}`;
+  return Effect.map(
     "wallId" in part
       ? sql<{ readonly seen: boolean }>`
-          select ${wallTouchesSeen(sql)} as seen
-          from encounter_run_wall w
-          join encounter_run_board on encounter_run_board.run_id = w.run_id
-          cross join lateral ${partyView(sql)}
-          where w.run_id = ${runId} and w.id = ${part.wallId}
+          select ${wallTouchesSeen(sql, tables)} as seen
+          from ${sql(tables.wall)} w ${onBoard("w")}
+          where w.${key} = ${id} and w.id = ${part.wallId}
         `
       : "regionId" in part
         ? sql<{ readonly seen: boolean }>`
           select exists (
                    select 1 from unnest(g.squares) square where v.seen_at[square + 1]
                  ) as seen
-          from encounter_run_region g
-          join encounter_run_board on encounter_run_board.run_id = g.run_id
-          cross join lateral ${partyView(sql)}
-          where g.run_id = ${runId} and g.id = ${part.regionId}
+          from ${sql(tables.region)} g ${onBoard("g")}
+          where g.${key} = ${id} and g.id = ${part.regionId}
         `
         : sql<{ readonly seen: boolean }>`
-          select ${lightOnSeen(sql)} as seen
-          from encounter_run_light l
-          join encounter_run_board on encounter_run_board.run_id = l.run_id
-          cross join lateral ${partyView(sql)}
-          where l.run_id = ${runId} and l.id = ${part.lightId}
+          select ${lightOnSeen(sql, tables)} as seen
+          from ${sql(tables.light)} l ${onBoard("l")}
+          where l.${key} = ${id} and l.id = ${part.lightId}
         `,
     (rows) => rows[0]?.seen === true,
   );
+};

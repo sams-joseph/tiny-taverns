@@ -1887,9 +1887,11 @@ export const levelOwned = (sql: SqlClient.SqlClient, actor: Actor): Statement.Fr
 // ---------------------------------------------------------------------------
 // Level visits (`0113_level_visits.ts`)
 //
-// A visit is a campaign's live state of one of its creator's levels, and in
-// this phase its creator is its only reader and writer. Its parts and tokens
-// are read only by walking a visit this fragment returned.
+// A visit is a campaign's live state of one of its creator's levels. Its
+// creator reads and writes it whole (`levelVisitWritable`); a seated player
+// reads the one on the table, narrowed, and walks their own token on it
+// (`levelVisitAtPlayerTable`, `ownVisitToken`). Its parts and tokens are read
+// only by walking a visit one of these fragments returned.
 // ---------------------------------------------------------------------------
 
 /** Rows of `level_visit` at this campaign, when the actor is its creator. */
@@ -1902,3 +1904,58 @@ export const levelVisitWritable = (
     sql`level_visit.campaign_id = ${campaignId}`,
     campaignWritableById(sql, campaignId, actor),
   ]);
+
+/**
+ * Rows of `level_visit` a seated player's table is shown: the visit on this
+ * campaign's table (`campaign.table_visit_id`), at a campaign the actor may
+ * read, while its night is open (the current session, started and not ended)
+ * and readable to them (`rowReadable`, so an unshared night shows nothing),
+ * to an actor holding a live seat with a character here. A visit has no
+ * share switch of its own: putting it on the table is the DM's showing it.
+ *
+ * Whether a fight borrows the visit is not asked here: the read leaves a
+ * borrowed visit out (the table plays the fight), and the player's write
+ * finds it and refuses it as a `Conflict`, as the DM's does.
+ */
+export const levelVisitAtPlayerTable = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql`level_visit.campaign_id = ${campaignId}`,
+    sql`exists (
+      select 1 from campaign
+      join session on session.id = campaign.current_session_id
+      where campaign.id = level_visit.campaign_id
+        and campaign.table_visit_id = level_visit.id
+        and ${campaignReadable(sql, actor, campaignId)}
+        and session.started_at is not null and session.ended_at is null
+        and ${rowReadable(sql, "session", campaignId, actor)}
+    )`,
+    sql`exists (
+      select 1 from campaign_character seat
+      where seat.campaign_id = level_visit.campaign_id
+        and seat.account_id = ${actor.accountId}
+        and seat.left_at is null
+        and seat.character_id is not null
+    )`,
+  ]);
+
+/**
+ * Over `level_visit_token`: its seat is one of the actor's own live seats at
+ * this campaign, holding a character. The one token a player may walk; it
+ * grants no reach on its own, and is composed under a visit the caller has
+ * already proved with `levelVisitAtPlayerTable`.
+ */
+export const ownVisitToken = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign_character seat
+              where seat.id = level_visit_token.seat_id
+                and seat.campaign_id = ${campaignId}
+                and seat.account_id = ${actor.accountId}
+                and seat.left_at is null
+                and seat.character_id is not null)`;
