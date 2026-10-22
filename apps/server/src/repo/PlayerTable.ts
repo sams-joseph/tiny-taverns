@@ -55,7 +55,7 @@ import {
   tokenShownTo,
 } from "./liveTables.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
-import { runLevel } from "./levelFights.js";
+import { playerLevelColumn, refreshAndRing, runLevel } from "./levelFights.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -442,7 +442,8 @@ export class PlayerTable extends Context.Service<
         Result: PlayerBoardRow,
         execute: ({ runId }) => sql`
           select encounter_run_board.board_columns, encounter_run_board.board_rows,
-                 encounter_run_board.feet_per_cell, ${fogColumn(sql)}, ${areaColumn(sql)}
+                 encounter_run_board.feet_per_cell, ${playerLevelColumn(sql)},
+                 ${fogColumn(sql)}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
           where encounter_run_board.run_id = ${runId}
@@ -751,6 +752,7 @@ export class PlayerTable extends Context.Service<
                           where encounter_run.id = combatant.encounter_run_id) as token_shown
                     `;
                     const shown = moved[0]!;
+                    const lineShared = shown.visibility === "shared" && shown.token_shown;
                     yield* appendEvent(sql, {
                       sessionId: row.session_id,
                       kind: "combatant-moved",
@@ -765,8 +767,13 @@ export class PlayerTable extends Context.Service<
                         to,
                       },
                       requestId: payload.requestId,
-                      visibility:
-                        shown.visibility === "shared" && shown.token_shown ? "shared" : "dm",
+                      visibility: lineShared ? "shared" : "dm",
+                    });
+                    // A party token moved: what the party sees moves with it.
+                    yield* refreshAndRing(sql, {
+                      sessionId: row.session_id,
+                      runId,
+                      lineShared,
                     });
                     return row.session_id;
                   }),

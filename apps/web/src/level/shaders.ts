@@ -218,13 +218,18 @@ void main(){ if(distance(vW,uC)>uR) discard; gl_FragColor=vec4(uOut,1.); }`;
  * plus the light map; in the party's view, colour where they see and it is lit,
  * grey where only darkvision sees, dim where they have been, the hatch where
  * they have not; the hatch outside the board; the grid; a vignette.
+ *
+ * `uFans` is 0 when the view has no viewers' fans (a seated player's table,
+ * which is told only the squares the party sees): the squares are then the
+ * sight, and a square seen but unlit is seen by darkvision, since that is the
+ * only way `partyVision` sees one.
  */
 export const COMPOSITE_VERT = /* glsl */ `
 varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
 
 export const COMPOSITE_FRAG = /* glsl */ `
 uniform sampler2D tA, tL, tV, tSees, tSeen;
-uniform vec3 uAmb; uniform float uLit, uView, uGrid, uDmFloor; uniform vec4 uCam; uniform vec2 uBoard;
+uniform vec3 uAmb; uniform float uLit, uView, uGrid, uDmFloor, uFans; uniform vec4 uCam; uniform vec2 uBoard;
 varying vec2 vUv;
 ${PALETTE}
 ${HATCH}
@@ -242,7 +247,7 @@ void main(){
   if(uView>.5 && inBoard){
     vec4 v=texture2D(tV,bUv); float g=dot(alb,vec3(.3,.59,.11));
     bool sees=texture2D(tSees,sUv).r>.5, seen=texture2D(tSeen,sUv).r>.5;
-    bool los=v.r>.5, dv=v.g>.5, lit=lum>.14;
+    bool los=uFans<.5 || v.r>.5, dv=uFans<.5 || v.g>.5, lit=lum>.14;
     if(sees && los && lit){}
     else if(sees && los && dv){ col=vec3(g)*DARKVISION*.85; }
     else if(sees && los){}

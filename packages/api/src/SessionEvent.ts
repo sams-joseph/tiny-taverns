@@ -47,13 +47,26 @@ export const SessionEventKind = Schema.Literals([
   "board-area-updated",
   /**
    * The DM opened, closed or locked a door of a fight's level, or revealed or
-   * hid a secret one. Carries `{wallId, doorState, revealed}`. Always the DM's
-   * own line: a player's table draws nothing of a level yet, and a shared line
-   * about a secret door would say there is one.
+   * hid a secret one. Carries `{wallId, doorState, revealed}`. Shared only
+   * for a plain door touching a square the party has seen, while the table is
+   * shown the board; a secret door's line is always the DM's own, since a
+   * shared line about one would say there is one.
    */
   "board-door-updated",
-  /** The DM lit or snuffed a light of a fight's level. Carries `{lightId, lit}`; the DM's own line. */
+  /**
+   * The DM lit or snuffed a light of a fight's level. Carries `{lightId, lit}`.
+   * Shared only for a light standing on a square the party has seen, while the
+   * table is shown the board.
+   */
   "board-light-updated",
+  /**
+   * What the party sees of a fight's level changed (`party_sees`,
+   * `party_seen`), a secret door they have seen was revealed or hidden, or a
+   * creature they saw walked out of their sight, while the table is shown the
+   * board and the write's own line is not shared. Carries nothing: it is the
+   * players' doorbell, so their table re-reads what the party sees.
+   */
+  "board-vision-updated",
   "turn-advanced",
   /** A conversation turned into a fight: the run's mode became `combat`. */
   "run-escalated",

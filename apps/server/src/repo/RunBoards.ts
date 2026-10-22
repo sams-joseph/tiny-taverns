@@ -18,7 +18,7 @@ import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { boardShown, clearArea, RUNS } from "./liveTables.js";
 import { classFromColumns, dieOnSqlError, fromColumns, intArray, orNotFound } from "./rows.js";
-import { levelColumn } from "./levelFights.js";
+import { levelColumn, partSeen, refreshPartyVision, ringVision } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { nestedRowWritable } from "./visibility.js";
 
@@ -131,9 +131,13 @@ export class RunBoards extends Context.Service<
      * fight that is over or not on a level, a plain wall, and a reveal of a
      * door that is not secret. A repeated `requestId` changes nothing.
      *
-     * The line is the DM's own (`0109_level_fights.ts`): a player's table
-     * draws nothing of a level yet, and a shared line about a secret door
-     * would say there is one.
+     * The party's vision is recomputed in the same transaction
+     * (`levelFights.ts`' `refreshPartyVision`). The line is shared only for a
+     * plain door touching a square the party has seen, while the table is
+     * shown the board; a secret door's line is always the DM's own, since a
+     * shared line about one would say there is one. When the line is the
+     * DM's but what the table draws changed, a contentless
+     * `board-vision-updated` rings the players instead (`ringVision`).
      */
     readonly updateDoor: (
       creator: CampaignCreatorActor,
@@ -142,7 +146,11 @@ export class RunBoards extends Context.Service<
       wallId: LevelPartId,
       update: BoardDoorUpdate,
     ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
-    /** Light or snuff a light of the fight's level: `updateDoor`'s rules, with `board-light-updated`. */
+    /**
+     * Light or snuff a light of the fight's level: `updateDoor`'s rules, with
+     * `board-light-updated`, shared for a light standing on a square the
+     * party has seen.
+     */
     readonly updateLight: (
       creator: CampaignCreatorActor,
       sessionId: SessionId,
@@ -478,13 +486,21 @@ export class RunBoards extends Context.Service<
                   const changed = yield* sql<{
                     readonly door_state: string;
                     readonly revealed: boolean;
+                    readonly was_revealed: boolean;
                   }>`
                     update encounter_run_wall
                     set door_state = coalesce(${update.doorState ?? null}::text, door_state),
                         revealed = coalesce(${update.revealed ?? null}::boolean, revealed)
                     where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
-                    returning encounter_run_wall.door_state, encounter_run_wall.revealed
+                    returning encounter_run_wall.door_state, encounter_run_wall.revealed,
+                      old.revealed as was_revealed
                   `;
+                  // What the party sees through it now, then whether the table
+                  // is told: a plain door they have seen, on a board they are
+                  // shown. A secret door's line is the DM's whatever happens.
+                  const vision = yield* refreshPartyVision(sql, runId);
+                  const seen = yield* partSeen(sql, runId, { wallId });
+                  const lineShared = vision?.shown === true && wall.kind === "door" && seen;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-door-updated",
@@ -495,7 +511,16 @@ export class RunBoards extends Context.Service<
                       revealed: changed[0]!.revealed,
                     },
                     requestId: update.requestId,
-                    visibility: "dm",
+                    visibility: lineShared ? "shared" : "dm",
+                  });
+                  yield* ringVision(sql, {
+                    sessionId,
+                    runId,
+                    vision,
+                    lineShared,
+                    // A secret door they have seen turned from wall to door,
+                    // or back: their table draws it differently now.
+                    force: seen && changed[0]!.revealed !== changed[0]!.was_revealed,
                   });
                   return yield* current;
                 }),
@@ -540,14 +565,21 @@ export class RunBoards extends Context.Service<
                   if (changed.length === 0) {
                     return yield* new NotFound({ resource: "light", id: lightId });
                   }
+                  // What the party sees by it now, then whether the table is
+                  // told: a light standing where they have seen, on a board
+                  // they are shown.
+                  const vision = yield* refreshPartyVision(sql, runId);
+                  const lineShared =
+                    vision?.shown === true && (yield* partSeen(sql, runId, { lightId }));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-light-updated",
                     encounterRunId: runId,
                     payload: { lightId, lit: update.lit },
                     requestId: update.requestId,
-                    visibility: "dm",
+                    visibility: lineShared ? "shared" : "dm",
                   });
+                  yield* ringVision(sql, { sessionId, runId, vision, lineShared });
                   return yield* current;
                 }),
               )

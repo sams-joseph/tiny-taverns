@@ -408,6 +408,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 107, name: "party_travel" },
         { migration_id: 108, name: "levels" },
         { migration_id: 109, name: "level_fights" },
+        { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
       ]);
     }),
@@ -528,6 +529,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 107, name: "party_travel" },
         { migration_id: 108, name: "levels" },
         { migration_id: 109, name: "level_fights" },
+        { migration_id: 110, name: "party_vision" },
         { migration_id: 111, name: "retire_battle_maps" },
       ]);
     }),

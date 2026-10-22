@@ -538,6 +538,7 @@ export const sharedBoard = {
   feetPerCell: 5,
   fog: [],
   area: null,
+  level: null,
   tokens: [
     { combatantId: yourCombatantId, position: { column: 5, row: 4 } },
     { combatantId: hagCombatantId, position: { column: 11, row: 6 } },

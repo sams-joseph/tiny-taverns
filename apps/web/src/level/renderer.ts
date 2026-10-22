@@ -343,6 +343,7 @@ export class LevelRenderer {
           uView: { value: 0 },
           uGrid: { value: 1 },
           uDmFloor: { value: 0.16 },
+          uFans: { value: 1 },
           uCam: { value: new THREE.Vector4() },
           uBoard: { value: new THREE.Vector2(1, 1) },
         },
@@ -698,11 +699,17 @@ export class LevelRenderer {
   // ---------------------------------------------------------------------------
   // The party's vision
 
-  /** What the party sees and has seen, or `null` outside the party's view. */
+  /**
+   * What the party sees and has seen, or `null` outside the party's view. A
+   * vision with no viewers (a seated player's table, told only the squares)
+   * takes its sight from the squares: no fans, and a flame shows where its
+   * square is seen.
+   */
   setVision(vision: { readonly part: VisionPart; readonly seen: Uint8Array } | null) {
     this.vision = vision?.part ?? null;
     clear(this.visGroup);
     if (vision === null) return;
+    this.compMat.uniforms["uFans"]!.value = vision.part.viewers.length > 0 ? 1 : 0;
     const sees = this.seesTex.image.data as Uint8Array;
     sees.fill(0);
     for (const square of vision.part.sees) if (square < sees.length) sees[square] = 255;
@@ -739,10 +746,18 @@ export class LevelRenderer {
     this.visionDirty = true;
   }
 
-  /** Whether the party sees a light's flame: it stands inside some viewer's sight. */
+  /**
+   * Whether the party sees a light's flame: it stands inside some viewer's
+   * sight, or, with no viewers, on a square the party sees.
+   */
   private flameSeen(light: LightPart): boolean {
     const vision = this.vision;
     if (vision === null) return false;
+    if (vision.viewers.length === 0) {
+      const columns = this.seesTex.image.width;
+      const square = Math.floor(light.y) * columns + Math.floor(light.x);
+      return (this.seesTex.image.data as Uint8Array)[square] === 255;
+    }
     return vision.viewers.some((v) => withinVisibility(v.polygon, { x: light.x, y: light.y }));
   }
 

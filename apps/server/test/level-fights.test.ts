@@ -730,7 +730,7 @@ describeLayer("level-fights", shared, (it) => {
       }),
     );
 
-    it.effect("carries no level on the player's table: the board is the bare grid", () =>
+    it.effect("carries the party's view of the level on the player's table, not the copy", () =>
       Effect.gen(function* () {
         const { ilse, table } = yield* Fixture;
         const level = yield* aHall();
@@ -745,17 +745,12 @@ describeLayer("level-fights", shared, (it) => {
         const board = read.fight?.board;
         expect(board).not.toBeNull();
         expect(Object.keys(board!).sort()).toEqual(
-          ["area", "columns", "feetPerCell", "fog", "rows", "tokens"].sort(),
+          ["area", "columns", "feetPerCell", "fog", "level", "rows", "tokens"].sort(),
         );
-        for (const word of [
-          "walls",
-          "floor",
-          "props",
-          "lights",
-          "regions",
-          "ambient",
-          "secretDoor",
-        ]) {
+        // The party (Tamsin, west of the closed door) has seen the west room
+        // only: the secret door, the DM's crate and the trap are not sent,
+        // and nothing says what a part is that a player is not told.
+        for (const word of ["secretDoor", "dmOnly", "revealed", "secret", '"lit"', part(7)]) {
           expect(raw.body).not.toContain(word);
         }
       }),

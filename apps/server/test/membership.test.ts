@@ -225,9 +225,9 @@ describe("the reach seam, enforced rather than asserted", () => {
       // internal campaign instance minted for it. The comparison is against
       // `copyableIntoCampaign`'s answer, never a caller-supplied account.
       "repo/EncounterCreatures.ts",
-      // An encounter's level pointer copies the owner from the level row
-      // `levelOwned` just returned, and the composite keys to `level (id,
-      // account_id)` and `campaign (id, creator_account_id)` refuse any other.
+      // An encounter's level pointer copies the level's owner from a row read
+      // through `levelOwned`, and the keys to the level's owner and to the
+      // campaign's creator refuse any other. Never a caller-supplied account.
       "repo/Encounters.ts",
       "repo/Equipment.ts",
       "repo/Feats.ts",
@@ -239,9 +239,8 @@ describe("the reach seam, enforced rather than asserted", () => {
       // `campaign (id, creator_account_id)` refuses any other; the daily cap
       // counts by it. Never a caller-supplied account.
       "repo/Images.ts",
-      // A level's owner is written from `CurrentActor` at create, and the
-      // ownership comparison is `levelOwned` in `repo/visibility.ts`; the
-      // shelf's uses join an encounter's pointer to the level's own owner.
+      // A level's owner is written from `CurrentActor` at create and compared
+      // only through `levelOwned` in `repo/visibility.ts`.
       "repo/Levels.ts",
       "repo/LibraryShares.ts",
       // A place's owner is written from `CurrentActor` at create and copied
@@ -262,8 +261,8 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
-      // A fight copies its encounter's level through the encounter's own
-      // pointer and owner column, beneath `levelOwned`.
+      // A fight's snapshot joins the level on the owner the encounter's keys
+      // already hold; it reads, and reaches nothing the encounter did not.
       "repo/levelFights.ts",
       // The level-up recompute's class lookup prefers the bundle's row by
       // `account_id is null` inside a vocabulary its caller already narrowed.

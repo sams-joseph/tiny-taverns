@@ -61,7 +61,7 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
-import { carryLevel, copyLevel, runLevel, unstandable } from "./levelFights.js";
+import { carryLevel, copyLevel, refreshPartyVision, runLevel, unstandable } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   campaignWritableById,
@@ -930,6 +930,8 @@ export class EncounterRuns extends Context.Service<
                       },
                       visibility: run.visibility,
                     });
+                    // On a level, the party looks around from where it stands.
+                    yield* refreshPartyVision(sql, run.id);
 
                     return started;
                   }),
@@ -1165,6 +1167,9 @@ export class EncounterRuns extends Context.Service<
                       },
                       visibility: run.visibility,
                     });
+                    // On a level, what the party explored carried over with
+                    // the board; what it sees now is from where it stands.
+                    yield* refreshPartyVision(sql, run.id);
 
                     return resumed;
                   }),

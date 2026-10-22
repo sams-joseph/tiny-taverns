@@ -534,7 +534,7 @@ describeLayer("player-board", shared, (it) => {
           expect(raw.body).not.toContain(leak);
         }
         expect(Object.keys(JSON.parse(raw.body).fight.board).sort()).toEqual(
-          ["area", "columns", "feetPerCell", "fog", "rows", "tokens"].sort(),
+          ["area", "columns", "feetPerCell", "fog", "level", "rows", "tokens"].sort(),
         );
       }),
     );

@@ -1,12 +1,20 @@
 import { type LevelLayout } from "@taverns/api";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { levelMarks } from "../level/overlay";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { levelMarks, partyMarks } from "../level/overlay";
 import type { LevelRenderer } from "../level/renderer";
-import { dmReader } from "../level/scene";
+import { dmReader, type Reader } from "../level/scene";
 import type { LevelView } from "../level/view";
 import type { CanvasView } from "./canvas";
 
 type Stage = typeof import("../level/renderer");
+
+/** What the party sees of the level, as a seated player's table is told it (`PlayerLiveLevel`). */
+export interface PartySight {
+  /** Squares in sight now. */
+  readonly sees: ReadonlyArray<number>;
+  /** Squares explored, `sees` among them. */
+  readonly seen: ReadonlyArray<number>;
+}
 
 /**
  * The level under a fight's board, drawn by the editor's own renderer
@@ -15,6 +23,13 @@ type Stage = typeof import("../level/renderer");
  * (`levelMarks`: secret doors, locked doors, low walls, DM-only props,
  * regions). Lit by the fight's own ambient and lights, so a snuffed torch goes
  * dark when the doorbell's re-read lands.
+ *
+ * **On a seated player's table** (`party`), the same renderer in the party's
+ * view: the level is only what the table was sent (`playerLevelLayout`), read
+ * as the party knows it (every secret door it was sent is found, no DM-only
+ * prop), what the party sees now in full, what it has explored dimmed and
+ * grey, the rest hatched; and only the regions it was sent marked
+ * (`partyMarks`), nothing of the DM's.
  *
  * It fills the board canvas behind the transformed board (`BoardCanvas`'s
  * `backdrop`) and follows its view, so it draws its own pixels at every zoom
@@ -29,15 +44,29 @@ export function LevelBackdrop({
   cellPx,
   view,
   grid,
+  party,
   onFailed,
 }: {
   readonly layout: LevelLayout;
   readonly cellPx: number;
   readonly view: CanvasView;
   readonly grid: boolean;
+  /** The party's sight, on a seated player's table; absent on the DM's board. */
+  readonly party?: PartySight | undefined;
   /** Three could not load, or the browser dropped the WebGL context. */
   readonly onFailed: () => void;
 }) {
+  // One reader per walls array, so a re-read that leaves the walls alone
+  // rebuilds nothing that reads them.
+  const walls = layout.walls;
+  const partyReader = useMemo<Reader>(
+    () => ({
+      revealed: new Set(walls.filter((w) => w.kind === "secretDoor").map((w) => w.id)),
+      party: true,
+    }),
+    [walls],
+  );
+  const viewing = party !== undefined;
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<LevelRenderer | null>(null);
   const size = useRef({ width: 1, height: 1 });
@@ -106,14 +135,22 @@ export function LevelBackdrop({
   useEffect(() => {
     const r = renderer.current;
     if (r === null) return;
-    r.setLevel(layout, dmReader(layout));
-    r.setVision(null);
-    r.setOverlay(levelMarks(layout, { lights: false }));
-  }, [ready, layout]);
+    if (party === undefined) {
+      r.setLevel(layout, dmReader(layout));
+      r.setVision(null);
+      r.setOverlay(levelMarks(layout, { lights: false }));
+      return;
+    }
+    r.setLevel(layout, partyReader);
+    const seen = new Uint8Array(layout.columns * layout.rows);
+    for (const square of party.seen) if (square < seen.length) seen[square] = 1;
+    r.setVision({ part: { viewers: [], sees: party.sees }, seen });
+    r.setOverlay(partyMarks(layout));
+  }, [ready, layout, party, partyReader]);
 
   useEffect(() => {
-    renderer.current?.setOptions({ lit: true, grid, viewAs: false });
-  }, [ready, grid]);
+    renderer.current?.setOptions({ lit: true, grid, viewAs: viewing });
+  }, [ready, grid, viewing]);
 
   useEffect(() => {
     renderer.current?.setView(levelView(view, cellPx));
