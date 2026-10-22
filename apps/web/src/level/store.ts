@@ -77,7 +77,13 @@ export type Gesture =
       readonly dy: number;
     };
 
-export type SaveStatus = "saved" | "dirty" | "saving" | "failed";
+/**
+ * Where the working copy stands against the server. `conflict`: a save was
+ * refused because the level was saved elsewhere since it was read; the
+ * editor stops saving on its own until the owner of the editor chooses
+ * (`loadSaved`, `keepMine`).
+ */
+export type SaveStatus = "saved" | "dirty" | "saving" | "failed" | "conflict";
 
 export interface EditorState {
   readonly history: History<LevelDocument>;
@@ -112,14 +118,33 @@ export interface EditorState {
 /** How long after the last edit the level saves itself. */
 export const SAVE_DELAY_MS = 1200;
 
-/** What the editor hands its owner to save; the owner answers with the version the server kept. */
+/**
+ * What the editor hands its owner to save; the owner answers with the version
+ * the server kept, or rejects: with a `LevelSaveConflict` when the server
+ * refused a stale version, with anything else when the save did not land.
+ */
 export type SaveLevel = (next: LevelDocument) => Promise<{ readonly version: number }>;
+
+/** Read the level as the server holds it now, for the editor's way out of a conflict. */
+export type LoadLevel = () => Promise<LevelDocument>;
+
+/** A save refused because the level was saved elsewhere since it was read: the server's `Conflict`. */
+export class LevelSaveConflict extends Error {
+  override readonly name = "LevelSaveConflict";
+}
 
 const VIEWER_NAMES = ["Ash", "Bryn", "Cael", "Dov"] as const;
 /** A new viewer's darkvision, alternating none and 60 ft, as the prototype's party did. */
 const VIEWER_DARKVISION = [0, 60, 0, 60] as const;
 
 type Listener = () => void;
+
+/** Whether a point lies on one of the level's squares: the tools that place something ignore a click past the edge. */
+const onBoard = (doc: Pick<LevelDocument, "columns" | "rows">, p: Point): boolean => {
+  const column = Math.floor(p.x);
+  const row = Math.floor(p.y);
+  return column >= 0 && row >= 0 && column < doc.columns && row < doc.rows;
+};
 
 export class EditorStore {
   private state: EditorState;
@@ -141,6 +166,7 @@ export class EditorStore {
   constructor(
     level: LevelDocument,
     private readonly onSave: SaveLevel,
+    private readonly onLoad?: LoadLevel,
   ) {
     this.state = {
       history: historyOf(level),
@@ -233,9 +259,11 @@ export class EditorStore {
     const revision = changed ? this.state.revision + 1 : this.state.revision;
     const status: SaveStatus = this.inFlight
       ? "saving"
-      : revision !== this.savedRevision
-        ? "dirty"
-        : "saved";
+      : this.state.save.status === "conflict"
+        ? "conflict"
+        : revision !== this.savedRevision
+          ? "dirty"
+          : "saved";
     this.set({
       history,
       revision,
@@ -489,10 +517,8 @@ export class EditorStore {
           });
           return;
         }
-        const column = Math.floor(p.x);
-        const row = Math.floor(p.y);
-        if (column < 0 || row < 0 || column >= doc.columns || row >= doc.rows) return;
-        if (this.addViewer(column, row) === null) this.select(null);
+        if (!onBoard(doc, p)) return;
+        if (this.addViewer(Math.floor(p.x), Math.floor(p.y)) === null) this.select(null);
         return;
       }
       case "floor": {
@@ -536,6 +562,8 @@ export class EditorStore {
         this.set({ gesture: { type: "room", from: clampToBoard(doc, snapVertex(p, false)) } });
         return;
       case "door": {
+        // Off the board there is no wall to cut a door in, as no party stands there.
+        if (!onBoard(doc, p)) return;
         const hit = pick(doc, p, ["door"]);
         if (hit !== null) {
           this.edit((d) => (shift ? toggleSecret(d, hit.id) : toggleDoor(d, hit.id)));
@@ -550,6 +578,7 @@ export class EditorStore {
         return;
       }
       case "light": {
+        if (!onBoard(doc, p)) return;
         const light = newLight(state.light, lightSpot(p, shift));
         this.edit((d) => addLight(d, light), { selection: { type: "light", id: light.id } });
         return;
@@ -685,6 +714,8 @@ export class EditorStore {
 
   private scheduleSave() {
     if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
+    // In a conflict nothing saves on its own: the owner chooses first.
+    if (this.state.save.status === "conflict") return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = undefined;
       // A drag saves once it ends.
@@ -696,12 +727,16 @@ export class EditorStore {
     }, SAVE_DELAY_MS);
   }
 
-  /** Save the working copy now; while a save is out, save again once it lands. */
+  /**
+   * Save the working copy now; while a save is out, save again once it lands.
+   * In a conflict it waits for the owner's choice (`loadSaved`, `keepMine`).
+   */
   readonly saveNow = async (): Promise<void> => {
     if (this.saveTimer !== undefined) {
       clearTimeout(this.saveTimer);
       this.saveTimer = undefined;
     }
+    if (this.state.save.status === "conflict") return;
     if (this.inFlight) {
       this.againAfter = true;
       return;
@@ -722,7 +757,7 @@ export class EditorStore {
       this.againAfter = false;
       this.set({
         save: {
-          status: "failed",
+          status: error instanceof LevelSaveConflict ? "conflict" : "failed",
           error: error instanceof Error && error.message !== "" ? error.message : null,
         },
       });
@@ -736,6 +771,68 @@ export class EditorStore {
       void this.saveNow();
     }
   };
+
+  /**
+   * The way out of a conflict that drops this copy: read the level as the
+   * server holds it and edit that, with a fresh undo stack. Unsaved edits
+   * here are gone.
+   */
+  readonly loadSaved = async (): Promise<void> => {
+    if (this.onLoad === undefined) return;
+    const saved = await this.loadOrFail();
+    if (saved === undefined) return;
+    if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
+    const revision = this.state.revision + 1;
+    this.savedRevision = revision;
+    this.set({
+      history: historyOf(saved),
+      revision,
+      selection: null,
+      wallChain: null,
+      gesture: null,
+      save: { status: "saved", error: null },
+    });
+  };
+
+  /**
+   * The way out of a conflict that keeps this copy: read the version the
+   * server holds now, then save this copy over it at that version. What was
+   * saved elsewhere is replaced.
+   */
+  readonly keepMine = async (): Promise<void> => {
+    if (this.onLoad === undefined) return;
+    const saved = await this.loadOrFail();
+    if (saved === undefined) return;
+    const history = mapAll(this.state.history, (doc) =>
+      doc.version === saved.version ? doc : { ...doc, version: saved.version },
+    );
+    // Not saved as of the server's version: the save below sends it.
+    this.savedRevision = -1;
+    this.state = { ...this.state, history };
+    this.set({ save: { status: "dirty", error: null } });
+    await this.saveNow();
+  };
+
+  /** The server's level for a way out of a conflict; on a failed read, the conflict stands. */
+  private async loadOrFail(): Promise<LevelDocument | undefined> {
+    try {
+      return await this.onLoad!();
+    } catch (error) {
+      this.set({
+        save: {
+          status: "conflict",
+          error: error instanceof Error && error.message !== "" ? error.message : null,
+        },
+      });
+      return undefined;
+    }
+  }
+
+  /** The working copy holds edits the server has not kept: what leaving the page would lose. */
+  get unsaved(): boolean {
+    return this.state.revision !== this.savedRevision || this.state.save.status === "conflict";
+  }
 
   /**
    * The editor is going away: save what is unsaved now rather than after the

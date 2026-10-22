@@ -132,4 +132,20 @@ describe("the level editor", () => {
     await userEvent.click(undo);
     expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
   });
+
+  it("asks before the page is left with edits the server has not kept", async () => {
+    renderEditor();
+    const leave = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(leave()).toBe(false);
+    await userEvent.click(screen.getByRole("radio", { name: "Dim" }));
+    expect(leave()).toBe(true);
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await settle();
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(leave()).toBe(false);
+  });
 });

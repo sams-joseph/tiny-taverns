@@ -5,4 +5,4 @@
  */
 export { LevelEditor, type LevelEditorProps } from "./LevelEditor";
 export type { LevelDocument } from "./document";
-export type { SaveLevel } from "./store";
+export { LevelSaveConflict, type LoadLevel, type SaveLevel } from "./store";

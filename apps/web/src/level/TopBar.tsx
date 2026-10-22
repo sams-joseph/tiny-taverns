@@ -14,6 +14,7 @@ const STATUS: Readonly<Record<EditorState["save"]["status"], string>> = {
   dirty: "Unsaved changes",
   saving: "Saving…",
   failed: "Not saved",
+  conflict: "Saved elsewhere since you opened it",
 };
 
 /**
@@ -39,7 +40,10 @@ export function TopBar({
   const litId = useId();
   const gridId = useId();
   useEffect(() => setName(doc.name), [doc.name]);
-  const status = saving && state.save.status !== "failed" ? "saving" : state.save.status;
+  const status =
+    saving && state.save.status !== "failed" && state.save.status !== "conflict"
+      ? "saving"
+      : state.save.status;
 
   return (
     <header className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-2.5 rounded-panel border border-hairline bg-surface-card px-2.5 py-2 shadow-3">
@@ -135,11 +139,32 @@ export function TopBar({
       <p
         role="status"
         data-status={status}
-        className="min-w-0 text-label-s text-muted-foreground data-[status=failed]:text-danger-ink"
+        className="min-w-0 text-label-s text-muted-foreground data-[status=conflict]:text-danger-ink data-[status=failed]:text-danger-ink"
         title={state.save.error ?? undefined}
       >
         {STATUS[status]}
       </p>
+      {status === "conflict" ? (
+        <>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void store.loadSaved()}
+            title="Drop your unsaved edits and edit the level as it was saved"
+          >
+            <Icon name="refresh-cw" size={14} />
+            Load the saved level
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void store.keepMine()}
+            title="Save your copy over the one saved elsewhere"
+          >
+            <Icon name="save" size={14} />
+            Keep mine
+          </Button>
+        </>
+      ) : (
       <Button
         variant={status === "failed" ? "default" : "secondary"}
         size="sm"
@@ -150,6 +175,7 @@ export function TopBar({
         <Icon name="save" size={14} />
         {status === "failed" ? "Try again" : "Save"}
       </Button>
+      )}
     </header>
   );
 }

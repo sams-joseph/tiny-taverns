@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LevelDocument } from "./document";
 import { smallLevel } from "./level.fixtures";
 import { describeHover } from "./overlay";
-import { EditorStore, SAVE_DELAY_MS } from "./store";
+import { EditorStore, LevelSaveConflict, SAVE_DELAY_MS } from "./store";
 
 const make = (level: LevelDocument = smallLevel()) => {
   const saves: Array<LevelDocument> = [];
@@ -99,6 +99,19 @@ describe("the door tool", () => {
     expect(store.doc.walls.find((w) => w.id === door!.id)!.doorState).toBe("open");
     click(store, 2.5, 1.02, true);
     expect(store.doc.walls.find((w) => w.id === door!.id)!.kind).toBe("secretDoor");
+  });
+
+  it("ignores a click off the board, as the party tool does", () => {
+    const { store } = make();
+    const before = store.doc;
+    store.setTool("door");
+    click(store, -0.4, 2.5);
+    click(store, before.columns + 0.3, 1.5);
+    store.setTool("light");
+    click(store, 2.5, -0.6);
+    click(store, 2.5, before.rows + 0.2);
+    expect(store.doc).toBe(before);
+    expect(store.canUndo).toBe(false);
   });
 
   it("cuts a secret door when the tray says so", () => {
@@ -351,6 +364,59 @@ describe("saving", () => {
     refuse = false;
     await store.saveNow();
     expect(store.getState().save.status).toBe("saved");
+  });
+
+  it("stops saving on a conflict until it loads the saved level or keeps its own", async () => {
+    let refuse = true;
+    const saves: Array<LevelDocument> = [];
+    const theirs = { ...smallLevel(), name: "Theirs", version: 7 };
+    const store = new EditorStore(
+      smallLevel(),
+      (doc) => {
+        saves.push(doc);
+        return refuse
+          ? Promise.reject(new LevelSaveConflict("saved since you read it"))
+          : Promise.resolve({ version: doc.version + 1 });
+      },
+      () => Promise.resolve(theirs),
+    );
+    store.setAmbient("dim");
+    await store.saveNow();
+    expect(store.getState().save).toEqual({
+      status: "conflict",
+      error: "saved since you read it",
+    });
+    // An edit in a conflict stays in it, and nothing saves on its own.
+    store.setAmbient("bright");
+    expect(store.getState().save.status).toBe("conflict");
+    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS * 2);
+    await store.saveNow();
+    expect(saves).toHaveLength(1);
+    expect(store.unsaved).toBe(true);
+
+    refuse = false;
+    await store.keepMine();
+    expect(saves).toHaveLength(2);
+    expect(saves[1]).toMatchObject({ ambient: "bright", version: 7 });
+    expect(store.getState().save.status).toBe("saved");
+    expect(store.unsaved).toBe(false);
+  });
+
+  it("loads the saved level over its own copy, with a fresh undo stack", async () => {
+    const theirs = { ...smallLevel(), name: "Theirs", version: 7 };
+    const store = new EditorStore(
+      smallLevel(),
+      () => Promise.reject(new LevelSaveConflict("")),
+      () => Promise.resolve(theirs),
+    );
+    store.setAmbient("dim");
+    await store.saveNow();
+    expect(store.getState().save.status).toBe("conflict");
+    await store.loadSaved();
+    expect(store.doc).toBe(theirs);
+    expect(store.canUndo).toBe(false);
+    expect(store.getState().save.status).toBe("saved");
+    expect(store.unsaved).toBe(false);
   });
 
   it("saves once more when an edit lands while a save is out", async () => {
