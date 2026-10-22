@@ -45,6 +45,8 @@ export function TopBar({
     <header className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-2.5 rounded-panel border border-hairline bg-surface-card px-2.5 py-2 shadow-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {back}
+        {/* The screen's heading: the name is an editable field, so the heading is for the outline. */}
+        <h1 className="sr-only">{doc.name}</h1>
         <span className="shrink-0 text-label-s text-faint">Level</span>
         <Label htmlFor={nameId} className="sr-only">
           Level name
