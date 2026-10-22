@@ -724,7 +724,8 @@ const LibraryLevelsLive = HttpApiBuilder.group(
       .handle("create", ({ payload }) => levels.create(payload))
       .handle("findById", ({ params }) => levels.findById(params.levelId))
       .handle("save", ({ params, payload }) => levels.save(params.levelId, payload))
-      .handle("remove", ({ params }) => levels.remove(params.levelId));
+      .handle("remove", ({ params }) => levels.remove(params.levelId))
+      .handle("uses", ({ params }) => levels.uses(params.levelId));
   }),
 );
 
@@ -1935,6 +1936,16 @@ const RunsLive = HttpApiBuilder.group(
       )
       .handle("setArea", ({ params, payload }) =>
         dm(params.campaignId, (as) => maps.setArea(as, params.sessionId, params.runId, payload)),
+      )
+      .handle("updateDoor", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          maps.updateDoor(as, params.sessionId, params.runId, params.wallId, payload),
+        ),
+      )
+      .handle("updateLight", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          maps.updateLight(as, params.sessionId, params.runId, params.lightId, payload),
+        ),
       )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),

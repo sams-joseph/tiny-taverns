@@ -5,7 +5,15 @@ import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
-import { CampaignId, CreatureId, EncounterId, EncounterRunId, NpcId, SessionId } from "./Ids.js";
+import {
+  CampaignId,
+  CreatureId,
+  EncounterId,
+  EncounterRunId,
+  LevelId,
+  NpcId,
+  SessionId,
+} from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { AbilityKey } from "./Ruleset.js";
 
@@ -143,6 +151,14 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
    */
   lastPlayed: Schema.NullOr(EncounterPlayed),
   /**
+   * The level a fight on it is played on: one of the campaign's creator's own
+   * Library levels, or `null` for the battle map's picture board. A fight
+   * copies the level when it starts (`LevelFight.ts`), so editing or deleting
+   * the level never moves a fight in progress; deleting it sets this `null`.
+   * The creator's alone: `PlayerEncounter` has no such field.
+   */
+  levelId: Schema.NullOr(LevelId),
+  /**
    * The DM's Share switch. A player reads the encounter only when it is
    * `shared` **and** its prep is Ready: a shared draft is still the DM's.
    */
@@ -271,6 +287,11 @@ export const EncounterCreate = Schema.Struct({
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
+  /**
+   * The level a fight on it is played on: one of the creator's own Library
+   * levels. Any other account's level is `NotFound`. Absent or `null` is none.
+   */
+  levelId: Schema.optional(Schema.NullOr(LevelId)),
   tactics: Schema.optional(EncounterTactics),
   treasure: Schema.optional(EncounterTreasure),
   challenge: Schema.optional(EncounterChallenge),
@@ -297,6 +318,11 @@ export const EncounterUpdate = Schema.Struct({
   visibility: Schema.optional(Visibility),
   /** The map's setting line; `null` or a blank clears it. Editing it redraws nothing. */
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
+  /**
+   * The level a fight on it is played on, one of the creator's own; `null`
+   * takes it off. A fight already started keeps the copy it took.
+   */
+  levelId: Schema.optional(Schema.NullOr(LevelId)),
   /** The whole list, replacing the last; `[]` clears it. */
   tactics: Schema.optional(EncounterTactics),
   /** `null` clears it. */

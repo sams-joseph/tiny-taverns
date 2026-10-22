@@ -98,7 +98,14 @@ const NOT_CONTENT = [
   // beside the prep, the creator's alone through the creator proof, with their
   // run's provenance. See 0065_run_scenes.ts.
   "encounter_run_check",
+  // A fight's copy of its level's parts, with the live door, reveal and light
+  // columns: part of its board, the creator's alone through the creator proof,
+  // with their run's provenance. See 0109_level_fights.ts.
+  "encounter_run_light",
+  "encounter_run_prop",
+  "encounter_run_region",
   "encounter_run_scene",
+  "encounter_run_wall",
   "equipment_category",
   "equipment_content",
   "equipment_property",

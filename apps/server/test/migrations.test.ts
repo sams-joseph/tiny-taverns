@@ -220,7 +220,11 @@ describeLayer("migrations", database, (it) => {
         "encounter_run",
         "encounter_run_board",
         "encounter_run_check",
+        "encounter_run_light",
+        "encounter_run_prop",
+        "encounter_run_region",
         "encounter_run_scene",
+        "encounter_run_wall",
         "equipment",
         "equipment_category",
         "equipment_content",
@@ -405,6 +409,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
         { migration_id: 108, name: "levels" },
+        { migration_id: 109, name: "level_fights" },
       ]);
     }),
   );
@@ -523,6 +528,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 106, name: "location_images" },
         { migration_id: 107, name: "party_travel" },
         { migration_id: 108, name: "levels" },
+        { migration_id: 109, name: "level_fights" },
       ]);
     }),
   );
@@ -1345,7 +1351,8 @@ describeLayer("upgrading a database whose fights predate their boards", boardsDa
           const sql = yield* SqlClient.SqlClient;
           yield* migrate;
           // The shape `0057` left: no boards table at all.
-          yield* sql`drop table encounter_run_board`;
+          // Its level parts, which hang off it, go with it.
+          yield* sql`drop table encounter_run_board cascade`;
 
           const accounts = yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "board-hash" })}

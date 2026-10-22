@@ -50,6 +50,7 @@ import {
 } from "./rows.js";
 import type { AssistantOrigin } from "./rows.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
+import { runLevel, unstandable } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   type CharacterVitals,
@@ -978,14 +979,19 @@ export class Combatants extends Context.Service<
                     where encounter_run_board.run_id = ${runId}
                   `;
                   const grid = boards[0];
+                  const level = grid === undefined ? null : yield* runLevel(sql, runId);
                   const taken =
                     grid === undefined
                       ? []
-                      : yield* sql<{ readonly column: number; readonly row: number }>`
-                          select board_column as column, board_row as row from combatant
-                          where combatant.encounter_run_id = ${runId}
-                            and combatant.board_column is not null
-                        `;
+                      : [
+                          ...(yield* sql<{ readonly column: number; readonly row: number }>`
+                            select board_column as column, board_row as row from combatant
+                            where combatant.encounter_run_id = ${runId}
+                              and combatant.board_column is not null
+                          `),
+                          // On a level, not in rock or on a crate either.
+                          ...(level === null ? [] : unstandable(level.layout)),
+                        ];
                   const square =
                     grid === undefined
                       ? undefined

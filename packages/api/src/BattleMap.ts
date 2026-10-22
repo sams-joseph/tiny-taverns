@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { AreaShape } from "./AreaShape.js";
 import { CombatantPosition } from "./Combatant.js";
 import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
+import { RunBoardLevel } from "./LevelFight.js";
 
 /**
  * An encounter's battle map: the board a fight on it is played on, and the
@@ -224,6 +225,13 @@ export class EncounterRunBoard extends Schema.Class<EncounterRunBoard>("Encounte
   fog: Schema.Array(CombatantPosition),
   /** The area template pinned on the board, or `null` (`BoardArea`). */
   area: Schema.NullOr(BoardArea),
+  /**
+   * The fight's own copy of its encounter's level (`LevelFight.ts`), or
+   * `null` for a fight on a picture. On a level fight `mapId` and `image` are
+   * `null`, `columns`, `rows` and `feetPerCell` are the level's, and
+   * `alignment` is the plain grid: the board is drawn on itself.
+   */
+  level: Schema.NullOr(RunBoardLevel),
 }) {}
 
 /** The most squares one fog write names: every square of the largest board. */
