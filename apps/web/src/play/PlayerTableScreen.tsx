@@ -43,6 +43,8 @@ import { bandOfLine, deliveryFor } from "../run/options";
 import { RunLayout } from "../run/RunLayout";
 import { CanvasTitle } from "../run/CanvasTitle";
 import { RunStage } from "../run/RunStage";
+import { hudSurface, StageDrawerButton } from "../run/hud";
+import { INITIATIVE_DRAWER } from "../run/stageDrawers";
 import { TurnCard, type TurnTile } from "../run/TurnCard";
 import { useStage } from "../run/stage";
 import { feetLeft, type TurnTicks } from "../run/turn";
@@ -86,10 +88,10 @@ const newRequestId = (): string =>
  *
  * **On a fight with a shared map, at a desktop width**, it is the runner's
  * canvas (`run/RunStage.tsx`): the board fills the stage and the panels float
- * over it — the read-only initiative strip across the top (or *Your
- * initiative* while it is rolled), the player's own card on the right with
- * whose turn it is and the table's NPCs and read-alouds under it, and their
- * rolls bottom left. Like the DM's, this stage is bounded to the viewport and
+ * over it — the read-only initiative order in a drawer the top right opens
+ * (and *Your initiative* on the left while it is rolled), the player's own
+ * card on the right with whose turn it is and the table's NPCs and
+ * read-alouds under it, and their rolls bottom left. Like the DM's, this stage is bounded to the viewport and
  * its panels scroll themselves.
  *
  * **Otherwise** — a narrow screen, no shared map, or a scene that is not a
@@ -378,6 +380,7 @@ export function PlayerTableScreen() {
       />
     ) : null;
 
+  const combat = fight?.mode === "combat";
   const strip =
     fight === null ? null : fight.mode !== "combat" ? (
       <SceneOnTheTable mode={fight.mode} />
@@ -386,8 +389,7 @@ export function PlayerTableScreen() {
         fight={fight}
         labels={labels}
         selectedId={selectedId}
-        floating={canvas}
-        compact={canvas}
+        list={canvas}
         onSelect={pick}
       />
     );
@@ -613,8 +615,30 @@ export function PlayerTableScreen() {
                   subtitle={headerSubtitle}
                 />
               }
-              strip={strip}
-              controls={null}
+              controls={
+                combat && (
+                  <div className={cn(hudSurface, "flex items-center p-1")}>
+                    <StageDrawerButton
+                      drawer={INITIATIVE_DRAWER}
+                      icon="list-ordered"
+                      label="Initiative"
+                    />
+                  </div>
+                )
+              }
+              drawers={
+                combat
+                  ? [
+                      {
+                        key: INITIATIVE_DRAWER,
+                        label: "Initiative",
+                        icon: "list-ordered",
+                        rail: false,
+                        content: strip,
+                      },
+                    ]
+                  : []
+              }
               notices={notice}
               rolling={yourInitiative}
               party={partyRail || null}
@@ -626,6 +650,8 @@ export function PlayerTableScreen() {
               }
               panel={
                 <>
+                  {/* A scene has no order, so its card heads the panel. */}
+                  {!combat && strip}
                   {panel}
                   {tableCards}
                 </>

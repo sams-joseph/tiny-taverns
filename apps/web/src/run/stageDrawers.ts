@@ -9,7 +9,8 @@ import { type ReactNode, createContext, useContext } from "react";
 /**
  * One of the canvas's drawers: a panel the right-hand rail opens over the
  * board, closed until the DM wants it. `rail: false` keeps it off the rail
- * for a drawer some other button opens (Hob's, from the controls).
+ * for a drawer some other button opens (Hob's and the order, from the
+ * controls).
  */
 export interface StageDrawer {
   readonly key: string;
@@ -37,6 +38,8 @@ export interface StageDrawerState {
 export const SHEET_DRAWER = "sheet";
 /** Hob's switches and spends, which the controls open. */
 export const HOB_DRAWER = "hob";
+/** The initiative order, which the controls open (`InitiativeStrip.tsx`, `list`). */
+export const INITIATIVE_DRAWER = "initiative";
 
 export const StageDrawers = createContext<StageDrawerState | null>(null);
 

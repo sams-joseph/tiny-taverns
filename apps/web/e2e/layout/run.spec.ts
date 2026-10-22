@@ -6,16 +6,18 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The runner (`run/RunScreen.tsx`) at every width. From `@3xl` of `main` (1440
  * and 1024 here) it is a canvas (`run/RunStage.tsx`): the board fills the stage
  * under the header and pans and zooms (`run/BoardCanvas.tsx`), the panels float
- * over it on the `hud` rung as a game's screen — the initiative strip
- * (`run/InitiativeStrip.tsx`) across the top, the party's portraits down the
- * left, the rail of drawers down the right, the tools, the action bar and the
- * rolls along the foot — and the window does not scroll.
+ * over it on the `hud` rung as a game's screen — the title and the controls
+ * across the top with the target frame centred between them, the party's
+ * portraits down the left, the rail of drawers down the right with the
+ * initiative order (`run/InitiativeStrip.tsx`) in a drawer the controls open,
+ * the tools, the action bar and the rolls along the foot — and the window does
+ * not scroll.
  * Below it (760 and 390) it is the window-scrolling grid of named areas
  * (`run/RunLayout.tsx`) with the board to look at, the strip heading it, which
  * re-deals the cards rather than leaving a blank beside any. Then the selected
  * card's controls inside its edges, the *Rolls* dock taking a click, a long
- * order scrolling sideways inside the strip, every chip in reach of the
- * keyboard, and, on the canvas, a token dragged onto its square with its ruler
+ * order scrolling inside the strip (sideways) or the drawer (down), every chip
+ * in reach of the keyboard, and, on the canvas, a token dragged onto its square with its ruler
  * on the way, an attack picked on the board, the Fog brush painting it, and the
  * dock's Measure and Area taking the pointer over the tokens (a ruler, a
  * preview, a pin and its banner). All of it is layout, stacking, cursors and
@@ -39,6 +41,8 @@ const ASIDE = 340;
 const RAIL = 232;
 /** The canvas's turn card at its widest (`--run-turn-w`). */
 const TURN = 720;
+/** The canvas's target frame at its widest in the top row (`--run-target-w`). */
+const TARGET_FRAME = 480;
 /** The grid's gap, `gap-4`. */
 const GAP = 16;
 /** How far the canvas's panels float in from the stage's edge, `inset-3`. */
@@ -134,6 +138,26 @@ const rolling = (page: Page) =>
   ]);
 
 /**
+ * Answer the fight with a name far longer than the controls are wide, which
+ * once pushed the top row's centre off the window's.
+ */
+const longName = (page: Page) =>
+  page.route(
+    (url) => /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+$/.test(url.pathname),
+    async (route) => {
+      const response = await route.fetch();
+      const run = (await response.json()) as Record<string, unknown>;
+      await route.fulfill({
+        response,
+        json: {
+          ...run,
+          encounterName: `${String(run.encounterName)}, below the Sunken Chapel at Greyhollow`,
+        },
+      });
+    },
+  );
+
+/**
  * Answer the fight's rows with a long order: the fixture's two, then a dozen
  * more goblins, so the strip has more chips than any width holds.
  */
@@ -163,6 +187,7 @@ for (const width of WIDTHS) {
     test.use({ viewport: { width, height: HEIGHT } });
 
     test("the fight's layout", async ({ app, page }) => {
+      await longName(page);
       await app.open(run);
       const list = page.getByRole("region", { name: "Initiative", exact: true });
       const map = page.getByRole("region", { name: "Battle map" });
@@ -216,7 +241,8 @@ for (const width of WIDTHS) {
           const at = {
             stage: await box(stage),
             header: await box(page.locator('[data-slot="run-hud-header"]')),
-            list: await box(list),
+            title: await box(page.locator('[data-slot="run-hud-title"]')),
+            controls: await box(page.locator('[data-slot="run-hud-controls"]')),
             party: await box(page.getByRole("region", { name: "Party", exact: true })),
             corner: await box(page.locator('[data-slot="run-hud-corner"]')),
             turn: await box(page.locator('[data-slot="run-hud-turn"]')),
@@ -224,14 +250,14 @@ for (const width of WIDTHS) {
             dice: await box(dice),
             rolls: await box(page.locator('[data-slot="run-hud-rolls"]')),
           };
-          // The ribbon, at the top: beside the title where there is room, under it where not.
-          expect.soft(at.list.y, "ribbon in the top row").toBeLessThan(bottom(at.header));
+          // The top row is the title and the controls, and no order: that is a
+          // drawer, closed until it is wanted.
+          expect.soft(at.title.x - at.stage.x, "title from the left").toBeCloseTo(INSET, 0);
           expect
-            .soft(
-              Math.abs(at.list.x + at.list.width / 2 - (at.stage.x + at.stage.width / 2)),
-              "ribbon centred",
-            )
-            .toBeLessThanOrEqual(width >= 1280 ? 200 : 1);
+            .soft(right(at.stage) - right(at.controls), "controls from the right")
+            .toBeCloseTo(INSET, 0);
+          expect.soft(right(at.title), "title before the controls").toBeLessThan(at.controls.x);
+          await expect.soft(list).toBeHidden();
           // The party's portraits down the left, narrower than the old rail of cards.
           expect.soft(at.party.x - at.stage.x, "party from the left").toBeCloseTo(INSET, 0);
           expect.soft(at.party.width, "party a column of portraits").toBeLessThan(RAIL / 2);
@@ -277,7 +303,7 @@ for (const width of WIDTHS) {
           await expect.soft(page.locator('[data-slot="run-hud"]')).toHaveCSS("z-index", "5");
           // Over the board: a point inside each panel lands in the panel.
           for (const [name, part] of [
-            ["list", at.list],
+            ["controls", at.controls],
             ["party", at.party],
             ["turn card", at.turn],
             ["rail", at.rail],
@@ -391,7 +417,7 @@ for (const width of WIDTHS) {
       if (canvas) {
         await test.step("the title is the way back, and the turn card holds the one peach", async () => {
           const title = page.locator('[data-slot="run-hud-title"]');
-          await expect.soft(title.locator("h1")).toHaveText("Ambush in the reeds");
+          await expect.soft(title.locator("h1")).toHaveText(/^Ambush in the reeds, below/);
           await expect.soft(title.getByRole("link", { name: "Overview" })).toBeVisible();
           // Next turn is the one peach, and no key stands in for it.
           const turn = page.locator('[data-slot="run-hud-turn"]');
@@ -422,6 +448,25 @@ for (const width of WIDTHS) {
         });
       }
 
+      if (canvas)
+        await test.step("the controls open the order in a drawer beside the rail", async () => {
+          const opener = page
+            .locator('[data-slot="run-hud-controls"]')
+            .getByRole("button", { name: "Initiative", exact: true });
+          await opener.click();
+          await expect(opener).toHaveAttribute("aria-expanded", "true");
+          await expect(list).toBeVisible();
+          const drawer = await box(
+            page.locator('[data-slot="run-drawer"][data-drawer="initiative"]'),
+          );
+          const rail = await box(page.locator('[data-slot="run-hud-rail"]'));
+          expect.soft(drawer.width, "drawer width").toBeCloseTo(ASIDE, 0);
+          expect.soft(rail.x - right(drawer), "drawer beside the rail").toBeCloseTo(INSET, 0);
+          expect.soft(drawer.y, "drawer level with the rail").toBeCloseTo(rail.y, 0);
+          // The title keeps the round while the order is put away.
+          await expect.soft(page.locator('[data-slot="run-hud-title"]')).toContainText("Round 1");
+        });
+
       await test.step("the strip's chips are the drawing's, inside it and on top", async () => {
         const edge = await box(list);
         const order = list.getByRole("list", { name: "Initiative order" });
@@ -435,14 +480,8 @@ for (const width of WIDTHS) {
         for (const chip of await chips.all()) {
           const at = await box(chip);
           const name = (await chip.getAttribute("aria-label")) ?? "chip";
-          if (canvas) {
-            // The ribbon's disc, with its initiative under it.
-            expect.soft(at.height, `${name} height`).toBeGreaterThanOrEqual(TARGET);
-            expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(TARGET);
-          } else {
-            expect.soft(at.height, `${name} height`).toBeCloseTo(CHIP.height, 0);
-            expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
-          }
+          expect.soft(at.height, `${name} height`).toBeCloseTo(CHIP.height, 0);
+          expect.soft(at.width, `${name} width`).toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
           const centre = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
           if (centre.x > right(view)) continue;
           // A press in the middle of a chip in view lands on it, over the board.
@@ -451,15 +490,7 @@ for (const width of WIDTHS) {
         // Whoever is up wears the accent; the trailing controls stay inside
         // the strip and are targets a pointer can hit.
         const up = order.getByRole("button", { name: /^Brannoc,/ });
-        if (canvas) {
-          // First on the ribbon, in a peach ring.
-          await expect.soft(chips.first()).toHaveAttribute("aria-label", /^Brannoc,/);
-          await expect
-            .soft(up.locator('[data-slot="strip-disc"]'))
-            .toHaveCSS("border-top-color", await accentColour(page));
-        } else {
-          await expect.soft(up).toHaveCSS("border-top-color", await accentColour(page));
-        }
+        await expect.soft(up).toHaveCSS("border-top-color", await accentColour(page));
         for (const name of ["Add combatant", "More about the order"]) {
           const control = await box(list.getByRole("button", { name, exact: true }));
           expect.soft(control.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
@@ -481,9 +512,35 @@ for (const width of WIDTHS) {
           .getByRole("list", { name: "Initiative order" })
           .getByRole("button", { name: /^Goblin Boss,/ })
           .click();
-        // On the canvas the pick is framed under the ribbon; its sheet opens from the frame.
+        // On the canvas the pick is framed in the top row; its sheet opens from the frame.
         const selected = canvas ? page.getByRole("region", { name: "Target, Goblin Boss" }) : sheet;
         await expect(selected).toContainText("Goblin Boss");
+        if (canvas) {
+          // Centred on the window, however long the title beside it, and in the
+          // top row where there is room for three columns, under it where not.
+          const frame = await box(page.locator('[data-slot="run-hud-target"]'));
+          const stage = await box(page.locator('[data-slot="run-stage"]'));
+          const title = await box(page.locator('[data-slot="run-hud-title"]'));
+          const controls = await box(page.locator('[data-slot="run-hud-controls"]'));
+          expect
+            .soft(
+              Math.abs(frame.x + frame.width / 2 - (stage.x + stage.width / 2)),
+              "frame centred",
+            )
+            .toBeLessThanOrEqual(1);
+          if (width >= 1280) {
+            expect
+              .soft(frame.width, "frame at most its width")
+              .toBeLessThanOrEqual(TARGET_FRAME + 0.5);
+            expect.soft(frame.y, "frame in the top row").toBeCloseTo(title.y, 0);
+            expect.soft(frame.x, "frame after the title").toBeGreaterThan(right(title));
+            expect.soft(right(frame), "frame before the controls").toBeLessThan(controls.x);
+          } else {
+            expect
+              .soft(frame.y, "frame under the title and controls")
+              .toBeGreaterThan(Math.max(bottom(title), bottom(controls)));
+          }
+        }
         const edge = await box(selected);
         const controls = await selected.locator("button, input").evaluateAll((els) =>
           els.map((el) => {
@@ -744,88 +801,104 @@ for (const width of WIDTHS) {
       }
     });
 
-    test("a long order scrolls sideways inside the strip", async ({ app, page }) => {
-      // The canvas's ribbon of discs holds twice the chips the grid's strip does.
-      const extra = canvas ? 30 : 12;
-      await crowded(page, extra);
+    test("a long order scrolls inside the strip", async ({ app, page }) => {
+      await crowded(page, 12);
       await app.open(run);
       const strip = page.getByRole("region", { name: "Initiative", exact: true });
       const order = strip.getByRole("list", { name: "Initiative order" });
       const chips = order.getByRole("button");
-      await expect(chips).toHaveCount(extra + 2);
+      // On the canvas the strip is the drawer's, which scrolls down; in the
+      // grid it heads the page and scrolls sideways.
+      const scroller = canvas
+        ? page.locator('[data-slot="run-drawer"][data-drawer="initiative"] > div')
+        : order;
+      if (canvas)
+        await page
+          .locator('[data-slot="run-hud-controls"]')
+          .getByRole("button", { name: "Initiative", exact: true })
+          .click();
+      await expect(chips).toHaveCount(14);
 
       await test.step("the order scrolls, the page does not", async () => {
         const { scrollWidth, clientWidth } = await app.widths();
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
-        const overflow = await order.evaluate((el) => el.scrollWidth - el.clientWidth);
-        expect.soft(overflow, "the order is wider than its strip").toBeGreaterThan(0);
+        const overflow = await scroller.evaluate((el) =>
+          Math.max(el.scrollWidth - el.clientWidth, el.scrollHeight - el.clientHeight),
+        );
+        expect.soft(overflow, "the order is longer than its box").toBeGreaterThan(0);
         const edge = await box(strip);
         const main = await box(page.locator("main"));
         expect.soft(right(edge), "strip inside main").toBeLessThanOrEqual(right(main) + 0.5);
-        // The scrollbar is hidden, as drawn; the chips keep the drawing's size.
-        await expect.soft(order).toHaveCSS("scrollbar-width", "none");
+        // The strip's scrollbar is hidden, as drawn; the chips keep the drawing's size.
+        if (!canvas) await expect.soft(order).toHaveCSS("scrollbar-width", "none");
         const last = await box(chips.last());
-        expect
-          .soft(last.width, "last chip width")
-          .toBeGreaterThanOrEqual(canvas ? TARGET : CHIP.minWidth - 0.5);
+        expect.soft(last.width, "last chip width").toBeGreaterThanOrEqual(CHIP.minWidth - 0.5);
       });
 
-      // The ribbon draws a disc and says the name in its tooltip and accessible name.
-      if (!canvas)
-        await test.step("a crowded strip still shows each name, not a letter or two", async () => {
-          // The chip's floor holds eight characters or so before the ellipsis:
-          // "Goblin 12" all but whole, never "G…".
-          for (const chip of await chips.all()) {
-            const label = (await chip.getAttribute("aria-label")) ?? "chip";
-            const name = chip.locator("[data-slot=strip-name]");
-            const { shown, length } = await name.evaluate((el) => {
-              const length = el.textContent?.length ?? 0;
-              const glyph = el.scrollWidth / Math.max(length, 1);
-              return { shown: el.clientWidth / glyph, length };
-            });
-            expect
-              .soft(shown, `${label} characters shown`)
-              .toBeGreaterThanOrEqual(Math.min(8, length) - 0.5);
-          }
-        });
+      await test.step("a crowded strip still shows each name, not a letter or two", async () => {
+        // The chip's floor holds eight characters or so before the ellipsis:
+        // "Goblin 12" all but whole, never "G…".
+        for (const chip of await chips.all()) {
+          const label = (await chip.getAttribute("aria-label")) ?? "chip";
+          const name = chip.locator("[data-slot=strip-name]");
+          const { shown, length } = await name.evaluate((el) => {
+            const length = el.textContent?.length ?? 0;
+            const glyph = el.scrollWidth / Math.max(length, 1);
+            return { shown: el.clientWidth / glyph, length };
+          });
+          expect
+            .soft(shown, `${label} characters shown`)
+            .toBeGreaterThanOrEqual(Math.min(8, length) - 0.5);
+        }
+      });
 
-      await test.step("the keyboard reaches every chip, and the strip brings it into view", async () => {
+      await test.step("the keyboard reaches every chip, and brings it into view", async () => {
         await chips.first().focus();
-        for (let step = 1; step < extra + 2; step++) await page.keyboard.press("Tab");
+        for (let step = 1; step < 14; step++) await page.keyboard.press("Tab");
         await expect(chips.last()).toBeFocused();
-        const view = await box(order);
+        const view = await box(scroller);
         const last = await box(chips.last());
-        expect
-          .soft(last.x, "last chip scrolled in from the left")
-          .toBeGreaterThanOrEqual(view.x - 0.5);
-        expect.soft(right(last), "last chip scrolled in").toBeLessThanOrEqual(right(view) + 0.5);
-        expect
-          .soft(await order.evaluate((el) => el.scrollLeft), "scrolled along")
-          .toBeGreaterThan(0);
+        if (canvas) {
+          expect
+            .soft(last.y, "last chip scrolled in from the top")
+            .toBeGreaterThanOrEqual(view.y - 0.5);
+          expect
+            .soft(bottom(last), "last chip scrolled in")
+            .toBeLessThanOrEqual(bottom(view) + 0.5);
+          expect
+            .soft(await scroller.evaluate((el) => el.scrollTop), "scrolled down")
+            .toBeGreaterThan(0);
+        } else {
+          expect
+            .soft(last.x, "last chip scrolled in from the left")
+            .toBeGreaterThanOrEqual(view.x - 0.5);
+          expect.soft(right(last), "last chip scrolled in").toBeLessThanOrEqual(right(view) + 0.5);
+          expect
+            .soft(await order.evaluate((el) => el.scrollLeft), "scrolled along")
+            .toBeGreaterThan(0);
+        }
         // Enter on a chip selects it.
         await page.keyboard.press("Enter");
         await expect(chips.last()).toHaveAttribute("aria-pressed", "true");
         // The grid's card follows it; on the canvas the target frame does.
         if (canvas)
-          await expect(
-            page.getByRole("region", { name: `Target, Goblin ${String(extra)}` }),
-          ).toBeVisible();
+          await expect(page.getByRole("region", { name: "Target, Goblin 12" })).toBeVisible();
         else
           await expect(page.getByRole("region", { name: "Selected combatant" })).toContainText(
-            `Goblin ${String(extra)}`,
+            "Goblin 12",
           );
       });
 
-      // On the canvas no page scrolls under the pointer, so the wheel is the
-      // strip's; in the grid it stays the page's, as everywhere else.
+      // A wheel over the drawer is the drawer's: it scrolls, and the board
+      // under it neither pans nor zooms.
       if (canvas) {
-        await test.step("a wheel over the strip walks it along, and the page stays put", async () => {
-          await order.evaluate((el) => (el.scrollLeft = 0));
-          const view = await box(order);
+        await test.step("a wheel over the drawer scrolls it, and the board stays put", async () => {
+          await scroller.evaluate((el) => (el.scrollTop = 0));
+          const view = await box(scroller);
           await page.mouse.move(view.x + view.width / 2, view.y + view.height / 2);
           const before = await viewOf(page);
           await page.mouse.wheel(0, 200);
-          await expect.poll(() => order.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+          await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
           expect.soft(await viewOf(page), "the board did not zoom").toEqual(before);
           expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
         });
@@ -1359,7 +1432,10 @@ for (const width of WIDTHS) {
           await expect
             .soft(page.locator('[data-slot="run-hud-rolling"]'))
             .toContainText("Roll initiative");
-          await expect.soft(page.locator('[data-slot="run-hud-strip"]')).toHaveCount(0);
+          // The panel is the order while it rolls: no drawer holds another.
+          await expect
+            .soft(page.getByRole("button", { name: "Initiative", exact: true }))
+            .toHaveCount(0);
           expect.soft(at.panel.width, "panel width").toBeCloseTo(ASIDE, 0);
           expect.soft(at.panel.x - stage.x, "panel from the left").toBeCloseTo(INSET, 0);
           expect.soft(at.panel.y - bottom(header), "panel under the header").toBeCloseTo(INSET, 0);

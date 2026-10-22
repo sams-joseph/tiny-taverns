@@ -255,6 +255,36 @@ describe("PlayerTableScreen", () => {
     expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(false);
   });
 
+  it("puts the order in a drawer on the canvas, opened from the top right", async () => {
+    // The canvas is chosen by a probe the stylesheet shows from `@3xl`.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset.slot === "run-stage-probe" ? 1024 : 0;
+    });
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+
+    const controls = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-slot=run-hud-controls]");
+      if (found === null) throw new Error("no controls on the stage");
+      return found;
+    });
+    // Put away until the player asks for it.
+    expect(screen.queryByRole("list", { name: "Initiative order" })).toBeNull();
+    const order = within(controls).getByRole("button", { name: "Initiative" });
+    await userEvent.click(order);
+    expect(order).toHaveAttribute("aria-expanded", "true");
+    const drawer = document.querySelector<HTMLElement>(
+      "[data-slot=run-drawer][data-drawer=initiative]",
+    );
+    expect(drawer).toBeVisible();
+    // The same read-only chips, with nothing to add.
+    const list = within(within(drawer!).getByRole("list", { name: "Initiative order" }));
+    expect(list.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ })).toBeInTheDocument();
+    expect(within(drawer!).queryByRole("button", { name: "Add combatant" })).toBeNull();
+  });
+
   it("lays a character's portrait on its token, and leaves the rest their initials", async () => {
     server.routes.set(
       ...playing(campaignId, {

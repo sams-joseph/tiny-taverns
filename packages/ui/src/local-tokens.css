@@ -53,12 +53,15 @@
 
   /* The encounter runner's canvas (`Encounter Canvas.dc.html`): the party
      rail down its left edge is 232px and the turn card at its foot is
-     capped at 720px. No token answers either. */
+     capped at 720px. The target frame in the top row's centre is capped at
+     480px, the maintainer's call of 2026-10-22, so the title and the controls
+     keep a column each beside it. No token answers any of them. */
   --run-rail-w: 232px;
   --run-turn-w: 720px;
+  --run-target-w: 480px;
 
-  /* The same drawing's halo on whoever is up, on the ribbon's disc and the
-     token's base: a soft accent glow. No elevation token is a glow. */
+  /* The same drawing's halo on whoever is up, on the turn card's portrait: a
+     soft accent glow. No elevation token is a glow. */
   --shadow-glow-accent: 0 0 18px 2px color-mix(in oklab, var(--accent) 35%, transparent);
 
   /* The same drawing's hero: the cover is `height: clamp(180px, 24vw, 280px)`,

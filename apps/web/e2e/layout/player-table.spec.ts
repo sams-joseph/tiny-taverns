@@ -7,8 +7,10 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  *
  * - **On the canvas** (from `@3xl` of `main`, `run/RunStage.tsx`): the stage
  *   is the whole window, the shell's nav rows put away, and the window does
- *   not scroll; the header floats at the top, the strip runs across under it, the player's card and the turn banner are the right-hand
- *   panel, their rolls the left; the board lies under them, and the player's
+ *   not scroll; the header floats at the top with the controls on its right,
+ *   which open the initiative order in a drawer beside the panel; the
+ *   player's card and the turn banner are the right-hand panel, their rolls
+ *   under it; the board lies under them, and the player's
  *   own token is on the board clear of every panel.
  * - **In the grid** (`run/RunLayout.tsx`), below it: the strip heads the page
  *   and the map is a card at the picture's shape, its tokens a picture with
@@ -160,21 +162,35 @@ for (const width of WIDTHS) {
           expect.soft(scrolls, "the window has nothing to scroll").toBe(false);
         });
 
-        await test.step("the strip across the top, your card and rolls right, the party left", async () => {
+        await test.step("the order in a drawer, your card and rolls right, the party left", async () => {
           const stage = await box(page.locator("[data-slot=run-stage]"));
+          // The order is put away until the player opens it from the top right.
+          await expect.soft(strip).toBeHidden();
+          const opener = page
+            .locator("[data-slot=run-hud-controls]")
+            .getByRole("button", { name: "Initiative", exact: true });
+          await opener.click();
+          await expect(strip).toBeVisible();
           const at = {
             header: await box(page.locator("[data-slot=run-hud-header]")),
+            controls: await box(page.locator("[data-slot=run-hud-controls]")),
             strip: await box(strip),
             panel: await box(page.locator("[data-slot=run-hud-panel]")),
             rolls: await box(page.getByRole("region", { name: "Your rolls" })),
           };
           expect.soft(at.header.y - stage.y, "the header at the stage's top").toBeLessThan(16);
           expect
-            .soft(at.strip.y - (at.header.y + at.header.height), "the strip under the header")
+            .soft(stage.x + stage.width - (at.controls.x + at.controls.width), "controls right")
             .toBeLessThan(16);
           expect
-            .soft(at.panel.y, "the panel under the strip")
-            .toBeGreaterThan(at.strip.y + at.strip.height - 0.5);
+            .soft(at.panel.y, "the panel under the header")
+            .toBeGreaterThan(at.header.y + at.header.height - 0.5);
+          // The drawer opens over the board beside the panel, not over it.
+          expect
+            .soft(at.strip.x + at.strip.width, "the order beside the panel")
+            .toBeLessThanOrEqual(at.panel.x + 0.5);
+          await opener.click();
+          await expect.soft(strip).toBeHidden();
           expect
             .soft(stage.x + stage.width - (at.panel.x + at.panel.width), "panel right")
             .toBeLessThan(16);

@@ -5,7 +5,7 @@ import { HudIconButton } from "./hud";
 import { SHEET_DRAWER, useStageDrawers } from "./stageDrawers";
 
 /**
- * The canvas's target frame, top centre under the ribbon, as a game frames
+ * The canvas's target frame, top centre, as a game frames
  * what it has targeted (the maintainer's call of 2026-10-22): drawn while
  * something other than whoever is up is selected, and gone with the
  * selection. Its disc, name and line, its hit points on the shared bar with
