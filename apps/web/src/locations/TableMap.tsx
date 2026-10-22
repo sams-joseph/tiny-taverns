@@ -1,6 +1,10 @@
 import type { CampaignId, LocationId } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Icon } from "@taverns/ui";
+import { useCallback } from "react";
+import { useInvalidate } from "../api/atoms";
+import { reads } from "../api/keys";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { type MapPlace, PlaceMap } from "./PlaceMap";
 
 /** A place in a table's list: what the map draws, and the place around it in this view. */
@@ -28,7 +32,13 @@ export function TableMap({
   readonly partyAt?: LocationId | undefined;
 }) {
   const navigate = useNavigate();
+  const invalidate = useInvalidate();
   const place = places.find((candidate) => candidate.id === placeId);
+  // Both readers of a table's places answer this key, the creator's and a player's.
+  useHobDrawingPolling(
+    place?.imagePending === true,
+    useCallback(() => invalidate([reads.locations(campaignId)]), [invalidate, campaignId]),
+  );
   if (place === undefined) return null;
 
   const byId = new Map(places.map((candidate) => [candidate.id, candidate] as const));

@@ -160,11 +160,16 @@ export function LocationMapScreen() {
               {...(parent === undefined
                 ? {}
                 : { onUp: () => open(parent.id), upLabel: parent.name })}
-              editing={{
-                onPin: (child, at) => pin(child, at),
-                placing: inside.find((child) => child.id === placing),
-                onPlaced: () => setPlacing(undefined),
-              }}
+              // The pins are what Hob is drawing around, so they hold still until it is done.
+              {...(place.imagePending
+                ? {}
+                : {
+                    editing: {
+                      onPin: (child, at) => pin(child, at),
+                      placing: inside.find((child) => child.id === placing),
+                      onPlaced: () => setPlacing(undefined),
+                    },
+                  })}
             />
             {inside.length > 0 && (
               <section aria-label="Places inside it" className="flex flex-col gap-3">

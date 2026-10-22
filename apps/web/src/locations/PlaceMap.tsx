@@ -1,5 +1,5 @@
 import type { LocationId, LocationImages, LocationKind, LocationPin } from "@taverns/api";
-import { Badge, Button, EmptyState, Icon, Loading } from "@taverns/ui";
+import { Badge, Button, EmptyState, Icon } from "@taverns/ui";
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { apiUrl } from "../api/client";
 import { locationKindLabel } from "./kind";
 
 /** What every read of a place carries that the map draws. */
@@ -321,19 +322,16 @@ export function PlaceMap({
   );
 
   // With no picture, the owner still lays the places out, on a blank canvas
-  // the size the picture will be drawn: a map is drawn around its pins.
-  const canvas = place.image === null && editing !== undefined && !place.imagePending;
+  // the size the picture will be drawn: a map is drawn around its pins. While
+  // Hob draws it, every reader sees that canvas, saying so.
+  const canvas = place.image === null && (editing !== undefined || place.imagePending);
   if (place.image === null && !canvas) {
     return (
       <div className="flex flex-col gap-3">
         {toolbar}
-        {place.imagePending ? (
-          <Loading label="Hob is drawing it…" />
-        ) : (
-          <EmptyState icon="map" title="No picture yet">
-            The places inside it are listed below until it has one.
-          </EmptyState>
-        )}
+        <EmptyState icon="map" title="No picture yet">
+          The places inside it are listed below until it has one.
+        </EmptyState>
       </div>
     );
   }
@@ -379,12 +377,12 @@ export function PlaceMap({
               data-slot="place-canvas"
               className="pointer-events-none flex size-full items-center justify-center p-6 text-center text-caption leading-body text-faint"
             >
-              No picture yet. Lay out the places inside it, then draw it: the map is drawn around
-              your pins.
+              {!place.imagePending &&
+                "No picture yet. Lay out the places inside it, then draw it: the map is drawn around your pins."}
             </div>
           ) : (
             <img
-              src={place.image.fullUrl}
+              src={apiUrl(place.image.fullUrl)}
               alt={`The ${locationKindLabel(place.kind).toLowerCase()} ${place.name}`}
               draggable={false}
               className="pointer-events-none size-full"
@@ -435,6 +433,11 @@ export function PlaceMap({
             );
           })}
         </div>
+        {place.imagePending && (
+          <Badge variant="outline" role="status" className="absolute bottom-3 left-3">
+            Hob is drawing…
+          </Badge>
+        )}
       </div>
       {placing !== undefined && (
         <p className="text-caption leading-body text-muted-foreground">
