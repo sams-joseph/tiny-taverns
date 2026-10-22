@@ -576,6 +576,7 @@ describeLayer(
             "proposeBeat",
             "proposeCampaignStory",
             "proposeEncounter",
+            "proposeLevel",
             "proposeLocation",
             "proposeNight",
             "proposeNightSummary",

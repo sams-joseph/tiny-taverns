@@ -9,6 +9,7 @@ import {
   type HobAccepted,
   keptFrom,
   type CharacterOwnCreate,
+  generateLevel,
   type HobProposal,
   type Location,
   type LocationKind,
@@ -30,6 +31,7 @@ import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { Groups } from "./Groups.js";
+import { Levels } from "./Levels.js";
 import { Locations } from "./Locations.js";
 import { PartyTravel } from "./PartyTravel.js";
 import { discardedConflict, lockTurnForAccept, markAccepted } from "./HobThreads.js";
@@ -256,7 +258,34 @@ export class Proposals extends Context.Service<
       const acts = yield* Acts;
       const advancement = yield* Advancement;
       const locations = yield* Locations;
+      const levels = yield* Levels;
       const travel = yield* PartyTravel;
+
+      /**
+       * A level laid out again from the spec and seed the card drew, then made
+       * the way the editor makes one: the shelf's create, stamped with the
+       * turn, and the editor's save of the whole document at the version that
+       * create answered. Owned by the accepting credential.
+       */
+      const keepLevel = (
+        proposal: Extract<HobProposal, { target: "level" }>,
+        from: AssistantOrigin,
+      ) =>
+        Effect.gen(function* () {
+          const { target: _target, ...spec } = proposal;
+          const { level: draft } = generateLevel(spec);
+          const made = yield* levels.create(
+            {
+              name: draft.name,
+              columns: draft.columns,
+              rows: draft.rows,
+              feetPerCell: draft.feetPerCell,
+            },
+            from,
+          );
+          const level = yield* levels.save(made.id, { ...draft, version: made.version });
+          return { accepted: "level" as const, level };
+        });
 
       /**
        * A drafted place and everything under it, made through the shelf's own
@@ -525,6 +554,16 @@ export class Proposals extends Context.Service<
               return kept;
             });
 
+          case "level":
+            // The creator's toolkit offers it, into the campaign's own
+            // thread; the proof is asked again, so nobody else keeps one. The
+            // level goes into the creator's Library and nowhere else: a level
+            // is in no campaign.
+            return Effect.gen(function* () {
+              yield* creators.of(campaignId);
+              return yield* keepLevel(proposal, from);
+            });
+
           case "partyMove":
             // The creator's own move, behind the proof the accept asks for
             // again: a place taken out of the world since the offer is its
@@ -698,7 +737,9 @@ export class Proposals extends Context.Service<
                           : proposal.target === "location"
                             ? // Into the asker's Library, and nowhere else.
                               yield* keepPlaces(proposal, from)
-                            : undefined;
+                            : proposal.target === "level"
+                              ? yield* keepLevel(proposal, from)
+                              : undefined;
                   if (accepted === undefined) {
                     // Only the account's own toolkits write into these threads
                     // and they propose nothing else; the refusal is the same

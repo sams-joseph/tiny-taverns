@@ -667,7 +667,8 @@ export const servicesOver = <E>(
     // through must never hold a bearer URL.
     Layer.fresh(Locations.layer).pipe(Layer.provide(imageUrls)),
     // Account-owned levels: the owner's alone, every method behind
-    // `levelOwned`. Only the handlers hold it; no toolkit has a level tool yet.
+    // `levelOwned`. The handlers hold it, and the accept writes a kept Hob
+    // level through it; `proposeLevel` itself reads nothing.
     Levels.layer,
     // The party's travels: a move during an open night rings its doorbell.
     PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -812,6 +813,9 @@ export const servicesOver = <E>(
         // create, and into the campaign's or the world's context through the
         // creator's or member's own placement.
         Locations.layer,
+        // A kept level goes into the keeper's Library through the shelf's
+        // own create and the editor's own save.
+        Levels.layer,
         // A kept party move goes through the creator's own move, which hands
         // its doorbell back for the handler to ring after the commit.
         PartyTravel.layer.pipe(Layer.provide(LiveEvents.layer)),

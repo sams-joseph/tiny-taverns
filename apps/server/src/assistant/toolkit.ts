@@ -59,6 +59,18 @@ import {
   LOCATION_DESCRIPTION_MAX,
   LOCATION_NAME_MAX,
   LOCATION_NOTES_MAX,
+  generateLevel,
+  LEVEL_DESCRIPTION_MAX,
+  LEVEL_NAME_MAX,
+  LEVEL_ROOM_LABEL_MAX,
+  LEVEL_ROOMS_MAX,
+  LEVEL_SECRETS_MAX,
+  LEVEL_SEED_MAX,
+  LevelConnections,
+  LevelMood,
+  LevelRoomPurpose,
+  LevelRoomSize,
+  type LevelSpec,
   LocationId,
   LocationKind,
   NoteCategory,
@@ -108,7 +120,7 @@ import {
   type SubraceEntry,
   subraceNamed,
 } from "@taverns/api";
-import { Effect, Ref, Result, Schema, SchemaGetter } from "effect";
+import { Effect, Random, Ref, Result, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Acts } from "../repo/Acts.js";
 import type { CampaignStories } from "../repo/CampaignStories.js";
@@ -2031,6 +2043,108 @@ export const ProposePartyMove = Tool.make("proposePartyMove", {
   failureMode: "return",
 });
 
+/**
+ * `proposeLevel`: a battle map for the asker's Library, as **labels, not
+ * coordinates** — rooms by purpose and rough size, how they connect, how many
+ * secret doors and the light — which `generateLevel` (`@taverns/api`) lays
+ * out. The model never places a wall: a small local model cannot, and a level
+ * it could would be one the save refuses.
+ *
+ * The schema is permissive and the handler holds the rules (an empty room
+ * list, more rooms than the size holds, too many secret doors), for
+ * `searchCampaign.query`'s reason: a refusal the framework makes before a
+ * handler runs is one the model cannot hear. The seed is the server's.
+ */
+export const ProposeLevel = Tool.make("proposeLevel", {
+  description:
+    "Offer them a new level — a battle map of rooms and corridors for a fight or a " +
+    "dungeon — for their Library, built from what they described. Say what it is, not " +
+    "where things go: a name, a short description, the board's size (small, medium or " +
+    `large: at most ${String(LEVEL_ROOMS_MAX.small)}, ${String(LEVEL_ROOMS_MAX.medium)} ` +
+    `or ${String(LEVEL_ROOMS_MAX.large)} rooms), and each room's purpose — shrine, tavern, ` +
+    "store, library, barracks, cistern or garden — with a rough size and a short label " +
+    "if it has a name. connections is how rooms open onto the corridors: doors, mixed " +
+    "or open arches. secrets is how many secret doors to hide. mood is the light: " +
+    "firelit, dim, dark (nothing lit), moonlit or arcane. The walls, doors, furniture " +
+    "and lights are laid out for you, and they can change anything afterwards in the " +
+    "editor. Only a suggestion: nothing is made unless they keep it. Say one short " +
+    "line about it and stop.",
+  parameters: Schema.Struct({
+    name: Schema.String.check(Schema.isBetweenLength(1, LEVEL_NAME_MAX)),
+    description: optionalText(LEVEL_DESCRIPTION_MAX),
+    size: Schema.Literals(["small", "medium", "large"]),
+    rooms: Schema.Array(
+      Schema.Struct({
+        purpose: LevelRoomPurpose,
+        size: optional(LevelRoomSize),
+        label: optionalText(LEVEL_ROOM_LABEL_MAX),
+      }),
+    ),
+    connections: optional(LevelConnections),
+    secrets: optional(Schema.Int),
+    mood: LevelMood,
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+type LevelDraft = Tool.Parameters<typeof ProposeLevel>;
+
+/**
+ * `proposeLevel`, bound: the spec with every default filled and a seed the
+ * server picked, which is the whole proposal. It is laid out once here only
+ * to tell the model what it offered; the card and the keep lay it out again
+ * from the same spec and get the same level.
+ */
+const levelHandlerFor =
+  (actor: Actor, proposal: ProposalSlot) =>
+  ({ name, description, size, rooms, connections, secrets, mood }: LevelDraft) =>
+    Effect.gen(function* () {
+      const title = name.trim();
+      if (title === "") return yield* new Conflict({ message: "give the level a name" });
+      if (rooms.length === 0) {
+        return yield* new Conflict({ message: "give the level at least one room" });
+      }
+      const most = LEVEL_ROOMS_MAX[size];
+      if (rooms.length > most) {
+        return yield* new Conflict({
+          message:
+            `a ${size} level holds at most ${String(most)} rooms — offer fewer rooms` +
+            (size === "large" ? "" : " or a larger size"),
+        });
+      }
+      const hidden = absent(secrets) ?? 0;
+      if (hidden < 0 || hidden > LEVEL_SECRETS_MAX) {
+        return yield* new Conflict({
+          message: `secrets is how many secret doors, from 0 to ${String(LEVEL_SECRETS_MAX)}`,
+        });
+      }
+      const spec: LevelSpec = {
+        name: title,
+        description: blank(description) ?? null,
+        size,
+        rooms: rooms.map((room) => ({
+          purpose: room.purpose,
+          size: absent(room.size) ?? "medium",
+          label: blank(room.label) ?? null,
+        })),
+        connections: absent(connections) ?? "mixed",
+        secrets: hidden,
+        mood,
+        seed: yield* Random.nextIntBetween(0, LEVEL_SEED_MAX),
+      };
+      const { level } = generateLevel(spec);
+      const doors = level.walls.filter((wall) => wall.kind !== "wall").length;
+      return yield* bind(actor, proposal).offer(
+        { target: "level", ...spec },
+        `Offered the level "${title}": ${String(spec.rooms.length)} ` +
+          `${spec.rooms.length === 1 ? "room" : "rooms"} on a ${size} board, ` +
+          `${String(doors)} ${doors === 1 ? "door" : "doors"}, ${mood}. ` +
+          "Nothing is made unless they keep it; say one short line about it and stop.",
+      );
+    });
+
 /** What `listLocations` answers, from any of the three reads it is bound to. */
 const locationReads = (
   places: ReadonlyArray<{
@@ -2197,6 +2311,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeNpcSheet,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
     ProposePartyMove,
     ReadFight,
     SpendCharacterResource,
@@ -2238,6 +2353,9 @@ export const HobToolkit = Toolkit.make(
   // Library, placed in that world when kept.
   ListLocations,
   ProposeLocation,
+  // A level — a battle map — for the creator's Library, as labels the
+  // generator lays out.
+  ProposeLevel,
   // The party travelling to one of those places: the creator's alone, a
   // proposal the creator keeps (the maintainer's exception for live play).
   ProposePartyMove,
@@ -2455,6 +2573,7 @@ export const accountToolkitOver = (
     ProposeSharedWorld,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
   );
 
 /** {@link accountToolkitOver} above the cap: the same six, plus the listing. */
@@ -2470,6 +2589,7 @@ export const accountToolkitListing = (
     ProposeSharedWorld,
     ListLocations,
     ProposeLocation,
+    ProposeLevel,
   );
 
 /**
@@ -3123,6 +3243,7 @@ export const dmHandlersFor = (
     // The places in the campaign's world, through the creator's own read.
     listLocations: () => Effect.map(repositories.locations.atCampaign(dm), locationReads),
     proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
+    proposeLevel: levelHandlerFor(actor, proposal),
     proposePartyMove: ({ locationId }) =>
       Effect.gen(function* () {
         const place = (yield* repositories.locations.atCampaign(dm)).find(
@@ -4458,6 +4579,7 @@ const accountHandlersFor = (
       (places) => locationReads(places.map((place) => ({ ...place, mine: true }))),
     ),
   proposeLocation: locationHandlerFor(repositories.locations, actor, proposal),
+  proposeLevel: levelHandlerFor(actor, proposal),
 });
 
 /** {@link accountToolkitOver}, bound to {@link accountHandlersFor}. */

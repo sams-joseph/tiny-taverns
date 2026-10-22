@@ -28,8 +28,11 @@ import {
   SharedWorldHistorySummaryId,
   SharedWorldId,
   LocationId,
+  LevelId,
   PartyMoveId,
 } from "./Ids.js";
+import { Level } from "./Level.js";
+import { LevelSpec } from "./LevelGenerator.js";
 import { Location, LocationKind, LocationPin } from "./Location.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
 import { PartyMove } from "./PartyTravel.js";
@@ -210,7 +213,8 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
  * `sharedWorld` (the asker's new world), a `levelUp` (the next level of a
  * character the asker owns), a `location` (a place for the asker's Library,
- * with the places inside it), a `partyMove` (the party travelling to a place
+ * with the places inside it), a `level` (a battle map for the asker's
+ * Library, as labels and a seed), a `partyMove` (the party travelling to a place
  * at the table) and an `npcTurn` (a monster's turn in a fight,
  * which nothing keeps yet). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
@@ -222,12 +226,12 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
  * `proposeNightSummary`, `proposeNight`, `proposeAct`, `proposeEncounter`,
  * `proposeCampaignStory`, `proposeNpc`, `proposeNpcSheet`,
- * `proposeLocation` and `proposePartyMove`; Shared World Hob has the Chronicle's two and
+ * `proposeLocation`, `proposeLevel` and `proposePartyMove`; Shared World Hob has the Chronicle's two and
  * `proposeLocation`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter`, `proposeCampaign`,
- * `proposeSharedWorld` and `proposeLocation`; the level-up composer (`HobDraftAsk.intent:
+ * `proposeSharedWorld`, `proposeLocation` and `proposeLevel`; the level-up composer (`HobDraftAsk.intent:
  * "levelUp"`) has `proposeLevelUp` and nothing else; the fight toolkit has
  * `proposeNpcTurn`, which it files into the fight's own thread. So the halves of this
  * union are reachable from disjoint conversations: a character, a campaign, a
@@ -650,6 +654,23 @@ export const HobProposal = Schema.Union([
     children: Schema.Array(HobLocationChild),
   }),
   /**
+   * A level for the asker's Library — a battle map — offered by the creator's
+   * Hob at a campaign and by the account's own panel (`proposeLevel`).
+   *
+   * **Labels, not coordinates**: the spec Hob wrote (rooms by purpose and
+   * rough size, how they connect, how many secret doors, the light), with
+   * every default filled and the seed the server picked when Hob proposed.
+   * The document is never stored here: `generateLevel` lays the same spec out
+   * the same way everywhere, so the card draws its preview from it and the
+   * keep generates it again and writes it through `Levels.create` and
+   * `Levels.save`, the editor's own statements, stamped `origin =
+   * 'assistant'` with the turn.
+   */
+  Schema.Struct({
+    target: Schema.Literal("level"),
+    ...LevelSpec.fields,
+  }),
+  /**
    * The party moving to a place in the campaign's world, offered to its
    * creator by the campaign's own Hob (`proposePartyMove`) — the maintainer's
    * one exception besides a monster's turn to *Hob does not create live-play
@@ -764,6 +785,8 @@ export const HobKept = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("partyMove"), id: PartyMoveId }),
   /** A place kept into the asker's Library: the top of what the draft made. */
   Schema.Struct({ accepted: Schema.Literal("location"), id: LocationId }),
+  /** A level kept into the asker's Library, which opens in the editor. */
+  Schema.Struct({ accepted: Schema.Literal("level"), id: LevelId }),
   /** A monster's turn, carried out in its fight (`hobFight.keep`). */
   Schema.Struct({
     accepted: Schema.Literal("npcTurn"),
@@ -1122,6 +1145,8 @@ export const HobAccepted = Schema.Union([
     location: Location,
     descendants: Schema.Array(Location),
   }),
+  /** The level a person kept from their Hob, in their own Library: the whole document. */
+  Schema.Struct({ accepted: Schema.Literal("level"), level: Level }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 
@@ -1170,6 +1195,8 @@ export const keptFrom = (accepted: HobAccepted): HobKept => {
       return { accepted: "location", id: accepted.location.id };
     case "partyMove":
       return { accepted: "partyMove", id: accepted.move.id };
+    case "level":
+      return { accepted: "level", id: accepted.level.id };
   }
 };
 
