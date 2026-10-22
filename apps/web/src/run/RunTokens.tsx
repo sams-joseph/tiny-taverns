@@ -205,6 +205,13 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
   /** A level fight's walk: the range and the ruler go by it. Absent on a plain grid. */
   readonly walk?: LevelWalk | undefined;
+  /**
+   * Exploring a level visit (`play/PlayerVisitBoard.tsx`): there is no turn
+   * and no speed, so the range is drawn for any selected token that may move,
+   * reaching every square the walk does, and the ruler reads the distance
+   * alone. `feetLeftOf` and `activeId` are not asked for either.
+   */
+  readonly exploring?: boolean;
   /** The attacks and areas this reader may see drawn; a player's board has none yet. */
   readonly acts?: ReadonlyArray<Act>;
 }
@@ -235,9 +242,19 @@ function Range<T extends LayerToken>({
   readonly occupied: ReadonlyArray<BoardSquare>;
 }) {
   const { board, selected, activeId, feetLeftOf, diagonals, rangeShown } = props;
-  if (!rangeShown || selected === undefined || selected.id !== activeId || from === null)
+  const exploring = props.exploring === true;
+  if (
+    !rangeShown ||
+    selected === undefined ||
+    (exploring ? !props.movable(selected) : selected.id !== activeId) ||
+    from === null
+  )
     return null;
-  const left = feetLeftOf(selected);
+  // Exploring has no speed: a budget no walk on the board can spend, at
+  // double for difficult ground and half again for diagonals.
+  const left = exploring
+    ? board.columns * board.rows * board.feetPerCell * 3
+    : feetLeftOf(selected);
   if (left === undefined) return null;
   const walk = props.walk;
   const squares =
@@ -576,7 +593,10 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
       ? rulerReading({
           from: drag.from,
           to: drag.over,
-          remaining: dragged.id === activeId ? (feetLeftOf(dragged) ?? null) : null,
+          remaining:
+            props.exploring !== true && dragged.id === activeId
+              ? (feetLeftOf(dragged) ?? null)
+              : null,
           occupied: heldBesides(dragged.id).some((held) => same(held, drag.over)),
           feetPerCell: board.feetPerCell,
           diagonals,

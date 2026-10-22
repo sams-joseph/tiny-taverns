@@ -1,5 +1,6 @@
 import {
   type BoardSquare,
+  type CampaignCharacterId,
   type CampaignId,
   type CombatantId,
   type DeathSaves,
@@ -55,6 +56,7 @@ import { loadPlayerTableView } from "./load";
 import { PlayerBoardCard, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
 import { TableRowCard, YourCard } from "./PlayerCard";
 import { PlayerStrip } from "./PlayerStrip";
+import { PlayerVisitCard, PlayerVisitStage, type PlayerVisitBoardProps } from "./PlayerVisitBoard";
 import { SceneOnTheTable } from "./SceneOnTheTable";
 import { tableLabels, tableRowState } from "./tableRows";
 import { usePlayerTableStream } from "./tableStream";
@@ -111,6 +113,9 @@ export function PlayerTableScreen() {
   const view = resource.state === "ready" ? resource.value : undefined;
   const table = view?.table;
   const fight = table?.fight ?? null;
+  // The level the party explores, while no fight is on the table: a fight is
+  // what the table plays when there is one.
+  const visit = fight === null ? (table?.visit ?? null) : null;
   const you = fight?.order.find((row): row is PlayerLiveCombatantYou => row.kind === "you");
   // The seat, not the order's "you" row: a conversation, a skill challenge or
   // a hazard has no initiative order, and a player still rolls in one.
@@ -179,6 +184,19 @@ export function PlayerTableScreen() {
           (client) =>
             client.table.move({
               params: { campaignId, runId: fight.id, combatantId: you.combatantId },
+              payload: { position: to, requestId: newRequestId() },
+            }),
+          [reads.playerTable(campaignId)],
+        );
+
+  /** Walk your own token on the level the party explores (`table.moveOnVisit`). */
+  const walkOnVisit = (seatId: CampaignCharacterId, to: BoardSquare) =>
+    visit === null
+      ? Promise.resolve()
+      : moveWrite.submit(
+          (client) =>
+            client.table.moveOnVisit({
+              params: { campaignId, visitId: visit.id, seatId },
               payload: { position: to, requestId: newRequestId() },
             }),
           [reads.playerTable(campaignId)],
@@ -323,7 +341,17 @@ export function PlayerTableScreen() {
           // The fight's attacks and areas this player may see, their own among them.
           acts: actsOfTable(fight.acts),
         };
+  const visitProps: PlayerVisitBoardProps | undefined =
+    visit === null
+      ? undefined
+      : {
+          visit,
+          diagonals: view?.campaign.diagonalRule ?? "five",
+          movable: !moveWrite.busy,
+          onMove: walkOnVisit,
+        };
   const canvas = stage.wide === true && boardProps !== undefined;
+  const visitCanvas = stage.wide === true && visitProps !== undefined;
 
   const turnCardShown = canvas && yourTurn && you !== undefined;
   const selectedCover =
@@ -533,7 +561,7 @@ export function PlayerTableScreen() {
   // On the canvas the screen holds the whole window, as the DM's does: the
   // shell puts its nav rows away and the header floats over the board.
   const onCanvas =
-    canvas && view !== undefined && table !== undefined && table !== null && fight !== null;
+    (canvas || visitCanvas) && view !== undefined && table !== undefined && table !== null;
   useFullscreen(onCanvas);
 
   const headerTitle = view?.campaign.name ?? "The table";
@@ -544,7 +572,9 @@ export function PlayerTableScreen() {
         ? "No shared live table for one of your seats."
         : `Session ${String(table.sessionNumber)}${
             fight === null
-              ? " · nothing on the table"
+              ? visit === null
+                ? " · nothing on the table"
+                : " · exploring"
               : fight.mode !== "combat"
                 ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
                 : fight.phase === "initiative"
@@ -592,7 +622,45 @@ export function PlayerTableScreen() {
       {view !== undefined && table !== null && table !== undefined && stage.wide !== undefined && (
         <div className={cn("flex flex-col gap-4", onCanvas && "min-h-0 flex-1")}>
           {!onCanvas && notice}
-          {fight === null ? (
+          {fight === null && visitProps !== undefined ? (
+            onCanvas ? (
+              <RunStage
+                title={
+                  <CanvasTitle
+                    back={{ to: "/campaigns/$campaignId", params: { campaignId } }}
+                    title={headerTitle}
+                    subtitle={headerSubtitle}
+                  />
+                }
+                controls={null}
+                notices={notice}
+                rolling={null}
+                party={null}
+                turn={null}
+                banner={undefined}
+                panel={
+                  <>
+                    {failure !== undefined && (
+                      <Card className="border-danger">
+                        <CardContent className="pt-card">
+                          <SaveFailure failure={failure} />
+                        </CardContent>
+                      </Card>
+                    )}
+                    {tableCards}
+                  </>
+                }
+                rolls={rolls}
+                board={(freeArea) => <PlayerVisitStage {...visitProps} freeArea={freeArea} />}
+              />
+            ) : (
+              <>
+                <PlayerVisitCard {...visitProps} />
+                {tableCards}
+                {rolls}
+              </>
+            )
+          ) : fight === null ? (
             <>
               <Card>
                 <CardHeader>

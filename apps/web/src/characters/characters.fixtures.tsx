@@ -410,6 +410,8 @@ export const playing = (
     /** The attacks and areas the board draws, oldest first. */
     readonly acts?: ReadonlyArray<Record<string, unknown>>;
   } | null = {},
+  /** The level visit the party explores (`PlayerLevelVisit`), or none. */
+  visit: Record<string, unknown> | null = null,
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
   {
@@ -470,6 +472,7 @@ export const playing = (
               ],
               board: fight.board ?? null,
             },
+      visit,
     },
   },
 ];
