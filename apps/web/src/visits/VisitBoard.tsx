@@ -4,6 +4,7 @@ import {
   type BoardSquare,
   type CampaignCharacterId,
   type DiagonalRule,
+  type EncounterId,
   type LevelPartId,
   type LevelVisit,
   type PlaneRect,
@@ -46,11 +47,25 @@ export interface VisitBoardProps {
   readonly onDoor: (wallId: LevelPartId, update: Omit<BoardDoorUpdate, "requestId">) => void;
   readonly onLight: (lightId: LevelPartId, lit: boolean) => void;
   readonly onRegion: (regionId: LevelPartId, revealed: boolean) => void;
+  /** Open a placed encounter, from one of its creatures on the level. */
+  readonly onOpenEncounter: (encounterId: EncounterId) => void;
 }
 
 interface SeatToken extends LayerToken {
+  readonly kind: "seat";
   readonly seatId: CampaignCharacterId;
 }
+
+/** A placed creature of an encounter waiting on the level: the DM's, not the table's. */
+interface PlacedToken extends LayerToken {
+  readonly kind: "placed";
+  readonly encounterId: EncounterId;
+}
+
+type VisitToken = SeatToken | PlacedToken;
+
+const placedId = (creature: { readonly encounterCreatureId: string; readonly ordinal: number }) =>
+  `placed:${creature.encounterCreatureId}:${String(creature.ordinal)}`;
 
 /**
  * A level visit on the stage: the runner's canvas over the visit's copy of
@@ -75,6 +90,7 @@ export function VisitBoard({
   onDoor,
   onLight,
   onRegion,
+  onOpenEncounter,
 }: VisitBoardProps) {
   const [chosen, setChosen] = useState<BoardTool>("move");
   const tool = chosen;
@@ -97,7 +113,8 @@ export function VisitBoard({
   );
   const [levelDrawable, setLevelDrawable] = useState(canDrawWebGL);
 
-  const tokens = visit.tokens.map((token): SeatToken => ({
+  const seats = visit.tokens.map((token): SeatToken => ({
+    kind: "seat",
     seatId: token.seatId,
     id: token.seatId,
     displayName: token.name,
@@ -110,12 +127,48 @@ export function VisitBoard({
     struck: false,
     hidden: false,
   }));
+  // Each placed creature drawn as the DM's hidden token, labelled by its
+  // encounter's initials and numbered within it ("A1", "A2"), so the markers
+  // group by encounter. One past the copy's edge has no square and is only
+  // listed (the stage's *Waiting here* drawer).
+  const placed = visit.encounters.flatMap((encounter) =>
+    encounter.creatures
+      .filter((creature) => creature.problem !== "offBoard")
+      .map((creature): PlacedToken => ({
+        kind: "placed",
+        encounterId: encounter.id,
+        id: placedId(creature),
+        displayName: `${creature.name}, ${encounter.name}`,
+        position: { column: creature.column, row: creature.row },
+        party: false,
+        portrait: undefined,
+        conditions: 0,
+        health: undefined,
+        out: false,
+        struck: false,
+        hidden: true,
+        spoken: creature.problem === "blocked" ? ", waiting, needs moving" : ", waiting",
+      })),
+  );
+  const tokens: ReadonlyArray<VisitToken> = [...seats, ...placed];
   const labels = useMemo(
     () =>
-      labelsInOrder(visit.tokens.map((token) => ({ id: token.seatId, displayName: token.name }))),
-    [visit.tokens],
+      new Map<string, string>([
+        ...labelsInOrder(
+          visit.tokens.map((token) => ({ id: token.seatId, displayName: token.name })),
+        ),
+        ...labelsInOrder(
+          visit.encounters.flatMap((encounter) =>
+            encounter.creatures.map((creature) => ({
+              id: placedId(creature),
+              displayName: encounter.name,
+            })),
+          ),
+        ),
+      ]),
+    [visit.tokens, visit.encounters],
   );
-  const first = tokens[0]?.position;
+  const first = seats[0]?.position;
   const firstAt = first === undefined || first === null ? undefined : centreOf(first);
 
   return (
@@ -176,21 +229,28 @@ export function VisitBoard({
           grid={!levelDrawable}
           className={cn("box-content", levelDrawable && "border-transparent bg-transparent")}
         >
+          <PlacedOverlay visit={visit} />
           <TokenLayer
             board={board}
             tokens={tokens}
             labels={labels}
-            selected={tokens.find((token) => token.seatId === selectedId)}
+            selected={seats.find((token) => token.seatId === selectedId)}
             activeId={null}
             feetLeftOf={() => undefined}
             diagonals={diagonals}
-            movable={() => tool === "move"}
+            movable={(token) => token.kind === "seat" && tool === "move"}
             names="all"
             fog={{ squares: fogTool.fog, veil: "dim" }}
             rangeShown={false}
-            onSelect={(token) => setSelectedId(token.seatId)}
+            onSelect={(token) =>
+              token.kind === "seat"
+                ? setSelectedId(token.seatId)
+                : onOpenEncounter(token.encounterId)
+            }
             onTarget={undefined}
-            onMove={(token, to) => (to === null ? Promise.resolve() : onMove(token.seatId, to))}
+            onMove={(token, to) =>
+              to === null || token.kind !== "seat" ? Promise.resolve() : onMove(token.seatId, to)
+            }
           />
           {tool === "move" && (
             <LevelSwitches
@@ -207,5 +267,53 @@ export function VisitBoard({
         </GridBoard>
       </BoardCanvas>
     </section>
+  );
+}
+
+const percent = (fraction: number) => `${String(fraction * 100)}%`;
+
+/**
+ * Under the tokens, the DM's marks of the encounters waiting on the level:
+ * each one's trigger area, tinted, and a ring on a placed creature the copy
+ * cannot hold there (`problem`), so the DM sees it needs moving. Nothing here
+ * is the table's: a player's read has no placement at all.
+ */
+function PlacedOverlay({ visit }: { readonly visit: LevelVisit }) {
+  const { columns, rows } = visit;
+  return (
+    <div data-slot="visit-placements" aria-hidden className="pointer-events-none absolute inset-0">
+      {visit.encounters.flatMap((encounter) =>
+        (encounter.trigger ?? []).map((square) => (
+          <span
+            key={`${encounter.id}:${String(square.column)}:${String(square.row)}`}
+            data-trigger={encounter.id}
+            className="absolute border border-magic bg-magic-soft opacity-60"
+            style={{
+              left: percent(square.column / columns),
+              top: percent(square.row / rows),
+              width: percent(1 / columns),
+              height: percent(1 / rows),
+            }}
+          />
+        )),
+      )}
+      {visit.encounters.flatMap((encounter) =>
+        encounter.creatures
+          .filter((creature) => creature.problem === "blocked")
+          .map((creature) => (
+            <span
+              key={placedId(creature)}
+              data-needs-moving
+              className="absolute rounded-full border-2 border-danger"
+              style={{
+                left: percent(creature.column / columns),
+                top: percent(creature.row / rows),
+                width: percent(1 / columns),
+                height: percent(1 / rows),
+              }}
+            />
+          )),
+      )}
+    </div>
   );
 }

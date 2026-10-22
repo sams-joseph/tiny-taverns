@@ -5,6 +5,7 @@ import {
   type LevelRegionKind,
   type LightPreset,
   type SessionEventKind,
+  VisitPlacementUpdatedPayload,
   VisitTabledPayload,
 } from "@taverns/api";
 import { Option, Schema } from "effect";
@@ -82,9 +83,15 @@ export const SENTENCE: Record<
   "visit-region-updated": (_who, _noun, payload) => regionSentence(payload),
   "visit-fog-updated": () => "The fog on the level shifted",
   "visit-vision-updated": () => "What the party sees of the level changed",
+  "visit-placement-updated": (_who, _noun, payload) =>
+    Option.match(decodePlaced(payload), {
+      onNone: () => "An encounter was placed on the level",
+      onSome: ({ name }) => `${name} was placed on the level`,
+    }),
 };
 
 const decodeTabled = Schema.decodeUnknownOption(VisitTabledPayload);
+const decodePlaced = Schema.decodeUnknownOption(VisitPlacementUpdatedPayload);
 
 const decodeDoor = Schema.decodeUnknownOption(BoardDoorUpdatedPayload);
 const decodeLight = Schema.decodeUnknownOption(BoardLightUpdatedPayload);

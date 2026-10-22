@@ -621,6 +621,28 @@ function EncounterBuilder({
                 value={draft.levelId}
                 onChange={(levelId) => patch({ levelId })}
               />
+              {/* Placing is on the encounter's page, over the saved roster
+                  and level: a level just picked here is placed once saved. */}
+              {encounter !== undefined &&
+                encounter.levelId !== null &&
+                draft.levelId === encounter.levelId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    nativeButton={false}
+                    render={
+                      <Link
+                        to="/campaigns/$campaignId/encounters/$encounterId"
+                        params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+                        hash="placement"
+                      />
+                    }
+                  >
+                    <Icon name="map-pin" size={14} />
+                    Place on the level
+                  </Button>
+                )}
               {encounter === undefined && draft.levelId === null && (
                 <Field
                   label="Location"

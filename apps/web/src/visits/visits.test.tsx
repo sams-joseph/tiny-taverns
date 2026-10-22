@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { campaign, installStubServer } from "../campaign/campaign.fixtures";
 import { cryptLevelId, fordLevelId } from "../levels/levels.fixtures";
-import { campaignId, seatId, sessionId } from "../test/ids";
+import { campaignId, encounterId, seatId, sessionId } from "../test/ids";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
 
@@ -91,6 +91,7 @@ const hall = (
   partySees: [0, 1, 2, 6, 7, 8],
   partySeen: [0, 1, 2, 6, 7, 8],
   tokens: [{ seatId, name: "Brannoc", column: over.column ?? 0, row: 1 }],
+  encounters: [],
 });
 
 const base = `/campaigns/${campaignId}`;
@@ -281,6 +282,63 @@ describe("a visit's stage", () => {
     await at(`${base}/levels/${hallId}`);
     await screen.findByRole("region", { name: "Level" });
     await waitFor(() => expect(calls("GET", `${base}/visits/${hallId}`).length).toBeGreaterThan(1));
+  });
+
+  it("marks the encounters waiting on the level, and opens one from its creature", async () => {
+    onTheCanvas();
+    const line = "2b1f2a1e-0000-4000-8000-000000000b01";
+    const creature = (ordinal: number, column: number, problem: string | null) => ({
+      encounterCreatureId: line,
+      ordinal,
+      name: "Goblin",
+      column,
+      row: 2,
+      problem,
+    });
+    server.routes.set(`GET ${base}/visits/${hallId}`, {
+      status: 200,
+      body: {
+        ...hall(),
+        encounters: [
+          {
+            id: encounterId,
+            name: "Ambush",
+            kind: "combat",
+            creatures: [
+              creature(0, 1, null),
+              creature(1, 2, "blocked"),
+              creature(2, 9, "offBoard"),
+            ],
+            trigger: [{ column: 0, row: 3 }],
+          },
+        ],
+      },
+    });
+    await at(`${base}/levels/${hallId}`);
+    const board = await screen.findByRole("region", { name: "Level" });
+    // On the board: the two the copy has a square for, as the DM's hidden
+    // tokens; the trigger area and the one that needs moving marked.
+    const waiting = await within(board).findAllByRole("button", { name: /Goblin, Ambush/ });
+    expect(waiting).toHaveLength(2);
+    expect(document.querySelectorAll("[data-trigger]")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-needs-moving]")).toHaveLength(1);
+
+    // The drawer lists it, with what needs moving, by name.
+    await userEvent.click(screen.getByRole("button", { name: "Waiting here" }));
+    const list = document.querySelector<HTMLElement>("[data-slot=waiting-here]");
+    expect(list).not.toBeNull();
+    expect(within(list!).getByRole("link", { name: "Ambush" })).toHaveAttribute(
+      "href",
+      `${base}/encounters/${encounterId}#placement`,
+    );
+    expect(list!.textContent).toContain("3 creatures wait, with a trigger area");
+    expect(list!.textContent).toContain("Goblin (nothing can stand there), Goblin (past the edge)");
+
+    // A creature on the board opens its encounter.
+    await userEvent.click(waiting[0]!);
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`${base}/encounters/${encounterId}`),
+    );
   });
 
   it("says the level needs a wider window rather than squeezing the stage", async () => {

@@ -97,6 +97,7 @@ const visit = {
     },
     { seatId: otherSeatId, name: "Ilse Thornbury", own: false, column: 3, row: 1 },
   ],
+  creatures: [],
 };
 
 const moveRoute = (seatId: string) =>
@@ -162,6 +163,22 @@ describe("a level visit on a seated player's canvas", () => {
     level.getByRole("button", { name: /^Ilse Thornbury/ }).focus();
     await userEvent.keyboard("{ArrowRight}");
     expect(moves()).toHaveLength(1);
+  });
+
+  it("draws a creature the party sees as a foe's token, with nothing to press", async () => {
+    stageWidth(1024);
+    server.routes.set(
+      ...playing(campaignId, null, {
+        ...visit,
+        creatures: [{ name: "Goblin", column: 4, row: 1 }],
+      }),
+    );
+    await renderTable();
+    const level = within(await screen.findByRole("region", { name: "Level" }));
+    const goblin = level.getByRole("button", { name: /^Goblin, column 5, row 2/ });
+    goblin.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(moves()).toHaveLength(0);
   });
 
   it("tints every square the walk reaches over what the party has seen, with no speed", async () => {

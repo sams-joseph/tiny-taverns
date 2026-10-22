@@ -83,6 +83,7 @@ describe("ratingOf", () => {
       tactics: [],
       treasure: null,
       challenge: { kind: "challenge", dc: 14, successes: 3, failures: 2, skills: [] },
+      placement: { spots: [], trigger: null },
     });
     expect(ratingOf(well, set)).toEqual({ text: "DC 14" });
     expect(ratingOf(well, undefined)).toEqual({ text: "Unrated" });

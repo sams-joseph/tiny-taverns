@@ -41,14 +41,29 @@ export interface PlayerVisitBoardProps {
 }
 
 interface SeatToken extends LayerToken {
+  readonly kind: "seat";
   readonly seatId: CampaignCharacterId;
   readonly own: boolean;
 }
 
+/**
+ * A creature the party sees now on the level (`PlayerLevelVisit.creatures`),
+ * drawn as a fight's player board draws a foe: its name and its square, and
+ * nothing to press. The server sends no id, so its square is its key: two
+ * never share one.
+ */
+interface CreatureToken extends LayerToken {
+  readonly kind: "creature";
+}
+
+const creatureId = (creature: { readonly column: number; readonly row: number }) =>
+  `creature:${String(creature.column)}:${String(creature.row)}`;
+
 function VisitTokens({ visit, diagonals, movable, onMove }: PlayerVisitBoardProps) {
   const { columns, rows, feetPerCell, level, fog } = visit;
   const board = useMemo(() => ({ columns, rows, feetPerCell }), [columns, rows, feetPerCell]);
-  const tokens = visit.tokens.map((token): SeatToken => ({
+  const seats = visit.tokens.map((token): SeatToken => ({
+    kind: "seat",
     seatId: token.seatId,
     own: token.own,
     id: token.seatId,
@@ -63,10 +78,30 @@ function VisitTokens({ visit, diagonals, movable, onMove }: PlayerVisitBoardProp
     hidden: false,
     ...(token.own ? { spoken: " (you)" } : {}),
   }));
+  const creatures = visit.creatures.map((creature): CreatureToken => ({
+    kind: "creature",
+    id: creatureId(creature),
+    displayName: creature.name,
+    position: { column: creature.column, row: creature.row },
+    party: false,
+    portrait: undefined,
+    conditions: 0,
+    health: undefined,
+    out: false,
+    struck: false,
+    hidden: false,
+  }));
+  const tokens: ReadonlyArray<SeatToken | CreatureToken> = [...seats, ...creatures];
   const labels = useMemo(
     () =>
-      labelsInOrder(visit.tokens.map((token) => ({ id: token.seatId, displayName: token.name }))),
-    [visit.tokens],
+      labelsInOrder<string>([
+        ...visit.tokens.map((token) => ({ id: token.seatId, displayName: token.name })),
+        ...visit.creatures.map((creature) => ({
+          id: creatureId(creature),
+          displayName: creature.name,
+        })),
+      ]),
+    [visit.tokens, visit.creatures],
   );
   const walk = useMemo(() => {
     const party = playerWalk(board, level);
@@ -75,7 +110,7 @@ function VisitTokens({ visit, diagonals, movable, onMove }: PlayerVisitBoardProp
   const [picked, setPicked] = useState<CampaignCharacterId>();
   // Whoever was picked, while they still stand here; else your own token.
   const selected =
-    tokens.find((token) => token.seatId === picked) ?? tokens.find((token) => token.own);
+    seats.find((token) => token.seatId === picked) ?? seats.find((token) => token.own);
   return (
     <TokenLayer
       board={board}
@@ -86,14 +121,16 @@ function VisitTokens({ visit, diagonals, movable, onMove }: PlayerVisitBoardProp
       activeId={null}
       feetLeftOf={() => undefined}
       diagonals={diagonals}
-      movable={(token) => movable && token.own}
+      movable={(token) => movable && token.kind === "seat" && token.own}
       names="all"
       fog={{ squares: fog, veil: "opaque" }}
       rangeShown
       exploring
-      onSelect={(token) => setPicked(token.seatId)}
+      onSelect={(token) => (token.kind === "seat" ? setPicked(token.seatId) : undefined)}
       onTarget={undefined}
-      onMove={(token, to) => (to === null ? Promise.resolve() : onMove(token.seatId, to))}
+      onMove={(token, to) =>
+        to === null || token.kind !== "seat" ? Promise.resolve() : onMove(token.seatId, to)
+      }
     />
   );
 }

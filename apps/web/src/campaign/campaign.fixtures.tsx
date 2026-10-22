@@ -238,6 +238,7 @@ export const encounterPrep = {
   ],
   treasure: "28 sp and a bone whistle",
   challenge: null,
+  placement: { spots: [], trigger: null },
 };
 
 export const sketch = {
@@ -1741,6 +1742,7 @@ const prepFor = (encounterId: string, over: object = {}) => ({
   tactics: [],
   treasure: null,
   challenge: null,
+  placement: { spots: [], trigger: null },
   ...over,
 });
 

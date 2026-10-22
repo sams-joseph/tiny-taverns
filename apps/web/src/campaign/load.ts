@@ -305,6 +305,20 @@ export const encounterPrepListAtom = Atom.family((campaignId: CampaignId) =>
   ),
 );
 
+/**
+ * One encounter's DM prep, its placement on its level among it
+ * (`EncounterPrep.placement`): what the encounter page's *Where they wait*
+ * opens on. It answers `encounters`, as the list does, since the encounter's
+ * form and the placement's write both name that.
+ */
+export const encounterPrepAtom = Atom.family(
+  (at: { readonly campaignId: CampaignId; readonly encounterId: EncounterId }) =>
+    apiAtom(
+      (client) => client.encounterPrep.find({ params: at }),
+      [reads.encounters(at.campaignId)],
+    ),
+);
+
 export const campaignInvitesAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.campaignInvites.list({ params: { campaignId } }),

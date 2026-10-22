@@ -9,7 +9,7 @@ import type {
   LevelVisitId,
   SessionId,
 } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Button,
   EmptyState,
@@ -39,13 +39,15 @@ import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { levelVisitAtom, tableVisitWrites } from "./load";
 import { VisitBoard } from "./VisitBoard";
+import { WaitingHere } from "./WaitingHere";
 
 /**
  * A level visit's stage: the DM exploring the dungeon with no fight on
  * (`LevelVisit.ts`). The runner's canvas (`RunStage.tsx`) with only what a
  * visit has: the title and the way back, the switches over the table (*On the
- * table*, *Party's view*), and the board (`VisitBoard.tsx`). No order, no
- * turn, no rolls. It holds the window as the runner does (`useFullscreen`)
+ * table*, *Party's view*), the board (`VisitBoard.tsx`) with the encounters
+ * placed on the level over it, and the *Waiting here* drawer listing them
+ * (`WaitingHere.tsx`). No order, no turn, no rolls. It holds the window as the runner does (`useFullscreen`)
  * and is the second screen, with the runner, that does not scroll with it.
  *
  * Every write answers with the visit and is written straight into its atom,
@@ -66,6 +68,7 @@ export function VisitScreen() {
   const registry = useContext(RegistryContext);
   const stage = useStage();
   const [partyView, setPartyView] = useState(false);
+  const navigate = useNavigate();
   const writes = useMutation();
   const tabling = useMutation();
 
@@ -254,6 +257,15 @@ export function VisitScreen() {
               party={null}
               turn={null}
               banner={undefined}
+              drawers={[
+                {
+                  key: "waiting",
+                  label: "Waiting here",
+                  icon: "swords",
+                  badge: visit.encounters.length === 0 ? undefined : visit.encounters.length,
+                  content: <WaitingHere campaignId={campaignId} encounters={visit.encounters} />,
+                },
+              ]}
               rolls={null}
               board={(freeArea) => (
                 <VisitBoard
@@ -266,6 +278,13 @@ export function VisitScreen() {
                   onDoor={onDoor}
                   onLight={onLight}
                   onRegion={onRegion}
+                  onOpenEncounter={(encounterId) =>
+                    void navigate({
+                      to: "/campaigns/$campaignId/encounters/$encounterId",
+                      params: { campaignId, encounterId },
+                      hash: "placement",
+                    })
+                  }
                 />
               )}
             />
