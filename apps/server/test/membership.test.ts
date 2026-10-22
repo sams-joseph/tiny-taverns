@@ -225,6 +225,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       // internal campaign instance minted for it. The comparison is against
       // `copyableIntoCampaign`'s answer, never a caller-supplied account.
       "repo/EncounterCreatures.ts",
+      // An encounter's level pointer copies the level's owner from a row read
+      // through `levelOwned`, and the keys to the level's owner and to the
+      // campaign's creator refuse any other. Never a caller-supplied account.
+      "repo/Encounters.ts",
       "repo/Equipment.ts",
       "repo/Feats.ts",
       "repo/Groups.ts",
@@ -235,6 +239,9 @@ describe("the reach seam, enforced rather than asserted", () => {
       // `campaign (id, creator_account_id)` refuses any other; the daily cap
       // counts by it. Never a caller-supplied account.
       "repo/Images.ts",
+      // A level's owner is written from `CurrentActor` at create and compared
+      // only through `levelOwned` in `repo/visibility.ts`.
+      "repo/Levels.ts",
       "repo/LibraryShares.ts",
       // A place's owner is written from `CurrentActor` at create and copied
       // onto a placement from the place row itself; the ownership comparison
@@ -254,6 +261,9 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
+      // A fight's snapshot joins the level on the owner the encounter's keys
+      // already hold; it reads, and reaches nothing the encounter did not.
+      "repo/levelFights.ts",
       // The level-up recompute's class lookup prefers the bundle's row by
       // `account_id is null` inside a vocabulary its caller already narrowed.
       // An ordering, never a reach.
