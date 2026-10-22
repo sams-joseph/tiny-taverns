@@ -49,6 +49,7 @@ import {
   type NpcTurnOptions,
   npcTurnOptions,
   type NpcTurnProposalStep,
+  type NpcTurnResolvedStep,
   type NpcTurnStep,
   npcLimits,
   type StatBlock,
@@ -3752,8 +3753,87 @@ export const fightFocusText = (read: TableFightRead, context: HobFightContext): 
   fightText(read, {
     combatantId: context.combatantId,
     moment: context.moment,
-    options: npcTurnOptions(turnFightOf(read), context.combatantId),
+    options: forHob(npcTurnOptions(turnFightOf(read), context.combatantId), context),
   });
+
+/** An option that does harm to whom it is aimed at: an attack, a save, or a multiattack's strikes. */
+const harms = (option: NpcTurnOption): boolean =>
+  option.attack !== undefined || option.save !== undefined || option.strikes !== undefined;
+
+/**
+ * **Hob turns on the creature's foes.** The options say who is on its own
+ * side and refuse nobody (a betrayal is a legal turn when the DM plays it),
+ * but a model told to spare its allies still swung at the nearest name on the
+ * list, and under autopilot the monsters fought each other. So the fight's
+ * Hob is shown no ally among a harmful option's targets and no area placement
+ * that catches none of its foes, and `proposeNpcTurn` refuses one that aims
+ * there anyway ({@link allyRefusal}). A DM's steer lifts both: "it turns on
+ * the goblin" is theirs to say.
+ */
+const forHob = (options: NpcTurnOptions, context: HobFightContext): NpcTurnOptions => {
+  if (context.instruction !== undefined) return options;
+  const spare = (option: NpcTurnOption): NpcTurnOption => ({
+    ...option,
+    ...(option.targets === undefined || !harms(option)
+      ? {}
+      : { targets: option.targets.filter((target) => !target.ally) }),
+    ...(option.placements === undefined || !harms(option)
+      ? {}
+      : {
+          placements: option.placements.filter(
+            (placement) => placement.catches.length > placement.allies.length,
+          ),
+        }),
+    ...(option.strikes === undefined
+      ? {}
+      : {
+          strikes: option.strikes.map((strike) => ({ ...strike, option: spare(strike.option) })),
+        }),
+  });
+  return { ...options, options: options.options.map(spare) };
+};
+
+/**
+ * Why a checked turn turns on the creature's own side, or nothing: a harmful
+ * option aimed at an ally, a strike at one, or an area that catches only
+ * allies. Not asked when the DM gave a steer ({@link forHob}).
+ */
+const allyRefusal = (
+  read: TableFightRead,
+  combatantId: CombatantId,
+  steps: ReadonlyArray<NpcTurnResolvedStep>,
+  handle: (id: CombatantId) => string,
+): string | undefined => {
+  const self = read.combatants.find((row) => row.id === combatantId);
+  const ally = (id: CombatantId) =>
+    id !== combatantId && read.combatants.find((row) => row.id === id)?.side === self?.side;
+  const offered = new Map<string, NpcTurnOption>();
+  const index = (option: NpcTurnOption): void => {
+    offered.set(option.id, option);
+    for (const strike of option.strikes ?? []) index(strike.option);
+  };
+  npcTurnOptions(turnFightOf(read), combatantId).options.forEach(index);
+  const harmful = (id: string) => {
+    const option = offered.get(id);
+    return option !== undefined && harms(option);
+  };
+  for (const [at, step] of steps.entries()) {
+    if (step.kind !== "option" || !harmful(step.optionId)) continue;
+    const where = `Step ${String(at + 1)}`;
+    if (step.placement !== undefined) {
+      if (step.placement.catches.length > 0 && step.placement.catches.every(ally)) {
+        return `${where}: that placement catches only its own side; aim it at its foes`;
+      }
+      continue;
+    }
+    const struck = step.strikes?.map((strike) => strike.target) ?? step.targets;
+    const turned = struck.find(ally);
+    if (turned !== undefined) {
+      return `${where}: ${handle(turned)} is on its own side; attack its foes, not its allies`;
+    }
+  }
+  return undefined;
+};
 
 /** A creature as the fight's reads name it: its place in the order and its name. */
 const orderHandle =
@@ -3826,6 +3906,11 @@ export const fightHandlersFor = (
               : `Step ${String(checked.step + 1)}: ${checked.reason}`,
           );
         }
+        const turned =
+          context.instruction === undefined
+            ? allyRefusal(read, context.combatantId, checked.steps, handle)
+            : undefined;
+        if (turned !== undefined) return yield* refuse(turned);
         const nameOf = (id: CombatantId) =>
           read.combatants.find((row) => row.id === id)?.displayName ?? "";
         const target = (id: CombatantId) => ({ combatantId: id, name: nameOf(id) });

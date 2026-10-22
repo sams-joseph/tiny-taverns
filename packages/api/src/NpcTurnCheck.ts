@@ -131,7 +131,10 @@ export type NpcTurnCheck =
 /**
  * Whether `moment` is one this creature has now, or why not. A turn is its
  * own; a legendary action needs one offered; a reaction needs its reaction
- * unspent and something to spend it on.
+ * unspent and something to spend it on. On a level, a creature that sees none
+ * of its foes has not found the party: it takes no turn and no legendary
+ * action until it does. A reaction is still asked for, since whoever asks
+ * says what triggered it.
  */
 export const npcMomentRefusal = (
   options: NpcTurnOptions,
@@ -139,6 +142,9 @@ export const npcMomentRefusal = (
 ): string | undefined => {
   const whole = options.omitted.find((omission) => omission.id === "*");
   if (whole !== undefined) return `it can do nothing now: ${whole.reason}`;
+  if (moment !== "reaction" && options.sight?.seesFoe === false) {
+    return "it sees none of its foes yet";
+  }
   if (moment === "turn") return options.up ? undefined : "it is not its turn";
   if (options.options.some((option) => option.slot === moment)) return undefined;
   if (moment === "legendary") {

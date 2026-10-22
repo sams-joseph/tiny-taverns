@@ -222,6 +222,7 @@ const aFight = Effect.gen(function* () {
 const askTurn = (
   fight: Effect.Success<typeof aFight>,
   rounds: ReadonlyArray<Round>,
+  instruction?: string,
 ): Effect.Effect<
   { readonly events: ReadonlyArray<HobEvent>; readonly requests: ReadonlyArray<ChatRequest> },
   never,
@@ -236,7 +237,7 @@ const askTurn = (
       Effect.flatMap(
         client.hobFight.turn({
           params: { ...fight.params, combatantId: fight.him.id },
-          payload: { moment: "turn" },
+          payload: { moment: "turn", ...(instruction === undefined ? {} : { instruction }) },
         }),
         (stream) => Stream.runCollect(stream),
       ),
@@ -246,6 +247,15 @@ const askTurn = (
 
 const systemOf = (request: ChatRequest | undefined): string =>
   String((request?.messages ?? []).find((message) => message.role === "system")?.content ?? "");
+
+const toolAnswers = (requests: ReadonlyArray<ChatRequest>): string =>
+  requests
+    .flatMap((request) =>
+      (request.messages ?? [])
+        .filter((message) => message.role === "tool")
+        .map((message) => String(message.content)),
+    )
+    .join("\n");
 
 const strike = (fight: Effect.Success<typeof aFight>, line?: string) =>
   toolCallChunks("proposeNpcTurn", {
@@ -301,6 +311,52 @@ describeLayer("hob-cast-npc-turn", shared, (it) => {
         expect(system).not.toContain("This creature is Sildar Hallwinter");
         expect(system).not.toContain(INSTRUCTIONS);
         expect(system).toContain('"Sildar Hallwinter"');
+      }),
+    );
+  });
+
+  describe("whom it turns on", () => {
+    const atBrannoc = (fight: Effect.Success<typeof aFight>) =>
+      toolCallChunks("proposeNpcTurn", {
+        steps: [{ option: "actions/Scimitar", targets: [fight.place(fight.hero)] }],
+        narration: "Sildar wheels on Brannoc.",
+      });
+
+    it.effect("is never its own side: an ally is not offered, and a swing at one is refused", () =>
+      Effect.gen(function* () {
+        const fight = yield* aFight;
+        const { events, requests } = yield* askTurn(fight, [
+          atBrannoc(fight),
+          textChunks("He attacks."),
+        ]);
+        const system = systemOf(requests[0]);
+        const scimitar = system
+          .split("\n")
+          .findIndex((line) => line.includes("actions/Scimitar ("));
+        const targets = system
+          .split("\n")
+          .slice(scimitar)
+          .find((line) => line.includes("Targets:"));
+        expect(targets).toContain('"Cragmaw Goblin"');
+        expect(targets).not.toContain('"Brannoc"');
+        expect(toolAnswers(requests)).toMatch(/is on its own side; attack its foes/);
+        expect(events.some((event) => event.event === "proposal")).toBe(false);
+      }),
+    );
+
+    it.effect("is the DM's to change with a steer", () =>
+      Effect.gen(function* () {
+        const fight = yield* aFight;
+        const { events } = yield* askTurn(
+          fight,
+          [atBrannoc(fight)],
+          "He has been bought: he turns on Brannoc.",
+        );
+        const proposed = events.find((event) => event.event === "proposal");
+        expect(proposed?.event === "proposal" ? proposed.data.proposal : undefined).toMatchObject({
+          target: "npcTurn",
+          steps: [{ kind: "option", targets: [{ combatantId: fight.hero.id }] }],
+        });
       }),
     );
   });

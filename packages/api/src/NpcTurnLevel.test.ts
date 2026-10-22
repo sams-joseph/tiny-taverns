@@ -12,7 +12,7 @@ import {
   sensesOf,
   sightMode,
 } from "./LevelRules.js";
-import { npcTurnCheck } from "./NpcTurnCheck.js";
+import { npcMomentRefusal, npcTurnCheck } from "./NpcTurnCheck.js";
 import { fightOf, option } from "./testing/npcFight.js";
 
 const FLAGSTONE = LEVEL_MATERIALS.indexOf("flagstone");
@@ -232,6 +232,27 @@ describe("a monster's options on a level", () => {
     expect(turn.sight?.senses).toEqual({ darkvision: 0, blindsight: 0, truesight: 0 });
   });
 
+  it("takes no turn for Hob while it sees none of its foes, and does once it sees one", () => {
+    const walled = fight(levelOf({ walls: divide })).optionsOf("Goblin");
+    expect(walled.sight?.seesFoe).toBe(false);
+    expect(npcMomentRefusal(walled, "turn")).toBe("it sees none of its foes yet");
+    // A reaction is asked for with its trigger, so it is still the asker's call.
+    expect(npcMomentRefusal(walled, "reaction")).not.toBe("it sees none of its foes yet");
+    const open = fight(levelOf()).optionsOf("Goblin");
+    expect(open.sight?.seesFoe).toBe(true);
+    expect(npcMomentRefusal(open, "turn")).toBeUndefined();
+    // An ally in plain view is not a foe found.
+    const friends = fightOf(
+      [
+        { name: "Goblin", creature: "Goblin", at: [5, 5] },
+        { name: "Boss", creature: "Goblin", at: [6, 5] },
+        { name: "Tamsin", at: [12, 5] },
+      ],
+      { level: levelOf({ walls: divide }) },
+    ).optionsOf("Goblin");
+    expect(npcMomentRefusal(friends, "turn")).toBe("it sees none of its foes yet");
+  });
+
   it("walks round walls, not through them, and pays double for difficult terrain", () => {
     const walled = fight(levelOf({ walls: divide }));
     const squares = walled.optionsOf("Goblin").movement!.squares;
@@ -314,6 +335,8 @@ describe("a monster's turn checked on a level", () => {
       [
         { name: "Goblin", creature: "Goblin", at: [5, 5] },
         { name: "Tamsin", at: [11, 5] },
+        // On its side of the wall, so it has found the party and takes its turn.
+        { name: "Ilse", at: [2, 2] },
       ],
       { level: levelOf({ walls: divide }) },
     );
