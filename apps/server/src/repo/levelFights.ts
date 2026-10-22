@@ -260,7 +260,7 @@ export interface PartyVisionRefresh {
 }
 
 /** A sheet's traits read defensively: only a trait's name and text matter here. */
-const traitsOf = (
+export const traitsOf = (
   value: unknown,
 ): ReadonlyArray<{ readonly name: string; readonly text?: string }> =>
   Array.isArray(value)

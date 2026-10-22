@@ -5,6 +5,10 @@ import {
   type DiagonalRule,
   type EncounterRunId,
   feetBetween,
+  type LevelLayout,
+  pathCost,
+  type RunBoardLevel,
+  tableSight,
 } from "@taverns/api";
 import { Effect } from "effect";
 import type { SqlClient } from "effect/sql";
@@ -60,24 +64,40 @@ export const ensureOnBoard = (
 
 /**
  * The feet this move adds to the row's `feet_moved`: the walk from where it
- * stood, under the campaign's diagonal rule, while the fight takes turns and
- * this row is up. Putting a token down or taking it off walks nowhere, and
- * nothing counts for anyone else or while initiative is being rolled.
+ * stood, while the fight takes turns and this row is up. Putting a token down
+ * or taking it off walks nowhere, and nothing counts for anyone else or while
+ * initiative is being rolled.
+ *
+ * On a plain grid the walk is straight, under the campaign's diagonal rule.
+ * On a level (`level`, `runLevel`'s answer) it is the walk `pathCost` finds
+ * over the fight's copy as the table knows its secret doors: round the walls,
+ * difficult terrain at double, diagonals by the same rule. A square no walk
+ * reaches (the DM placing freely through a wall) counts straight, as before.
  */
 export const feetWalked = (
   fight: MoveFight,
   id: CombatantId,
   from: { readonly board_column: number | null; readonly board_row: number | null },
   to: CombatantPosition | null,
-): number =>
-  to !== null &&
-  from.board_column !== null &&
-  from.board_row !== null &&
-  fight.feet_per_cell !== null &&
-  fight.phase === "turns" &&
-  fight.active_combatant_id === id
-    ? feetBetween({ column: from.board_column, row: from.board_row }, to, {
-        feetPerCell: fight.feet_per_cell,
-        diagonals: fight.diagonal_rule,
-      })
-    : 0;
+  level: { readonly layout: LevelLayout; readonly level: RunBoardLevel } | null,
+): number => {
+  if (
+    to === null ||
+    from.board_column === null ||
+    from.board_row === null ||
+    fight.feet_per_cell === null ||
+    fight.phase !== "turns" ||
+    fight.active_combatant_id !== id
+  ) {
+    return 0;
+  }
+  const start = { column: from.board_column, row: from.board_row };
+  const walked =
+    level === null
+      ? null
+      : pathCost(level.layout, start, to, tableSight(level.level), fight.diagonal_rule);
+  return (
+    walked ??
+    feetBetween(start, to, { feetPerCell: fight.feet_per_cell, diagonals: fight.diagonal_rule })
+  );
+};

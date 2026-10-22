@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Combatant } from "../Combatant.js";
 import type { StatBlock } from "../Creature.js";
 import type { CombatantId, CreatureId, EncounterRunId } from "../Ids.js";
+import type { RunBoardLevel } from "../LevelFight.js";
 import {
   type NpcSpell,
   type NpcTurnFight,
@@ -88,11 +89,16 @@ export const combatant = (row: Row, creatureIds: Map<string, CreatureId>): Comba
 
 /**
  * A fight on a 20 by 20 board of 5-foot squares, the first row up unless
- * `up` names another, everyone else as listed.
+ * `up` names another, everyone else as listed; on `level` when given (its
+ * floor 400 squares long).
  */
 export const fightOf = (
   rows: ReadonlyArray<Row>,
-  { up, board = true }: { readonly up?: string; readonly board?: boolean } = {},
+  {
+    up,
+    board = true,
+    level,
+  }: { readonly up?: string; readonly board?: boolean; readonly level?: RunBoardLevel } = {},
 ) => {
   const creatureIds = new Map<string, CreatureId>();
   const statBlocks = new Map<CreatureId, StatBlock>();
@@ -108,7 +114,9 @@ export const fightOf = (
   const fight: NpcTurnFight = {
     run: { phase: "turns", activeCombatantId: byName(up ?? rows[0]!.name).id, endedAt: null },
     combatants,
-    board: board ? { columns: 20, rows: 20, feetPerCell: 5 } : undefined,
+    board: board
+      ? { columns: 20, rows: 20, feetPerCell: 5, ...(level === undefined ? {} : { level }) }
+      : undefined,
     diagonals: "five",
     statBlocks,
     spells,

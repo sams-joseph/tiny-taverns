@@ -37,6 +37,7 @@ export * from "./LevelFight.js";
 export * from "./LevelKit.js";
 export * from "./LevelGeometry.js";
 export * from "./LevelGenerator.js";
+export * from "./LevelRules.js";
 export * from "./ImageUpload.js";
 export * from "./Initiative.js";
 export * from "./SharedWorld.js";

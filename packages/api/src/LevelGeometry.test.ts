@@ -8,7 +8,10 @@ import {
   type LevelLayout,
   type LevelPoint,
   cover,
+  levelSight,
   levelSquareIndex,
+  NO_SENSES,
+  reachableOnLevel,
   lightLevelAt,
   lightLevels,
   lightSources,
@@ -710,4 +713,83 @@ describe("party vision on a 200 × 200 dungeon", () => {
       expect(each).toBeLessThan(1000);
     });
   }
+});
+
+describe("where a walk reaches", () => {
+  const open = (parts: Partial<LevelLayout> = {}) => level({ columns: 12, rows: 12, ...parts });
+
+  it("is every square within the feet, round walls, never through them", () => {
+    // A closed room from (0,0) to (4,4): nothing outside is reachable from inside.
+    const inside = reachableOnLevel(open({ walls: room(0, 0, 4, 4) }), at(1, 1), 60);
+    expect(inside.length).toBe(15);
+    expect(inside.every(({ square }) => square.column < 4 && square.row < 4)).toBe(true);
+  });
+
+  it("costs what pathCost says, difficult terrain at double", () => {
+    const floor = open().floor.map((material, square) =>
+      square === levelSquareIndex({ columns: 12 }, at(1, 0)) ? WATER : material,
+    );
+    const reached = reachableOnLevel(open({ floor, rows: 1 }), at(0, 0), 10);
+    // Into the water costs 10; nothing past it is within 10 except by the water.
+    expect(reached).toEqual([{ square: at(1, 0), feet: 10 }]);
+    for (const { square, feet } of reachableOnLevel(open(), at(5, 5), 15)) {
+      expect(pathCost(open(), at(5, 5), square)).toBe(feet);
+    }
+  });
+
+  it("counts every second diagonal double under the alternating rule", () => {
+    // Four diagonals: 5 + 10 + 5 + 10, as the board's straight measure says.
+    expect(pathCost(open(), at(0, 0), at(4, 4), {}, "alternating")).toBe(30);
+    expect(pathCost(open(), at(0, 0), at(4, 4))).toBe(20);
+    const reached = reachableOnLevel(open(), at(0, 0), 15, {}, "alternating");
+    expect(reached.find(({ square }) => square.column === 2 && square.row === 2)?.feet).toBe(15);
+    expect(reached.some(({ square }) => square.column === 3 && square.row === 3)).toBe(false);
+  });
+});
+
+describe("what a creature sees", () => {
+  const dark = (parts: Partial<LevelLayout> = {}) =>
+    level({ columns: 20, rows: 12, ambient: "dark", ...parts });
+  const eyes = (square: BoardSquare, senses: Partial<typeof NO_SENSES> = {}) => ({
+    square,
+    senses: { ...NO_SENSES, ...senses },
+  });
+
+  it("sees a lit target in the open, and nothing through a wall", () => {
+    const lit = level({ columns: 20, rows: 12 });
+    expect(levelSight(lit).sees(eyes(at(2, 5)), at(12, 5))).toBe(true);
+    const walled = level({ columns: 20, rows: 12, walls: [wall(7, 0, 7, 12)] });
+    expect(levelSight(walled).sees(eyes(at(2, 5)), at(12, 5))).toBe(false);
+  });
+
+  it("does not see a target in the dark without darkvision, and does within its reach", () => {
+    expect(levelSight(dark()).sees(eyes(at(2, 5)), at(8, 5))).toBe(false);
+    expect(levelSight(dark()).sees(eyes(at(2, 5), { darkvision: 60 }), at(8, 5))).toBe(true);
+    // 30 feet is six squares: (2,5) to (9,5) is 35.
+    expect(levelSight(dark()).sees(eyes(at(2, 5), { darkvision: 30 }), at(9, 5))).toBe(false);
+  });
+
+  it("sees a target a torch lights, from the dark", () => {
+    const sight = levelSight(dark({ lights: [torch(12.5, 5.5)] }));
+    expect(sight.sees(eyes(at(2, 5)), at(12, 5))).toBe(true);
+    expect(sight.light(at(12, 5))).toBe("bright");
+  });
+
+  it("sees into magical darkness only by blindsight or truesight", () => {
+    const shroud = dark({ regions: [region("magicalDarkness", 20, [at(8, 5)])] });
+    expect(levelSight(shroud).sees(eyes(at(2, 5), { darkvision: 120 }), at(8, 5))).toBe(false);
+    expect(levelSight(shroud).sees(eyes(at(2, 5), { truesight: 60 }), at(8, 5))).toBe(true);
+    expect(levelSight(shroud).sees(eyes(at(6, 5), { blindsight: 10 }), at(8, 5))).toBe(true);
+    // Blindsight is not past a wall.
+    const walled = dark({ walls: [wall(7, 0, 7, 12)] });
+    expect(levelSight(walled).sees(eyes(at(6, 5), { blindsight: 10 }), at(8, 5))).toBe(false);
+  });
+
+  it("reads cover as the corner rule does", () => {
+    const walls = [wall(5, 0, 5, 5)];
+    const board = level({ columns: 12, rows: 12, walls });
+    expect(levelSight(board).cover(at(2, 2), at(8, 2))).toBe(
+      cover(at(2, 2), at(8, 2), sightSegments(board), []),
+    );
+  });
 });

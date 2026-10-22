@@ -316,9 +316,16 @@ const OBSCURING: ReadonlyArray<LevelRegionKind> = ["magicalDarkness", "heavyObsc
 export const visionSegments = (
   level: LevelLayout,
   options: SightOptions = {},
+): ReadonlyArray<SightSegment> => obscuredSegments(level, options, OBSCURING);
+
+/** {@link sightSegments} plus every edge of every square of a region of `kinds`. */
+const obscuredSegments = (
+  level: LevelLayout,
+  options: SightOptions,
+  kinds: ReadonlyArray<LevelRegionKind>,
 ): ReadonlyArray<SightSegment> => {
   const out = [...sightSegments(level, options)];
-  const obscured = regionMask(level, OBSCURING);
+  const obscured = regionMask(level, kinds);
   const edges = new Set<string>();
   const edge = (x1: number, y1: number, x2: number, y2: number) => {
     const key = `${String(x1)},${String(y1)},${String(x2)},${String(y2)}`;
@@ -927,6 +934,97 @@ export const partyVision = (
 };
 
 // ---------------------------------------------------------------------------
+// A creature's sight
+
+/** How far a creature perceives without light, in feet; 0 for none. */
+export interface CreatureSenses {
+  readonly darkvision: number;
+  readonly blindsight: number;
+  readonly truesight: number;
+}
+
+export const NO_SENSES: CreatureSenses = { darkvision: 0, blindsight: 0, truesight: 0 };
+
+/** One creature on a level, looking: where it stands and what it perceives with. */
+export interface LevelViewer {
+  readonly square: BoardSquare;
+  readonly senses: CreatureSenses;
+}
+
+/**
+ * The rules of sight one fight's level answers, worked out once and asked
+ * many times: what a creature sees and what cover a target has. Hob's turn
+ * options, the server that carries a turn out and the DM's runner all ask
+ * this, so the three cannot disagree.
+ */
+export interface LevelSight {
+  /**
+   * Whether `viewer` sees a creature on `target`. A creature always sees its
+   * own square. Otherwise a line from the viewer's centre must reach the
+   * target's centre or one of its corners (pulled a tenth into the square)
+   * past what stops it, and the target must be perceived there:
+   *
+   * - within **blindsight**, past walls and sight-blocking props alone,
+   *   whatever the light and through obscurement (it is not sight);
+   * - within **truesight**, past those and heavy obscurement, in any light,
+   *   magical darkness included;
+   * - otherwise past {@link visionSegments} too (never into or through
+   *   magical darkness or heavy obscurement), on a square lit dim or bright,
+   *   or within **darkvision** and not magically dark.
+   *
+   * Distance is straight, centre to centre, in feet, as party vision measures
+   * darkvision.
+   */
+  readonly sees: (viewer: LevelViewer, target: BoardSquare) => boolean;
+  /** {@link cover} over the level's sight segments and props. */
+  readonly cover: (attacker: BoardSquare, target: BoardSquare) => LevelCover;
+  /** {@link lightLevelAt}, from one pass over the lights. */
+  readonly light: (square: BoardSquare) => LightLevel;
+}
+
+/** Where a line toward a square may land: its centre, then its corners a tenth inside. */
+const sightPoints = (square: BoardSquare): ReadonlyArray<LevelPoint> => [
+  centreOf(square),
+  { x: square.column + 0.1, y: square.row + 0.1 },
+  { x: square.column + 0.9, y: square.row + 0.1 },
+  { x: square.column + 0.1, y: square.row + 0.9 },
+  { x: square.column + 0.9, y: square.row + 0.9 },
+];
+
+export const levelSight = (level: LevelLayout, options: SightOptions = {}): LevelSight => {
+  const walls = sightSegments(level, options);
+  const fogged = obscuredSegments(level, options, ["heavyObscurement"]);
+  const vision = visionSegments(level, options);
+  const ranks = lightRanks(level, options);
+  const dark = regionMask(level, ["magicalDarkness"]);
+  const lineTo = (from: BoardSquare, to: BoardSquare, segments: ReadonlyArray<SightSegment>) => {
+    const index = indexOf(segments);
+    const origin = centreOf(from);
+    return sightPoints(to).some((point) =>
+      clearBetween(index, origin.x, origin.y, point.x, point.y),
+    );
+  };
+  return {
+    sees: (viewer, target) => {
+      if (!onLevel(level, viewer.square) || !onLevel(level, target)) return false;
+      if (viewer.square.column === target.column && viewer.square.row === target.row) return true;
+      const feet =
+        Math.hypot(viewer.square.column - target.column, viewer.square.row - target.row) *
+        level.feetPerCell;
+      const within = (reach: number) => reach > 0 && feet <= reach + 1e-9;
+      if (within(viewer.senses.blindsight) && lineTo(viewer.square, target, walls)) return true;
+      if (within(viewer.senses.truesight) && lineTo(viewer.square, target, fogged)) return true;
+      const at = levelSquareIndex(level, target);
+      const perceived = ranks[at]! > 0 || (within(viewer.senses.darkvision) && dark[at] === 0);
+      return perceived && lineTo(viewer.square, target, vision);
+    },
+    cover: (attacker, target) => cover(attacker, target, walls, level.props),
+    light: (square) =>
+      onLevel(level, square) ? LIGHTS[ranks[levelSquareIndex(level, square)]!]! : "dark",
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Movement
 
 const orientation = (
@@ -1043,26 +1141,91 @@ export const movementCost = (
 };
 
 /**
+ * How a walk on a level counts a diagonal step: `five`, every step one
+ * square's feet; `alternating`, every second diagonal two (`Board.ts`'s
+ * `DiagonalRule`, the campaign's). Difficult terrain doubles either.
+ */
+export type WalkRule = "five" | "alternating";
+
+/**
  * The fewest feet a creature walks from `from` to `to`, square by square,
- * each step what {@link movementCost} says it costs: `0` to stay put, `null`
- * when no walk gets there (walls, shut doors, unfound secret doors, blocking
- * props or void every way round). The server refuses a player's move by it.
- *
- * Cheapest first (Dijkstra). Each step is costed against only the walls near
- * the square it leaves and the props and regions on the square it enters, so
- * a 200 × 200 dungeon walks in milliseconds rather than testing every wall at
- * every step; what {@link movementCost} decides is unchanged.
+ * each step what {@link movementCost} says it costs under the campaign's
+ * diagonal rule: `0` to stay put, `null` when no walk gets there (walls, shut
+ * doors, unfound secret doors, blocking props or void every way round). The
+ * server refuses a player's move by it, and counts every move on a level by
+ * it.
  */
 export const pathCost = (
   level: LevelLayout,
   from: BoardSquare,
   to: BoardSquare,
   options: SightOptions = {},
+  rule: WalkRule = "five",
 ): number | null => {
   if (!onLevel(level, from) || !onLevel(level, to)) return null;
   if (from.column === to.column && from.row === to.row) return 0;
+  const target = levelSquareIndex(level, to);
+  const feet = walkFrom(level, from, options, rule, { target });
+  const found = feet[target]!;
+  return Number.isFinite(found) ? found : null;
+};
+
+/** A square a walk reaches, and the fewest feet it costs. */
+export interface ReachedSquare {
+  readonly square: BoardSquare;
+  readonly feet: number;
+}
+
+/**
+ * Every square a creature on `from` can walk to with `feet` to spend, each at
+ * the fewest feet it costs ({@link pathCost}'s walk), its own square left out.
+ * Where the runner tints a level fight's range and what a monster's options
+ * say it can reach. A square someone holds is walked through, not stood on:
+ * that is the caller's to take out.
+ */
+export const reachableOnLevel = (
+  level: LevelLayout,
+  from: BoardSquare,
+  feet: number,
+  options: SightOptions = {},
+  rule: WalkRule = "five",
+): ReadonlyArray<ReachedSquare> => {
+  if (!onLevel(level, from) || !(feet > 0)) return [];
+  const walked = walkFrom(level, from, options, rule, { budget: feet });
+  const start = levelSquareIndex(level, from);
+  const out: Array<ReachedSquare> = [];
+  for (let at = 0; at < walked.length; at++) {
+    const cost = walked[at]!;
+    if (at === start || !(cost <= feet)) continue;
+    out.push({
+      square: { column: at % level.columns, row: Math.floor(at / level.columns) },
+      feet: cost,
+    });
+  }
+  return out;
+};
+
+/**
+ * Cheapest first (Dijkstra) from `from`: the fewest feet to each square. It
+ * stops once `target` is settled, and never walks past `budget` feet. Under
+ * the alternating rule a walk is a square and whether it has taken an odd
+ * number of diagonals, since that decides what the next one costs.
+ *
+ * Each step is costed against only the walls near the square it leaves and
+ * the props and regions on the square it enters, so a 200 × 200 dungeon walks
+ * in milliseconds rather than testing every wall at every step; what
+ * {@link movementCost} decides is unchanged.
+ */
+const walkFrom = (
+  level: LevelLayout,
+  from: BoardSquare,
+  options: SightOptions,
+  rule: WalkRule,
+  stop: { readonly target?: number; readonly budget?: number },
+): Float64Array => {
   const { columns, rows } = level;
   const squares = columns * rows;
+  const budget = stop.budget ?? Number.POSITIVE_INFINITY;
   const bucket = <T>(buckets: Array<Array<T> | undefined>, at: number, item: T) => {
     const list = buckets[at];
     if (list === undefined) buckets[at] = [item];
@@ -1097,12 +1260,12 @@ export const pathCost = (
     }
   }
 
-  const target = levelSquareIndex(level, to);
-  const best = new Float64Array(squares).fill(Number.POSITIVE_INFINITY);
+  // A state is `square * 2 + odd`, odd once an odd number of diagonals is taken.
+  const best = new Float64Array(squares * 2).fill(Number.POSITIVE_INFINITY);
   const start = levelSquareIndex(level, from);
-  best[start] = 0;
-  // A binary heap of [feet, square], cheapest on top.
-  const heap: Array<readonly [number, number]> = [[0, start]];
+  best[start * 2] = 0;
+  // A binary heap of [feet, state], cheapest on top.
+  const heap: Array<readonly [number, number]> = [[0, start * 2]];
   const swap = (i: number, j: number) => {
     const held = heap[i]!;
     heap[i] = heap[j]!;
@@ -1139,9 +1302,11 @@ export const pathCost = (
   };
 
   while (heap.length > 0) {
-    const [feet, at] = pop();
-    if (feet > best[at]!) continue;
-    if (at === target) return feet;
+    const [feet, state] = pop();
+    if (feet > best[state]!) continue;
+    const at = state >> 1;
+    const odd = state & 1;
+    if (at === stop.target) break;
     const here = { column: at % columns, row: Math.floor(at / columns) };
     for (let down = -1; down <= 1; down++) {
       for (let across = -1; across <= 1; across++) {
@@ -1161,13 +1326,19 @@ export const pathCost = (
           options,
         );
         if (step === null) continue;
-        const total = feet + step;
-        if (total < best[into]!) {
-          best[into] = total;
-          push([total, into]);
+        const diagonal = across !== 0 && down !== 0;
+        const counted = rule === "alternating" && diagonal && odd === 1 ? step * 2 : step;
+        const total = feet + counted;
+        if (total > budget) continue;
+        const after = into * 2 + (rule === "alternating" && diagonal ? 1 - odd : odd);
+        if (total < best[after]!) {
+          best[after] = total;
+          push([total, after]);
         }
       }
     }
   }
-  return null;
+  const out = new Float64Array(squares);
+  for (let at = 0; at < squares; at++) out[at] = Math.min(best[at * 2]!, best[at * 2 + 1]!);
+  return out;
 };

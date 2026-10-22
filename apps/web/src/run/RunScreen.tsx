@@ -16,7 +16,18 @@ import type {
   SessionEvent,
   Visibility,
 } from "@taverns/api";
-import { attackLands, attackModeAt, rollFace, saveModifier, walkingFeet } from "@taverns/api";
+import {
+  attackLands,
+  attackModeAt,
+  combineModes,
+  coveredAc,
+  coverLine,
+  type LevelCover,
+  rollFace,
+  saveModifier,
+  sightMode,
+  walkingFeet,
+} from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
@@ -45,6 +56,7 @@ import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
 import { actionDetail, actionsOf, type ActionLine } from "./actions";
+import { sensesOfSource, sightBetween, sightLines } from "./levelRules";
 import {
   attackThrows,
   concentrationSave,
@@ -812,6 +824,8 @@ export function RunScreen() {
         readonly outcome: AttackOutcome;
         /** Where the target stood against the line's reach and range, when not plainly within. */
         readonly range: "out" | "long" | undefined;
+        /** On a level: its cover and who could not see whom, as the roll took them. */
+        readonly sight: ReadonlyArray<string>;
         /** What was sent, and the target's hit points before it. */
         readonly applied: { readonly amount: number; readonly hpBefore: number } | undefined;
         /** The concentration save the hit set up was rolled. */
@@ -912,8 +926,17 @@ export function RunScreen() {
             statBlocks: new Map(
               [...view.creatures].map(([id, creature]) => [id, creature.statBlock] as const),
             ),
+            senses: new Map(
+              state.combatants.flatMap((row) => {
+                if (row.kind !== "pc") return [];
+                const sheet = (partyResource.state === "ready" ? partyResource.value : []).find(
+                  (seat) => seat.character?.id === row.characterId,
+                )?.character?.sheet;
+                return [[row.id, sensesOfSource({ sheet })] as const];
+              }),
+            ),
           },
-    [state, view, boardRead],
+    [state, view, boardRead, partyResource],
   );
   const selectedOptions =
     optionsSource === undefined || selected === undefined
@@ -1279,11 +1302,30 @@ export function RunScreen() {
       optionsSource === undefined ? undefined : rangeOptionsFor(optionsSource, attacker);
     const out = outOfRangeFor(options, line);
     const long = longRangeFor(options, line);
+    // On a level: total cover refuses the swing; cover adds to the AC, and
+    // who cannot see whom sets the mode with the range (`LevelRules.ts`).
+    const sight = sightOf(attacker, combatant);
+    if (sight?.cover === "total") {
+      toast.add({
+        type: "destructive",
+        title: `${combatant.displayName} cannot be targeted`,
+        description: `It has total cover from ${attacker.displayName}: no line reaches it past the walls.`,
+      });
+      return;
+    }
+    const cover = sight?.cover ?? "none";
     const outcome = resolveAttack({
       attacker: attacker.displayName,
       line,
-      target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
-      mode: attackModeAt(long.has(combatant.id) ? "long" : undefined),
+      target: {
+        name: combatant.displayName,
+        ac: coveredAc(combatant.ac, cover),
+        conditions: combatant.conditions,
+      },
+      mode: combineModes([
+        attackModeAt(long.has(combatant.id) ? "long" : undefined),
+        sight === undefined ? "normal" : sightMode(sight),
+      ]),
     });
     dice.file(
       attackThrows(outcome, {
@@ -1315,6 +1357,15 @@ export function RunScreen() {
       targetId: combatant.id,
       outcome,
       range: out.has(combatant.id) ? "out" : long.has(combatant.id) ? "long" : undefined,
+      sight: [
+        ...(coverLine(cover) === undefined ? [] : [`${coverLine(cover)!}.`]),
+        ...(sight === undefined || sight.attackerSees
+          ? []
+          : [`${attacker.displayName} could not see ${combatant.displayName}: disadvantage.`]),
+        ...(sight === undefined || sight.targetSees
+          ? []
+          : [`${combatant.displayName} could not see ${attacker.displayName}: advantage.`]),
+      ],
       applied: hit ? { amount: outcome.amount, hpBefore } : undefined,
       saveRolled: false,
     });
@@ -1681,6 +1732,13 @@ export function RunScreen() {
         ? undefined
         : party.find((seat) => seat.character?.id === combatant.characterId)?.character?.sheet,
   });
+  /** On a level, how two combatants stand to each other (`levelRules.ts`). */
+  const sightOf = (attacker: Combatant, target: Combatant) =>
+    sightBetween(
+      boardRead,
+      { position: attacker.position, senses: sensesOfSource(sourceOf(attacker)) },
+      { position: target.position, senses: sensesOfSource(sourceOf(target)) },
+    );
   const speedOf = (combatant: Combatant): number | undefined => {
     const { statBlock, sheet } = sourceOf(combatant);
     return walkingFeet(statBlock?.speed ?? sheet?.identity?.speed);
@@ -1824,6 +1882,7 @@ export function RunScreen() {
         ? () => rollConcentration(struck, owed, conSave)
         : undefined,
     range: attack.range,
+    sight: attack.sight,
     next: (() => {
       if (sequence === undefined || sequence.attackerId !== attack.attackerId) return undefined;
       const line = sequence.run.strikes[sequence.next];
@@ -1851,6 +1910,12 @@ export function RunScreen() {
         hp={selected === undefined ? 0 : controller.hpOf(selected)}
         label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
         speed={selected === undefined ? undefined : speedOf(selected)}
+        // The target's cover from whoever is up, and who cannot see whom.
+        sight={
+          selected === undefined || active === undefined || selected.id === active.id
+            ? []
+            : sightLines(sightOf(active, selected), active.displayName)
+        }
         // On the canvas whoever is up acts from the turn card.
         actions={selected === undefined || selectedIsTurn ? [] : actionsOf(sourceOf(selected))}
         multiattacks={
@@ -2045,6 +2110,21 @@ export function RunScreen() {
     </Button>
   );
 
+  /** The turn card's line for the target: its AC with its cover's bonus, or why it cannot be targeted. */
+  const targetHint = (target: Combatant, cover: LevelCover): string => {
+    if (cover === "total") {
+      return `${target.displayName} has total cover from ${active?.displayName ?? "whoever is up"}: it cannot be targeted.`;
+    }
+    const ac = coveredAc(target.ac, cover);
+    const covered =
+      cover === "half"
+        ? " (half cover)"
+        : cover === "threeQuarters"
+          ? " (three-quarters cover)"
+          : "";
+    return `Targeting ${target.displayName}${ac === null ? "" : `, AC ${String(ac)}${covered}`}. An attack resolves against them.`;
+  };
+
   const resultCard = result !== undefined && (
     <AttackResultCard
       outcome={result.outcome}
@@ -2055,6 +2135,7 @@ export function RunScreen() {
       disabled={frozen}
       onRollSave={result.onRollSave}
       range={result.range}
+      sight={result.sight}
       next={result.next}
       onApply={(amount) => void applyAttack(amount)}
       onDismiss={() => {
@@ -2134,7 +2215,7 @@ export function RunScreen() {
           picking !== undefined
             ? `Pick a target for ${picking.line.name}: a token, a name in the order or the party.`
             : target !== undefined
-              ? `Targeting ${target.displayName}${target.ac === null ? "" : `, AC ${String(target.ac)}`}. An attack resolves against them.`
+              ? targetHint(target, sightOf(active, target)?.cover ?? "none")
               : "Select a creature to make it the target, or pick an attack and then its target. Drag a token to move it."
         }
         action={nextTurn}

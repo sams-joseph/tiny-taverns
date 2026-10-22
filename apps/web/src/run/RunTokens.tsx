@@ -7,6 +7,8 @@ import {
   type RulerReading,
   boardPlane,
   cellRect,
+  pathCost,
+  reachableOnLevel,
   reachableSquares,
   rulerReading,
   squareAt,
@@ -21,6 +23,7 @@ import {
   useState,
 } from "react";
 import { BoardEffects } from "./BoardEffects";
+import { type LevelWalk, runLevelWalk } from "./levelRules";
 import { boardStage } from "./fx/stage";
 import type { Act } from "./effects";
 import { FogLayer } from "./Fog";
@@ -72,9 +75,12 @@ import { type TokenNames, type TokenState, nameShown, percentOf, tokenState } fr
  * left of its speed reaches are tinted: every square within the leading number
  * of its stat block's or sheet's speed less the feet the server has counted it
  * walking this turn (`feetLeftOf`), under the diagonal rule, less the squares
- * others hold (`reachableSquares`). A drag measures from where it started, and
- * its ruler's *left* or *over* is against the same feet, so the board and the
- * panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
+ * others hold (`reachableSquares`). On a level fight (`walk`) the squares are
+ * the ones a walk reaches (`reachableOnLevel`: round walls, shut doors and
+ * blocking props, difficult terrain at double), and the ruler reads the walk
+ * (`pathCost`), as the server counts the move. A drag measures from where it
+ * started, and its ruler's *left* or *over* is against the same feet, so the
+ * board and the panel's *This turn* bar agree. The range is Move's: while the dock's Measure,
  * Area or Fog is on (`BoardTools.tsx`, `Fog.tsx`) it is not drawn.
  *
  * ### Effects
@@ -197,6 +203,8 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onSelect: (token: T) => void;
   readonly onTarget: ((token: T) => void) | undefined;
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
+  /** A level fight's walk: the range and the ruler go by it. Absent on a plain grid. */
+  readonly walk?: LevelWalk | undefined;
   /** The attacks and areas this reader may see drawn; a player's board has none yet. */
   readonly acts?: ReadonlyArray<Act>;
 }
@@ -231,13 +239,19 @@ function Range<T extends LayerToken>({
     return null;
   const left = feetLeftOf(selected);
   if (left === undefined) return null;
-  const squares = reachableSquares(board, {
-    from,
-    feet: left,
-    occupied,
-    feetPerCell: board.feetPerCell,
-    diagonals,
-  });
+  const walk = props.walk;
+  const squares =
+    walk === undefined
+      ? reachableSquares(board, {
+          from,
+          feet: left,
+          occupied,
+          feetPerCell: board.feetPerCell,
+          diagonals,
+        })
+      : reachableOnLevel(walk.layout, from, left, walk.sight, diagonals)
+          .map(({ square }) => square)
+          .filter((square) => !occupied.some((taken) => same(taken, square)));
   if (squares.length === 0) return null;
   const plane = boardPlane(board);
   return (
@@ -278,6 +292,7 @@ const RULER_TONE: Readonly<Record<RulerReading["verdict"], RulerTone>> = {
   left: "accent",
   over: "danger",
   occupied: "danger",
+  blocked: "danger",
 };
 
 /**
@@ -378,6 +393,7 @@ export function RunTokens(props: TokenProps) {
     outOfRange,
     ...rest
   } = props;
+  const walk = useMemo(() => runLevelWalk(props.board), [props.board]);
   const tokens = combatants.map((combatant) => ({
     ...tokenState(combatant, { hp: hpOf(combatant), hostileTokensHidden }),
     combatant,
@@ -399,6 +415,7 @@ export function RunTokens(props: TokenProps) {
   return (
     <TokenLayer
       {...rest}
+      walk={walk}
       tokens={tokens}
       selected={byId(props.selected?.id)}
       movable={() => movable}
@@ -563,6 +580,17 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
           occupied: heldBesides(dragged.id).some((held) => same(held, drag.over)),
           feetPerCell: board.feetPerCell,
           diagonals,
+          ...(props.walk === undefined
+            ? {}
+            : {
+                walked: pathCost(
+                  props.walk.layout,
+                  drag.from,
+                  drag.over,
+                  props.walk.sight,
+                  diagonals,
+                ),
+              }),
         })
       : undefined;
 

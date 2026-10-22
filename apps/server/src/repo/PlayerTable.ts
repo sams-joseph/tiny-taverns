@@ -735,7 +735,7 @@ export class PlayerTable extends Context.Service<
                         });
                       }
                     }
-                    const feet = feetWalked(fight, combatantId, row, to);
+                    const feet = feetWalked(fight, combatantId, row, to, level);
 
                     const moved = yield* sql<{
                       readonly visibility: "dm" | "shared";

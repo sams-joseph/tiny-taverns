@@ -9,6 +9,10 @@ import {
   attackLands,
   attackModeAt,
   type AttackRoll,
+  combineModes,
+  coveredAc,
+  coverLine,
+  type NpcAim,
   abilityKeyOf,
   type Combatant,
   type CombatantId,
@@ -340,6 +344,7 @@ export class NpcTurns extends Context.Service<
             option: NpcTurnOption,
             targetId: CombatantId,
             band: NpcTarget["band"] | undefined,
+            aim: NpcAim | undefined,
             notes: Array<string>,
           ) =>
             Effect.gen(function* () {
@@ -353,13 +358,28 @@ export class NpcTurns extends Context.Service<
                 );
                 return undefined;
               }
+              // On a level: cover adds to the AC it rolls against, and a
+              // target that cannot see it is attacked at advantage, which a
+              // long range's disadvantage cancels (`npcTurnCheck`'s aim).
+              const cover = aim?.cover ?? "none";
               const rolled = rollAttack({
                 toHit: numbers.toHit,
                 damage: numbers.damage,
-                ac: target.ac,
-                mode: attackModeAt(band),
+                ac: coveredAc(target.ac, cover),
+                mode: combineModes([
+                  attackModeAt(band),
+                  aim?.unseenByTarget === true ? "advantage" : "normal",
+                ]),
                 random: dice.random,
               });
+              const covered = coverLine(cover);
+              if (covered !== undefined) notes.push(`${target.displayName}: ${covered}.`);
+              if (aim?.unseenByTarget === true) {
+                notes.push(
+                  `${target.displayName} could not see ${selfName}: ${option.name} was rolled at advantage` +
+                    (band === "long" ? ", cancelled by long range." : "."),
+                );
+              }
               const label = `${selfName} · ${option.name} → ${target.displayName}`;
               const delivery = attackDelivery(numbers, band);
               const about = { combatantId: selfId, targetCombatantId: targetId };
@@ -612,12 +632,18 @@ export class NpcTurns extends Context.Service<
                   );
                   continue;
                 }
-                const made = yield* attack(swing, strike.target, strike.band, notes);
+                const made = yield* attack(swing, strike.target, strike.band, strike.aim, notes);
                 if (made !== undefined) attacks.push(made);
               }
             } else if (option.attack !== undefined) {
               for (const target of step.targets) {
-                const made = yield* attack(option, target, step.bands?.[target], notes);
+                const made = yield* attack(
+                  option,
+                  target,
+                  step.bands?.[target],
+                  step.aims?.[target],
+                  notes,
+                );
                 if (made !== undefined) attacks.push(made);
               }
               if (option.attack.damage.length === 0) {

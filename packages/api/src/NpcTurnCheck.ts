@@ -2,7 +2,10 @@ import { Schema } from "effect";
 import { type BoardSquare, feetBetween } from "./Board.js";
 import type { Combatant } from "./Combatant.js";
 import type { CombatantId } from "./Ids.js";
+import { runLevelLayout, tableSight } from "./LevelFight.js";
+import { pathCost } from "./LevelGeometry.js";
 import {
+  type NpcAim,
   type NpcSlot,
   type NpcSpend,
   type NpcTarget,
@@ -27,6 +30,12 @@ import { walkingFeet } from "./Speed.js";
  * Dash is the one rule the options do not model (they give speed less feet
  * moved), so the walk here grants a Dash's extra speed to the moves after it.
  * How a carried-out turn records that is the accept's business.
+ *
+ * On a level a move is a walk: the square must be one the options say it can
+ * reach (`reachableOnLevel`), and it costs what `pathCost` says, difficult
+ * terrain at double. A move through a wall, or past its speed, is refused
+ * whole rather than trimmed: the chooser is told why and picks again, and
+ * the creature never ends somewhere nobody chose.
  */
 
 /**
@@ -85,6 +94,12 @@ export type NpcTurnResolvedStep =
        * for a target nothing measured (no board, or an area's catch).
        */
       readonly bands?: Readonly<Record<CombatantId, NpcTarget["band"]>>;
+      /**
+       * On a level, each aimed target's cover and whether it could see the
+       * creature, after the moves before it: cover adds to its AC, and an
+       * attacker it cannot see attacks at advantage.
+       */
+      readonly aims?: Readonly<Record<CombatantId, NpcAim>>;
       readonly placement?: {
         readonly origin: BoardSquare;
         readonly toward: BoardSquare;
@@ -96,6 +111,7 @@ export type NpcTurnResolvedStep =
         readonly name: string;
         readonly target: CombatantId;
         readonly band?: NpcTarget["band"];
+        readonly aim?: NpcAim;
       }>;
     };
 
@@ -211,16 +227,33 @@ export const npcTurnCheck = (
     }
     if (option.targets === undefined) return undefined;
     const measured = option.targets.find((entry) => entry.combatantId === target);
-    if (measured === undefined) return `${name(target)} is not on the board`;
+    if (measured === undefined) {
+      const hidden = options.sight?.hidden.find((entry) => entry.combatantId === target);
+      return hidden === undefined
+        ? `${name(target)} is not on the board`
+        : hidden.reason === "total cover"
+          ? `${name(target)} has total cover from it and cannot be targeted`
+          : `${name(target)} is out of its sight (walls, darkness or obscurement) and cannot be targeted`;
+    }
     return measured.band === "out"
       ? `${name(target)} is ${String(measured.feet)} ft away, out of ${option.name}'s reach and range`
       : undefined;
   };
   const bandOf = (option: NpcTurnOption, target: CombatantId): NpcTarget["band"] | undefined =>
     option.targets?.find((entry) => entry.combatantId === target)?.band;
+  const aimOf = (option: NpcTurnOption, target: CombatantId): NpcAim | undefined => {
+    const entry = option.targets?.find((candidate) => candidate.combatantId === target);
+    return entry?.cover === undefined
+      ? undefined
+      : {
+          cover: entry.cover,
+          ...(entry.unseenByTarget === undefined ? {} : { unseenByTarget: true as const }),
+        };
+  };
 
+  let options = first;
   for (const [index, step] of steps.entries()) {
-    const options = npcTurnOptions(state, combatantId);
+    options = index === 0 ? first : npcTurnOptions(state, combatantId);
 
     if (step.option === "move") {
       const to = step.square;
@@ -237,10 +270,22 @@ export const npcTurnCheck = (
         return refuse(
           index,
           `${square(to)} is not a square it can move to with ${String(options.movement.feetLeft)} ft left` +
-            " (off the board, taken, or too far)",
+            (fight.board?.level == null
+              ? " (off the board, taken, or too far)"
+              : " (off the board, taken, too far to walk, or walled off)"),
         );
       }
-      const feet = feetBetween(from, to, measure!);
+      const level = fight.board?.level ?? null;
+      const feet =
+        level === null
+          ? feetBetween(from, to, measure!)
+          : (pathCost(
+              runLevelLayout(fight.board!, level),
+              from,
+              to,
+              tableSight(level),
+              fight.diagonals,
+            ) ?? feetBetween(from, to, measure!));
       replace({ ...rowOf(), position: to, feetMoved: rowOf().feetMoved + feet });
       resolved.push({ kind: "move", to, feet });
       continue;
@@ -286,6 +331,7 @@ export const npcTurnCheck = (
     let strikes: Extract<NpcTurnResolvedStep, { kind: "option" }>["strikes"];
     let aimed: ReadonlyArray<CombatantId> = targets;
     const bands: Record<CombatantId, NpcTarget["band"]> = {};
+    const aims: Record<CombatantId, NpcAim> = {};
 
     if (option.kind === "multiattack") {
       const swings = (option.strikes ?? []).flatMap((strike) =>
@@ -309,11 +355,13 @@ export const npcTurnCheck = (
         const refused = aimRefusal(swing, target);
         if (refused !== undefined) return refuse(index, `${swing.name}: ${refused}`);
         const band = bandOf(swing, target);
+        const aim = aimOf(swing, target);
         list.push({
           optionId: swing.id,
           name: swing.name,
           target,
           ...(band === undefined ? {} : { band }),
+          ...(aim === undefined ? {} : { aim }),
         });
       }
       strikes = list;
@@ -360,6 +408,8 @@ export const npcTurnCheck = (
         if (refused !== undefined) return refuse(index, refused);
         const band = bandOf(option, target);
         if (band !== undefined) bands[target] = band;
+        const aim = aimOf(option, target);
+        if (aim !== undefined) aims[target] = aim;
       }
     }
 
@@ -380,6 +430,7 @@ export const npcTurnCheck = (
       slot: option.slot,
       targets: aimed,
       ...(Object.keys(bands).length === 0 ? {} : { bands }),
+      ...(Object.keys(aims).length === 0 ? {} : { aims }),
       ...(placement === undefined ? {} : { placement }),
       ...(strikes === undefined ? {} : { strikes }),
     });

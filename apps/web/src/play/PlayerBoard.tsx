@@ -8,6 +8,7 @@ import {
   BOARD_CELL_PX,
   boardPlane,
   playerLevelLayout,
+  playerSight,
 } from "@taverns/api";
 import { useMemo, useState } from "react";
 import { CameraBar } from "../run/CameraBar";
@@ -106,9 +107,24 @@ function PlayerTokens(props: PlayerBoardProps) {
     ];
   });
   const mine = (token: TableToken) => token.row.kind === "you";
+  // On a level, the range and the ruler walk the party's view of it: a square
+  // the party has not seen is void, so the range never shows what they have not.
+  const level = board.level;
+  const { columns, rows, feetPerCell } = board;
+  const walk = useMemo(
+    () =>
+      level === null
+        ? undefined
+        : {
+            layout: playerLevelLayout({ columns, rows, feetPerCell }, level),
+            sight: playerSight(level),
+          },
+    [level, columns, rows, feetPerCell],
+  );
   return (
     <TokenLayer
       board={board}
+      walk={walk}
       tokens={tokens}
       labels={labels}
       selected={tokens.find((token) => token.id === selectedId)}

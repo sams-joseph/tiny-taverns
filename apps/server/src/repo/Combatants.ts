@@ -720,7 +720,13 @@ export class Combatants extends Context.Service<
           const from = before[0];
           if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
 
-          const feet = feetWalked(fight, id, from, to);
+          const feet = feetWalked(
+            fight,
+            id,
+            from,
+            to,
+            to === null ? null : yield* runLevel(sql, runId),
+          );
 
           const { tokenShown: shown, ...moved } = yield* place({
             campaignId,

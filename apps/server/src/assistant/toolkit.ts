@@ -4844,13 +4844,19 @@ const optionText = (
         : `  Targets: ${option.targets
             .map(
               (target) =>
-                `${handle(target.combatantId)}${target.ally ? ", an ally," : ""} ${String(target.feet)} ft (${
+                `${handle(target.combatantId)}${target.ally ? ", an ally," : ""} ${String(target.feet)} ft (${[
                   target.band === "out"
                     ? "out of reach"
                     : target.band === "long"
                       ? "long range, at disadvantage"
-                      : target.band
-                })`,
+                      : target.band,
+                  ...(target.cover === "half"
+                    ? ["half cover, +2 AC"]
+                    : target.cover === "threeQuarters"
+                      ? ["three-quarters cover, +5 AC"]
+                      : []),
+                  ...(target.unseenByTarget === true ? ["cannot see it: advantage"] : []),
+                ].join("; ")})`,
             )
             .join(", ")}.`,
     );
@@ -5111,6 +5117,7 @@ const fightText = (read: TableFightRead, focus?: FightFocus): string => {
                   ...(options.movement === undefined
                     ? []
                     : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+                  ...sightLines(options, handle),
                   ...options.omitted.map((omission) =>
                     omission.id === "*"
                       ? `It can do nothing now: ${omission.reason}.`
@@ -5138,6 +5145,44 @@ const MOMENT_HEADINGS: Record<NpcTurnMoment, string> = {
   reaction: "A reaction",
 };
 
+/**
+ * On a level: how it sees, who it cannot target and why, and how it walks.
+ * Targets in cover are already marked on each option; a creature prefers one
+ * with none.
+ */
+const sightLines = (
+  options: NpcTurnOptions,
+  handle: (id: string) => string,
+): ReadonlyArray<string> => {
+  const sight = options.sight;
+  if (sight === undefined) return [];
+  const senses = (["darkvision", "blindsight", "truesight"] as const).flatMap((sense) =>
+    sight.senses[sense] > 0 ? [`${sense} ${String(sight.senses[sense])} ft`] : [],
+  );
+  return [
+    `On a level: it sees by ${senses.length === 0 ? "light alone" : senses.join(", ")}` +
+      (sight.unread.length === 0
+        ? ""
+        : ` (not read, counted as none: ${sight.unread.join(", ")})`) +
+      ". It may target only what it sees, past less than total cover; cover adds to AC, so prefer a target without it.",
+    ...(sight.hidden.length === 0
+      ? []
+      : [
+          `Cannot target now: ${sight.hidden
+            .map(
+              (entry) =>
+                `${handle(entry.combatantId)} (${entry.reason === "total cover" ? "total cover" : "out of sight"})`,
+            )
+            .join(", ")}.`,
+        ]),
+    ...(options.movement === undefined
+      ? []
+      : [
+          "A move must be walkable round walls, closed doors and blocking props, difficult terrain costing double; a square it cannot walk to within its feet is refused.",
+        ]),
+  ];
+};
+
 /** The focused creature in full, and its options at the moment: only the slots the moment takes. */
 const focusText = (
   focus: FightFocus,
@@ -5163,6 +5208,7 @@ const focusText = (
     ...(moment !== "turn" || options.movement === undefined
       ? []
       : [`Movement: ${String(options.movement.feetLeft)} ft left.`]),
+    ...sightLines(options, handle),
     ...options.omitted.map((omission) =>
       omission.id === "*"
         ? `It can do nothing now: ${omission.reason}.`

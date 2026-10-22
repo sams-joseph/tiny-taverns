@@ -440,10 +440,11 @@ export interface RulerReading {
   readonly feet: number;
   /**
    * `distance` is a plain measure; `left` and `over` are a move against what the
-   * mover has left to walk; `occupied` is a move onto a square someone holds.
+   * mover has left to walk; `occupied` is a move onto a square someone holds;
+   * `blocked` is a walk on a level that no way round reaches.
    */
-  readonly verdict: "distance" | "left" | "over" | "occupied";
-  /** `"35 ft"`, `"20 ft · 10 left"`, `"35 ft · 5 over"` or `"Occupied"`. */
+  readonly verdict: "distance" | "left" | "over" | "occupied" | "blocked";
+  /** `"35 ft"`, `"20 ft · 10 left"`, `"35 ft · 5 over"`, `"Occupied"` or `"No way there"`. */
   readonly text: string;
 }
 
@@ -451,22 +452,27 @@ export interface RulerReading {
  * The ruler's words. `remaining` is the feet the mover has left this turn, or
  * `null` when the ruler is a plain measure or moves somebody whose turn it is
  * not; `occupied` says the far end is a square someone else holds, which wins.
+ * `walked` is a move's walk on a level (`pathCost`), which it reads in place
+ * of the straight distance, and `null` when no walk gets there.
  */
 export const rulerReading = ({
   from,
   to,
   remaining,
   occupied,
+  walked,
   ...measure
 }: BoardMeasure & {
   readonly from: BoardSquare;
   readonly to: BoardSquare;
   readonly remaining: number | null;
   readonly occupied: boolean;
+  readonly walked?: number | null;
 }): RulerReading => {
-  const feet = feetBetween(from, to, measure);
+  const feet = walked ?? feetBetween(from, to, measure);
   const distance = `${String(feet)} ft`;
   if (occupied) return { feet, verdict: "occupied", text: "Occupied" };
+  if (walked === null) return { feet, verdict: "blocked", text: "No way there" };
   if (remaining === null) return { feet, verdict: "distance", text: distance };
   return feet > remaining
     ? { feet, verdict: "over", text: `${distance} · ${String(feet - remaining)} over` }

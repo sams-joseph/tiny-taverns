@@ -817,8 +817,14 @@ export function CombatantPanel({
   resources,
   multiattacks,
   onMultiattack,
+  sight = [],
   variant = "card",
 }: {
+  /**
+   * On a level, where it stands against whoever is up: its cover (`Half
+   * cover: +2 AC from Brannoc`) and who cannot see whom (`levelRules.ts`).
+   */
+  readonly sight?: ReadonlyArray<string>;
   /**
    * The narrow grid's whole card, or the canvas's target card (`Encounter
    * Canvas.dc.html`): the creature, its hit points on the bar with the damage
@@ -908,6 +914,8 @@ export function CombatantPanel({
         readonly onRollSave: (() => void) | undefined;
         /** Where the target stood against the line's reach and range, when not plainly within. */
         readonly range: "out" | "long" | undefined;
+        /** On a level: its cover and who could not see whom, as the roll took them. */
+        readonly sight?: ReadonlyArray<string>;
         /** The next strike of the multiattack being run, if there is one. */
         readonly next: { readonly label: string; readonly onNext: () => void } | undefined;
       }
@@ -1100,6 +1108,16 @@ export function CombatantPanel({
           </div>
         )}
 
+        {sight.length > 0 && (
+          <ul data-slot="target-sight" className="m-0 flex list-none flex-col gap-0.5 p-0">
+            {sight.map((line) => (
+              <li key={line} className="text-caption leading-snug text-info-ink">
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+
         <HitPoints combatant={combatant} disabled={disabled} onApply={onDamage} />
 
         {/* Only at zero: above it a party member makes no saves, and healing
@@ -1124,6 +1142,7 @@ export function CombatantPanel({
             disabled={disabled}
             onRollSave={result.onRollSave}
             range={result.range}
+            sight={result.sight}
             next={result.next}
             onApply={onApplyResult}
             onDismiss={onDismissResult}

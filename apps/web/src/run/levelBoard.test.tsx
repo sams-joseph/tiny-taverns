@@ -1,8 +1,10 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { goblinBoss } from "../campaign/campaign.fixtures";
 import {
   bodyOf,
+  brannocPlaced,
   campaignId,
   installRunServer,
   liveRun,
@@ -204,5 +206,76 @@ describe("a fight on a level, on the DM's canvas", () => {
     server.emit(sessionEvent(12, "board-door-updated"));
     expect(await board().findByRole("button", { name: "Close the door" })).toBeInTheDocument();
     expect(doorWrites()).toEqual([]);
+  });
+});
+
+describe("the rules a level makes, on the DM's canvas", () => {
+  const range = () =>
+    [
+      ...document.querySelectorAll<SVGElement>("[data-slot=run-tokens] [data-slot=range-square]"),
+    ].map((square) => square.dataset.square!);
+
+  it("tints only the squares Brannoc can walk to, not a radius through the wall", async () => {
+    // The wall down x = 4 closed the whole way: nothing west of it is reachable.
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: {
+        ...runLevelBoard,
+        level: {
+          ...runLevelBoard.level,
+          walls: [
+            ...runLevelBoard.level.walls,
+            {
+              ...runLevelBoard.level.walls[0]!,
+              id: "1e7e1000-0000-4000-8000-0000000000f1",
+              y1: 4,
+              y2: 6,
+            },
+          ],
+        },
+      },
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await waitFor(() => expect(range().length).toBeGreaterThan(0));
+    // Brannoc stands at (5,4) with 25 feet: a plain radius would reach column 0.
+    expect(range().every((square) => Number(square.split(",")[0]) >= 4)).toBe(true);
+    expect(range()).toContain("7,0");
+  });
+
+  it("says the target's cover on its card, and puts it on the AC the turn card names", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: {
+        ...runLevelBoard,
+        level: {
+          ...runLevelBoard.level,
+          props: [
+            {
+              id: "1e7e1000-0000-4000-8000-0000000000f2",
+              kind: "crate",
+              x: 3,
+              y: 4,
+              rotation: 0,
+              blocksMovement: null,
+              blocksSight: null,
+              cover: null,
+              difficult: null,
+              dmOnly: false,
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 1, row: 4 } }],
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await userEvent.click(await board().findByRole("button", { name: /^Goblin Boss, column/ }));
+    const card = within(await screen.findByRole("region", { name: "Selected combatant" }));
+    expect(await card.findByText("Half cover: +2 AC from Brannoc")).toBeInTheDocument();
+    expect(screen.getByText(/Targeting Goblin Boss, AC 19 \(half cover\)/)).toBeInTheDocument();
   });
 });

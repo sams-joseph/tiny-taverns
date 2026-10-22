@@ -9,6 +9,7 @@ import {
   type Combatant,
   type CombatantId,
   type CreatureId,
+  type CreatureSenses,
   type DiagonalRule,
   npcMomentRefusal,
   type NpcTurnMoment,
@@ -36,9 +37,16 @@ import type { ActionLine } from "./actions";
 export interface RunOptionsSource {
   readonly run: Pick<EncounterRun, "phase" | "activeCombatantId" | "endedAt">;
   readonly combatants: ReadonlyArray<Combatant>;
-  readonly board: Pick<EncounterRunBoard, "columns" | "rows" | "feetPerCell"> | null | undefined;
+  /** On a level fight, its `level` too: then targets are what the creature sees and walks are walks. */
+  readonly board:
+    | (Pick<EncounterRunBoard, "columns" | "rows" | "feetPerCell"> &
+        Partial<Pick<EncounterRunBoard, "level">>)
+    | null
+    | undefined;
   readonly diagonals: DiagonalRule;
   readonly statBlocks: ReadonlyMap<CreatureId, StatBlock>;
+  /** A party member's darkvision, off its sheet, for what it sees of a monster on a level. */
+  readonly senses?: ReadonlyMap<CombatantId, CreatureSenses>;
 }
 
 /** The options for one combatant, or `undefined` for a party member, whose turn is its player's. */
@@ -55,6 +63,7 @@ export const runOptionsFor = (
           board: source.board ?? undefined,
           diagonals: source.diagonals,
           statBlocks: source.statBlocks,
+          ...(source.senses === undefined ? {} : { senses: source.senses }),
         },
         combatant.id,
       );
