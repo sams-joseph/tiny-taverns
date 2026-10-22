@@ -1419,6 +1419,7 @@ export const liveRun = {
   mapShown: false,
   hostileTokensHidden: false,
   continuedFrom: null,
+  levelVisitId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,

@@ -1179,7 +1179,10 @@ class LocationsGroup extends HttpApiGroup.make("locations")
  * delete of the visit and everything on it, which takes it off the table, and
  * is refused with a `Conflict` while a live fight is played on it.
  * `putOnTable` makes a visit the one on the campaign's table, and
- * `takeOffTable` leaves none there. The rest are the DM exploring the visit:
+ * `takeOffTable` leaves none there. While a live fight borrows a visit
+ * (`LevelVisit.fight`), the dungeon is the fight's: putting another visit on
+ * the table, taking it off and resetting it are each a `Conflict`. The rest
+ * are the DM exploring the visit:
  * tokens, fog, doors, lights and regions, each answered with the visit.
  *
  * While a night is open, each write here is a line in its log naming the
@@ -1212,12 +1215,12 @@ class LevelVisitsGroup extends HttpApiGroup.make("levelVisits")
       params: { campaignId: CampaignId },
       payload: TableVisitSet,
       success: LevelVisit,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.delete("takeOffTable", "/table-visit", {
       params: { campaignId: CampaignId },
       success: HttpApiSchema.NoContent,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     /**
      * The DM stands a seat's token on a square of the visit. `NotFound` for a

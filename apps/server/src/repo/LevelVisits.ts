@@ -30,6 +30,8 @@ import {
   standable,
   startingSquares,
   tableSight,
+  type EncounterRunId,
+  VisitReturnedPayload,
   VisitTabledPayload,
   VisitTokenMovedPayload,
 } from "@taverns/api";
@@ -47,6 +49,7 @@ import {
   partySeen,
   playerLevelColumn,
   refreshBoardVision,
+  returnBoardState,
   unstandable,
   VISIT_BOARD,
   type VisionViewer,
@@ -127,6 +130,21 @@ export const borrowedBy = (sql: SqlClient.SqlClient) =>
   sql`exists (select 1 from encounter_run
               where encounter_run.level_visit_id = level_visit.id
                 and encounter_run.ended_at is null)`;
+
+/**
+ * Over `level_visit`: the live fight borrowing it (`LevelVisit.fight`), as one
+ * `json` column, `fight`, or `null`. At most one, by
+ * `encounter_run_level_visit_live`. **The creator's read only.**
+ */
+const fightColumn = (sql: SqlClient.SqlClient) => sql`
+  (select json_build_object(
+            'runId', encounter_run.id, 'sessionId', encounter_run.session_id,
+            'name', encounter_run.encounter_name
+          )
+   from encounter_run
+   where encounter_run.level_visit_id = level_visit.id and encounter_run.ended_at is null
+  ) as fight
+`;
 
 /**
  * Over `encounter` and `level_visit`: the encounter is placed in the visit
@@ -534,6 +552,127 @@ export const dropSeatTokens = (
         return [...new Set(nights.filter((night): night is SessionId => night !== null))];
       });
 
+/** The campaign's visit of an encounter's level, as a fight's start asks of it. */
+export interface VisitOfEncounter {
+  readonly id: LevelVisitId;
+  readonly name: string;
+  readonly on_table: boolean;
+  readonly borrowed: boolean;
+}
+
+/**
+ * The campaign's visit of the encounter's level, held `for update` until the
+ * caller's transaction ends (as a visit write holds it, so none lands between
+ * a fight's copy of it and the borrow), or `null` when the campaign has none:
+ * whether it is on the table, and whether a live fight already borrows it.
+ * Beneath the caller's gate, which has proved the encounter the creator's.
+ */
+export const visitOfEncounter = (
+  sql: SqlClient.SqlClient,
+  campaign: CampaignId,
+  encounterId: string,
+) =>
+  Effect.map(
+    sql<VisitOfEncounter>`
+      select level_visit.id, level_visit.name, ${onTableColumn(sql)},
+             ${borrowedBy(sql)} as borrowed
+      from encounter
+      join level_visit on level_visit.campaign_id = encounter.campaign_id
+                      and level_visit.level_id = encounter.level_id
+      join campaign on campaign.id = level_visit.campaign_id
+      where encounter.id = ${encounterId} and encounter.campaign_id = ${campaign}
+      for update of level_visit
+    `,
+    (rows): VisitOfEncounter | null => rows[0] ?? null,
+  );
+
+/**
+ * Where each live seat's character stands on a visit, by character: the
+ * squares a borrowing fight seats the party on.
+ */
+export const visitPartySquares = (sql: SqlClient.SqlClient, visitId: string) =>
+  Effect.map(
+    sql<{
+      readonly character_id: string;
+      readonly board_column: number;
+      readonly board_row: number;
+    }>`
+      select seat.character_id, level_visit_token.board_column, level_visit_token.board_row
+      from level_visit_token
+      join campaign_character seat on seat.id = level_visit_token.seat_id
+      where level_visit_token.visit_id = ${visitId}
+        and seat.left_at is null and seat.character_id is not null
+    `,
+    (rows) =>
+      new Map(
+        rows.map(
+          (row) => [row.character_id, { column: row.board_column, row: row.board_row }] as const,
+        ),
+      ),
+  );
+
+/**
+ * A borrowing fight ended resolved: hand its dungeon back to the visit, in
+ * the ending write's transaction. The visit row is held as a visit write
+ * holds it; the fight's doors, lights, reveals, fog and seen squares go onto
+ * it (`returnBoardState`); each live seat whose character fought on the board
+ * stands where the fight left them, a seat with no token on the visit gaining
+ * one; the party looks again from there (`refreshVisitVision`); and the
+ * fight's night logs `visit-returned`, shared while the visit is on the
+ * table, whose players go back to it, else the DM's. Nothing for a fight that
+ * borrowed no visit, or whose visit was reset. A carried fight is not handed
+ * back: its successor inherits the borrow and hands back when it resolves.
+ */
+export const handBack = (sql: SqlClient.SqlClient, runId: EncounterRunId, sessionId: SessionId) =>
+  Effect.gen(function* () {
+    const visits = yield* sql<{
+      readonly id: string;
+      readonly campaign_id: string;
+      readonly name: string;
+    }>`
+      select level_visit.id, level_visit.campaign_id, level_visit.name
+      from encounter_run
+      join level_visit on level_visit.id = encounter_run.level_visit_id
+      where encounter_run.id = ${runId}
+      for update of level_visit
+    `;
+    const visit = visits[0];
+    if (visit === undefined) return;
+    yield* returnBoardState(sql, runId, visit.id);
+    // Each character the fight had on its board, by the live seat that holds
+    // it at this table. The two boards are one size, so a square is the same
+    // square on both.
+    yield* sql`
+      insert into level_visit_token (
+        visit_id, campaign_id, seat_id, board_columns, board_rows, board_column, board_row
+      )
+      select distinct on (seat.id)
+             level_visit.id, level_visit.campaign_id, seat.id,
+             level_visit.board_columns, level_visit.board_rows,
+             combatant.board_column, combatant.board_row
+      from combatant
+      join level_visit on level_visit.id = ${visit.id}
+      join campaign_character seat on seat.campaign_id = level_visit.campaign_id
+                                  and seat.character_id = combatant.character_id
+                                  and seat.left_at is null
+      where combatant.encounter_run_id = ${runId}
+        and combatant.kind = 'pc'
+        and combatant.board_column < level_visit.board_columns
+        and combatant.board_row < level_visit.board_rows
+      order by seat.id, combatant.created_at, combatant.id
+      on conflict (visit_id, seat_id) do update
+        set board_column = excluded.board_column, board_row = excluded.board_row
+    `;
+    const vision = yield* refreshVisitVision(sql, visit.id);
+    yield* appendEvent(sql, {
+      sessionId,
+      kind: "visit-returned",
+      levelVisitId: visit.id,
+      payload: { name: visit.name } satisfies typeof VisitReturnedPayload.Encoded,
+      visibility: vision?.shown === true ? "shared" : "dm",
+    });
+  });
+
 /**
  * One write on a visit, the DM's or a player's, in one transaction: the visit
  * held `for update` beneath `gate`, the caller's predicate over `level_visit`
@@ -568,7 +707,7 @@ const visitWrite = <A>(
       `;
       const visit = locked[0];
       if (visit === undefined) return yield* new NotFound({ resource: "level_visit", id });
-      // The fight's start holds the visit too (a later phase), so once a
+      // A fight's start holds the visit too (`visitOfEncounter`), so once a
       // fight borrows it nothing here writes until it ends.
       if (visit.borrowed) {
         return yield* new Conflict({
@@ -800,14 +939,20 @@ export class LevelVisits extends Context.Service<
     /**
      * Makes the visit the one on the campaign's table, in place of any other,
      * and stands a token for any live seat that has none on it
-     * (`standMissingSeats`), unless a fight borrows it.
+     * (`standMissingSeats`), unless a fight borrows it. `Conflict` while a
+     * live fight borrows another of the campaign's visits: the party is in
+     * that dungeon until the fight ends (the maintainer's decision of
+     * 2026-10-22).
      */
     readonly putOnTable: (
       creator: CampaignCreatorActor,
       id: LevelVisitId,
-    ) => Effect.Effect<LevelVisit, NotFound>;
-    /** Leaves no visit on the campaign's table. */
-    readonly takeOffTable: (creator: CampaignCreatorActor) => Effect.Effect<void>;
+    ) => Effect.Effect<LevelVisit, NotFound | Conflict>;
+    /**
+     * Leaves no visit on the campaign's table. `Conflict` while a live fight
+     * borrows the visit there: the party is in it.
+     */
+    readonly takeOffTable: (creator: CampaignCreatorActor) => Effect.Effect<void, Conflict>;
     /**
      * Stand a seat's token on a square of the visit, as the DM would a
      * miniature: any square on the board a token may stand on (`standable`),
@@ -888,6 +1033,7 @@ export class LevelVisits extends Context.Service<
                    where level_visit_token.visit_id = level_visit.id
                  ), '[]'::json) as tokens,
                  ${placedEncountersColumn(sql)},
+                 ${fightColumn(sql)},
                  ${onTableColumn(sql)}, level_visit.created_at, level_visit.updated_at
           from level_visit
           join campaign on campaign.id = level_visit.campaign_id
@@ -1064,6 +1210,18 @@ export class LevelVisits extends Context.Service<
                   if (found === undefined) {
                     return yield* new NotFound({ resource: "level_visit", id });
                   }
+                  const elsewhere = yield* sql<{ readonly name: string }>`
+                    select level_visit.name from level_visit
+                    where level_visit.campaign_id = ${campaign}
+                      and level_visit.id <> ${id}
+                      and ${borrowedBy(sql)}
+                  `;
+                  const busy = elsewhere[0];
+                  if (busy !== undefined) {
+                    return yield* new Conflict({
+                      message: `a fight is being played in ${busy.name}: end it before putting another level on the table`,
+                    });
+                  }
                   const set = yield* sql<{ readonly was: string | null }>`
                     update campaign set table_visit_id = level_visit.id
                     from level_visit
@@ -1101,6 +1259,21 @@ export class LevelVisits extends Context.Service<
               .withTransaction(
                 Effect.gen(function* () {
                   const { actor, campaign } = creator;
+                  // Held as a visit write holds it, so a fight's start that
+                  // would borrow it lands before this or after it.
+                  const tabled = yield* sql<{ readonly name: string; readonly borrowed: boolean }>`
+                    select level_visit.name, ${borrowedBy(sql)} as borrowed
+                    from campaign
+                    join level_visit on level_visit.id = campaign.table_visit_id
+                    where campaign.id = ${campaign}
+                      and ${campaignWritableById(sql, campaign, actor)}
+                    for update of level_visit
+                  `;
+                  if (tabled[0]?.borrowed === true) {
+                    return yield* new Conflict({
+                      message: `a fight is being played in ${tabled[0].name}: end it before taking the level off the table`,
+                    });
+                  }
                   const cleared = yield* sql<{ readonly was: string | null }>`
                     update campaign set table_visit_id = null
                     where campaign.id = ${campaign}

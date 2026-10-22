@@ -5,8 +5,10 @@ import {
   CampaignCharacterId,
   EncounterCreatureId,
   EncounterId,
+  EncounterRunId,
   LevelId,
   LevelVisitId,
+  SessionId,
 } from "./Ids.js";
 import { PlayerLiveLevel, RunBoardLevel } from "./LevelFight.js";
 
@@ -79,6 +81,20 @@ export const LevelVisitEncounter = Schema.Struct({
 });
 export type LevelVisitEncounter = typeof LevelVisitEncounter.Type;
 
+/**
+ * The live fight borrowing a visit: the run, on its night, so the DM's stage
+ * can go to it. While a fight borrows the visit, every write to the visit is a
+ * `Conflict` and the board is the fight's; ending it resolved hands the
+ * dungeon back (`EncounterRun.levelVisitId`).
+ */
+export const LevelVisitFight = Schema.Struct({
+  runId: EncounterRunId,
+  sessionId: SessionId,
+  /** The fight's name: its encounter's, as it was when the fight started. */
+  name: Schema.String,
+});
+export type LevelVisitFight = typeof LevelVisitFight.Type;
+
 export class LevelVisit extends Schema.Class<LevelVisit>("LevelVisit")({
   id: LevelVisitId,
   /** The level it was opened from, or `null` once that level is deleted. */
@@ -107,6 +123,8 @@ export class LevelVisit extends Schema.Class<LevelVisit>("LevelVisit")({
   encounters: Schema.Array(LevelVisitEncounter),
   /** Whether this is the visit on the campaign's table. */
   onTable: Schema.Boolean,
+  /** The live fight played on the visit, or `null` while the party explores it. */
+  fight: Schema.NullOr(LevelVisitFight),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}

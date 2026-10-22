@@ -64,7 +64,12 @@ const summary = (id: string, name: string, levelId: string | null, onTable: bool
 
 /** The hall, whole: a door down the middle, Brannoc in the west room. */
 const hall = (
-  over: { doorState?: "open" | "closed"; column?: number; onTable?: boolean } = {},
+  over: {
+    doorState?: "open" | "closed";
+    column?: number;
+    onTable?: boolean;
+    fight?: { runId: string; sessionId: string; name: string };
+  } = {},
 ) => ({
   ...summary(hallId, "The Hall", cryptLevelId, over.onTable ?? true),
   level: {
@@ -92,6 +97,7 @@ const hall = (
   partySeen: [0, 1, 2, 6, 7, 8],
   tokens: [{ seatId, name: "Brannoc", column: over.column ?? 0, row: 1 }],
   encounters: [],
+  fight: over.fight ?? null,
 });
 
 const base = `/campaigns/${campaignId}`;
@@ -338,6 +344,36 @@ describe("a visit's stage", () => {
     await userEvent.click(waiting[0]!);
     await waitFor(() =>
       expect(globalThis.location.pathname).toBe(`${base}/encounters/${encounterId}`),
+    );
+  });
+
+  it("is read-only under a banner to the fight while a fight borrows the visit", async () => {
+    onTheCanvas();
+    const runId = "2b1f2a1e-0000-4000-8000-00000000f001";
+    server.routes.set(`GET ${base}/visits/${hallId}`, {
+      status: 200,
+      body: hall({ fight: { runId, sessionId, name: "Ambush" } }),
+    });
+    await at(`${base}/levels/${hallId}`);
+    const board = await screen.findByRole("region", { name: "Level" });
+    const banner = document.querySelector<HTMLElement>("[data-slot=visit-fight-banner]");
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).toContain("Ambush is being played here");
+    const go = banner!.querySelector("a");
+    expect(go?.textContent).toBe("Go to the fight");
+    expect(go).toHaveAttribute("href", `${base}/sessions/${sessionId}/runs/${runId}`);
+    // Nothing on the board writes: the door is drawn and does not switch, the
+    // tools are off, and the table cannot change under the fight.
+    const door = await within(board).findByRole("button", { name: "Open the door" });
+    expect(door).toBeDisabled();
+    for (const tool of within(screen.getByRole("group", { name: "Tools" })).getAllByRole(
+      "button",
+    )) {
+      expect(tool).toBeDisabled();
+    }
+    expect(screen.getByRole("switch", { name: "On the table" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
   });
 

@@ -160,7 +160,10 @@ export const SessionEventKind = Schema.Literals([
    * its own (a seat left the table, or a placed creature came into or out of
    * its sight). `visit-placement-updated` `{encounterId, name}` is the DM's
    * placing an encounter on the visit's level (`VisitPlacementUpdatedPayload`),
-   * always the DM's line.
+   * always the DM's line. `visit-returned` `{name}` is a fight that borrowed
+   * the visit ending resolved and handing the dungeon back
+   * (`VisitReturnedPayload`): the table's line while the visit is on the
+   * table, since the players' table goes back to the level.
    */
   "visit-opened",
   "visit-tabled",
@@ -171,6 +174,7 @@ export const SessionEventKind = Schema.Literals([
   "visit-fog-updated",
   "visit-vision-updated",
   "visit-placement-updated",
+  "visit-returned",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

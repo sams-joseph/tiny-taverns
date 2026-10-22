@@ -6,6 +6,7 @@ import type {
   CampaignId,
   LevelPartId,
   LevelVisit,
+  LevelVisitFight,
   LevelVisitId,
   SessionId,
 } from "@taverns/api";
@@ -55,6 +56,11 @@ import { WaitingHere } from "./WaitingHere";
  * over a newer one (the runner's board line, `RunScreen.tsx`). While a night
  * is open the visit's stream rings when another tab writes, and the visit is
  * read again. Below the canvas's width there is no stage, and it says so.
+ *
+ * While a fight borrows the visit (`LevelVisit.fight`) the stage is the
+ * dungeon as the fight found it, read-only, under a banner that goes to the
+ * fight; the fight's start and end are lines on the visit's stream, so the
+ * stage turns on its own.
  */
 export function VisitScreen() {
   const { campaignId, visitId } = useParams({
@@ -182,6 +188,8 @@ export function VisitScreen() {
     });
 
   const back = { to: "/campaigns/$campaignId/levels", params: { campaignId } } as const;
+  /** The fight borrowing the visit, while one is on: the dungeon is its until it ends. */
+  const fight = visit?.fight ?? null;
   const title = visit?.name ?? "Level";
   const subtitle = [
     campaign.state === "ready" ? campaign.value.name : undefined,
@@ -206,7 +214,7 @@ export function VisitScreen() {
           label="On the table"
           hint={visit.onTable ? "Take the level off the table" : "Put the level on the table"}
           checked={visit.onTable}
-          disabled={tabling.busy}
+          disabled={tabling.busy || fight !== null}
           onCheckedChange={setOnTable}
         />
         <HudIconSwitch
@@ -256,7 +264,9 @@ export function VisitScreen() {
               rolling={null}
               party={null}
               turn={null}
-              banner={undefined}
+              banner={
+                fight === null ? undefined : <FightBanner campaignId={campaignId} fight={fight} />
+              }
               drawers={[
                 {
                   key: "waiting",
@@ -272,6 +282,7 @@ export function VisitScreen() {
                   visit={visit}
                   diagonals={diagonals}
                   partyView={partyView}
+                  frozen={fight !== null}
                   freeArea={freeArea}
                   onMove={onMove}
                   onFog={onFog}
@@ -326,5 +337,43 @@ function VisitDoorbell({
       <Icon name="octagon-x" size={13} />
       {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
     </Button>
+  );
+}
+
+/**
+ * Over a visit a fight borrows: the fight's name and the way to it. The board
+ * under it is read-only until the fight ends and hands the dungeon back.
+ */
+function FightBanner({
+  campaignId,
+  fight,
+}: {
+  readonly campaignId: CampaignId;
+  readonly fight: LevelVisitFight;
+}) {
+  return (
+    <div
+      role="status"
+      data-slot="visit-fight-banner"
+      className="pointer-events-auto flex items-center gap-3 rounded-card border border-danger bg-surface-raised py-1.5 pr-1.5 pl-3.5 shadow-3"
+    >
+      <Icon name="swords" size={16} className="shrink-0 text-danger" />
+      <span className="min-w-0 text-label leading-snug font-medium text-heading">
+        {fight.name} is being played here. The level is the fight's until it ends.
+      </span>
+      <Button
+        variant="secondary"
+        size="sm"
+        nativeButton={false}
+        render={
+          <Link
+            to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
+            params={{ campaignId, sessionId: fight.sessionId, runId: fight.runId }}
+          />
+        }
+      >
+        Go to the fight
+      </Button>
+    </div>
   );
 }

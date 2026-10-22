@@ -182,11 +182,56 @@ export const copyLevel = (
   });
 
 /**
+ * Copy one board's parts beside another's board row, live state and all:
+ * walls with their door state and reveal, props, lights lit or not, regions
+ * revealed or not, with their ids and order, one `insert … select` per table.
+ * The one copy between boards: a carried fight's to the fight that resumes it
+ * (`carryLevel`), and a visit's to the fight that borrows it (`borrowVisit`).
+ * The target's board row is the caller's. A board on the plain grid has no
+ * parts, and each statement copies none.
+ */
+const copyBoardParts = (
+  sql: SqlClient.SqlClient,
+  from: BoardTables,
+  fromId: string,
+  to: BoardTables,
+  toId: string,
+) =>
+  Effect.gen(function* () {
+    const key = sql(to.partKey);
+    const source = (table: string) =>
+      sql`from ${sql(table)} where ${sql(table)}.${sql(from.partKey)} = ${fromId}`;
+    yield* sql`
+      insert into ${sql(to.wall)} (${key}, id, ordinal, x1, y1, x2, y2, kind, door_state, low, revealed)
+      select ${toId}, id, ordinal, x1, y1, x2, y2, kind, door_state, low, revealed
+      ${source(from.wall)}
+    `;
+    yield* sql`
+      insert into ${sql(to.prop)} (
+        ${key}, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
+        difficult, dm_only
+      )
+      select ${toId}, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
+             difficult, dm_only
+      ${source(from.prop)}
+    `;
+    yield* sql`
+      insert into ${sql(to.light)} (${key}, id, ordinal, x, y, bright, dim, tone, flicker, lit)
+      select ${toId}, id, ordinal, x, y, bright, dim, tone, flicker, lit
+      ${source(from.light)}
+    `;
+    yield* sql`
+      insert into ${sql(to.region)} (${key}, id, ordinal, kind, squares, secret, revealed)
+      select ${toId}, id, ordinal, kind, squares, secret, revealed
+      ${source(from.region)}
+    `;
+  });
+
+/**
  * Carry a carried fight's level to the fight that resumes it: the
- * predecessor's own copy, doors and lights as the DM left them, one
- * `insert … select` per table. The board row (with `ambient` and `floor`) is
- * the caller's copy of the predecessor's board. A fight on the plain grid has
- * no parts, and each statement copies none.
+ * predecessor's own copy, doors and lights as the DM left them
+ * (`copyBoardParts`). The board row (with `ambient` and `floor`) is the
+ * caller's copy of the predecessor's board.
  */
 export const carryLevel = (
   sql: SqlClient.SqlClient,
@@ -194,32 +239,7 @@ export const carryLevel = (
   fromRunId: EncounterRunId,
 ) =>
   Effect.gen(function* () {
-    yield* sql`
-      insert into encounter_run_wall (
-        run_id, id, ordinal, x1, y1, x2, y2, kind, door_state, low, revealed
-      )
-      select ${runId}, id, ordinal, x1, y1, x2, y2, kind, door_state, low, revealed
-      from encounter_run_wall where encounter_run_wall.run_id = ${fromRunId}
-    `;
-    yield* sql`
-      insert into encounter_run_prop (
-        run_id, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
-        difficult, dm_only
-      )
-      select ${runId}, id, ordinal, kind, x, y, rotation, blocks_movement, blocks_sight, cover,
-             difficult, dm_only
-      from encounter_run_prop where encounter_run_prop.run_id = ${fromRunId}
-    `;
-    yield* sql`
-      insert into encounter_run_light (run_id, id, ordinal, x, y, bright, dim, tone, flicker, lit)
-      select ${runId}, id, ordinal, x, y, bright, dim, tone, flicker, lit
-      from encounter_run_light where encounter_run_light.run_id = ${fromRunId}
-    `;
-    yield* sql`
-      insert into encounter_run_region (run_id, id, ordinal, kind, squares, secret, revealed)
-      select ${runId}, id, ordinal, kind, squares, secret, revealed
-      from encounter_run_region where encounter_run_region.run_id = ${fromRunId}
-    `;
+    yield* copyBoardParts(sql, RUN_BOARD, fromRunId, RUN_BOARD, runId);
     // What the party explored stays explored (`0110_party_vision.ts`); what
     // it sees is the resuming fight's own, written once its tokens stand.
     yield* sql`
@@ -229,6 +249,89 @@ export const carryLevel = (
       where encounter_run_board.run_id = ${runId}
         and predecessor.run_id = ${fromRunId}
         and encounter_run_board.floor is not null
+    `;
+  });
+
+/**
+ * A new fight's board copied from the level visit it borrows: the dungeon as
+ * it stands, not the level. The board row with the visit's size, scale,
+ * ambient and floor, its fog as the fight's starting fog (a fog `reset` in the
+ * fight goes back to it) and what the party has seen of it, then every part
+ * with its live state (`copyBoardParts`). What the party sees now is the
+ * fight's own, written once its tokens stand (`refreshPartyVision`).
+ *
+ * Beneath the caller's gate, which has proved the visit the campaign's and
+ * holds its row `for update` until the commit, so the copy is of one state of
+ * the visit, whole, and no visit write lands between it and the borrow.
+ */
+export const borrowVisit = (sql: SqlClient.SqlClient, runId: EncounterRunId, visitId: string) =>
+  Effect.gen(function* () {
+    yield* sql`
+      insert into encounter_run_board (
+        run_id, board_columns, board_rows, feet_per_cell, fog_hidden, fog_start,
+        ambient, floor, party_seen
+      )
+      select ${runId}, board_columns, board_rows, feet_per_cell, fog_hidden, fog_hidden,
+             ambient, floor, party_seen
+      from level_visit where level_visit.id = ${visitId}
+    `;
+    yield* copyBoardParts(sql, VISIT_BOARD, visitId, RUN_BOARD, runId);
+  });
+
+/**
+ * Hand a borrowing fight's dungeon back to its visit, the other direction of
+ * `borrowVisit`: each door's state and reveal, each light's `lit` and each
+ * secret region's reveal as the fight leaves them, written onto the visit's
+ * part of the same id; the fight's fog as the visit's; and what the party has
+ * seen, the union of both. One `update … from` per table. A part the visit
+ * does not have, which cannot be (the fight's parts are the visit's copy), is
+ * written nowhere. Where the party stands is the caller's
+ * (`LevelVisits.handBack`).
+ *
+ * Beneath the caller's gate, which holds the visit row `for update`.
+ */
+export const returnBoardState = (
+  sql: SqlClient.SqlClient,
+  runId: EncounterRunId,
+  visitId: string,
+) =>
+  Effect.gen(function* () {
+    yield* sql`
+      update level_visit_wall
+      set door_state = fight.door_state, revealed = fight.revealed
+      from encounter_run_wall fight
+      where level_visit_wall.visit_id = ${visitId}
+        and fight.run_id = ${runId} and fight.id = level_visit_wall.id
+    `;
+    yield* sql`
+      update level_visit_light
+      set lit = fight.lit
+      from encounter_run_light fight
+      where level_visit_light.visit_id = ${visitId}
+        and fight.run_id = ${runId} and fight.id = level_visit_light.id
+    `;
+    yield* sql`
+      update level_visit_region
+      set revealed = fight.revealed
+      from encounter_run_region fight
+      where level_visit_region.visit_id = ${visitId}
+        and fight.run_id = ${runId} and fight.id = level_visit_region.id
+    `;
+    // The board sizes are one (the fight's board is the visit's copy), so a
+    // square means the same on both.
+    yield* sql`
+      update level_visit
+      set fog_hidden = fight.fog_hidden,
+          party_seen = array(
+            select square
+            from unnest(level_visit.party_seen || coalesce(fight.party_seen, '{}')) square
+            group by square order by square
+          ),
+          updated_at = now()
+      from encounter_run_board fight
+      where level_visit.id = ${visitId} and fight.run_id = ${runId}
+        and fight.board_columns = level_visit.board_columns
+        and fight.board_rows = level_visit.board_rows
     `;
   });
 

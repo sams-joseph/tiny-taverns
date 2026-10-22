@@ -422,6 +422,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 113, name: "level_visits" },
         { migration_id: 114, name: "level_visit_writes" },
         { migration_id: 115, name: "encounter_placement" },
+        { migration_id: 116, name: "visit_fights" },
       ]);
     }),
   );
@@ -547,6 +548,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 113, name: "level_visits" },
         { migration_id: 114, name: "level_visit_writes" },
         { migration_id: 115, name: "encounter_placement" },
+        { migration_id: 116, name: "visit_fights" },
       ]);
     }),
   );

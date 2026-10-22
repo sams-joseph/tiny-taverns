@@ -3,6 +3,7 @@ import {
   BOARD_COLUMNS_DEFAULT,
   BOARD_ROWS_DEFAULT,
   type AssistantTurnId,
+  type BoardSquare,
   CampaignId,
   type CharacterId,
   type CharacterSheet,
@@ -61,7 +62,15 @@ import {
   textArray,
   timestampColumns,
 } from "./rows.js";
-import { carryLevel, copyLevel, refreshPartyVision, runLevel, unstandable } from "./levelFights.js";
+import {
+  borrowVisit,
+  carryLevel,
+  copyLevel,
+  refreshPartyVision,
+  runLevel,
+  unstandable,
+} from "./levelFights.js";
+import { handBack, visitOfEncounter, visitPartySquares } from "./LevelVisits.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   campaignWritableById,
@@ -140,7 +149,8 @@ export const runColumns = (
   actor: Actor,
 ): Statement.Fragment =>
   sql`${playerRunColumns(sql, campaignId, actor)},
-    encounter_run.allow_hob_direct_writes, encounter_run.hob_autopilot_driver`;
+    encounter_run.allow_hob_direct_writes, encounter_run.hob_autopilot_driver,
+    encounter_run.level_visit_id`;
 
 /**
  * {@link runColumns} without the DM's two Hob switches, for a player's reads
@@ -245,6 +255,15 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
         new Conflict({ message: "that fight has already been picked up on another night" }),
       );
     }
+    // `encounter_run_level_visit_live`: a carried fight picked up while
+    // another fight is being played in the dungeon it borrowed.
+    if (error.reason.constraint.includes("level_visit_live")) {
+      return Effect.fail(
+        new Conflict({
+          message: "another fight is being played on that fight's level; end it first",
+        }),
+      );
+    }
     return Effect.fail(error);
   });
 
@@ -334,6 +353,8 @@ interface PartyRow {
 }
 
 interface RosterRow {
+  /** The roster line, whose instances' spots (`encounter_creature_spot`) say where they wait. */
+  readonly line_id: string;
   readonly count: number;
   readonly side: CombatantSide;
   /** The member of the Cast the line names, fighting as this creature; `null` for a line of creatures. */
@@ -676,6 +697,24 @@ export class EncounterRuns extends Context.Service<
                     const phase: EncounterRunPhase =
                       encounter.kind === "combat" ? "initiative" : "turns";
 
+                    // Which dungeon the fight is in. A campaign that has been
+                    // to the encounter's level (`0113_level_visits.ts`) plays
+                    // it there, as the party left it, and only while that
+                    // visit is on the table: a fresh copy of the level beside
+                    // it would fork the dungeon. Held from here to the commit,
+                    // so no visit write lands between the copy and the borrow.
+                    const visit = yield* visitOfEncounter(sql, campaignId, encounter.id);
+                    if (visit !== null && !visit.on_table) {
+                      return yield* new Conflict({
+                        message: `the party has been to ${visit.name}, and it is not on the table: put ${visit.name} on the table first, or reset it`,
+                      });
+                    }
+                    if (visit !== null && visit.borrowed) {
+                      return yield* new Conflict({
+                        message: `a fight is already being played in ${visit.name}; end it first`,
+                      });
+                    }
+
                     // An insert answers with its row; not getting one is a defect.
                     const run = yield* insert(
                       defined({
@@ -685,15 +724,21 @@ export class EncounterRuns extends Context.Service<
                         mode: encounter.kind,
                         phase,
                         visibility: payload.visibility,
+                        level_visit_id: visit?.id,
                       }),
                     ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
-                    // The fight's board: a copy of the encounter's level
+                    // The fight's board: a copy of the visit it borrows, doors,
+                    // lights, fog and what the party has seen as they stand
+                    // (`borrowVisit`); else a copy of the encounter's level
                     // (`0109_level_fights.ts`), taken here, so editing or
                     // deleting the level never moves this fight; or, for an
                     // encounter that names none, the plain grid. Every fight
                     // has a board.
-                    const onLevel = yield* copyLevel(sql, run.id, encounter.id, actor);
+                    const onLevel =
+                      visit !== null
+                        ? yield* Effect.as(borrowVisit(sql, run.id, visit.id), true)
+                        : yield* copyLevel(sql, run.id, encounter.id, actor);
                     if (!onLevel) {
                       yield* sql`
                         insert into encounter_run_board (
@@ -773,7 +818,8 @@ export class EncounterRuns extends Context.Service<
                     // the join so a line never drops; the create put only this
                     // campaign's NPCs on the roster.
                     const roster = yield* sql<RosterRow>`
-                      select encounter_creature.count as count, encounter_creature.side,
+                      select encounter_creature.id as line_id,
+                             encounter_creature.count as count, encounter_creature.side,
                              npc.id as npc_id,
                              creature.id as creature_id, coalesce(npc.name, creature.name) as name,
                              creature.size, creature.type,
@@ -796,8 +842,44 @@ export class EncounterRuns extends Context.Service<
                     // because a deterministic insert order is what makes the
                     // seed reproducible for a given roster.
 
+                    // Where each row asks to start, beside it: a party member
+                    // where their token stands on the visit the fight borrows,
+                    // a monster on its placed spot (`EncounterSpots.ts`).
+                    const tokens =
+                      visit === null
+                        ? new Map<string, BoardSquare>()
+                        : yield* visitPartySquares(sql, visit.id);
+                    const spots = onLevel
+                      ? yield* sql<{
+                          readonly encounter_creature_id: string;
+                          readonly ordinal: number;
+                          readonly board_column: number;
+                          readonly board_row: number;
+                        }>`
+                          select spot.encounter_creature_id, spot.ordinal,
+                                 spot.board_column, spot.board_row
+                          from encounter_creature_spot spot
+                          join encounter_creature line on line.id = spot.encounter_creature_id
+                          where line.encounter_id = ${encounter.id}
+                        `
+                      : [];
+                    const spotOf = new Map(
+                      spots.map(
+                        (spot) =>
+                          [
+                            `${spot.encounter_creature_id}:${String(spot.ordinal)}`,
+                            { column: spot.board_column, row: spot.board_row },
+                          ] as const,
+                      ),
+                    );
                     const seeded: Array<Record<string, unknown>> = [];
+                    const wants: Array<{
+                      readonly square: BoardSquare;
+                      readonly pc: boolean;
+                    } | null> = [];
                     for (const member of party) {
+                      const token = tokens.get(member.id);
+                      wants.push(token === undefined ? null : { square: token, pc: true });
                       seeded.push({
                         encounter_run_id: run.id,
                         character_id: member.id,
@@ -835,6 +917,8 @@ export class EncounterRuns extends Context.Service<
                     }
                     for (const line of roster) {
                       for (let index = 0; index < line.count; index += 1) {
+                        const spot = spotOf.get(`${line.line_id}:${String(index)}`);
+                        wants.push(spot === undefined ? null : { square: spot, pc: false });
                         seeded.push({
                           encounter_run_id: run.id,
                           character_id: null,
@@ -865,12 +949,16 @@ export class EncounterRuns extends Context.Service<
                         });
                       }
                     }
-                    // Every token starts on the board, the party's side down the
-                    // left edge and the foes down the right (`startingSquares`),
-                    // so the DM drags them where they belong rather than
-                    // putting each one down. Every row carries both keys, for
-                    // `sql.insert`'s first-row column list; with no board they
-                    // stay off it.
+                    // Every token starts on the board. A row with a square of
+                    // its own starts there when it can stand there: a party
+                    // member on its token's square (two of the party may share
+                    // one, as on the visit), a monster on its spot when nobody
+                    // stands there yet. The rest go as they always have, the
+                    // party's side down the left edge and the foes down the
+                    // right (`startingSquares`), so the DM drags them where
+                    // they belong rather than putting each one down. Every row
+                    // carries both keys, for `sql.insert`'s first-row column
+                    // list; with no board they stay off it.
                     const boards = yield* sql<{
                       readonly board_columns: number;
                       readonly board_rows: number;
@@ -883,16 +971,41 @@ export class EncounterRuns extends Context.Service<
                     for (const row of seeded) {
                       row.board_column = null;
                       row.board_row = null;
-                      sides[row.side as CombatantSide].push(row);
                     }
                     if (grid !== undefined) {
                       const board = { columns: grid.board_columns, rows: grid.board_rows };
                       // On a level, no token starts in rock or on a crate.
                       const level = onLevel ? yield* runLevel(sql, run.id) : null;
                       const blocked = level === null ? [] : unstandable(level.layout);
-                      const left = startingSquares(board, "party", sides.party.length, blocked);
+                      const at = (square: BoardSquare) =>
+                        square.row * board.columns + square.column;
+                      const unusable = new Set(blocked.map(at));
+                      const stood: Array<BoardSquare> = [];
+                      const held = new Set<number>();
+                      seeded.forEach((row, index) => {
+                        const want = wants[index] ?? null;
+                        const fits =
+                          want !== null &&
+                          want.square.column < board.columns &&
+                          want.square.row < board.rows &&
+                          !unusable.has(at(want.square)) &&
+                          (want.pc || !held.has(at(want.square)));
+                        if (fits) {
+                          row.board_column = want.square.column;
+                          row.board_row = want.square.row;
+                          stood.push(want.square);
+                          held.add(at(want.square));
+                        } else {
+                          sides[row.side as CombatantSide].push(row);
+                        }
+                      });
+                      const left = startingSquares(board, "party", sides.party.length, [
+                        ...blocked,
+                        ...stood,
+                      ]);
                       const right = startingSquares(board, "foes", sides.foes.length, [
                         ...blocked,
+                        ...stood,
                         ...left,
                       ]);
                       for (const [rows, squares] of [
@@ -923,6 +1036,9 @@ export class EncounterRuns extends Context.Service<
                       sessionId,
                       kind: "run-started",
                       encounterRunId: run.id,
+                      // On the visit's log too, so the DM's visit stream hears
+                      // that the dungeon is the fight's now.
+                      levelVisitId: visit?.id,
                       payload: {
                         encounterId: encounter.id,
                         encounterName: encounter.name,
@@ -970,6 +1086,10 @@ export class EncounterRuns extends Context.Service<
          *   to prevent. Nor is it `start`'s: an encounter is played once
          *   (`playthroughOf`), and a resumed carried fight is that one
          *   playthrough continuing, which is why this path is not refused by it.
+         * - **A fight that borrowed a level visit borrows it again**
+         *   (`level_visit_id` copied), and hands it back when it resolves. Its
+         *   board is the predecessor's, not the visit's as it stands tonight:
+         *   the fight is the dungeon until it ends.
          */
         resume: ({ actor, campaign: campaignId }, sessionId, payload) =>
           dieOnSqlError(
@@ -1006,6 +1126,10 @@ export class EncounterRuns extends Context.Service<
                       origin: from.origin,
                       assistant_turn_id: from.assistantTurnId,
                       continued_from: from.id,
+                      // Still in the dungeon it borrowed: the successor hands
+                      // it back when it resolves, as the predecessor would
+                      // have. A visit reset since leaves none.
+                      level_visit_id: from.levelVisitId,
                     }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
                     // The same fight on the same board: the predecessor's own
@@ -1159,6 +1283,7 @@ export class EncounterRuns extends Context.Service<
                       sessionId,
                       kind: "run-resumed",
                       encounterRunId: run.id,
+                      levelVisitId: from.levelVisitId ?? undefined,
                       payload: {
                         continuedFrom: from.id,
                         encounterName: from.encounterName,
@@ -1503,6 +1628,11 @@ export class EncounterRuns extends Context.Service<
          *
          * Idempotent: ending an ended run is a no-op that appends no second
          * event, so a retried request cannot put two endings in the log.
+         *
+         * This is the fight resolving, so a fight that borrowed a level visit
+         * hands the dungeon back here, in the same transaction
+         * (`LevelVisits.handBack`). A night that ends with the fight still on
+         * carries it instead (`Sessions`), and carrying hands nothing back.
          */
         end: ({ actor, campaign: campaignId }, sessionId, id) =>
           dieOnSqlError(
@@ -1535,9 +1665,14 @@ export class EncounterRuns extends Context.Service<
                     sessionId,
                     kind: "run-ended",
                     encounterRunId: id,
+                    levelVisitId: ended.levelVisitId ?? undefined,
                     payload: { round: current.round },
                     visibility: current.visibility,
                   });
+                  // Resolved in the dungeon it borrowed: the dungeon goes
+                  // back to the visit as the fight leaves it, and the table
+                  // with it.
+                  yield* handBack(sql, id, sessionId);
                   return ended;
                 }),
               )

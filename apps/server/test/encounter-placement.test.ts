@@ -581,8 +581,10 @@ describeLayer("encounter-placement", shared, (it) => {
           },
         ]);
 
-        // Once played, it is no longer waiting on the level.
+        // Once played, it is no longer waiting on the level. A fight on a
+        // level the party has been to is played on the visit on the table.
         const night = yield* openNight(table);
+        yield* putOnTable(table, visit);
         yield* as(jo.token, (client) =>
           client.runs.start({
             params: { campaignId: table, sessionId: night },

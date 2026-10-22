@@ -511,6 +511,64 @@ describe("starting a session", () => {
     ).toBe(false);
   });
 
+  it("offers a level the party has been to on the table before a fight starts there", async () => {
+    const levelId = "1e7e7000-0000-4000-8000-0000000000c1";
+    const visitId = "1e7e7000-0000-4000-8000-0000000000c2";
+    const visitOf = (onTable: boolean) => ({
+      id: visitId,
+      levelId,
+      name: "The Undercroft",
+      columns: 6,
+      rows: 4,
+      feetPerCell: 5,
+      onTable,
+      createdAt: "2026-10-22T19:00:00.000Z",
+      updatedAt: "2026-10-22T19:00:00.000Z",
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, {
+      status: 200,
+      body: page([{ ...encounter, levelId }]),
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [visitOf(false)],
+    });
+    server.routes.set(`PUT /campaigns/${campaignId}/table-visit`, {
+      status: 200,
+      body: {
+        ...visitOf(true),
+        level: { ambient: "dim", floor: [], walls: [], props: [], lights: [], regions: [] },
+        fog: [],
+        partySees: [],
+        partySeen: [],
+        tokens: [],
+        encounters: [],
+        fight: null,
+      },
+    });
+    server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
+    await screen.findByText("Put an encounter on the table");
+    // Off the table, the start would be refused, so it is not offered.
+    expect(screen.getByText(/is not on the table/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start the fight" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Put The Undercroft on the table" }));
+    await waitFor(() => expect(bodyOf(server, "PUT", "/table-visit")).toEqual({ visitId }));
+    expect(await screen.findByText(/where the party\s+stands/)).toBeInTheDocument();
+    const start = screen.getByRole("button", { name: "Start the fight" });
+    expect(start).toBeEnabled();
+    await userEvent.click(start);
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/sessions/${sessionId}/runs`)).toEqual({
+        encounterId,
+        visibility: "dm",
+      }),
+    );
+  });
+
   it("still goes from a cold campaign to a fight in one step", async () => {
     // The branch this change had to keep. A DM who goes straight to a fight
     // must not be made to open the night first — so the run dialog opens one on

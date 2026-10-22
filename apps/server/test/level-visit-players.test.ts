@@ -497,12 +497,11 @@ describeLayer("level-visit-players", shared, (it) => {
         );
         expect(yield* tableVisit(ilse, table)).toBeNull();
         yield* putOnTable(table, visit);
-        // A fight that borrows it: the table plays the fight. No shipped write
-        // borrows a visit yet, so the pointer is set as that start will set it.
+        // A fight on the visit's level borrows it: the table plays the fight.
         const encounter = yield* as(jo.token, (client) =>
           client.encounters.create({
             params: { campaignId: table.campaignId },
-            payload: { name: "In the undercroft", ready: true },
+            payload: { name: "In the undercroft", ready: true, levelId: visit.levelId! },
           }),
         );
         const fight = yield* as(jo.token, (client) =>
@@ -511,17 +510,18 @@ describeLayer("level-visit-players", shared, (it) => {
             payload: { encounterId: encounter.id },
           }),
         );
-        expect(yield* tableVisit(ilse, table)).not.toBeNull();
-        yield* sql(
-          (sql) =>
-            sql`update encounter_run set level_visit_id = ${visit.id} where id = ${fight.id}`,
-        );
+        expect(fight.levelVisitId).toBe(visit.id);
         expect(yield* tableVisit(ilse, table)).toBeNull();
         expect(yield* walk(ilse, table, visit, table.tamsin, 1, 0)).toEqual({
           tag: "Conflict",
           message: "a fight is being played on this level: the board is the fight's until it ends",
         });
-        yield* sql((sql) => sql`update encounter_run set ended_at = now() where id = ${fight.id}`);
+        yield* as(jo.token, (client) =>
+          client.runs.end({
+            params: { campaignId: table.campaignId, sessionId, runId: fight.id },
+            payload: {},
+          }),
+        );
         expect(yield* tableVisit(ilse, table)).not.toBeNull();
         // The night over: no visit again.
         yield* endNight(table, sessionId);

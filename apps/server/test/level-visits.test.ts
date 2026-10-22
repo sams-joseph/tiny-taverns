@@ -493,6 +493,12 @@ describeLayer("level-visits", shared, (it) => {
         const { jo, table } = yield* Fixture;
         const level = yield* aHall("Borrowed");
         const visit = yield* openAt(jo.token, table, level.id);
+        yield* as(jo.token, (client) =>
+          client.levelVisits.putOnTable({
+            params: { campaignId: table },
+            payload: { visitId: visit.id },
+          }),
+        );
         const sessionId = yield* night(table);
         const encounter = yield* as(jo.token, (client) =>
           client.encounters.create({
@@ -500,18 +506,14 @@ describeLayer("level-visits", shared, (it) => {
             payload: { name: "In the borrowed hall", ready: true, levelId: level.id },
           }),
         );
+        // On the level whose visit is on the table: the fight borrows it.
         const fight = yield* as(jo.token, (client) =>
           client.runs.start({
             params: { campaignId: table, sessionId },
             payload: { encounterId: encounter.id },
           }),
         );
-        // No shipped write borrows a visit yet (the fight's start learns it
-        // in a later phase), so the pointer is set as that start will set it.
-        yield* sql(
-          (sql) =>
-            sql`update encounter_run set level_visit_id = ${visit.id} where id = ${fight.id}`,
-        );
+        expect(fight.levelVisitId).toBe(visit.id);
         const params = { campaignId: table, sessionId, runId: fight.id };
 
         const refused = yield* failure(jo.token, (client) =>
@@ -521,7 +523,8 @@ describeLayer("level-visits", shared, (it) => {
         expect(refused.message).toContain("end it before resetting the level");
         expect((yield* rowsOf(visit.id)).visit).toBe(1);
 
-        // A second live fight on the same visit is unrepresentable.
+        // A second live fight on the same visit is refused by the start,
+        // and unrepresentable beneath it.
         const another = yield* as(jo.token, (client) =>
           client.encounters.create({
             params: { campaignId: table },
@@ -530,10 +533,24 @@ describeLayer("level-visits", shared, (it) => {
         );
         // On another night: a night has one fight on the table at a time.
         const otherNight = yield* night(table);
-        const second = yield* as(jo.token, (client) =>
+        const twice = yield* failure(jo.token, (client) =>
           client.runs.start({
             params: { campaignId: table, sessionId: otherNight },
             payload: { encounterId: another.id },
+          }),
+        );
+        expect(twice.tag).toBe("Conflict");
+        expect(twice.message).toContain("a fight is already being played in");
+        const elsewhere = yield* as(jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: table },
+            payload: { name: "Off the level", ready: true },
+          }),
+        );
+        const second = yield* as(jo.token, (client) =>
+          client.runs.start({
+            params: { campaignId: table, sessionId: otherNight },
+            payload: { encounterId: elsewhere.id },
           }),
         );
         expect(

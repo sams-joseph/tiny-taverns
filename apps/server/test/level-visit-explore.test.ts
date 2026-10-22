@@ -695,7 +695,15 @@ describeLayer("level-visit-explore", shared, (it) => {
     it.effect("refuses every write with a Conflict, and writes again once it ends", () =>
       Effect.gen(function* () {
         const { jo, table } = yield* Fixture;
-        const visit = yield* aVisit();
+        const opened = yield* aVisit();
+        // A fight on a level the party has been to is played on its visit,
+        // which is on the table.
+        const visit = yield* as(jo.token, (client) =>
+          client.levelVisits.putOnTable({
+            params: { campaignId: table },
+            payload: { visitId: opened.id },
+          }),
+        );
         const sessionId = (yield* as(jo.token, (client) =>
           client.sessions.create({ params: { campaignId: table }, payload: { number: 901 } }),
         )).id;
@@ -711,12 +719,7 @@ describeLayer("level-visit-explore", shared, (it) => {
             payload: { encounterId: encounter.id },
           }),
         );
-        // No shipped write borrows a visit yet (a later phase's start will),
-        // so the pointer is set as that start will set it.
-        yield* sql(
-          (sql) =>
-            sql`update encounter_run set level_visit_id = ${visit.id} where id = ${fight.id}`,
-        );
+        expect(fight.levelVisitId).toBe(visit.id);
         const seatId = seatOf(visit);
         const refused = [
           yield* failure(jo.token, (client) =>
@@ -755,7 +758,10 @@ describeLayer("level-visit-explore", shared, (it) => {
           yield* as(jo.token, (client) =>
             client.levelVisits.findById({ params: on(table, visit) }),
           ),
-        ).toEqual(visit);
+        ).toEqual({
+          ...visit,
+          fight: { runId: fight.id, sessionId, name: "Borrowing" },
+        });
 
         yield* as(jo.token, (client) =>
           client.runs.end({
@@ -763,13 +769,13 @@ describeLayer("level-visit-explore", shared, (it) => {
             payload: {},
           }),
         );
-        const opened = yield* as(jo.token, (client) =>
+        const reopened = yield* as(jo.token, (client) =>
           client.levelVisits.updateDoor({
             params: { ...on(table, visit), wallId: DOOR },
             payload: { doorState: "open" },
           }),
         );
-        expect(opened.level.walls.find((wall) => wall.id === DOOR)?.doorState).toBe("open");
+        expect(reopened.level.walls.find((wall) => wall.id === DOOR)?.doorState).toBe("open");
       }),
     );
   });

@@ -134,3 +134,12 @@ export const VisitPlacementUpdatedPayload = Schema.Struct({
   name: Schema.String,
 });
 export type VisitPlacementUpdatedPayload = typeof VisitPlacementUpdatedPayload.Type;
+
+/**
+ * `visit-returned`: a fight that borrowed the visit ended resolved and handed
+ * the dungeon back, by the visit's name (the level's when it was opened):
+ * doors, lights, reveals, fog and what the party saw are the fight's, and the
+ * party stands where the fight left it.
+ */
+export const VisitReturnedPayload = Schema.Struct({ name: Schema.String });
+export type VisitReturnedPayload = typeof VisitReturnedPayload.Type;

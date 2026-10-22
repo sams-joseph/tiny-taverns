@@ -6,6 +6,7 @@ import {
   Conflict,
   CurrentActor,
   EncounterRunId,
+  LevelVisitId,
   NotFound,
   Session,
   type SessionCreate,
@@ -203,13 +204,19 @@ export class Sessions extends Context.Service<
       const carryRun = SqlSchema.findOneOption({
         Request: Schema.toType(SessionId),
         Result: fromColumns(
-          Schema.Struct({ id: EncounterRunId, round: Schema.Int, encounterName: Schema.String }),
+          Schema.Struct({
+            id: EncounterRunId,
+            round: Schema.Int,
+            encounterName: Schema.String,
+            levelVisitId: Schema.NullOr(LevelVisitId),
+          }),
         ),
         execute: (sessionId) => sql`
           update encounter_run
           set ended_at = now(), ended_reason = 'carried', updated_at = now()
           where encounter_run.session_id = ${sessionId} and encounter_run.ended_at is null
-          returning encounter_run.id, encounter_run.round, encounter_run.encounter_name
+          returning encounter_run.id, encounter_run.round, encounter_run.encounter_name,
+                    encounter_run.level_visit_id
         `,
       });
       const carryLiveRun = (session: Session) =>
@@ -233,6 +240,10 @@ export class Sessions extends Context.Service<
                 sessionId: session.id,
                 kind: "run-carried",
                 encounterRunId: run.id,
+                // A borrowing fight's visit hears it too: carried, nothing is
+                // handed back, and the visit is not the fight's again until
+                // the fight is picked up (`EncounterRuns.resume`).
+                levelVisitId: run.levelVisitId ?? undefined,
                 payload: { round: run.round, encounterName: run.encounterName },
                 visibility: session.visibility,
               });

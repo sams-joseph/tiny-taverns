@@ -39,6 +39,12 @@ export interface VisitBoardProps {
   readonly diagonals: DiagonalRule;
   /** Draw the level as the party sees it now, and what it has explored. */
   readonly partyView: boolean;
+  /**
+   * A fight is being played on the visit (`LevelVisit.fight`): the board is
+   * the fight's until it ends, so nothing here writes. The level is drawn and
+   * nothing drags, switches or paints.
+   */
+  readonly frozen: boolean;
   /** The part of the stage no panel covers. */
   readonly freeArea: (canvas: DOMRect) => PlaneRect;
   /** Stand a seat's token on a square; settles once the server answers. */
@@ -79,11 +85,16 @@ const placedId = (creature: { readonly encounterCreatureId: string; readonly ord
  * *Party's view* draws the level as the party sees it, so the DM watches the
  * vision move as a door opens or a token walks: the DM's whole level, read
  * through what the party sees now and has explored.
+ *
+ * While a fight borrows the visit (`frozen`) the board is the fight's: it is
+ * drawn as the party left it and nothing on it writes, since the server would
+ * refuse every write.
  */
 export function VisitBoard({
   visit,
   diagonals,
   partyView,
+  frozen,
   freeArea,
   onMove,
   onFog,
@@ -93,7 +104,8 @@ export function VisitBoard({
   onOpenEncounter,
 }: VisitBoardProps) {
   const [chosen, setChosen] = useState<BoardTool>("move");
-  const tool = chosen;
+  // Frozen, only the hand: no fog brush to pick up.
+  const tool = frozen ? "move" : chosen;
   const [selectedId, setSelectedId] = useState<CampaignCharacterId>();
   const { columns, rows, feetPerCell, fog, level } = visit;
   const board = useMemo(
@@ -207,7 +219,7 @@ export function VisitBoard({
               <BoardToolPicker
                 tool={tool}
                 offered={VISIT_TOOLS}
-                disabled={false}
+                disabled={frozen}
                 onTool={setChosen}
                 shape="sphere"
                 feet={0}
@@ -238,7 +250,7 @@ export function VisitBoard({
             activeId={null}
             feetLeftOf={() => undefined}
             diagonals={diagonals}
-            movable={(token) => token.kind === "seat" && tool === "move"}
+            movable={(token) => !frozen && token.kind === "seat" && tool === "move"}
             names="all"
             fog={{ squares: fogTool.fog, veil: "dim" }}
             rangeShown={false}
@@ -257,7 +269,7 @@ export function VisitBoard({
               level={level}
               columns={columns}
               rows={rows}
-              disabled={false}
+              disabled={frozen}
               onDoor={onDoor}
               onLight={onLight}
               onRegion={onRegion}
