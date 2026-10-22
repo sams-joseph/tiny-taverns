@@ -3,7 +3,6 @@ import {
   type BoardSquare,
   type EncounterId,
   type EncounterRunId,
-  LEVEL_BOARD_CELL_PX,
   type LevelLayout,
   propFootprint,
   RunBoardLevel,
@@ -17,7 +16,7 @@ import { levelOwned } from "./visibility.js";
 /**
  * A fight's copy of its level (`0109_level_fights.ts`): the copy at start and
  * at resume, the board column that reads it back, and what a move or a start
- * needs of it. The DM's live writes to it are `BattleMaps`'.
+ * needs of it. The DM's live writes to it are `RunBoards`'.
  *
  * Every statement here is beneath its caller's gate, which has already proved
  * the run (and, at start, the encounter) the creator's in this transaction.
@@ -26,11 +25,11 @@ import { levelOwned } from "./visibility.js";
 /**
  * Copy the encounter's level onto a new fight's board, in one
  * `insert … select` per table: the board row with the level's size, scale,
- * ambient and floor (no picture, the plain grid), then its walls, props,
- * lights and regions with their ids and order. The level is read through the
- * encounter's own pointer and the owner's predicate, so a pointer can reach
- * only the creator's level. Answers whether a level was copied: `false` for
- * an encounter that names none, whose fight gets the picture board instead.
+ * ambient and floor, then its walls, props, lights and regions with their ids
+ * and order. The level is read through the encounter's own pointer and the
+ * owner's predicate, so a pointer can reach only the creator's level. Answers
+ * whether a level was copied: `false` for an encounter that names none, whose
+ * fight gets the plain grid instead.
  */
 export const copyLevel = (
   sql: SqlClient.SqlClient,
@@ -49,11 +48,9 @@ export const copyLevel = (
     const owned = sql`level.id = ${levelId} and ${levelOwned(sql, actor)}`;
     yield* sql`
       insert into encounter_run_board (
-        run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
-        cell_px, offset_x_px, offset_y_px, ambient, floor
+        run_id, board_columns, board_rows, feet_per_cell, ambient, floor
       )
-      select ${runId}, null, 'square', level.columns, level.rows, level.feet_per_cell,
-             ${LEVEL_BOARD_CELL_PX}, 0, 0, level.ambient, level.floor
+      select ${runId}, level.columns, level.rows, level.feet_per_cell, level.ambient, level.floor
       from level
       where ${owned}
     `;
@@ -99,8 +96,8 @@ export const copyLevel = (
  * Carry a carried fight's level to the fight that resumes it: the
  * predecessor's own copy, doors and lights as the DM left them, one
  * `insert … select` per table. The board row (with `ambient` and `floor`) is
- * the caller's copy of the predecessor's board. A picture fight has no parts,
- * and each statement copies none.
+ * the caller's copy of the predecessor's board. A fight on the plain grid has
+ * no parts, and each statement copies none.
  */
 export const carryLevel = (
   sql: SqlClient.SqlClient,
@@ -138,7 +135,7 @@ export const carryLevel = (
 
 /**
  * The fight's level as one `json` column, `level`, in the wire's spelling
- * (`RunBoardLevel`), or `null` on a picture board. `encounter_run_board` must
+ * (`RunBoardLevel`), or `null` on the plain grid. `encounter_run_board` must
  * be in scope. **The creator's board read only**: no player read names it.
  */
 export const levelColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
@@ -178,7 +175,7 @@ export const levelColumn = (sql: SqlClient.SqlClient): Statement.Fragment => sql
 
 const decodeLevel = Schema.decodeUnknownEffect(Schema.NullOr(RunBoardLevel));
 
-/** The fight's level as the geometry reads it, or `null` on a picture board or none. */
+/** The fight's level as the geometry reads it, or `null` on the plain grid or no board. */
 export const runLevel = (sql: SqlClient.SqlClient, runId: EncounterRunId) =>
   Effect.gen(function* () {
     const rows = yield* sql<{

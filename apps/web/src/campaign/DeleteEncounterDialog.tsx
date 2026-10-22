@@ -17,8 +17,9 @@ import { SaveFailure } from "../ui/form";
  * Deleting an encounter: `DELETE /campaigns/:c/encounters/:e`.
  *
  * The copy says what goes and what stays in the server's terms
- * (`repo/Encounters.ts`, `remove`): the roster and the battle map cascade with
- * it; attached notes are detached, not deleted; fights already run keep their
+ * (`repo/Encounters.ts`, `remove`): the roster cascades with it; its level
+ * stays in the creator's Library; attached notes are detached, not deleted;
+ * fights already run keep their
  * record, and one on the table now keeps its board. No typed-name gate: an
  * encounter is a template a DM rebuilds in a minute, and nothing played is lost.
  *
@@ -67,7 +68,8 @@ export function DeleteEncounterDialog({
 
         <div className="flex flex-col gap-3 px-gutter py-3">
           <p className="text-body-s leading-body text-muted-foreground">
-            The encounter, its creature list, and its battle map and picture are deleted.
+            The encounter and its creature list are deleted.
+            {encounter.levelId !== null && " Its level stays in your Library."}
           </p>
           <p className="text-body-s leading-body text-muted-foreground">
             {attachedNotes > 0

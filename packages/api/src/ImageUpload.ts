@@ -30,7 +30,6 @@ export const ImageSubject = Schema.Literals([
   "npc",
   "campaign",
   "sharedWorld",
-  "battleMap",
   "location",
 ]);
 export type ImageSubject = typeof ImageSubject.Type;
@@ -43,7 +42,6 @@ export const ImageKindName = Schema.Literals([
   "npcBanner",
   "campaign",
   "sharedWorld",
-  "battleMap",
   "location",
 ]);
 export type ImageKindName = typeof ImageKindName.Type;
@@ -56,14 +54,13 @@ export const IMAGE_KINDS_OF_SUBJECT: {
   npc: ["npc", "npcBanner"],
   campaign: ["campaign"],
   sharedWorld: ["sharedWorld"],
-  battleMap: ["battleMap"],
   location: ["location"],
 };
 
 /**
  * Each kind's width over height, which a crop is drawn at: a square plate,
- * a 2:1 banner band, a 3:2 cover. `null` for a battle map, which is never
- * cropped, because its grid is measured against the whole picture. The
+ * a 2:1 banner band, a 3:2 cover. `null` for a place's picture, which is
+ * never cropped, because its pins are fractions of the whole picture. The
  * server's variant sizes agree with these (`images/kinds.ts`, pinned by its
  * test).
  */
@@ -74,7 +71,6 @@ export const IMAGE_ASPECT: { readonly [K in ImageKindName]: number | null } = {
   npcBanner: 2,
   campaign: 3 / 2,
   sharedWorld: 3 / 2,
-  battleMap: null,
   location: null,
 };
 
@@ -131,7 +127,7 @@ export type ImageUploadTicket = typeof ImageUploadTicket.Type;
 /**
  * Make the uploaded file the subject's picture, once per kind named. A kind
  * with no `crop` is cut the way a drawn picture is (centred, or for a bust
- * from the top); a battle map is never cut. Kinds the subject does not show,
+ * from the top); a place's picture is never cut. Kinds the subject does not show,
  * or a kind named twice, are refused.
  */
 export const ImageUploadApply = Schema.Struct({

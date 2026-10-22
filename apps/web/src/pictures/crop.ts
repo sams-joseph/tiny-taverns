@@ -13,7 +13,7 @@ import type { ImageCrop } from "@taverns/api";
  * upright picture, which is what `renderUpload` cuts).
  */
 
-export interface PictureSize {
+export interface PlaneSize {
   readonly width: number;
   readonly height: number;
 }
@@ -30,7 +30,7 @@ export const MAX_ZOOM = 4;
 export const CENTRED: CropView = { zoom: 1, centerX: 0.5, centerY: 0.5 };
 
 /** The crop's width and height at `zoom`, as fractions of the picture. */
-const spanOf = (picture: PictureSize, aspect: number, zoom: number) => {
+const spanOf = (picture: PlaneSize, aspect: number, zoom: number) => {
   const pictureAspect = picture.width / picture.height;
   const widest =
     pictureAspect > aspect
@@ -42,7 +42,7 @@ const spanOf = (picture: PictureSize, aspect: number, zoom: number) => {
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** `view`, with its zoom in range and its centre moved so the crop stays inside. */
-export const clampView = (picture: PictureSize, aspect: number, view: CropView): CropView => {
+export const clampView = (picture: PlaneSize, aspect: number, view: CropView): CropView => {
   const zoom = clamp(view.zoom, 1, MAX_ZOOM);
   const span = spanOf(picture, aspect, zoom);
   return {
@@ -53,7 +53,7 @@ export const clampView = (picture: PictureSize, aspect: number, view: CropView):
 };
 
 /** The crop a view shows. */
-export const cropOf = (picture: PictureSize, aspect: number, view: CropView): ImageCrop => {
+export const cropOf = (picture: PlaneSize, aspect: number, view: CropView): ImageCrop => {
   const clamped = clampView(picture, aspect, view);
   const span = spanOf(picture, aspect, clamped.zoom);
   return {
@@ -69,7 +69,7 @@ export const cropOf = (picture: PictureSize, aspect: number, view: CropView): Im
  * right moves the picture right, which shows more of its left.
  */
 export const panBy = (
-  picture: PictureSize,
+  picture: PlaneSize,
   aspect: number,
   view: CropView,
   frameDx: number,
@@ -84,7 +84,7 @@ export const panBy = (
 };
 
 /** Zoom about the frame's centre. */
-export const zoomTo = (picture: PictureSize, aspect: number, view: CropView, zoom: number) =>
+export const zoomTo = (picture: PlaneSize, aspect: number, view: CropView, zoom: number) =>
   clampView(picture, aspect, { ...view, zoom });
 
 /**

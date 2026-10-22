@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { BattleMaps } from "./BattleMaps.js";
+import { RunBoards } from "./RunBoards.js";
 import { Campaigns } from "./Campaigns.js";
 import { Combatants } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
@@ -48,7 +48,7 @@ import { Spells } from "./Spells.js";
 export interface TableFightRead {
   readonly sessionId: SessionId;
   readonly run: EncounterRun;
-  /** The fight's board, or `null` for a fight with none. Its picture is not signed here. */
+  /** The fight's board, or `null` for a fight with none. */
   readonly board: EncounterRunBoard | null;
   readonly diagonals: DiagonalRule;
   /** In initiative order, as `Combatants.list` answers it and `nextTurn` walks it. */
@@ -146,7 +146,7 @@ export class TableFight extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const runs = yield* EncounterRuns;
       const combatants = yield* Combatants;
-      const maps = yield* BattleMaps;
+      const boards = yield* RunBoards;
       const scenes = yield* RunScenes;
       const campaigns = yield* Campaigns;
       const creatures = yield* Creatures;
@@ -176,7 +176,7 @@ export class TableFight extends Context.Service<
           const [rows, board, scene, campaign, fog] = yield* Effect.all(
             [
               combatants.list(dm, sessionId, runId),
-              maps.forRun(dm, sessionId, runId),
+              boards.forRun(dm, sessionId, runId),
               scenes.read(dm, sessionId, runId),
               campaigns.findById(dm.campaign).pipe(as),
               dieOnSqlError(fogged(runId)),
@@ -268,15 +268,15 @@ export class TableFight extends Context.Service<
 
   /**
    * The layer Hob holds: over the **bare** live repositories, which sign
-   * nothing (no `ImageUrls` reaches them), so a board's picture and a seat's
-   * portrait never become a bearer URL a model could repeat. The handlers'
+   * nothing (no `ImageUrls` reaches them), so a seat's portrait never
+   * becomes a bearer URL a model could repeat. The handlers'
    * signed copies are `Layer.fresh` in `app.ts` so these stay unsigned.
    */
   static readonly unsigned = this.layer.pipe(
     Layer.provide([
       EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
       Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
-      BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
+      RunBoards.layer.pipe(Layer.provide(LiveEvents.layer)),
       RunScenes.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
       Creatures.layer,

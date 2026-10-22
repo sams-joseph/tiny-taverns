@@ -213,7 +213,7 @@ export type NpcTurnProposalStep = typeof NpcTurnProposalStep.Type;
  * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
  * `sharedWorld` (the asker's new world), a `levelUp` (the next level of a
  * character the asker owns), a `location` (a place for the asker's Library,
- * with the places inside it), a `level` (a battle map for the asker's
+ * with the places inside it), a `level` (a fight's board for the asker's
  * Library, as labels and a seed), a `partyMove` (the party travelling to a place
  * at the table) and an `npcTurn` (a monster's turn in a fight,
  * which nothing keeps yet). The union is discriminated on `target` for the reason
@@ -348,11 +348,20 @@ export const HobProposal = Schema.Union([
      */
     tags: Schema.Array(Schema.String),
     /**
-     * The line the encounter's battle map is drawn from, when Hob wrote one;
-     * absent when it did not, and on every proposal made before there was one.
-     * The card shows it, because accepting draws the map from it.
+     * One line on what the place looks like, when Hob wrote one: the
+     * description of the level the accept makes with the encounter. Absent
+     * when it did not.
      */
     setting: Schema.optional(Schema.String),
+    /**
+     * The encounter's level as labels and a seed, when Hob laid one out: the
+     * `proposeLevel` spec, named after the encounter, with the setting line as
+     * its description. The card draws its preview from it, and the accept
+     * generates it (`generateLevel`) and writes it through the level's own
+     * statements instead of making an empty level. Absent when Hob gave no
+     * rooms, and on every proposal made before an encounter could carry one.
+     */
+    level: Schema.optional(LevelSpec),
     /**
      * The encounter's kind and its DM prep, as the accept writes them. Absent
      * on every proposal made before Hob could offer them: those were fights

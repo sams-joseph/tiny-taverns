@@ -1,5 +1,5 @@
 import { IMAGE_UPLOAD_TYPES, type ImageUploadType, MAX_IMAGE_UPLOAD_BYTES } from "@taverns/api";
-import type { PictureSize } from "./crop";
+import type { PlaneSize } from "./crop";
 
 /**
  * What the browser does with a chosen file before it is sent.
@@ -17,7 +17,7 @@ export const MAX_EDGE = 4096;
 
 export type UploadPlan =
   | { readonly _tag: "asIs"; readonly type: ImageUploadType }
-  | { readonly _tag: "redraw"; readonly size: PictureSize };
+  | { readonly _tag: "redraw"; readonly size: PlaneSize };
 
 const isUploadType = (type: string): type is ImageUploadType =>
   (IMAGE_UPLOAD_TYPES as ReadonlyArray<string>).includes(type);
@@ -47,7 +47,7 @@ export const planUpload = (file: {
 export interface PreparedPicture {
   readonly blob: Blob;
   readonly type: ImageUploadType;
-  readonly size: PictureSize;
+  readonly size: PlaneSize;
   readonly previewUrl: string;
 }
 

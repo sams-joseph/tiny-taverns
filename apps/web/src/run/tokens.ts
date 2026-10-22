@@ -3,7 +3,7 @@ import {
   type Combatant,
   type CombatantId,
   type DiagonalRule,
-  type PictureRect,
+  type PlaneRect,
   feetBetween,
 } from "@taverns/api";
 import { outOfTheFight } from "./load";
@@ -14,8 +14,8 @@ import { outOfTheFight } from "./load";
  *
  * Everything here is about squares on the fight's own board
  * (`EncounterRunBoard`) and the feet each one is; where a square falls on the
- * picture, and how far apart two are, is the board's one geometry
- * (`BattleMap.ts`). The runner counts a diagonal by the campaign's
+ * plane, and how far apart two are, is the board's one geometry
+ * (`Board.ts`). The runner counts a diagonal by the campaign's
  * `diagonalRule`, as the server counts a move.
  */
 
@@ -97,9 +97,9 @@ export const moveLine = ({
   return `${name} moved ${String(feet)} ft${past}`;
 };
 
-/** A rectangle in the picture's pixels as percentages of the plane it is drawn on. */
+/** A rectangle in the board's plane as percentages of the plane. */
 export const percentOf = (
-  rect: PictureRect,
+  rect: PlaneRect,
   plane: { readonly width: number; readonly height: number },
 ): { left: string; top: string; width: string; height: string } => ({
   left: `${String((rect.x / plane.width) * 100)}%`,

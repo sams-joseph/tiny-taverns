@@ -1,5 +1,4 @@
 import { Schema } from "effect";
-import { EncounterSetting } from "./BattleMap.js";
 import { CombatantSide } from "./Combatant.js";
 import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
@@ -152,10 +151,12 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   lastPlayed: Schema.NullOr(EncounterPlayed),
   /**
    * The level a fight on it is played on: one of the campaign's creator's own
-   * Library levels, or `null` for the battle map's picture board. A fight
-   * copies the level when it starts (`LevelFight.ts`), so editing or deleting
-   * the level never moves a fight in progress; deleting it sets this `null`.
-   * The creator's alone: `PlayerEncounter` has no such field.
+   * Library levels, or `null` for the plain grid (`Board.ts`). Every encounter
+   * starts on one, made with it (`EncounterCreate`); the DM may pick another
+   * or clear it. A fight copies the level when it starts (`LevelFight.ts`),
+   * so editing or deleting the level never moves a fight in progress;
+   * deleting it sets this `null`. The creator's alone: `PlayerEncounter` has
+   * no such field.
    */
   levelId: Schema.NullOr(LevelId),
   /**
@@ -167,6 +168,16 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
+
+/**
+ * The bound on the setting line, shared by the form, the schema and Hob's
+ * tool: one line on what the place looks like, which becomes the description
+ * of the level made with the encounter (well inside `LEVEL_DESCRIPTION_MAX`).
+ */
+export const ENCOUNTER_SETTING_MAX = 300;
+
+/** The setting line as the wire carries it. A blank is stored as none. */
+export const EncounterSetting = Schema.String.check(Schema.isMaxLength(ENCOUNTER_SETTING_MAX));
 
 const tags = Schema.Array(Tag).check(Schema.isBetweenLength(0, 16));
 
@@ -189,11 +200,10 @@ export const EncounterTreasure = prose(ENCOUNTER_TREASURE_MAX);
  * DM's plan for the scene, and it reaches the wire only through the creator's
  * prep reads (`encounterPrep`), on a table no player read touches
  * (`0060_encounter_prep.ts`). It is written through the encounter's own create
- * and update, as the map's setting line is.
+ * and update.
  *
- * The drawing's "where" line is not here: it is the battle map's setting line
- * (`BattleMap.setting`), already the creator's alone and already written on
- * the encounter's form.
+ * What the place looks like is not here: it is the description of the
+ * encounter's level, the creator's own Library object.
  */
 export class EncounterPrep extends Schema.Class<EncounterPrep>("EncounterPrep")({
   encounterId: EncounterId,
@@ -273,12 +283,14 @@ export const rosterLineKey = (line: {
 }): string => (line.npcId === undefined ? `creature:${line.creatureId}` : `npc:${line.npcId}`);
 
 /**
- * `setting` is the one line the encounter's battle map is drawn from
- * (`BattleMap.ts`). It is written here, on the encounter's form, because the
- * map is made with the encounter and drawn once as it is made; but it is stored
- * on the map and read back only through the creator's map read, never on
- * the `encounter` row, whose shared ones a player may read. `tactics`,
- * `treasure` and `challenge` are the same arrangement over `EncounterPrep`.
+ * **Every encounter starts on a level.** Without a `levelId`, the create also
+ * makes an empty level in the creator's Library, named after the encounter, at
+ * the plain board's size and scale (`BOARD_COLUMNS_DEFAULT`), with `setting`
+ * as its description, and links it, in the same transaction and through the
+ * level's own create (`origin` and the turn are the encounter's). With a
+ * `levelId`, that level is linked and `setting` is not stored anywhere.
+ * `setting` is never on the `encounter` row, whose shared ones a player may
+ * read. `tactics`, `treasure` and `challenge` are written over `EncounterPrep`.
  */
 export const EncounterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
@@ -286,10 +298,12 @@ export const EncounterCreate = Schema.Struct({
   kind: Schema.optional(EncounterKind),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
+  /** What the place looks like: the new level's description. A blank is none. */
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
   /**
    * The level a fight on it is played on: one of the creator's own Library
-   * levels. Any other account's level is `NotFound`. Absent or `null` is none.
+   * levels. Any other account's level is `NotFound`. Absent or `null` makes
+   * a new, empty one.
    */
   levelId: Schema.optional(Schema.NullOr(LevelId)),
   tactics: Schema.optional(EncounterTactics),
@@ -316,8 +330,6 @@ export const EncounterUpdate = Schema.Struct({
   kind: Schema.optional(EncounterKind),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
-  /** The map's setting line; `null` or a blank clears it. Editing it redraws nothing. */
-  setting: Schema.optional(Schema.NullOr(EncounterSetting)),
   /**
    * The level a fight on it is played on, one of the creator's own; `null`
    * takes it off. A fight already started keeps the copy it took.

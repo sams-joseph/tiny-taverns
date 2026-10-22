@@ -34,12 +34,6 @@ const database = migratedDatabase("taverns_test_schema");
 const NOT_CONTENT = [
   "ability_score",
   "account",
-  // An encounter's battle map: part of its encounter, the creator's alone
-  // through the creator proof, and its provenance is the encounter's. See
-  // 0057_battle_maps.ts.
-  "battle_map",
-  // A battle map's picture: who may see it is exactly who may read the map.
-  "battle_map_image",
   // A seat's hook and secret: the DM's own notes about the character in it,
   // the creator's alone through the creator proof, reached only by walking its
   // seat, and written by nobody but the creator. See 0063_seat_prep.ts.
@@ -89,9 +83,9 @@ const NOT_CONTENT = [
   // encounter, the creator's alone through the creator proof, and its
   // provenance is the encounter's. See 0060_encounter_prep.ts.
   "encounter_prep",
-  // A fight's board: its run's copy of the grid and a pointer to its map, the
-  // creator's alone through the creator proof like the map it came from. See
-  // 0058_encounter_run_boards.ts.
+  // A fight's board: its run's copy of its level or the plain grid, the
+  // creator's alone through the creator proof like the run it belongs to. See
+  // 0058_encounter_run_boards.ts and 0109_level_fights.ts.
   "encounter_run_board",
   // A running scene's log of checks and saves, and the scene itself — its
   // beats, its challenge's snapshot, the DM's notes: copied from and sitting

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { apiUrl } from "../api/client";
-import { drawnCover, drawnMapPicture } from "../campaign/campaign.fixtures";
+import { drawnCover } from "../campaign/campaign.fixtures";
 import { HobCover } from "./HobCover";
 
 /**
@@ -62,35 +62,5 @@ describe("HobCover", () => {
       />,
     );
     expect(container.querySelector("img")).not.toBeNull();
-  });
-
-  it("draws a battle map full size, and takes what is laid over it away with it", () => {
-    const link = <a href="/encounter">Battle map</a>;
-    const { container, rerender } = render(
-      <HobCover image={drawnMapPicture} pending={false} shape="strip">
-        {link}
-      </HobCover>,
-    );
-    const img = container.querySelector("img")!;
-    expect(img.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
-    expect(container.firstElementChild).toHaveClass("aspect-24/9");
-    expect(screen.getByRole("link", { name: "Battle map" })).toBeInTheDocument();
-
-    fireEvent.error(img);
-    expect(container.innerHTML).toBe("");
-
-    rerender(
-      <HobCover image={null} pending={false} shape="whole">
-        {link}
-      </HobCover>,
-    );
-    expect(screen.queryByRole("link")).toBeNull();
-    rerender(
-      <HobCover image={null} pending shape="whole">
-        {link}
-      </HobCover>,
-    );
-    expect(container.firstElementChild).toHaveClass("aspect-3/2");
-    expect(screen.getByRole("status")).toHaveTextContent("Hob is drawing…");
   });
 });

@@ -1,6 +1,5 @@
-import type { PictureRect } from "@taverns/api";
+import { BOARD_CELL_PX, type PlaneRect, boardPlane, runLevelLayout } from "@taverns/api";
 import { cn } from "@taverns/ui";
-import { battleMapPlane, runLevelLayout } from "@taverns/api";
 import {
   type ReactNode,
   createContext,
@@ -16,12 +15,12 @@ import { LevelBackdrop } from "./LevelBackdrop";
 import { LevelSwitches } from "./LevelSwitches";
 import { createPortal } from "react-dom";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
-import { BattleMapBoard } from "../campaign/BattleMapBoard";
 import { BoardCanvas, type Camera } from "./BoardCanvas";
 import { centreOf } from "./canvas";
 import { AreaBanner, AreaLayer, BoardToolPicker, ToolSurface } from "./BoardTools";
 import { CameraBar } from "./CameraBar";
 import { FogActions, FogBrush } from "./Fog";
+import { GridBoard } from "./GridBoard";
 import { useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens } from "./RunTokens";
 
@@ -94,7 +93,7 @@ export function RunStage({
   readonly panel: ReactNode;
   readonly rolls: ReactNode;
   /** The board, told which part of the stage no panel covers. */
-  readonly board: (freeArea: (canvas: DOMRect) => PictureRect) => ReactNode;
+  readonly board: (freeArea: (canvas: DOMRect) => PlaneRect) => ReactNode;
 }) {
   const top = useRef<HTMLDivElement>(null);
   const left = useRef<HTMLDivElement>(null);
@@ -104,7 +103,7 @@ export function RunStage({
 
   // Between the two columns, under the top row and over the turn card, inset
   // as far as the HUD is from the stage's edge.
-  const freeArea = useCallback((canvas: DOMRect): PictureRect => {
+  const freeArea = useCallback((canvas: DOMRect): PlaneRect => {
     const t = top.current?.getBoundingClientRect();
     const l = left.current?.getBoundingClientRect();
     const r = right.current?.getBoundingClientRect();
@@ -282,7 +281,7 @@ const hudScroller = "pointer-events-auto overflow-y-auto overscroll-contain";
 export function RunBoardStage({
   freeArea,
   ...props
-}: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
+}: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
   const { resource, reload, over } = props;
   const { board, gridShown, withBoard, tools, fogTool } = useRunBoard(props, true);
   const camera = useRef<Camera | null>(null);
@@ -298,7 +297,7 @@ export function RunBoardStage({
     (combatant) => combatant.id === props.tokens.activeId,
   );
   const activeAt =
-    board === null || active?.position == null ? undefined : centreOf(board, active.position);
+    board === null || active?.position == null ? undefined : centreOf(active.position);
   const activeKey = activeAt === undefined ? undefined : `${active?.id ?? ""}`;
   // Following the turn: the view opens on whoever is up, and once the DM has
   // moved it, the next one up is brought into view when they are not in it.
@@ -323,7 +322,7 @@ export function RunBoardStage({
   }
   if (board === null || withBoard === undefined) return null;
 
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   // A level fight draws its level under the board where the browser can; the
   // board box over it is then clear, its grid the renderer's.
   const drawsLevel = layout !== null && levelDrawable;
@@ -331,7 +330,7 @@ export function RunBoardStage({
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
         plane={plane}
-        cellPx={board.alignment.cellPx}
+        cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
         focus={activeAt}
         camera={camera}
@@ -340,7 +339,7 @@ export function RunBoardStage({
             ? (view) => (
                 <LevelBackdrop
                   layout={layout}
-                  cellPx={board.alignment.cellPx}
+                  cellPx={BOARD_CELL_PX}
                   view={view}
                   grid={gridShown}
                   onFailed={() => setLevelDrawable(false)}
@@ -383,8 +382,9 @@ export function RunBoardStage({
           </InStageCorner>
         )}
       >
-        <BattleMapBoard
-          map={{ ...board, grid: gridShown && !drawsLevel ? "square" : "none" }}
+        <GridBoard
+          board={board}
+          grid={gridShown && !drawsLevel}
           className={cn("box-content", drawsLevel && "border-transparent bg-transparent")}
         >
           {tools.pinned !== null && <AreaLayer board={board} area={tools.pinned} state="pinned" />}
@@ -412,7 +412,7 @@ export function RunBoardStage({
               pointer={tools.pointer}
             />
           )}
-        </BattleMapBoard>
+        </GridBoard>
       </BoardCanvas>
     </section>
   );

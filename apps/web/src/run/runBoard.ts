@@ -2,6 +2,7 @@ import {
   type AreaShape,
   type BoardArea,
   type BoardDoorUpdate,
+  type BoardSize,
   type BoardSquare,
   type LevelPartId,
   type Combatant,
@@ -10,8 +11,6 @@ import {
 } from "@taverns/api";
 import { useEffect, useRef, useState } from "react";
 import type { Resource } from "../api/failure";
-import { describeBoard } from "../campaign/BattleMapBoard";
-import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { areaAt, caughtBy, caughtLine, sameArea, squaresOf, startingFeet, stepFeet } from "./area";
 import type { BoardTool, ToolPointer } from "./BoardTools";
 import { useEscapeAway } from "./escape";
@@ -72,19 +71,16 @@ export interface RunBoardProps {
  * whose pinned area both draw.
  */
 export function useRunBoard(
-  { resource, reload, over, tokens, hostileTokensHidden, onFog, onArea }: RunBoardProps,
+  { resource, over, tokens, hostileTokensHidden, onFog, onArea }: RunBoardProps,
   /** The canvas: the board takes a pointer, so the dock's tools are offered. */
   canvas: boolean,
 ) {
   const board = resource.state === "ready" ? resource.value : null;
-  // A fight started straight after its encounter was made may begin before
-  // Hob finishes the picture.
-  useHobDrawingPolling(board?.imagePending === true, reload);
   const [grid, setGrid] = useState<boolean>();
   const [lastMove, setLastMove] = useState<string>();
   const [names, setNames] = useTokenNames();
 
-  const gridShown = grid ?? board?.grid === "square";
+  const gridShown = grid ?? true;
   const { selected } = tokens;
   const tools = useBoardTools({
     board,
@@ -386,16 +382,21 @@ function useFogTool({
   };
 }
 
+/** "24 × 16 squares · 5 ft each · 120 × 80 ft" — the board's size in the DM's units. */
+export const describeBoard = (board: BoardSize & { readonly feetPerCell: number }): string =>
+  [
+    `${String(board.columns)} × ${String(board.rows)} squares`,
+    `${String(board.feetPerCell)} ft each`,
+    `${String(board.columns * board.feetPerCell)} × ${String(board.rows * board.feetPerCell)} ft`,
+  ].join(" · ");
+
 /**
- * The board's size in the DM's units, and what a deleted encounter took with
- * it. A level fight has no picture by design, and says it is played on its
- * level; its level is drawn on the canvas (`RunStage.tsx`), not on this card.
+ * The board's size in the DM's units, and what it is played on. A level is
+ * drawn on the canvas (`RunStage.tsx`), not on this card.
  */
 export const boardCaption = (board: EncounterRunBoard): string =>
   `${describeBoard(board)}${
     board.level !== null
       ? ". Played on a copy of the encounter's level, drawn on the full-width board."
-      : board.mapId === null
-        ? ". This fight's encounter was deleted, and its picture with it. The board keeps its squares."
-        : ""
+      : ". A plain grid: the encounter names no level."
   }`;

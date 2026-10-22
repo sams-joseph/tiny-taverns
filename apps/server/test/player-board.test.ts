@@ -11,33 +11,26 @@ import {
   type SessionId,
   TavernsApi,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer, Option, Redacted } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
-import { HobImages } from "../src/images/HobImages.js";
-import { ImageUrls, signedPath } from "../src/images/ImageUrls.js";
 import { Invites } from "../src/repo/Invites.js";
-import { ImageRecords } from "../src/repo/Images.js";
-import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { aCharacterAt, admittedTo, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
-import { scriptedImages } from "./support/imageModel.js";
 import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
  * **The fight's board on a player's table: shown only while the fight is
  * shared, the DM has turned on *Share map* and the reader holds a seat; with
- * the grid and Hob's picture, never the setting line; and with a token only for
+ * the board's size and scale, never the level's description; and with a token only for
  * a row the player's order already holds, and none for a monster while the DM
  * hides hostile tokens** (`0067_run_map_sharing.ts`, `repo/PlayerTable.ts`).
  *
- * Over the real application: the real handlers, the real image worker and
- * signer, and Postgres. The image endpoint is scripted
- * (`support/imageModel.ts`), so no request leaves the process. The wire is read
+ * Over the real application: the real handlers and Postgres. The wire is read
  * raw wherever a leak is the question, because the derived client decodes into
  * the narrow schema and would drop a field the server should never have sent.
  *
@@ -46,29 +39,11 @@ import { describeLayer } from "./support/suite.js";
  * with no seat, a member whose invitation was withdrawn, and a stranger.
  */
 
-const SECRET = Redacted.make("player-board-test-secret");
-const images = scriptedImages({ apiUrl: "https://api.openai.com/v1", model: "gpt-image-x" });
-
-/** The clock image URLs are minted and checked against. */
-const now = Date.now();
-
 const database = migratedDatabase("taverns_test_player_board");
-const services = servicesOver(
-  database,
-  undefined,
-  undefined,
-  undefined,
-  ObjectStorage.memory,
-  ImageUrls.layer(SECRET, () => now),
-  HobImages.layer({
-    generation: Option.some({ limits: { perAccountPerDay: 12, perDay: 100 }, concurrency: 2 }),
-    storageOn: true,
-  }).pipe(Layer.provide(images.layer)),
-);
+const services = servicesOver(database);
 
 const application = applicationOver(services, { quiet: true }).pipe(
   Layer.provideMerge(testServer),
-  Layer.provideMerge(ImageRecords.layer),
   Layer.provideMerge(services),
   Layer.provideMerge(database),
 );
@@ -103,9 +78,6 @@ const attempt = <A, E extends { readonly _tag: string }>(
 const sql = <A>(query: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
   Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie);
 
-/** Wait for every drawing job to finish. */
-const settled = () => Effect.flatMap(HobImages, (worker) => worker.idle);
-
 /** A GET as it goes over the wire: the status and the body, undecoded. */
 const wire = (token: string, path: string) =>
   Effect.gen(function* () {
@@ -113,13 +85,6 @@ const wire = (token: string, path: string) =>
       HttpClientRequest.get(path).pipe(HttpClientRequest.bearerToken(token)),
     );
     return { status: response.status, body: yield* response.text };
-  }).pipe(Effect.orDie);
-
-/** Fetch a path as an `<img>` does: no bearer. */
-const load = (path: string) =>
-  Effect.gen(function* () {
-    const response = yield* HttpClient.get(path);
-    return response.status;
   }).pipe(Effect.orDie);
 
 interface Person {
@@ -136,7 +101,7 @@ const person = (name: string) =>
     } satisfies Person;
   });
 
-/** The DM's prose on the map: planted, so its absence can be looked for. */
+/** The DM's prose on the encounter's level: planted, so its absence can be looked for. */
 const SETTING = "SETTING-A-SECRET-DOOR behind the reeds";
 
 const makeFixture = Effect.gen(function* () {
@@ -195,7 +160,6 @@ const makeFixture = Effect.gen(function* () {
       },
     }),
   )).id;
-  yield* settled();
   return { jo, ilse, unseated, withdrawn, stranger, table, elsewhere, archerId, secret, talk };
 }).pipe(Effect.orDie);
 
@@ -237,7 +201,7 @@ const endNight = (sessionId: SessionId) =>
   );
 
 /**
- * The ambush, written afresh for each fight with its map drawn: an encounter is
+ * The ambush, written afresh for each fight on its own level: an encounter is
  * played once (`playthroughOf` in `repo/EncounterRuns.ts`), so every fight on
  * it here is a different encounter's one playthrough.
  */
@@ -256,7 +220,6 @@ const anAmbush = () =>
         },
       }),
     );
-    yield* settled();
     return ambush.id;
   });
 
@@ -358,7 +321,7 @@ describeLayer("player-board", shared, (it) => {
           expect(read?.fight?.board).toBeNull();
           const raw = yield* rawTableOf(ilse);
           expect(raw.body).toContain('"board":null');
-          for (const leak of ['"position"', '"column"', "battle-map-images", "SETTING-A-SECRET"]) {
+          for (const leak of ['"position"', '"column"', "SETTING-A-SECRET"]) {
             expect(raw.body).not.toContain(leak);
           }
           // No move left a shared line: nobody could see one.
@@ -505,21 +468,17 @@ describeLayer("player-board", shared, (it) => {
       );
     });
 
-    it.effect("shows the fight's own grid and Hob's picture", () =>
+    it.effect("shows the fight's own size and scale", () =>
       Effect.gen(function* () {
         const { params } = yield* Shown;
         const { jo, ilse } = yield* Fixture;
         const board = yield* as(jo.token, (client) => client.runs.board({ params }));
         const read = yield* tableOf(ilse);
-        expect(board?.image).not.toBeNull();
         expect(read?.fight?.board).toMatchObject({
-          grid: board!.grid,
           columns: board!.columns,
           rows: board!.rows,
           feetPerCell: board!.feetPerCell,
-          alignment: board!.alignment,
         });
-        expect(read?.fight?.board?.image).toEqual(board!.image);
       }),
     );
 
@@ -559,58 +518,24 @@ describeLayer("player-board", shared, (it) => {
       }),
     );
 
-    it.effect("never carries the setting line, the map's id or whether a picture is pending", () =>
+    it.effect("never carries the level's description or its id", () =>
       Effect.gen(function* () {
-        const { params, lurker } = yield* Shown;
-        const { jo, ilse } = yield* Fixture;
-        const board = yield* as(jo.token, (client) => client.runs.board({ params }));
+        const { lurker } = yield* Shown;
+        const { ilse } = yield* Fixture;
         const raw = yield* rawTableOf(ilse);
         expect(raw.status).toBe(200);
         for (const leak of [
           '"setting"',
+          '"description"',
           "SETTING-A-SECRET",
-          '"mapId"',
-          board!.mapId!,
-          '"imagePending"',
+          '"levelId"',
           lurker.id,
         ]) {
           expect(raw.body).not.toContain(leak);
         }
         expect(Object.keys(JSON.parse(raw.body).fight.board).sort()).toEqual(
-          [
-            "alignment",
-            "area",
-            "columns",
-            "feetPerCell",
-            "fog",
-            "grid",
-            "image",
-            "rows",
-            "tokens",
-          ].sort(),
+          ["area", "columns", "feetPerCell", "fog", "rows", "tokens"].sort(),
         );
-      }),
-    );
-
-    it.effect("signs a picture that opens, and that no other kind's route opens", () =>
-      Effect.gen(function* () {
-        const { ilse } = yield* Fixture;
-        const image = (yield* tableOf(ilse))!.fight!.board!.image!;
-        for (const path of [image.cardUrl, image.fullUrl]) {
-          expect(path).toMatch(/^\/battle-map-images\/[0-9a-f-]+\/(card|full)\?e=\d+&s=/);
-          expect(yield* load(path)).toBe(200);
-        }
-        const imageId = new URL(image.cardUrl, "http://x").pathname.split("/")[2]!;
-        for (const path of [
-          image.cardUrl.replace("/battle-map-images/", "/campaign-images/"),
-          image.cardUrl.replace("/battle-map-images/", "/portraits/"),
-          signedPath(SECRET, "campaign", imageId, "card", now).replace(
-            "/campaign-images/",
-            "/battle-map-images/",
-          ),
-        ]) {
-          expect(yield* load(path), path).toBe(404);
-        }
       }),
     );
 
@@ -749,46 +674,8 @@ describeLayer("player-board", shared, (it) => {
             ).toEqual({ ok: false, tag: "NotFound" });
             const raw = yield* rawTableOf(who);
             expect(raw.status).toBe(404);
-            expect(raw.body).not.toContain("battle-map-images");
           }
         }),
-    );
-
-    it.effect("reaches no other table's map through the board's pointer", () =>
-      Effect.gen(function* () {
-        const { fight } = yield* Shown;
-        const { jo, ilse, elsewhere } = yield* Fixture;
-        const other = yield* as(jo.token, (client) =>
-          client.encounters.create({
-            params: { campaignId: elsewhere },
-            payload: { name: "Across the water", setting: "A drowned chapel" },
-          }),
-        );
-        yield* settled();
-        const theirs = yield* as(jo.token, (client) =>
-          client.battleMaps.find({ params: { campaignId: elsewhere, encounterId: other.id } }),
-        );
-        expect(theirs.image).not.toBeNull();
-        const ours = yield* sql(
-          (sql) => sql<{ readonly map_id: string }>`
-        select map_id from encounter_run_board where run_id = ${fight.id}
-      `,
-        );
-        // A state the product cannot reach — the board is copied from this
-        // table's own encounter — written so the read's own containment is tested.
-        yield* sql(
-          (sql) =>
-            sql`update encounter_run_board set map_id = ${theirs.id} where run_id = ${fight.id}`,
-        );
-        const read = yield* tableOf(ilse);
-        expect(read?.fight?.board).not.toBeNull();
-        expect(read?.fight?.board?.image).toBeNull();
-        yield* sql(
-          (sql) =>
-            sql`update encounter_run_board set map_id = ${ours[0]!.map_id} where run_id = ${fight.id}`,
-        );
-        expect((yield* tableOf(ilse))?.fight?.board?.image).not.toBeNull();
-      }),
     );
   });
 
@@ -801,7 +688,7 @@ describeLayer("player-board", shared, (it) => {
         yield* set(params, { mapShown: true });
         const read = yield* tableOf(ilse);
         expect(read?.fight?.encounterId).toBeNull();
-        expect(read?.fight?.board?.image).not.toBeNull();
+        expect(read?.fight?.board).not.toBeNull();
         const raw = yield* rawTableOf(ilse);
         expect(raw.body).not.toContain("NAME-THE-DMS-OWN");
         expect(raw.body).not.toContain(secret);

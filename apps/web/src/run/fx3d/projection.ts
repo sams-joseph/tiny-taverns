@@ -1,6 +1,6 @@
 /**
- * How the effects' world lands on the board's own plane (the picture's
- * pixels, `battleMapPlane`), so a three.js effect stands on the same square
+ * How the effects' world lands on the board's own plane (`boardPlane`), so
+ * a three.js effect stands on the same square
  * the DOM token does.
  *
  * The world is measured in grid squares: `x` across from the grid's left

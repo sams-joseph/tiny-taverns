@@ -1,4 +1,4 @@
-import type { PictureRect, PictureSize } from "@taverns/api";
+import type { PlaneRect, PlaneSize } from "@taverns/api";
 import {
   type CSSProperties,
   type PointerEvent,
@@ -82,11 +82,11 @@ export function BoardCanvas({
   backdrop,
   children,
 }: {
-  readonly plane: PictureSize;
+  readonly plane: PlaneSize;
   /** One square, in the plane's pixels: the zoom's bounds are a square's drawn size. */
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
-  readonly freeArea: (canvas: DOMRect) => PictureRect;
+  readonly freeArea: (canvas: DOMRect) => PlaneRect;
   /** What the view opens on until the DM moves it (`openingView`): whoever is up, in the plane's units. */
   readonly focus?: { readonly x: number; readonly y: number } | undefined;
   /** Where the camera is handed to whoever drives it from outside the canvas. */
@@ -105,15 +105,15 @@ export function BoardCanvas({
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   /** The free area as the canvas was last measured: what the view opens into. */
-  const [opening, setOpening] = useState<PictureRect>();
+  const [opening, setOpening] = useState<PlaneRect>();
   const [chosen, setChosen] = useState<CanvasView>();
-  const plane = useMemo<PictureSize>(() => ({ width, height }), [width, height]);
+  const plane = useMemo<PlaneSize>(() => ({ width, height }), [width, height]);
   const limits = useMemo(() => zoomLimits(cellPx), [cellPx]);
   const free = useRef(freeArea);
   free.current = freeArea;
 
   /** The free area now, or the whole canvas when the panels leave none. */
-  const area = useCallback((): PictureRect | undefined => {
+  const area = useCallback((): PlaneRect | undefined => {
     const canvas = viewport.current?.getBoundingClientRect();
     if (canvas === undefined || canvas.width === 0 || canvas.height === 0) return undefined;
     const clear = free.current(canvas);

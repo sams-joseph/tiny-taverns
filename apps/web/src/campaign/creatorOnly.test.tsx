@@ -69,8 +69,8 @@ describe("a player at an encounter URL", () => {
 describe("somebody who is not at the table", () => {
   it("still reads the server's refusal, the same as before", async () => {
     as(null);
-    // What the server answers somebody with no seat: the creator's map read refuses.
-    server.routes.set(`GET ${base}/encounters/${encounterId}/map`, {
+    // What the server answers somebody with no seat: the creator's roster read refuses.
+    server.routes.set(`GET ${base}/encounters/${encounterId}/creatures`, {
       status: 404,
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     });

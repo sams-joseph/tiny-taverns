@@ -2,32 +2,30 @@ import {
   type BoardSquare,
   type CombatantId,
   type DiagonalRule,
-  type PictureRect,
+  type PlaneRect,
   type PlayerLiveBoard,
   type PlayerLiveCombatant,
-  battleMapPlane,
+  BOARD_CELL_PX,
+  boardPlane,
 } from "@taverns/api";
 import { CameraBar } from "../run/CameraBar";
 import { centreOf } from "../run/canvas";
 import { InStageCorner } from "../run/RunStage";
 import { Card, Icon, SectionHeading } from "@taverns/ui";
-import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
 import { BoardCanvas } from "../run/BoardCanvas";
 import { AreaLayer } from "../run/BoardTools";
 import type { Act } from "../run/effects";
+import { GridBoard } from "../run/GridBoard";
+import { describeBoard } from "../run/runBoard";
 import { type LayerToken, TokenLayer } from "../run/RunTokens";
 import { tableRowState } from "./tableRows";
 
 /**
- * The fight's battle map as a seated player sees it, once the DM has turned on
- * *Share map* — built from the DM's own parts (the captain's call: the
- * picture, the grid, and tokens for everyone the players can already see in
- * initiative).
+ * The fight's board as a seated player sees it, once the DM has turned on
+ * *Share map* — built from the DM's own parts (the captain's call: the grid,
+ * and tokens for everyone the players can already see in initiative).
  *
- * It draws `PlayerLiveBoard`, a schema of its own with no setting line and no
- * "Hob is drawing", so the board is handed those as absent rather than the
- * wide type narrowed here: the picture's alt text is the generic one, and a
- * picture not drawn yet is the grid alone.
+ * It draws `PlayerLiveBoard`, a schema of its own.
  *
  * A token is a row of the player's order standing on a square: the server
  * sends only those (`tokenShownTo`), so a hidden creature, every monster while
@@ -72,7 +70,7 @@ interface TableToken extends LayerToken {
 }
 
 /** The DM's token layer, over a player's board. */
-function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
+function PlayerTokens(props: PlayerBoardProps) {
   const { board, order, labels, upNextId, selectedId, diagonals, feetLeft, movable } = props;
   const positions = new Map(board.tokens.map((token) => [token.combatantId, token.position]));
   const tokens = order.flatMap((row): ReadonlyArray<TableToken> => {
@@ -99,7 +97,7 @@ function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
   const mine = (token: TableToken) => token.row.kind === "you";
   return (
     <TokenLayer
-      board={props.map}
+      board={board}
       tokens={tokens}
       labels={labels}
       selected={tokens.find((token) => token.id === selectedId)}
@@ -124,14 +122,9 @@ function PlayerTokens(props: PlayerBoardProps & { readonly map: DrawnMap }) {
   );
 }
 
-type DrawnMap = ReturnType<typeof drawn>;
-
-/** The player's board as the battle map draws it: no setting line, no picture still coming. */
-const drawn = (board: PlayerLiveBoard) => ({ ...board, setting: null, imagePending: false });
-
 /** The board as a card, in the page's flow: below the canvas's width, or anywhere it has none. */
-export function PlayerBattleMap(props: PlayerBoardProps) {
-  const map = drawn(props.board);
+export function PlayerBoardCard(props: PlayerBoardProps) {
+  const map = props.board;
   return (
     <Card aria-label="Battle map" role="region" className="overflow-clip">
       <div className="flex items-center gap-2.5 border-b border-hairline px-panel py-2.5">
@@ -140,12 +133,12 @@ export function PlayerBattleMap(props: PlayerBoardProps) {
           Battle map
         </SectionHeading>
       </div>
-      <BattleMapBoard map={map}>
+      <GridBoard board={map} grid>
         {props.board.area !== null && (
           <AreaLayer board={map} area={props.board.area} state="pinned" />
         )}
-        <PlayerTokens {...props} map={map} />
-      </BattleMapBoard>
+        <PlayerTokens {...props} />
+      </GridBoard>
       <p className="mb-0 border-t border-hairline px-panel py-2.5 text-caption leading-body text-muted-foreground">
         {describeBoard(map)}
       </p>
@@ -162,16 +155,16 @@ export function PlayerBattleMap(props: PlayerBoardProps) {
 export function PlayerBoardStage({
   freeArea,
   ...props
-}: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
-  const map = drawn(props.board);
+}: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
+  const map = props.board;
   const up = props.order.find((row) => row.combatantId === props.upNextId);
   const upAt = props.board.tokens.find((token) => token.combatantId === up?.combatantId)?.position;
-  const upPoint = upAt === undefined ? undefined : centreOf(map, upAt);
+  const upPoint = upAt === undefined ? undefined : centreOf(upAt);
   return (
     <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
-        plane={battleMapPlane(map, map.image)}
-        cellPx={map.alignment.cellPx}
+        plane={boardPlane(map)}
+        cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
         controls={(camera) => (
           <InStageCorner
@@ -188,12 +181,12 @@ export function PlayerBoardStage({
           </InStageCorner>
         )}
       >
-        <BattleMapBoard map={map} className="box-content">
+        <GridBoard board={map} grid className="box-content">
           {props.board.area !== null && (
             <AreaLayer board={map} area={props.board.area} state="pinned" />
           )}
-          <PlayerTokens {...props} map={map} />
-        </BattleMapBoard>
+          <PlayerTokens {...props} />
+        </GridBoard>
       </BoardCanvas>
     </section>
   );

@@ -1,17 +1,13 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { apiUrl } from "../api/client";
 import { cryptLevelId } from "../levels/levels.fixtures";
 import { renderAt } from "../test/renderRoute";
 import {
-  battleMap,
   bodyOf,
   campaign,
   campaignId,
   cazril,
-  drawnBattleMap,
-  drawnMapPicture,
   encounter,
   encounterId,
   encounterPrep,
@@ -137,7 +133,7 @@ describe("writing a new encounter", () => {
     expect(await screen.findByRole("article", { name: "Ambush in the reeds" })).toBeInTheDocument();
   });
 
-  it("asks where it happens, and sends it trimmed for the battle map", async () => {
+  it("asks where it happens, and sends it trimmed for the new level's description", async () => {
     server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
     await userEvent.type(await openNew(), "Ambush in the reeds");
     await userEvent.type(
@@ -342,10 +338,11 @@ describe("the level a fight on it is played on", () => {
   it("offers the creator's own levels on a new encounter, and sends the one picked", async () => {
     server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
     await userEvent.type(await openNew(), "Ambush in the reeds");
-    expect(screen.getByRole("combobox", { name: "Level" })).toHaveTextContent(
-      "None: the battle map",
-    );
+    expect(screen.getByRole("combobox", { name: "Level" })).toHaveTextContent("A new, empty level");
+    await userEvent.type(screen.getByRole("textbox", { name: "Location" }), "A crypt");
     await pick(/^The Crypt/);
+    // A level of the creator's own needs no line to describe a new one.
+    expect(screen.queryByRole("textbox", { name: "Location" })).toBeNull();
     // The way into the editor, for the level picked.
     expect(screen.getByRole("link", { name: "Open The Crypt in the editor" })).toHaveAttribute(
       "href",
@@ -355,14 +352,22 @@ describe("the level a fight on it is played on", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/encounters")).toMatchObject({ levelId: cryptLevelId }),
     );
+    expect(bodyOf(server, "POST", "/encounters")).not.toHaveProperty("setting");
   });
 
-  it("sends no level for a new encounter left on its battle map", async () => {
+  it("sends no level for a new encounter left on a new one, and re-reads the shelf", async () => {
     server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
     await userEvent.type(await openNew(), "Ambush in the reeds");
     await save();
     await waitFor(() => expect(bodyOf(server, "POST", "/encounters")).toBeDefined());
     expect(bodyOf(server, "POST", "/encounters")).not.toHaveProperty("levelId");
+    // The create made a level on the Library's shelf, so the shelf is read again.
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "GET" && call.pathname === "/library/levels")
+          .length,
+      ).toBeGreaterThan(1),
+    );
   });
 
   it("opens on the encounter's level, and takes it off with a null", async () => {
@@ -375,7 +380,7 @@ describe("the level a fight on it is played on", () => {
     await waitFor(() =>
       expect(screen.getByRole("combobox", { name: "Level" })).toHaveTextContent("The Crypt"),
     );
-    await pick(/^None/);
+    await pick(/^None: a plain grid/);
     expect(screen.queryByRole("link", { name: /in the editor/ })).not.toBeInTheDocument();
     await save();
     await waitFor(() =>
@@ -395,10 +400,8 @@ describe("editing an encounter", () => {
     expect(await openEdit()).toHaveValue("Ambush in the reeds");
     expect(screen.getByRole("heading", { level: 1, name: "Edit encounter" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Tags" })).toHaveValue("Marsh, Night");
-    // The setting line is the map's, read back through the creator's map read.
-    expect(screen.getByRole("textbox", { name: "Location" })).toHaveValue(
-      "A boardwalk over black water",
-    );
+    // A saved encounter's place is its level's description, not a line here.
+    expect(screen.queryByRole("textbox", { name: "Location" })).toBeNull();
     // The roster arrives from `encounter_creature`, named on the row.
     expect(screen.getByLabelText("How many Goblin Boss")).toHaveTextContent("6");
 
@@ -414,23 +417,11 @@ describe("editing an encounter", () => {
     );
     // Difficulty is computed from the roster and the party: no field for it.
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("difficulty");
-    // An untouched line is not sent, nor an untouched level.
+    // No setting line, and no untouched level.
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("setting");
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("levelId");
     await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
     expect(new URLSearchParams(globalThis.location.search).get("encounter")).toBe(encounterId);
-  });
-
-  it("clears the setting line with a null when the DM empties it", async () => {
-    await openEdit();
-    await userEvent.clear(screen.getByRole("textbox", { name: "Location" }));
-    await save();
-
-    await waitFor(() =>
-      expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
-        setting: null,
-      }),
-    );
   });
 
   it("opens on the prep already written, and sends it whole with its kind", async () => {
@@ -546,71 +537,29 @@ describe("editing an encounter", () => {
 });
 
 describe("the battle map card", () => {
-  const mapPath = `${encountersPath}/${encounterId}/map`;
   const card = () => screen.getByRole("region", { name: "Battle map" });
 
-  it("holds the setting line alone for a new encounter, with nowhere to drop a picture", async () => {
+  it("holds the level and, for a new one, the line it is described by", async () => {
     await openNew();
+    expect(within(card()).getByRole("combobox", { name: "Level" })).toBeInTheDocument();
     expect(within(card()).getByRole("textbox", { name: "Location" })).toBeInTheDocument();
-    expect(card().querySelector("[data-slot=hob-cover]")).toBeNull();
     expect(document.querySelector("input[type=file]")).toBeNull();
     expect(screen.queryByText(/Drop a battle map/)).toBeNull();
   });
 
-  it("shows the picture Hob drew, whole, above the setting line it was drawn from", async () => {
-    server.routes.set(`GET ${mapPath}`, { status: 200, body: drawnBattleMap });
-    await openEdit();
-    const img = await waitFor(() => {
-      const found = card().querySelector<HTMLImageElement>("[data-slot=hob-cover] img");
-      expect(found).not.toBeNull();
-      return found!;
-    });
-    expect(img.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
-    expect(img.closest("[data-slot=hob-cover]")).toHaveClass("aspect-3/2");
-    const location = within(card()).getByRole("textbox", { name: "Location" });
-    expect(img.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // No redraw: the picture is Hob's, drawn once. The creator's own map goes
-    // in through the card's upload, whose file chooser is in its dialog.
-    expect(document.querySelector("input[type=file]")).toBeNull();
-    expect(
-      within(card())
-        .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["Replace map", "Remove map"]);
-  });
-
-  it("draws no empty slot when there is no picture", async () => {
+  it("holds only the level on an encounter already made", async () => {
     await openEdit();
     await waitFor(() =>
       expect(
         server.calls.some((call) => call.pathname === `${encountersPath}/${encounterId}/creatures`),
       ).toBe(true),
     );
-    expect(within(card()).getByRole("textbox", { name: "Location" })).toBeInTheDocument();
-    expect(card().querySelector("[data-slot=hob-cover]")).toBeNull();
-    expect(within(card()).queryByText("Hob is drawing…")).toBeNull();
-  });
-
-  it("says Hob is drawing, and the picture landing keeps what the DM has typed", async () => {
-    server.routes.set(`GET ${mapPath}`, {
-      status: 200,
-      body: { ...battleMap, imagePending: true },
-    });
-    const name = await openEdit();
-    expect(await within(card()).findByText("Hob is drawing…")).toHaveAttribute("role", "status");
-    await userEvent.clear(name);
-    await userEvent.type(name, "Ambush at the ford");
-
-    server.routes.set(`GET ${mapPath}`, { status: 200, body: drawnBattleMap });
-    await waitFor(() => expect(card().querySelector("[data-slot=hob-cover] img")).toBeTruthy(), {
-      timeout: 15_000,
-    });
-    expect(within(card()).queryByText("Hob is drawing…")).toBeNull();
-    expect(name).toHaveValue("Ambush at the ford");
-    expect(screen.getByRole("textbox", { name: "Location" })).toHaveValue(
-      "A boardwalk over black water",
+    expect(within(card()).getByRole("combobox", { name: "Level" })).toHaveTextContent(
+      "None: a plain grid",
     );
-  }, 30_000);
+    expect(within(card()).queryByRole("textbox", { name: "Location" })).toBeNull();
+    expect(within(card()).queryByRole("button")).toBeNull();
+  });
 });
 
 describe("the read-aloud box", () => {

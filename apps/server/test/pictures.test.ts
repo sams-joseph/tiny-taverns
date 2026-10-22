@@ -437,37 +437,6 @@ describeLayer(
         }),
     );
 
-    it.effect("put an uploaded battle map under a grid across its whole width, uncropped", () =>
-      Effect.gen(function* () {
-        const { jo, campaignId, red } = yield* Fixture;
-        const encounter = yield* as(jo, (client) =>
-          client.encounters.create({ params: { campaignId }, payload: { name: "The ford" } }),
-        );
-        yield* settled;
-        const map = yield* as(jo, (client) =>
-          client.battleMaps.find({ params: { campaignId, encounterId: encounter.id } }),
-        );
-
-        const cropped = yield* sendUpload(jo, "battleMap", map.id, red);
-        expect(
-          yield* apply(jo, cropped.uploadId, {
-            images: [{ kind: "battleMap", crop: RIGHT_SQUARE }],
-          }),
-        ).toBe("UploadRejected");
-
-        yield* upload(jo, "battleMap", map.id, red, { images: [{ kind: "battleMap" }] });
-        const after = yield* as(jo, (client) =>
-          client.battleMaps.find({ params: { campaignId, encounterId: encounter.id } }),
-        );
-        expect([after.image?.width, after.image?.height]).toEqual([400, 200]);
-        expect(after.alignment).toEqual({
-          cellPx: 400 / after.columns,
-          offsetXPx: 0,
-          offsetYPx: 0,
-        });
-      }),
-    );
-
     it.effect("limit the tickets one account takes in a day", () =>
       Effect.gen(function* () {
         const busy = yield* aPerson("Busy");

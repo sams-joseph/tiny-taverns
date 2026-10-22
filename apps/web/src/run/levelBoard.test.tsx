@@ -110,8 +110,8 @@ describe("a fight on a level, on the DM's canvas", () => {
     expect(document.querySelector("[data-slot=level-backdrop]")).not.toBeNull();
     // The DM's view, lit by the fight's own ambient and lights, never the party's preview.
     expect(drawn.options.at(-1)).toMatchObject({ lit: true, viewAs: false });
-    // The board's own picture surface is clear over it, and draws no second grid.
-    expect(document.querySelectorAll("[data-slot=battle-map-grid]")).toHaveLength(0);
+    // The board's own surface is clear over it, and draws no second grid.
+    expect(document.querySelectorAll("[data-slot=board-grid]")).toHaveLength(0);
     // Its view follows the board canvas: a square is the plane's 64 pixels at the canvas's zoom.
     expect(drawn.views.length).toBeGreaterThan(0);
   });

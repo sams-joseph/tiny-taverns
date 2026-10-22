@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { type BoardSquare, feetBetween } from "./BattleMap.js";
+import { type BoardSquare, feetBetween } from "./Board.js";
 import type { Combatant } from "./Combatant.js";
 import type { CombatantId } from "./Ids.js";
 import {

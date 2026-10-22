@@ -3,7 +3,7 @@ import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } fro
 import {
   type CropView,
   MAX_ZOOM,
-  type PictureSize,
+  type PlaneSize,
   cropOf,
   panBy,
   placementOf,
@@ -32,7 +32,7 @@ export function Cropper({
 }: {
   readonly label: string;
   readonly src: string;
-  readonly picture: PictureSize;
+  readonly picture: PlaneSize;
   readonly aspect: number;
   readonly view: CropView;
   readonly onChange: (view: CropView) => void;

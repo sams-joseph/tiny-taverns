@@ -1,5 +1,4 @@
 import type {
-  BattleMap,
   Campaign,
   CampaignId,
   CreatedOrder,
@@ -269,39 +268,32 @@ export const campaignNightAtom = Atom.family((campaignId: CampaignId) =>
 /** The creator-governed invitation list for one campaign. */
 /** What one encounter's page reads on top of the campaign view. */
 export interface EncounterPage {
-  readonly map: BattleMap;
   readonly roster: ReadonlyArray<EncounterCreature>;
 }
 
 /**
- * One encounter's page: its battle map and its roster, in one round — the
- * encounter row itself and its notes are the campaign view's already.
+ * One encounter's page: its roster — the encounter row itself and its notes
+ * are the campaign view's already, and its level is the Library's read
+ * (`levels/load.ts`).
  *
- * The map read is the creator's alone, so this is also what refuses the page
- * to anybody else: a player, even at a table where this encounter is shared,
- * gets the same `NotFound` a stranger does. It answers `encounters` as well as
- * its own key because the encounter's form writes the setting line and the
- * roster and names only that.
+ * The roster read is the creator's alone, so this is also what refuses the
+ * page to anybody else: a player, even at a table where this encounter is
+ * shared, gets the same `NotFound` a stranger does. It answers `encounters`
+ * because the encounter's form writes the roster and names only that.
  */
 export const encounterPageAtom = Atom.family(
   (at: { readonly campaignId: CampaignId; readonly encounterId: EncounterId }) =>
     apiAtom(
       (client) =>
-        Effect.all(
-          {
-            map: client.battleMaps.find({ params: at }),
-            roster: client.encounterCreatures.list({ params: at }),
-          },
-          { concurrency: "unbounded" },
-        ),
-      [reads.battleMap(at.encounterId), reads.encounters(at.campaignId)],
+        Effect.map(client.encounterCreatures.list({ params: at }), (roster) => ({ roster })),
+      [reads.encounters(at.campaignId)],
     ),
 );
 
 /**
  * Every encounter's DM prep in the campaign — tactics, treasure and a
  * challenge's numbers — in one read: the Encounters page's `extra`, for the
- * rows' *DC 14* and the preview's sections. The creator's alone, as the map is.
+ * rows' *DC 14* and the preview's sections. The creator's alone, as the roster is.
  *
  * Prep is written through the encounter's own form, which names `encounters`,
  * so this answers that key rather than one of its own.

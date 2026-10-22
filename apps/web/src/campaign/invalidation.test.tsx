@@ -299,12 +299,11 @@ describe("what the split did not cost", () => {
 
     // The campaign view came from the registry. What Notes and the Encounters
     // page read is their own: the cast, for a note's links; every encounter's
-    // prep, and the preview's map and roster.
+    // prep, and the preview's roster.
     expect(new Set(since(cold))).toEqual(
       new Set([
         `GET /campaigns/${campaignId}/npcs`,
         `GET /campaigns/${campaignId}/encounter-prep`,
-        `GET ${encountersPath}/${encounterId}/map`,
         `GET ${encountersPath}/${encounterId}/creatures`,
       ]),
     );

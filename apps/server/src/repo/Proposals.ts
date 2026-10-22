@@ -10,6 +10,7 @@ import {
   keptFrom,
   type CharacterOwnCreate,
   generateLevel,
+  type LevelSpec,
   type HobProposal,
   type Location,
   type LocationKind,
@@ -109,7 +110,9 @@ import type { ConversationReach } from "./visibility.js";
  * A kept level is laid out again from the labels and seed on the turn
  * (`generateLevel`, the function the card drew its preview with), then made
  * through `Levels.create` and the editor's own `Levels.save`, so the document
- * is never in the proposal and never in a request.
+ * is never in the proposal and never in a request. A kept encounter that
+ * carries a level spec makes its level the same way, then the encounter on it;
+ * one without makes the empty level `Encounters.create` makes for the form.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
@@ -273,12 +276,8 @@ export class Proposals extends Context.Service<
        * turn, and the editor's save of the whole document at the version that
        * create answered. Owned by the accepting credential.
        */
-      const keepLevel = (
-        proposal: Extract<HobProposal, { target: "level" }>,
-        from: AssistantOrigin,
-      ) =>
+      const keepLevel = (spec: LevelSpec, from: AssistantOrigin) =>
         Effect.gen(function* () {
-          const { target: _target, ...spec } = proposal;
           const { level: draft } = generateLevel(spec);
           const made = yield* levels.create(
             {
@@ -441,15 +440,21 @@ export class Proposals extends Context.Service<
             });
 
           case "encounter":
-            return Effect.map(
-              encounters.create(
+            return Effect.gen(function* () {
+              // The level the card drew, laid out again from its spec and
+              // made the way a kept level is, in this transaction; without
+              // one, the create below makes the encounter an empty level.
+              const level =
+                proposal.level === undefined ? undefined : yield* keepLevel(proposal.level, from);
+              const encounter = yield* encounters.create(
                 campaignId,
                 {
                   name: proposal.name,
                   tags: proposal.tags,
-                  // The line the battle map is drawn from, which the card
-                  // showed; the accept handler starts the draw after commit.
+                  // The line on what the place looks like, which the card
+                  // showed: the new level's description.
                   setting: proposal.setting,
+                  ...(level === undefined ? {} : { levelId: level.level.id }),
                   // The kind and the prep the card showed, through the same
                   // create the form uses. A proposal from before Hob could
                   // offer them has none, and was a fight.
@@ -468,9 +473,9 @@ export class Proposals extends Context.Service<
                   })),
                 },
                 from,
-              ),
-              (encounter) => ({ accepted: "encounter" as const, encounter }),
-            );
+              );
+              return { accepted: "encounter" as const, encounter };
+            });
 
           case "character":
             return Effect.map(

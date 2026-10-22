@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BoardSquare } from "./BattleMap.js";
+import type { BoardSquare } from "./Board.js";
 import {
   type LayoutLight,
   type LayoutProp,

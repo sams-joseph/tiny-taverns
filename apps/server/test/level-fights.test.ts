@@ -23,7 +23,7 @@ import { describeLayer } from "./support/suite.js";
  * **A fight on a level: the encounter names the creator's own level, the
  * fight copies it at start and at resume, the DM opens doors and lights
  * lights on that copy, and a player walks rather than teleports**
- * (`0109_level_fights.ts`, `levelFights.ts`, `BattleMaps.updateDoor` and
+ * (`0109_level_fights.ts`, `levelFights.ts`, `RunBoards.updateDoor` and
  * `updateLight`, `PlayerTable.move`).
  *
  * Over the real application and Postgres, through the client derived from the
@@ -313,7 +313,8 @@ describeLayer("level-fights", shared, (it) => {
         const read = yield* as(jo.token, (client) =>
           client.encounters.findById({ params: { campaignId: table, encounterId: made.id } }),
         );
-        expect([read.name, read.levelId]).toEqual(["Mine", null]);
+        // Still on the empty level its create made it, not Wren's.
+        expect([read.name, read.levelId]).toEqual(["Mine", made.levelId]);
 
         // And the other way round: Wren cannot name Jo's level at her own table.
         const jos = yield* aHall();
@@ -341,7 +342,7 @@ describeLayer("level-fights", shared, (it) => {
   });
 
   describe("a fight copies its level", () => {
-    it.effect("takes the level's size, ambient, floor and parts at start, and no picture", () =>
+    it.effect("takes the level's size, ambient, floor and parts at start", () =>
       Effect.gen(function* () {
         const level = yield* aHall();
         const session = yield* night();
@@ -349,9 +350,6 @@ describeLayer("level-fights", shared, (it) => {
         const board = yield* boardOf(params);
         expect(board).not.toBeNull();
         expect([board!.columns, board!.rows, board!.feetPerCell]).toEqual([7, 4, 5]);
-        expect(board!.mapId).toBeNull();
-        expect(board!.image).toBeNull();
-        expect(board!.alignment).toEqual({ cellPx: 64, offsetXPx: 0, offsetYPx: 0 });
         const copy = levelOf(board);
         expect(copy.ambient).toBe("dim");
         expect(copy.floor).toEqual(level.floor);
@@ -382,7 +380,7 @@ describeLayer("level-fights", shared, (it) => {
           client.libraryLevels.remove({ params: { levelId: level.id } }),
         );
         expect(yield* boardOf(params)).toEqual(before);
-        // The encounter goes back to its picture board.
+        // The encounter goes back to the plain grid.
         const read = yield* as(jo.token, (client) =>
           client.encounters.findById({ params: { campaignId: table, encounterId: encounter.id } }),
         );
@@ -542,12 +540,18 @@ describeLayer("level-fights", shared, (it) => {
           ),
         ).toBe("NotFound");
 
-        // A fight on a picture board has no door to open.
+        // A fight on the plain grid has no door to open.
         const other = yield* night();
-        const plain = yield* as(jo.token, (client) =>
+        const made = yield* as(jo.token, (client) =>
           client.encounters.create({ params: { campaignId: table }, payload: { name: "Plain" } }),
         );
-        const picture = yield* as(jo.token, (client) =>
+        const plain = yield* as(jo.token, (client) =>
+          client.encounters.update({
+            params: { campaignId: table, encounterId: made.id },
+            payload: { levelId: null },
+          }),
+        );
+        const onGrid = yield* as(jo.token, (client) =>
           client.runs.start({
             params: { campaignId: table, sessionId: other },
             payload: { encounterId: plain.id },
@@ -556,12 +560,12 @@ describeLayer("level-fights", shared, (it) => {
         expect(
           yield* refusal(jo.token, (client) =>
             client.runs.updateDoor({
-              params: { campaignId: table, sessionId: other, runId: picture.id, wallId: DOOR },
+              params: { campaignId: table, sessionId: other, runId: onGrid.id, wallId: DOOR },
               payload: { doorState: "open" },
             }),
           ),
         ).toBe("Conflict");
-        const board = yield* boardOf({ campaignId: table, sessionId: other, runId: picture.id });
+        const board = yield* boardOf({ campaignId: table, sessionId: other, runId: onGrid.id });
         expect(board?.level).toBeNull();
       }),
     );
@@ -741,19 +745,8 @@ describeLayer("level-fights", shared, (it) => {
         const board = read.fight?.board;
         expect(board).not.toBeNull();
         expect(Object.keys(board!).sort()).toEqual(
-          [
-            "alignment",
-            "area",
-            "columns",
-            "feetPerCell",
-            "fog",
-            "grid",
-            "image",
-            "rows",
-            "tokens",
-          ].sort(),
+          ["area", "columns", "feetPerCell", "fog", "rows", "tokens"].sort(),
         );
-        expect(board!["image"]).toBeNull();
         for (const word of [
           "walls",
           "floor",

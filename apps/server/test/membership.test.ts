@@ -23,7 +23,7 @@ import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
-import { BattleMaps } from "../src/repo/BattleMaps.js";
+import { RunBoards } from "../src/repo/RunBoards.js";
 import { RunScenes } from "../src/repo/RunScenes.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
@@ -225,6 +225,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       // internal campaign instance minted for it. The comparison is against
       // `copyableIntoCampaign`'s answer, never a caller-supplied account.
       "repo/EncounterCreatures.ts",
+      // An encounter's level pointer copies the owner from the level row
+      // `levelOwned` just returned, and the composite keys to `level (id,
+      // account_id)` and `campaign (id, creator_account_id)` refuse any other.
+      "repo/Encounters.ts",
       "repo/Equipment.ts",
       "repo/Feats.ts",
       "repo/Groups.ts",
@@ -235,6 +239,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       // `campaign (id, creator_account_id)` refuses any other; the daily cap
       // counts by it. Never a caller-supplied account.
       "repo/Images.ts",
+      // A level's owner is written from `CurrentActor` at create, and the
+      // ownership comparison is `levelOwned` in `repo/visibility.ts`; the
+      // shelf's uses join an encounter's pointer to the level's own owner.
+      "repo/Levels.ts",
       "repo/LibraryShares.ts",
       // A place's owner is written from `CurrentActor` at create and copied
       // onto a placement from the place row itself; the ownership comparison
@@ -254,6 +262,9 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
+      // A fight copies its encounter's level through the encounter's own
+      // pointer and owner column, beneath `levelOwned`.
+      "repo/levelFights.ts",
       // The level-up recompute's class lookup prefers the bundle's row by
       // `account_id is null` inside a vocabulary its caller already narrowed.
       // An ordering, never a reach.
@@ -311,7 +322,7 @@ const services = Layer.mergeAll(
   Characters.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   ClassProgression.layer,
-  BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
+  RunBoards.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,
@@ -678,7 +689,7 @@ const READS: Record<
     ReadonlyArray<unknown>,
     { readonly _tag: string },
     | Acts
-    | BattleMaps
+    | RunBoards
     | Beats
     | Campaigns
     | CampaignStories
@@ -808,7 +819,7 @@ const READS: Record<
   // A fight's board, gated like the run it belongs to; one or none, as a list.
   encounter_run_board: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
-      Effect.flatMap(BattleMaps, (r) =>
+      Effect.flatMap(RunBoards, (r) =>
         Effect.map(r.forRun(dm, f.session.id, f.run.id), (board) =>
           board === null ? [] : [board],
         ),
@@ -1038,12 +1049,6 @@ describeLayer("membership", shared, (it) => {
             and table_name not in (
               'ability_score',
               'account',
-              -- An encounter's map and its picture are read only through the
-              -- creator's map reads, behind the creator proof, and as a shown
-              -- fight's board on the live table; a stranger's refusal is
-              -- covered in battle-maps.test.ts and player-board.test.ts.
-              'battle_map',
-              'battle_map_image',
               -- An encounter's prep is read only through the creator's prep
               -- reads, behind the creator proof; a stranger's refusal there is
               -- covered in encounter-prep.test.ts.

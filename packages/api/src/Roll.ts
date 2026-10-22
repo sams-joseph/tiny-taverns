@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { AttackDelivery, DamageType } from "./AttackDelivery.js";
-import { BoardArea } from "./BattleMap.js";
+import { BoardArea } from "./Board.js";
 import {
   AccountId,
   CampaignId,

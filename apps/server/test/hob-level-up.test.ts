@@ -373,11 +373,13 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          // Moved when the creator's and the account's gained `proposeLevel`;
+          // Moved when the creator's `proposeEncounter` took a level's rooms and its
+          // setting stopped being what a picture is drawn from; before that, when
+          // the creator's and the account's gained `proposeLevel`;
           // before that, when `proposeLocation` (the creator's, the Shared
           // World's and the account's) took a layout, `x` and `y`, for the
           // places it drafts, and when the creator's gained `proposePartyMove`.
-          creator: "942af61e91160814ac4d19ddfb448a05e7e0e79f85dc609dd1f304e6bbf39fc6",
+          creator: "766438acf4094e647728e80541c603034eb53b544b6857e90d84ad70fd5f917c",
           sharedWorld: "77cbbc1e05e17b3a7dff267daada442e45289efd475f6ab771b68d512d0b4393",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",

@@ -6,7 +6,7 @@ import { Hob } from "../src/assistant/Hob.js";
 import { HobToolkit, NO_VOCABULARY, playerToolkitOver } from "../src/assistant/toolkit.js";
 import { transformedMonster } from "../src/bestiary/import.js";
 import { MONSTER_RAW } from "../src/bestiary/systemMonsters.js";
-import { BattleMaps } from "../src/repo/BattleMaps.js";
+import { RunBoards } from "../src/repo/RunBoards.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
@@ -297,18 +297,18 @@ describeLayer("hob-read-fight", shared, (it) => {
         const { dm, ford } = yield* Fixture;
         // Fog over the priest's square: the party cannot see it, and Hob is told.
         const proof = yield* asDm(dm, ford.campaign.id);
-        const maps = yield* BattleMaps;
+        const boards = yield* RunBoards;
         const at = (yield* Effect.flatMap(TableFight, (fight) => fight.onTable(proof)))
           ?.combatants[0]?.position;
         if (at === undefined || at === null)
           return yield* Effect.die(new Error("the priest has no square"));
-        yield* maps.updateFog(proof, ford.session.id, ford.run.id, { hide: [at] });
+        yield* boards.updateFog(proof, ford.session.id, ford.run.id, { hide: [at] });
         const { requests } = yield* ask(
           dm,
           ford.campaign.id,
           "Who's hurt, and what can the priest do?",
         );
-        yield* maps.updateFog(proof, ford.session.id, ford.run.id, { reveal: [at] });
+        yield* boards.updateFog(proof, ford.session.id, ford.run.id, { reveal: [at] });
 
         const first = JSON.stringify(requests[0]?.tools ?? []);
         expect(first).toContain("readFight");
@@ -324,8 +324,8 @@ describeLayer("hob-read-fight", shared, (it) => {
         // The bundle's Sacred Flame, an action; not the Library's bonus action.
         expect(said).toMatch(/\("Sacred Flame"\): action; cantrip; DC \d+ DEX save/);
         expect(said).toContain("Standard actions, each its action: standard/Dash");
-        // Nothing signed: no picture, no portrait.
-        expect(said).not.toMatch(/\/(portraits|campaign-images|battle-map)/);
+        // Nothing signed: no portrait.
+        expect(said).not.toMatch(/\/(portraits|campaign-images)/);
 
         // The sentinel lives in another DM's fight and in this DM's other
         // table; neither reaches the provider in any request.

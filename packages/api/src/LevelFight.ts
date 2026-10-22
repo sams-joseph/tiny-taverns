@@ -14,21 +14,12 @@ import { LevelAmbient, LevelDoorState } from "./LevelKit.js";
  * carries that copy to a resumed fight (`0109_level_fights.ts`), as a fight
  * keeps its grid (`0058`). Editing or deleting the level never moves a fight
  * in progress. The board's `columns`, `rows` and `feetPerCell` are the
- * level's, and the picture and its alignment do not apply: a level board is
- * drawn on itself, its alignment the plain grid.
+ * level's, and it is laid out on the same plane as every board (`Board.ts`).
  *
  * **The creator's alone**, on `EncounterRunBoard.level`. A player's table
  * carries none of it (`PlayerLiveBoard` is not widened): the party's narrowed
  * view of a level is computed in SQL in a later phase.
  */
-
-/**
- * The pixels a square of a level board's plane is, with no offset: the
- * alignment every level fight's board carries, so the run board's tokens,
- * fog, areas and effects (all measured in the plane's pixels) land on the
- * squares the level is drawn on. The battle map's default square.
- */
-export const LEVEL_BOARD_CELL_PX = 64;
 
 /**
  * A wall of a fight's level: the level's wall with its door state live, and

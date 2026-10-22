@@ -19,7 +19,7 @@ type Stage = typeof import("../level/renderer");
  * It fills the board canvas behind the transformed board (`BoardCanvas`'s
  * `backdrop`) and follows its view, so it draws its own pixels at every zoom
  * instead of a scaled bitmap. A square of the board's plane is `cellPx`
- * pixels (the level board's plain grid, `LEVEL_BOARD_CELL_PX`), so square
+ * pixels (`BOARD_CELL_PX`, every board's), so square
  * `(c, r)` lands where the tokens, the fog, the areas and the effects put it.
  * Takes no pointer: the canvas pans over it and the doors' switches sit on the
  * board (`LevelSwitches.tsx`).

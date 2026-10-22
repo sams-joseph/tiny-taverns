@@ -313,4 +313,148 @@ describeLayer("hob-levels", shared, (it) => {
       }),
     );
   });
+  describe("a campaign's Hob offers an encounter on a level", () => {
+    const ENCOUNTER_TEXT = "Make me a parley at the drowned shrine.";
+
+    /** A social encounter, so no creature has to be found first. */
+    const aParley = (over: Record<string, unknown> = {}) =>
+      toolCallChunks("proposeEncounter", {
+        name: "Parley at the shrine",
+        kind: "social",
+        setting: "A drowned abbey under the marsh",
+        ...over,
+      });
+
+    const levelRow = (levelId: string) =>
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly origin: string; readonly assistant_turn_id: string | null }>`
+          select origin, assistant_turn_id from level where id = ${levelId}
+        `,
+      ).pipe(Effect.orDie);
+
+    it.effect("keeps an empty level with the encounter, stamped with the turn", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const { events } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [aParley(), textChunks("A parley.")],
+        );
+        const proposal = proposedIn(events);
+        if (proposal?.target !== "encounter") throw new Error("no encounter was offered");
+        expect(proposal).not.toHaveProperty("level");
+        const { threadId, turnId } = begunIn(events);
+        const kept = yield* as(jo.token, (client) =>
+          client.hob.accept({ params: { campaignId: table.id, threadId, turnId }, payload: {} }),
+        );
+        if (kept.accepted !== "encounter") throw new Error("no encounter was kept");
+        expect(kept.encounter.levelId).not.toBeNull();
+        const level = yield* as(jo.token, (client) =>
+          client.libraryLevels.findById({ params: { levelId: kept.encounter.levelId! } }),
+        );
+        expect(level).toMatchObject({
+          name: "Parley at the shrine",
+          description: "A drowned abbey under the marsh",
+          columns: 24,
+          rows: 16,
+          origin: "assistant",
+          walls: [],
+          props: [],
+        });
+        expect(yield* levelRow(level.id)).toEqual([
+          { origin: "assistant", assistant_turn_id: turnId },
+        ]);
+      }),
+    );
+
+    it.effect("lays the level out from the rooms Hob named, and keeps it with the encounter", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const { events, requests } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [
+            aParley({
+              rooms: [
+                { purpose: "shrine", size: "large", label: "The Chapel" },
+                { purpose: "cistern" },
+              ],
+              secrets: 1,
+              mood: "dim",
+            }),
+            textChunks("A parley in the shrine."),
+          ],
+        );
+        expect(JSON.stringify(requests[1]?.messages)).toContain("on a small level of 2 rooms");
+        const proposal = proposedIn(events);
+        if (proposal?.target !== "encounter") throw new Error("no encounter was offered");
+        // The spec, named after the encounter, its setting the description,
+        // the smallest size that holds the rooms, and the server's seed.
+        expect(proposal.level).toMatchObject({
+          name: "Parley at the shrine",
+          description: "A drowned abbey under the marsh",
+          size: "small",
+          rooms: [
+            { purpose: "shrine", size: "large", label: "The Chapel" },
+            { purpose: "cistern", size: "medium", label: null },
+          ],
+          connections: "mixed",
+          secrets: 1,
+          mood: "dim",
+        });
+        const { threadId, turnId } = begunIn(events);
+        expect(yield* rowsFrom(turnId)).toEqual([]);
+
+        const kept = yield* as(jo.token, (client) =>
+          client.hob.accept({ params: { campaignId: table.id, threadId, turnId }, payload: {} }),
+        );
+        if (kept.accepted !== "encounter") throw new Error("no encounter was kept");
+        const level = yield* as(jo.token, (client) =>
+          client.libraryLevels.findById({ params: { levelId: kept.encounter.levelId! } }),
+        );
+        const drawn = generateLevel(proposal.level!).level;
+        expect(level).toMatchObject({
+          name: drawn.name,
+          description: drawn.description,
+          columns: drawn.columns,
+          rows: drawn.rows,
+          ambient: drawn.ambient,
+          origin: "assistant",
+        });
+        expect(level.walls.length).toBeGreaterThan(0);
+        expect(level.walls).toEqual(drawn.walls);
+        expect(level.props).toEqual(drawn.props);
+        // One level, the generated one: no empty level beside it.
+        expect(yield* rowsFrom(turnId)).toEqual([
+          { account_id: jo.actor.accountId, origin: "assistant" },
+        ]);
+      }),
+    );
+
+    it.effect("refuses more rooms than the size holds, offering nothing", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const { events, requests } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [
+            aParley({
+              mapSize: "small",
+              rooms: Array.from({ length: 9 }, () => ({ purpose: "store" })),
+            }),
+            textChunks("I could not."),
+          ],
+        );
+        expect(proposedIn(events)).toBeUndefined();
+        const said = JSON.stringify(requests[1]?.messages);
+        expect(said).toContain("a small level holds at most 6 rooms");
+        expect(said).toContain("call proposeEncounter again");
+      }),
+    );
+  });
 });

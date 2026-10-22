@@ -332,7 +332,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
          * the night*'s number all read, with its checklist and the act it
          * starts; a kept act is the Chronicle's acts alone. Anything else
          * Hob keeps here is a note, an encounter or the story so far, all three
-         * named because the model decides which.
+         * named because the model decides which; an encounter makes its level
+         * on the Library's shelf too.
          */
         keeps: (accepted) =>
           accepted.accepted === "nightSummary"
@@ -361,6 +362,7 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                                 reads.notes(campaignId),
                                 reads.encounters(campaignId),
                                 reads.story(campaignId),
+                                ...(accepted.accepted === "encounter" ? [reads.libraryLevels] : []),
                               ],
       };
     }

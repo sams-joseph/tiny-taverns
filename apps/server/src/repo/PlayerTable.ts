@@ -35,16 +35,8 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
-import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import {
-  alignmentColumn,
-  areaColumn,
-  battleMapPicture,
-  boardColumns,
-  fogColumn,
-  pictureFromColumn,
-} from "./BattleMaps.js";
+import { areaColumn, boardColumns, fogColumn } from "./RunBoards.js";
 import {
   type PortraitSigner,
   portraitFromId,
@@ -240,15 +232,11 @@ export const liveOrderStatement = (
   `;
 };
 
-/** The fight's board as a player may see it: the grid and the picture, no setting. */
-const playerBoardRow = (sign: ImageSigner | undefined) =>
-  fromColumns(
-    Schema.Struct({
-      ...Struct.omit(PlayerLiveBoard.fields, ["tokens"]),
-      image: pictureFromColumn(sign),
-    }),
-    { ...boardColumns, image: "picture" },
-  );
+/** The fight's board as a player may see it, before its tokens. */
+const PlayerBoardRow = fromColumns(
+  Schema.Struct(Struct.omit(PlayerLiveBoard.fields, ["tokens"])),
+  boardColumns,
+);
 
 /**
  * What is on one table right now, to somebody sitting at it.
@@ -260,8 +248,7 @@ const playerBoardRow = (sign: ImageSigner | undefined) =>
  * that still has an active seat in this campaign.
  *
  * **The board** is selected only while the fight is shared and the DM has
- * turned on *Share map* (`0067_run_map_sharing.ts`), and never its setting
- * line. A token is a position selected beside a row of the order under the
+ * turned on *Share map* (`0067_run_map_sharing.ts`). A token is a position selected beside a row of the order under the
  * same condition, and not at all for an NPC while hostile tokens are hidden,
  * so a row the order drops takes its token with it. **Fog** drops the row of
  * a creature under it, token and all (`liveTables.ts`' `hiddenByFog`); an ally
@@ -347,7 +334,6 @@ export class PlayerTable extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
       const LiveCombatantRow = liveCombatantRow(yield* portraitSigner);
-      const PlayerBoardRow = playerBoardRow(yield* imageSigner);
 
       /**
        * The fight on this table tonight, if there is one. `playerRunColumns`,
@@ -382,8 +368,6 @@ export class PlayerTable extends Context.Service<
           ),
       });
 
-      // The picture is joined through the board's pointer only to a map in
-      // this campaign, so the pointer grants nothing outside it.
       /**
        * What the table heard of this fight (`hob-turn-kept`, `0095`): only
        * the lines written `shared`, which the keep decides from the acting
@@ -456,15 +440,11 @@ export class PlayerTable extends Context.Service<
       const boardOf = SqlSchema.findOneOption({
         Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId })),
         Result: PlayerBoardRow,
-        execute: ({ campaignId, runId }) => sql`
-          select encounter_run_board.grid, encounter_run_board.board_columns,
-                 encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
-                 ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}, ${fogColumn(sql)}, ${areaColumn(sql)}
+        execute: ({ runId }) => sql`
+          select encounter_run_board.board_columns, encounter_run_board.board_rows,
+                 encounter_run_board.feet_per_cell, ${fogColumn(sql)}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
-          left join battle_map on battle_map.id = encounter_run_board.map_id
-            and battle_map.campaign_id = ${campaignId}
           where encounter_run_board.run_id = ${runId}
             and ${boardShown(sql)}
         `,

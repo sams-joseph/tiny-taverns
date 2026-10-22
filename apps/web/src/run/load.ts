@@ -190,7 +190,7 @@ export const liveStateAtom = Atom.family((path: RunPath) =>
 );
 
 /**
- * The fight's board — its own copy of the grid, its map's picture, its fog,
+ * The fight's board — its own copy of its level or the plain grid, its fog,
  * and the area template pinned on it.
  *
  * **Writable, as the fight is (`liveStateAtom`).** The Fog tool's write and the
@@ -198,13 +198,12 @@ export const liveStateAtom = Atom.family((path: RunPath) =>
  * draws that answer straight away rather than re-reading it (`RunScreen.tsx`'s
  * `paintFog` and `pinArea`).
  *
- * Names no reads: the fog and the pin are the only things the product writes
- * on a fight's board, and only this screen writes them, so a key would have no
- * other writer; another of the DM's tabs is heard through the doorbell's
- * `board-fog-updated` and `board-area-updated`.
- * A grid edit on the encounter's page is the next fight's, by design
- * (`EncounterRunBoard`), and Hob finishing the picture is polled for by the
- * band that shows it.
+ * Names no reads: the fog, the pin, and the level's doors and lights are the
+ * only things the product writes on a fight's board, and only this screen
+ * writes them, so a key would have no other writer; another of the DM's tabs
+ * is heard through the doorbell's `board-fog-updated`, `board-area-updated`,
+ * `board-door-updated` and `board-light-updated`. An edit to the encounter's
+ * level is the next fight's, by design (`EncounterRunBoard`).
  */
 export const runBoardAtom = Atom.family((path: RunPath) =>
   writableApiAtom(

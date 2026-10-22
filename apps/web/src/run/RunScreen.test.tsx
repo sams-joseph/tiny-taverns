@@ -1393,7 +1393,7 @@ describe("the fight's battle map", () => {
     await waitFor(() =>
       expect(card()).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft"),
     );
-    const board = card().querySelector("[data-slot=battle-map]");
+    const board = card().querySelector("[data-slot=board]");
     expect(board).not.toBeNull();
     expect(board?.querySelectorAll("[data-line=column]")).toHaveLength(25);
     expect(board?.querySelectorAll("[data-line=row]")).toHaveLength(17);
@@ -1403,7 +1403,7 @@ describe("the fight's battle map", () => {
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 
-  it("draws the grid the fight kept, not the encounter's map", async () => {
+  it("draws the grid the fight kept, not the encounter's level as it stands", async () => {
     server.routes.set(`GET ${serverRunBase()}/board`, {
       status: 200,
       body: { ...runBoard, columns: 10, rows: 6, feetPerCell: 10 },
@@ -1411,19 +1411,16 @@ describe("the fight's battle map", () => {
     await renderRunner();
     await waitFor(() => expect(card()).toHaveTextContent("10 × 6 squares · 10 ft each"));
     expect(document.querySelectorAll("[data-line=column]")).toHaveLength(11);
-    // The runner never asks for the encounter's live map.
-    expect(server.calls.some((call) => call.pathname.endsWith("/map"))).toBe(false);
+    // The runner never asks for the encounter's level.
+    expect(server.calls.some((call) => call.pathname.startsWith("/library/levels"))).toBe(false);
   });
 
-  it("says so when the fight's encounter was deleted, and keeps the squares", async () => {
-    server.routes.set(`GET ${serverRunBase()}/board`, {
-      status: 200,
-      body: { ...runBoard, mapId: null, setting: null },
-    });
+  it("says a fight with no level is on the plain grid, and draws its squares", async () => {
     await renderRunner();
     await waitFor(() => expect(card()).toBeInTheDocument());
-    expect(screen.getByText(/This fight's encounter was deleted/)).toBeInTheDocument();
-    expect(document.querySelector("[data-slot=battle-map]")).not.toBeNull();
+    expect(screen.getByText(/A plain grid: the encounter names no level/)).toBeInTheDocument();
+    expect(document.querySelector("[data-slot=board]")).not.toBeNull();
+    expect(document.querySelector("[data-slot=board] img")).toBeNull();
   });
 
   it("is absent for a fight with no board, and the layout closes the gap", async () => {
@@ -2472,7 +2469,7 @@ describe("the canvas", () => {
     expect(document.querySelector("[data-slot=run-layout]")).toBeNull();
     expect(stage()).toContainElement(board());
     // The board is the canvas's content, drawn at its plane's own size.
-    expect(content()).toContainElement(board().querySelector("[data-slot=battle-map]"));
+    expect(content()).toContainElement(board().querySelector("[data-slot=board]"));
     expect(content().style.getPropertyValue("--board-w")).toBe(`${String(24 * 64)}px`);
 
     // Initiative, across the top; nothing rolls initiative in the column under it.

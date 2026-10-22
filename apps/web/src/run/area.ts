@@ -1,7 +1,7 @@
 import {
   AREA_FEET,
   type AreaShape,
-  type BattleMapBoard,
+  type BoardSize,
   type BoardArea,
   type BoardSquare,
   type Combatant,
@@ -62,7 +62,7 @@ export const areaAt = ({
 
 /** The squares a template covers on this board. */
 export const squaresOf = (
-  board: Pick<BattleMapBoard, "columns" | "rows"> & { readonly feetPerCell: number },
+  board: BoardSize & { readonly feetPerCell: number },
   area: BoardArea,
 ): ReadonlyArray<BoardSquare> =>
   areaSquares(board, {

@@ -153,7 +153,7 @@ export const LIGHT_PRESETS = {
 } as const satisfies Record<string, LightReach>;
 export type LightPreset = keyof typeof LIGHT_PRESETS;
 
-/** The most squares a level runs across or down, the battle map's bound. */
+/** The most squares a level runs across or down, the bound of every fight's board. */
 export const LEVEL_SQUARES_MAX = 200;
 /** The farthest a light reaches, bright or dim, in feet. */
 export const LEVEL_LIGHT_FEET_MAX = 120;

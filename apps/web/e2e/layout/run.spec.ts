@@ -617,7 +617,7 @@ for (const width of WIDTHS) {
         });
 
         await test.step("a drag on the board pans it, and moves nobody", async () => {
-          const board = map.locator('[data-slot="battle-map"]');
+          const board = map.locator('[data-slot="board"]');
           const token = map.getByRole("button", { name: /^Brannoc, column/ });
           await page.waitForTimeout(400);
           const before = await box(token);

@@ -23,7 +23,7 @@ import { describeLayer } from "./support/suite.js";
  * **Fog of war on a fight's board: the DM's alone to paint, and a creature
  * under it is not on a player's table — neither its token nor its row of the
  * order. An ally under it keeps its row but not its token; the player's own
- * character keeps both** (`0087_run_board_fog.ts`, `BattleMaps.updateFog`,
+ * character keeps both** (`0087_run_board_fog.ts`, `RunBoards.updateFog`,
  * `liveTables.ts`' `hiddenByFog` and `tokenShownTo`).
  *
  * Over the real application and Postgres. A fight starts clear; the DM sees

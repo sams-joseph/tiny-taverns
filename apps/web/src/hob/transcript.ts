@@ -118,10 +118,15 @@ export type HobArtifact =
       readonly kind: "encounter";
       readonly roster: ReadonlyArray<HobRosterLine>;
       /**
-       * The line the encounter's battle map will be drawn from, when Hob wrote
-       * one. Shown on the card because accepting draws the map from it.
+       * One line on what the place looks like, when Hob wrote one: the
+       * description of the level the accept makes with the encounter.
        */
       readonly setting?: string;
+      /**
+       * The encounter's level as labels and a seed, when Hob laid one out:
+       * the card draws it as the keep will make it.
+       */
+      readonly level?: LevelSpec;
       /**
        * A skill challenge's or a hazard's numbers as label and value —
        * `["DC", "14"]`, `["Save", "CON 13"]` — and the skills it names.
@@ -412,6 +417,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: PanelProposal): 
           ...(line.npc === undefined ? {} : { npcName: line.npc.name }),
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
+        ...(proposal.level === undefined ? {} : { level: proposal.level }),
         ...(challenge === undefined
           ? {}
           : {

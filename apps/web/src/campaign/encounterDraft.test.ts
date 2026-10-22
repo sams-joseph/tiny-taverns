@@ -3,6 +3,7 @@ import {
   type EncounterCreatureId,
   type EncounterId,
   ENCOUNTER_SKILLS_MAX,
+  type LevelId,
   type NoteId,
   type NpcId,
   STANDARD_SKILLS,
@@ -50,6 +51,7 @@ const bossId = "0c000000-0000-4000-8000-000000000002" as CreatureId;
 const hagId = "0c000000-0000-4000-8000-000000000003" as CreatureId;
 const bossRowId = "0e000000-0000-4000-8000-000000000001" as EncounterCreatureId;
 const goblinRowId = "0e000000-0000-4000-8000-000000000002" as EncounterCreatureId;
+const levelOfMine = "1e7e0000-0000-4000-8000-000000000001" as LevelId;
 const noteId = "0d000000-0000-4000-8000-000000000001" as NoteId;
 
 const bossRow: SavedLine = {
@@ -105,7 +107,6 @@ const savedAmbush: SavedEncounter = {
     challenge: null,
   },
   roster: [bossRow, goblinRow],
-  setting: "A boardwalk over black water",
   readAloud: undefined,
 };
 
@@ -149,7 +150,7 @@ describe("a draft from what is stored", () => {
     expect(draft).toMatchObject({
       name: "Ambush in the reeds",
       tags: "Marsh, Night",
-      setting: "A boardwalk over black water",
+      setting: "",
       readAloud: "The reeds close in.",
       tactics: "Archers open from the reeds.\nThe boss hangs back.",
       treasure: "28 sp",
@@ -503,12 +504,22 @@ describe("the payloads", () => {
     expect(createPayload(blank({ ready: true }))).toMatchObject({ ready: true });
   });
 
-  it("sends the setting line only when it changed, and null when emptied", () => {
+  it("sends the setting line only with a create that makes the encounter's level", () => {
     const draft = draftFrom(savedAmbush);
-    expect(updatePayload(draft, savedAmbush)).not.toHaveProperty("setting");
-    expect(updatePayload({ ...draft, setting: "  " }, savedAmbush)).toMatchObject({
-      setting: null,
+    expect(
+      updatePayload({ ...draft, setting: "A drowned chapel" }, savedAmbush),
+    ).not.toHaveProperty("setting");
+    expect(createPayload(blank({ setting: "  A drowned chapel " }))).toMatchObject({
+      setting: "A drowned chapel",
     });
+    expect(createPayload(blank({ setting: "   " }))).not.toHaveProperty("setting");
+    const named = createPayload(blank({ setting: "A drowned chapel", levelId: levelOfMine }));
+    expect(named).not.toHaveProperty("setting");
+    expect(named.levelId).toBe(levelOfMine);
+  });
+
+  it("clears the treasure with null", () => {
+    const draft = draftFrom(savedAmbush);
     expect(updatePayload({ ...draft, treasure: "" }, savedAmbush)).toMatchObject({
       treasure: null,
     });

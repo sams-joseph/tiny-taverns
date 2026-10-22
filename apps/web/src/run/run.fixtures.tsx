@@ -108,22 +108,15 @@ export const directUpdate = {
 };
 
 /**
- * The fight's own board, as `runs.board` answers the DM: the encounter's map
- * as it stood when the fight began, with no picture.
+ * The fight's own board, as `runs.board` answers the DM: the plain grid, the
+ * encounter naming no level.
  */
 export const runBoard = {
-  mapId: "2b1f2a1e-0000-4000-8000-000000000611",
-  setting: "A boardwalk over black water",
-  grid: "square",
   columns: 24,
   rows: 16,
   feetPerCell: 5,
-  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
-  image: null,
-  imagePending: false,
   fog: [],
   area: null,
-  // A picture board: the encounter names no level.
   level: null,
 };
 
@@ -141,8 +134,6 @@ export const runLevelTorchId = levelPart(4);
  */
 export const runLevelBoard = {
   ...runBoard,
-  mapId: null,
-  setting: null,
   columns: 8,
   rows: 6,
   level: {

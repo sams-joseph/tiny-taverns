@@ -57,26 +57,12 @@ for (const width of WIDTHS) {
         });
       }
 
-      await test.step("the battle map card shows the picture whole, the card's width, under the details", async () => {
-        const card = page.getByRole("region", { name: "Battle map" });
-        const picture = card.locator('[data-slot="hob-cover"]');
-        await expect(picture.locator("img[data-loaded]")).toHaveCount(1);
-        const fit = await picture.evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return { width: r.width, height: r.height, room: el.parentElement!.clientWidth };
-        });
-        expect.soft(fit.width, "picture width").toBeCloseTo(fit.room, 0);
-        // 3:2 and a hairline under it.
-        expect.soft(fit.width / (fit.height - 1), "picture aspect").toBeCloseTo(3 / 2, 1);
-        const mapCard = await box(card);
+      await test.step("the battle map card sits under the details, over the creatures", async () => {
+        const mapCard = await box(page.getByRole("region", { name: "Battle map" }));
         expect.soft(mapCard.y, "battle map top").toBeGreaterThan(details.y);
         expect
           .soft(creatures.y, "creatures top")
           .toBeGreaterThanOrEqual(mapCard.y + mapCard.height - 0.5);
-        const location = await box(page.getByRole("textbox", { name: "Location" }));
-        expect
-          .soft(location.y, "location under the picture")
-          .toBeGreaterThan(mapCard.y + fit.height);
       });
 
       await test.step("every roster line keeps its name readable, its numbers on one line", async () => {

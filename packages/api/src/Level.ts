@@ -32,7 +32,7 @@ import { type LevelLayout, propFootprint } from "./LevelGeometry.js";
 /** The bounds the schema and the tables both state. */
 export const LEVEL_NAME_MAX = 120;
 export const LEVEL_DESCRIPTION_MAX = 2000;
-/** The DMG's scale is 5; the battle map's bound is kept. */
+/** The DMG's scale is 5; a square may stand for up to 100 feet. */
 export const LEVEL_FEET_PER_CELL_MAX = 100;
 export const LEVEL_FEET_PER_CELL_DEFAULT = 5;
 /** The most parts of each kind one level holds: a 200 × 200 dungeon fits well inside. */
@@ -243,6 +243,10 @@ export class LevelSummary extends Schema.Class<LevelSummary>("LevelSummary")({
  */
 export const LevelCreate = Schema.Struct({
   name,
+  /** Absent, `null` or blank is none. */
+  description: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMaxLength(LEVEL_DESCRIPTION_MAX))),
+  ),
   columns: squares,
   rows: squares,
   /** The DMG's 5 when omitted. */

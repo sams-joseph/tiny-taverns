@@ -1,4 +1,4 @@
-import type { BoardSquare } from "./BattleMap.js";
+import type { BoardSquare } from "./Board.js";
 import {
   DIFFICULT_MATERIALS,
   LEVEL_MATERIALS,

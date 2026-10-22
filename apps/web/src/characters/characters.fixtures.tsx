@@ -11,7 +11,6 @@ import {
   campaignOptions,
   coreOptions,
   character,
-  drawnMapPicture,
   sessionId,
   type Answer,
   type Call,
@@ -530,17 +529,13 @@ export const tableOrder: ReadonlyArray<Record<string, unknown>> = [
 ];
 
 /**
- * `PlayerLiveFight.board` once the DM shares the map: Hob's picture under a
- * 24 × 16 grid of 64px squares, with Brannoc and the Marsh Hag standing on it
- * and Nessa not put down yet. Nothing about the map's setting, as on the wire.
+ * `PlayerLiveFight.board` once the DM shares the map: a 24 × 16 grid, with
+ * Brannoc and the Marsh Hag standing on it and Nessa not put down yet.
  */
 export const sharedBoard = {
-  grid: "square",
   columns: 24,
   rows: 16,
   feetPerCell: 5,
-  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
-  image: drawnMapPicture,
   fog: [],
   area: null,
   tokens: [

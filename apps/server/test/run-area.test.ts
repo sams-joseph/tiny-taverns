@@ -19,7 +19,7 @@ import { describeLayer } from "./support/suite.js";
 /**
  * **An area template pinned on a fight's board: the DM's alone to pin and
  * clear, on a player's table exactly while the board is, and gone when the
- * fight ends** (`0090_run_board_area.ts`, `BattleMaps.setArea`).
+ * fight ends** (`0090_run_board_area.ts`, `RunBoards.setArea`).
  *
  * Over the real application and Postgres. The DM pins a sphere, cone, line or
  * cube and reads it back; a seated player reads it on a shared fight whose map

@@ -47,7 +47,7 @@ import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
-import { PlayerBattleMap, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
+import { PlayerBoardCard, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
 import { TableRowCard, YourCard } from "./PlayerCard";
 import { PlayerStrip } from "./PlayerStrip";
 import { SceneOnTheTable } from "./SceneOnTheTable";
@@ -594,7 +594,7 @@ export function PlayerTableScreen() {
                 </div>
               }
               strip
-              map={boardProps === undefined ? null : <PlayerBattleMap {...boardProps} />}
+              map={boardProps === undefined ? null : <PlayerBoardCard {...boardProps} />}
               card={<div className="flex flex-col gap-4">{panel}</div>}
               rest={
                 <>

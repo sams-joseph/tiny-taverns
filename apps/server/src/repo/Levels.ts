@@ -81,7 +81,9 @@ export class Levels extends Context.Service<
     readonly findById: (id: LevelId) => Effect.Effect<Level, NotFound, CurrentActor>;
     /**
      * A new, empty level of the asker's: every square `void`, bright, nothing
-     * on it. `from` is the accept path's, and only its — see `Notes.create`.
+     * on it. `from` is the accept path's, and only its — see `Notes.create`;
+     * an encounter's create passes its own, so a kept Hob encounter's level
+     * carries the turn too.
      */
     readonly create: (
       payload: LevelCreate,
@@ -97,7 +99,7 @@ export class Levels extends Context.Service<
     ) => Effect.Effect<Level, NotFound | Conflict, CurrentActor>;
     /**
      * The level and every part of it. Each encounter naming it goes back to
-     * its picture board (`on delete set null`); a fight already started keeps
+     * the plain grid (`on delete set null`); a fight already started keeps
      * its own copy (`0109_level_fights.ts`).
      */
     readonly remove: (id: LevelId) => Effect.Effect<void, NotFound, CurrentActor>;
@@ -272,10 +274,11 @@ export class Levels extends Context.Service<
                 // Every square `void`, built in SQL rather than sent.
                 const made = yield* sql<{ readonly id: LevelId }>`
                   insert into level
-                    (account_id, name, columns, rows, feet_per_cell, floor,
+                    (account_id, name, description, columns, rows, feet_per_cell, floor,
                      origin, assistant_turn_id)
                   values (
-                    ${actor.accountId}, ${payload.name.trim()}, ${payload.columns},
+                    ${actor.accountId}, ${payload.name.trim()},
+                    ${proseColumn(payload.description) ?? null}, ${payload.columns},
                     ${payload.rows}, ${payload.feetPerCell ?? LEVEL_FEET_PER_CELL_DEFAULT},
                     array_fill(0::smallint, array[${payload.columns * payload.rows}::int]),
                     ${(provenance.origin as string | undefined) ?? "authored"},

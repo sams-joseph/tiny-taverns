@@ -1,4 +1,4 @@
-import { battleMapPlane, cellRect } from "@taverns/api";
+import { boardPlane, cellRect } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { DrawnBoard } from "../BoardTools";
@@ -39,9 +39,9 @@ export function StrikeFx({
   readonly seed: number;
   readonly onEnd: () => void;
 }) {
-  const plane = battleMapPlane(board, board.image);
+  const plane = boardPlane(board);
   const centre = (square: StrikePlay["from"]) => {
-    const rect = cellRect(board, square);
+    const rect = cellRect(square);
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, cell: rect.width };
   };
   const from = centre(strike.from);

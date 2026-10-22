@@ -20,7 +20,7 @@ import {
   yourCombatantId,
 } from "../characters/characters.fixtures";
 import { apiUrl } from "../api/client";
-import { drawnMapPicture, drawnPortrait, page } from "../campaign/campaign.fixtures";
+import { drawnPortrait, page } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { TEST_SESSION } from "../test/session";
@@ -221,7 +221,7 @@ describe("PlayerTableScreen", () => {
     server.routes.set(...playing(campaignId, {}));
     await renderTable();
     await screen.findByRole("region", { name: "Initiative" });
-    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
+    expect(document.querySelector("[data-slot=board]")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Map/ })).toBeNull();
     expect(
       server.calls.some(
@@ -230,15 +230,12 @@ describe("PlayerTableScreen", () => {
     ).toBe(false);
   });
 
-  it("draws the board the DM shared: the picture, the grid and who stands on it", async () => {
+  it("draws the board the DM shared: the grid and who stands on it", async () => {
     server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
     await renderTable();
 
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
-    const picture = document.querySelector<HTMLImageElement>("[data-slot=battle-map] img");
-    expect(picture?.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
-    // The table sends no setting line, so the picture says what it is generically.
-    expect(picture?.getAttribute("alt")).toBe("The place, as Hob drew it");
+    expect(document.querySelector("[data-slot=board] img")).toBeNull();
     expect(document.querySelectorAll("[data-line=column]")).toHaveLength(25);
     expect(map.getByText("24 × 16 squares · 5 ft each · 120 × 80 ft")).toBeInTheDocument();
 
@@ -298,18 +295,18 @@ describe("PlayerTableScreen", () => {
     await renderTable();
 
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
-    const fog = document.querySelector<SVGElement>("[data-slot=battle-map] [data-slot=fog]");
+    const fog = document.querySelector<SVGElement>("[data-slot=board] [data-slot=fog]");
     expect(fog?.dataset.veil).toBe("opaque");
     expect(fog?.dataset.squares).toBe("2");
     // Opaque: the full surface, not the DM's dimmed one.
     const cover = fog?.querySelector("path");
     expect(cover?.getAttribute("class")).toBe("fill-surface-sunken");
     expect(cover?.getAttribute("d")).toBe("M320 256h64v64h-64zM384 256h64v64h-64z");
-    // Over the picture and the grid, under the player's own token.
+    // Over the grid, under the player's own token.
     const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
     expect(fog!.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
-      document.querySelector("[data-slot=battle-map-grid]")!.compareDocumentPosition(fog!) &
+      document.querySelector("[data-slot=board-grid]")!.compareDocumentPosition(fog!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(map.queryByRole("button", { name: /^Marsh Hag/ })).toBeNull();

@@ -1,4 +1,4 @@
-import type { BattleMapBoard, BoardFogUpdate, BoardSquare } from "@taverns/api";
+import type { BoardSize, BoardFogUpdate, BoardSquare } from "@taverns/api";
 import { cellRect } from "@taverns/api";
 
 /**
@@ -42,7 +42,7 @@ export const squareKey = (square: BoardSquare): string =>
  * the server answers it changes nothing here.
  */
 export const fogAfter = (
-  board: Pick<BattleMapBoard, "columns" | "rows">,
+  board: BoardSize,
   fog: ReadonlyArray<BoardSquare>,
   edits: ReadonlyArray<FogEdit>,
 ): ReadonlyArray<BoardSquare> => {
@@ -92,10 +92,10 @@ export const squaresBetween = (from: BoardSquare, to: BoardSquare): ReadonlyArra
  * a rectangle per square, so a fogged board is one element however many
  * squares it covers, and two squares side by side leave no seam between them.
  */
-export const fogOutline = (board: BattleMapBoard, squares: ReadonlyArray<BoardSquare>): string =>
+export const fogOutline = (squares: ReadonlyArray<BoardSquare>): string =>
   squares
     .map((square) => {
-      const { x, y, width, height } = cellRect(board, square);
+      const { x, y, width, height } = cellRect(square);
       return `M${String(x)} ${String(y)}h${String(width)}v${String(height)}h${String(-width)}z`;
     })
     .join("");

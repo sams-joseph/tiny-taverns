@@ -31,10 +31,15 @@ import { ARTIFACT_KINDS, type HobArtifact } from "./transcript";
 const isSaveable = (artifact: HobArtifact) => artifact.kind !== "rules";
 
 function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "encounter" } }) {
+  const spec = artifact.level;
+  const level = useMemo(() => (spec === undefined ? undefined : generateLevel(spec).level), [spec]);
   return (
     <div className="flex flex-col gap-1.5">
-      {/* The battle map is drawn from this line once the DM saves, so they
-          see it before they do. */}
+      {/* The level the keep makes with the encounter, laid out as it will be. */}
+      {level !== undefined && (
+        <LevelPreview level={level} label={`A preview of ${artifact.title}'s level`} />
+      )}
+      {/* The new level's description, which the DM sees before they save. */}
       {artifact.setting !== undefined && (
         <p className="flex items-start gap-2 pb-1 text-body-s leading-body text-muted-foreground">
           <Icon name="map" size={14} className="mt-0.5 shrink-0 text-faint" />

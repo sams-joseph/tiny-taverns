@@ -5,7 +5,7 @@ import {
   areaSquares,
   feetBetween,
   reachableSquares,
-} from "./BattleMap.js";
+} from "./Board.js";
 import type { Combatant } from "./Combatant.js";
 import type {
   ActionArea,

@@ -140,7 +140,7 @@ describe("the API declaration", () => {
     // because an `<img>` cannot send the bearer header. Its capability is an
     // HMAC over the kind, the image, the size and an expiry, minted only inside
     // a read of the character, the campaign, the Shared World, the NPC or the
-    // battle map that a visibility predicate already allowed; every failure is the same
+    // place that a visibility predicate already allowed; every failure is the same
     // `NotFound`. See the group's declaration and
     // `apps/server/src/images/ImageUrls.ts`.
     //
@@ -160,7 +160,6 @@ describe("the API declaration", () => {
       "images.sharedWorld",
       "images.npc",
       "images.npcBanner",
-      "images.battleMap",
       "images.location",
       "uploads.receive",
     ]);
@@ -309,8 +308,6 @@ describe("the API declaration", () => {
       // A campaign's acts: named runs of its nights on the Chronicle. The
       // creator's to write; a player lists the shared ones.
       "acts",
-      // An encounter's battle map: the creator's alone, under the encounter.
-      "battleMaps",
       "beats",
       "campaignInvites",
       "campaigns",
