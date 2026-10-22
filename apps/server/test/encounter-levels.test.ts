@@ -9,7 +9,8 @@ import {
   type SessionId,
   TavernsApi,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, DateTime, Deferred, Effect, Fiber, Layer } from "effect";
+import { SqlClient } from "effect/sql";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
@@ -348,6 +349,81 @@ describeLayer("encounter-levels", shared, (it) => {
           BOARD_ROWS_DEFAULT,
           null,
         ]);
+        yield* endNight(session);
+      }),
+    );
+
+    it.effect("waits for a delete of the level in flight, then fights on the plain grid", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const sql = yield* SqlClient.SqlClient;
+        const made = yield* as(jo.token, (client) =>
+          client.encounters.create({ params: { campaignId: table }, payload: { name: "Raced" } }),
+        );
+        const session = yield* night();
+        // A delete of the level, in a transaction held open until `gate`.
+        const gate = yield* Deferred.make<void>();
+        const deleted = yield* Deferred.make<void>();
+        const deleting = yield* Effect.forkChild(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* sql`delete from level where id = ${made.levelId!}`;
+              yield* Deferred.succeed(deleted, undefined);
+              yield* Deferred.await(gate);
+            }),
+          ),
+        );
+        yield* Deferred.await(deleted);
+        const starting = yield* Effect.forkChild(fightOn(session, made.id));
+        yield* Effect.sleep("300 millis");
+        // The start waits on the level rather than copying half of it.
+        expect(starting.pollUnsafe()).toBeUndefined();
+        yield* Deferred.succeed(gate, undefined);
+        yield* Fiber.join(deleting).pipe(Effect.orDie);
+        const fight = yield* Fiber.join(starting);
+        const board = yield* boardOf(session, fight.id);
+        expect([board?.columns, board?.rows, board?.level]).toEqual([
+          BOARD_COLUMNS_DEFAULT,
+          BOARD_ROWS_DEFAULT,
+          null,
+        ]);
+        yield* endNight(session);
+      }),
+    );
+
+    it.effect("waits for a save of the level in flight, and copies what it saved", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const sql = yield* SqlClient.SqlClient;
+        const made = yield* as(jo.token, (client) =>
+          client.encounters.create({ params: { campaignId: table }, payload: { name: "Mid-edit" } }),
+        );
+        const session = yield* night();
+        // A save's write to the level row, held open until `gate`: the
+        // encounter is not touched, so only the copy's own lock waits on it.
+        const gate = yield* Deferred.make<void>();
+        const saving = yield* Deferred.make<void>();
+        const save = yield* Effect.forkChild(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* sql`
+                update level set ambient = 'dark', version = version + 1
+                where id = ${made.levelId!}
+              `;
+              yield* Deferred.succeed(saving, undefined);
+              yield* Deferred.await(gate);
+            }),
+          ),
+        );
+        yield* Deferred.await(saving);
+        const starting = yield* Effect.forkChild(fightOn(session, made.id));
+        yield* Effect.sleep("300 millis");
+        expect(starting.pollUnsafe()).toBeUndefined();
+        yield* Deferred.succeed(gate, undefined);
+        yield* Fiber.join(save).pipe(Effect.orDie);
+        const fight = yield* Fiber.join(starting);
+        const board = yield* boardOf(session, fight.id);
+        expect(board?.level?.ambient).toBe("dark");
         yield* endNight(session);
       }),
     );

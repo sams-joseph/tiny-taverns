@@ -47,22 +47,31 @@ export const copyLevel = (
   actor: Actor,
 ) =>
   Effect.gen(function* () {
+    // Held `for share` until this transaction ends: a delete or a save of the
+    // level waits, so every statement below copies the one level the lookup
+    // found, whole. A level deleted first is no longer named, and the fight
+    // gets the plain grid.
     const named = yield* sql<{ readonly id: string }>`
       select level.id from encounter
       join level on level.id = encounter.level_id and level.account_id = encounter.level_owner_id
       where encounter.id = ${encounterId} and ${levelOwned(sql, actor)}
+      for share of level
     `;
     const levelId = named[0]?.id;
     if (levelId === undefined) return false;
     const owned = sql`level.id = ${levelId} and ${levelOwned(sql, actor)}`;
-    yield* sql`
+    const boards = yield* sql<{ readonly run_id: string }>`
       insert into encounter_run_board (
         run_id, board_columns, board_rows, feet_per_cell, ambient, floor
       )
       select ${runId}, level.columns, level.rows, level.feet_per_cell, level.ambient, level.floor
       from level
       where ${owned}
+      returning encounter_run_board.run_id
     `;
+    // No board row copied: the level went between the lookup and the copy.
+    // The caller writes the plain grid, and no part is copied without it.
+    if (boards.length === 0) return false;
     yield* sql`
       insert into encounter_run_wall (run_id, id, ordinal, x1, y1, x2, y2, kind, door_state, low)
       select ${runId}, level_wall.id, level_wall.ordinal, level_wall.x1, level_wall.y1,
