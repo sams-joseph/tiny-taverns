@@ -1,6 +1,13 @@
 import type { BoardSquare } from "./Board.js";
 import { type CreatureSenses, type LevelSight, NO_SENSES, levelSight } from "./LevelGeometry.js";
-import { type RunBoardLevel, runLevelLayout, tableSight } from "./LevelFight.js";
+import {
+  type PlayerLiveLevel,
+  type RunBoardLevel,
+  playerLevelLayout,
+  playerSight,
+  runLevelLayout,
+  tableSight,
+} from "./LevelFight.js";
 import type { LevelCover } from "./LevelKit.js";
 import type { RollMode } from "./Roll.js";
 
@@ -9,7 +16,8 @@ import type { RollMode } from "./Roll.js";
  * runner, Hob's turn options and the server that carries a kept turn out:
  * cover's bonus to AC, a creature's senses off its stat block, and the
  * advantage or disadvantage of attacking what cannot be seen (PHB, "Unseen
- * Attackers and Targets"). On a plain grid none of it applies.
+ * Attackers and Targets"), and cover against an area's point of origin (PHB,
+ * "Cover" and "Areas of Effect"). On a plain grid none of it applies.
  */
 
 /** What cover adds to a target's AC (PHB, "Cover"); `null` for total cover, which cannot be targeted. */
@@ -31,6 +39,26 @@ export const coveredAc = (ac: number | null, cover: LevelCover): number | null =
   const bonus = coverBonus(cover);
   return ac === null ? null : ac + (bonus ?? 0);
 };
+
+/**
+ * What cover from an area's point of origin adds to a saving throw against it
+ * (PHB, "Cover"): half +2 and three-quarters +5 to a **Dexterity** save, 0 to
+ * any other; `null` for total cover, which the area does not reach at all
+ * ("Areas of Effect": no unblocked line from the origin, so not affected).
+ */
+export const saveCoverBonus = (cover: LevelCover, ability: string): number | null => {
+  const bonus = coverBonus(cover);
+  if (bonus === null) return null;
+  return /^\s*dex(terity)?\s*$/i.test(ability) ? bonus : 0;
+};
+
+/** `Half cover: +2 to a Dex save`; `undefined` for none or total. */
+export const saveCoverLine = (cover: LevelCover): string | undefined =>
+  cover === "half"
+    ? "Half cover: +2 to a Dex save"
+    : cover === "threeQuarters"
+      ? "Three-quarters cover: +5 to a Dex save"
+      : undefined;
 
 /**
  * One roll's mode from everything that grants advantage or disadvantage: any
@@ -124,3 +152,44 @@ export const attackSight = (
   attackerSees: sight.sees(attacker, target.square),
   targetSees: sight.sees(target, attacker.square),
 });
+
+const playerSights = new WeakMap<PlayerLiveLevel, LevelSight>();
+
+/**
+ * The cover `target` has from `attacker` **as a seated player's table can
+ * know it**: over the party's view of the level (`PlayerLiveLevel`), never the
+ * fight's copy. Answered only when every square of the rectangle the two
+ * squares span has been seen: then every wall and every prop a line between
+ * them could cross touches a seen square, and so was sent. Otherwise
+ * `undefined`, and the table says nothing rather than guess; the server's
+ * answer over the fight's copy is the one an attack is resolved by (a prop the
+ * DM keeps to themselves can add cover the table was never sent).
+ */
+export const playerCover = (
+  board: { readonly columns: number; readonly rows: number; readonly feetPerCell: number },
+  level: PlayerLiveLevel,
+  attacker: BoardSquare,
+  target: BoardSquare,
+): LevelCover | undefined => {
+  const seen = new Set(level.seen);
+  for (
+    let row = Math.min(attacker.row, target.row);
+    row <= Math.max(attacker.row, target.row);
+    row++
+  ) {
+    for (
+      let column = Math.min(attacker.column, target.column);
+      column <= Math.max(attacker.column, target.column);
+      column++
+    ) {
+      if (column < 0 || row < 0 || column >= board.columns || row >= board.rows) return undefined;
+      if (!seen.has(row * board.columns + column)) return undefined;
+    }
+  }
+  let sight = playerSights.get(level);
+  if (sight === undefined) {
+    sight = levelSight(playerLevelLayout(board, level), playerSight(level));
+    playerSights.set(level, sight);
+  }
+  return sight.cover(attacker, target);
+};

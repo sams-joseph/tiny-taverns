@@ -5,6 +5,7 @@ import {
   brannocId,
   campaign,
   campaignId,
+  hagCombatantId,
   installCharacterServer,
   sessionId,
   liveRunId,
@@ -242,5 +243,96 @@ describe("a fight on a level, on a seated player's canvas", () => {
     expect(
       await screen.findByText("you cannot get there from where you stand"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("your target's cover, as the party's view can tell it", () => {
+  /**
+   * Row 4 seen from column 4 to 9: Brannoc on (5,4) and the hag on (8,4),
+   * with a crate between them on (6,4), or a wall down x = 7.
+   */
+  const yard = (parts: {
+    readonly props?: ReadonlyArray<Record<string, unknown>>;
+    readonly walls?: ReadonlyArray<Record<string, unknown>>;
+    readonly seen?: ReadonlyArray<number>;
+  }) => {
+    const seen = parts.seen ?? [4, 5, 6, 7, 8, 9].map((column) => at(column, 4));
+    return {
+      ...sharedBoard,
+      tokens: [
+        { combatantId: yourCombatantId, position: { column: 5, row: 4 } },
+        { combatantId: hagCombatantId, position: { column: 8, row: 4 } },
+      ],
+      level: {
+        ambient: "bright",
+        sees: seen,
+        seen,
+        floor: seen.map(() => 1),
+        walls: parts.walls ?? [],
+        props: parts.props ?? [],
+        lights: [],
+        regions: [],
+      },
+    };
+  };
+  const crate = {
+    id: "1e7e4000-0000-4000-8000-000000000040",
+    kind: "crate",
+    x: 6,
+    y: 4,
+    rotation: 0,
+    blocksMovement: null,
+    blocksSight: null,
+    cover: null,
+    difficult: null,
+  };
+  const wall = {
+    id: "1e7e4000-0000-4000-8000-000000000041",
+    x1: 7,
+    y1: 0,
+    x2: 7,
+    y2: 16,
+    kind: "wall",
+    doorState: null,
+    low: false,
+  };
+
+  /** The table on this board, with the hag picked on it; answers her card. */
+  const pickTheHag = async (board: Record<string, unknown>) => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board }));
+    await renderTable();
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    await userEvent.click(map.getByRole("button", { name: /^Marsh Hag/ }));
+    return within(await screen.findByRole("region", { name: "Selected combatant" }));
+  };
+
+  it("says half cover behind a crate, and nothing in the open", async () => {
+    const card = await pickTheHag(yard({ props: [crate] }));
+    expect(card.getByText("Half cover: +2 AC")).toBeInTheDocument();
+    cleanup();
+    const open = await pickTheHag(yard({}));
+    expect(open.queryByText(/cover/)).toBeNull();
+  });
+
+  it("says nothing where the party has not seen every square between", async () => {
+    const card = await pickTheHag(
+      yard({ props: [crate], seen: [4, 5, 7, 8, 9].map((column) => at(column, 4)) }),
+    );
+    expect(card.getByText("Marsh Hag")).toBeInTheDocument();
+    expect(card.queryByText(/cover/)).toBeNull();
+  });
+
+  it("says total cover past a wall, and sends no attack at her", async () => {
+    const card = await pickTheHag(yard({ walls: [wall] }));
+    expect(card.getByText("Total cover: it cannot be targeted")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Attack with Halberd" }));
+    expect(
+      await screen.findByText("Marsh Hag has total cover from you: Halberd cannot target them."),
+    ).toBeInTheDocument();
+    expect(
+      server.calls.filter(
+        (call) => call.method === "POST" && call.pathname === `/campaigns/${campaignId}/rolls`,
+      ),
+    ).toEqual([]);
   });
 });

@@ -179,11 +179,17 @@ export function TableRowCard({
   row,
   label,
   up,
+  cover,
   onBack,
 }: {
   readonly row: Exclude<PlayerLiveCombatant, PlayerLiveCombatantYou>;
   readonly label: string;
   readonly up: boolean;
+  /**
+   * On a level, its cover from you as your table can tell it (`Half cover: +2
+   * AC`); absent for none, or when the party's view cannot say.
+   */
+  readonly cover?: string | undefined;
   /** Back to your own card; absent when you have none. */
   readonly onBack: (() => void) | undefined;
 }) {
@@ -242,6 +248,11 @@ export function TableRowCard({
           <Tile label="Init" value={row.initiative === null ? "—" : String(row.initiative)} />
         </div>
         {up && <p className="mb-0 text-body-s leading-snug text-accent-ink">It is their turn.</p>}
+        {cover !== undefined && (
+          <p data-slot="target-cover" className="mb-0 text-caption leading-snug text-info-ink">
+            {cover}
+          </p>
+        )}
         {row.kind === "ally" && row.hpCurrent === 0 && (
           <DeathSaveBlock name={row.displayName} saves={row.deathSaves} disabled />
         )}
