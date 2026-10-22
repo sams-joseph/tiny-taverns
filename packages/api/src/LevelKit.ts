@@ -41,6 +41,20 @@ export type LevelWallKind = typeof LevelWallKind.Type;
 export const LevelDoorState = Schema.Literals(["open", "closed", "locked"]);
 export type LevelDoorState = typeof LevelDoorState.Type;
 
+/**
+ * A painted area with a rule of its own. A `trap` and a `hazard` are the DM's
+ * until revealed; magical darkness and heavy obscurement block sight without a
+ * wall (PHB, vision and light).
+ */
+export const LevelRegionKind = Schema.Literals([
+  "difficult",
+  "magicalDarkness",
+  "heavyObscurement",
+  "hazard",
+  "trap",
+]);
+export type LevelRegionKind = typeof LevelRegionKind.Type;
+
 /** The DMG's degrees of cover. */
 export const LevelCover = Schema.Literals(["none", "half", "threeQuarters", "total"]);
 export type LevelCover = typeof LevelCover.Type;
