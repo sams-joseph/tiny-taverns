@@ -50,7 +50,13 @@ import {
 } from "./rows.js";
 import type { AssistantOrigin } from "./rows.js";
 import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
-import { runLevel, unstandable } from "./levelFights.js";
+import {
+  refreshAndRing,
+  refreshPartyVision,
+  ringVision,
+  runLevel,
+  unstandable,
+} from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   type CharacterVitals,
@@ -695,12 +701,18 @@ export class Combatants extends Context.Service<
           if (to !== null) yield* ensureOnBoard(fight, to);
 
           // Where it stood, locked for the rest of this transaction, so the
-          // log's `from` is the square this move actually left.
+          // log's `from` is the square this move actually left; and whether a
+          // player's table showed it there, so a creature walking out of the
+          // party's sight on a level still rings their doorbell.
           const before = yield* sql<{
             readonly board_column: number | null;
             readonly board_row: number | null;
+            readonly token_shown: boolean;
           }>`
-            select combatant.board_column, combatant.board_row from combatant
+            select combatant.board_column, combatant.board_row,
+                   (select ${tokenShown(sql)} from encounter_run
+                     where encounter_run.id = combatant.encounter_run_id) as token_shown
+            from combatant
             where combatant.id = ${id}
               and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
             for update
@@ -719,6 +731,7 @@ export class Combatants extends Context.Service<
             feet,
           }).pipe(orNotFound("combatant", id));
           const combatant = new Combatant(moved, { disableChecks: true });
+          const lineShared = combatant.visibility === "shared" && shown;
           yield* appendEvent(sql, {
             sessionId,
             kind: "combatant-moved",
@@ -731,8 +744,19 @@ export class Combatants extends Context.Service<
                   : { column: from.board_column, row: from.board_row },
               to,
             },
-            visibility: combatant.visibility === "shared" && shown ? "shared" : "dm",
+            visibility: lineShared ? "shared" : "dm",
             ...stamped(args),
+          });
+          // A party token's move moves what the party sees; and a creature
+          // that walked out of it on a level is gone from the table's board,
+          // which rings without saying where it went.
+          const vision = yield* refreshPartyVision(sql, runId);
+          yield* ringVision(sql, {
+            sessionId,
+            runId,
+            vision,
+            lineShared,
+            force: combatant.visibility === "shared" && from.token_shown,
           });
           return { combatant, feet };
         });
@@ -823,6 +847,12 @@ export class Combatants extends Context.Service<
             hpCurrent: combatant.hpCurrent,
             conditions: combatant.conditions,
             deathSaves: combatant.deathSaves ?? undefined,
+          });
+          // Put back where it stood: the party's eyes go back with it.
+          yield* refreshAndRing(sql, {
+            sessionId,
+            runId,
+            lineShared: combatant.visibility === "shared",
           });
           return combatant;
         });
@@ -1033,6 +1063,12 @@ export class Combatants extends Context.Service<
                     characterId: combatant.characterId ?? undefined,
                     payload: { displayName: combatant.displayName, kind: combatant.kind },
                     visibility: combatant.visibility,
+                  });
+                  // A party member put on the board looks around.
+                  yield* refreshAndRing(sql, {
+                    sessionId,
+                    runId,
+                    lineShared: combatant.visibility === "shared",
                   });
                   return combatant;
                 }),
@@ -1479,6 +1515,12 @@ export class Combatants extends Context.Service<
                     characterId: removed.character_id ?? undefined,
                     payload: { combatantId: id },
                     visibility: removed.visibility,
+                  });
+                  // A party member gone takes their eyes with them.
+                  yield* refreshAndRing(sql, {
+                    sessionId,
+                    runId,
+                    lineShared: removed.visibility === "shared",
                   });
                 }),
               )

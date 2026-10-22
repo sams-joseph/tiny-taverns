@@ -5,6 +5,7 @@ import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
+import { PlayerLiveLevel } from "./LevelFight.js";
 import { RollOutcome } from "./Roll.js";
 import {
   CampaignCharacterId,
@@ -180,9 +181,15 @@ export const PlayerLiveBoard = Schema.Struct({
    */
   area: Schema.NullOr(BoardArea),
   /**
+   * The fight's level as the party has seen it (`PlayerLiveLevel`), or `null`
+   * on a board that is not a level's.
+   */
+  level: Schema.NullOr(PlayerLiveLevel),
+  /**
    * The tokens on the board: only rows in this player's `order`, only those the
    * DM has put down, no NPC's while the DM hides hostile tokens, and none under
-   * fog but the player's own.
+   * fog but the player's own. On a level, none the party does not see now
+   * (`PlayerLiveLevel.sees`) but the player's own.
    */
   tokens: Schema.Array(PlayerLiveToken),
 });

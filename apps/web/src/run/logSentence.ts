@@ -30,6 +30,7 @@ export const SENTENCE: Record<SessionEventKind, (who: string | undefined, noun: 
     "board-area-updated": () => "An area on the board was pinned or cleared",
     "board-door-updated": () => "A door on the level changed",
     "board-light-updated": () => "A light on the level was lit or snuffed",
+    "board-vision-updated": () => "What the party sees of the level changed",
     "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
     "run-escalated": () => "The conversation turned into a fight",
     // The scene is the DM's alone; these say only that it moved, never how.

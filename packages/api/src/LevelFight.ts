@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema, Struct } from "effect";
 import { CampaignId, EncounterId } from "./Ids.js";
 import { LevelLight, LevelProp, LevelRegion, LevelWall } from "./Level.js";
 import type { LevelLayout, SightOptions } from "./LevelGeometry.js";
@@ -17,9 +17,9 @@ import { LevelAmbient, LevelDoorState } from "./LevelKit.js";
  * level's, and the picture and its alignment do not apply: a level board is
  * drawn on itself, its alignment the plain grid.
  *
- * **The creator's alone**, on `EncounterRunBoard.level`. A player's table
- * carries none of it (`PlayerLiveBoard` is not widened): the party's narrowed
- * view of a level is computed in SQL in a later phase.
+ * **The creator's whole**, on `EncounterRunBoard.level`. A seated player's
+ * table carries `PlayerLiveLevel` instead: the party's view of it, narrowed in
+ * SQL by what the party has seen (`0110_party_vision.ts`).
  */
 
 /**
@@ -73,6 +73,96 @@ export const runLevelLayout = (
  */
 export const tableSight = (level: Pick<RunBoardLevel, "walls">): SightOptions => ({
   revealed: new Set(level.walls.filter((wall) => wall.revealed).map((wall) => wall.id)),
+});
+
+/**
+ * A character's darkvision in feet, from its sheet's traits: the most any
+ * trait named for darkvision says (`… within 60 feet …`), or 0. The SRD's
+ * races record darkvision only as the `Darkvision` trait's prose, which the
+ * composers copy onto the sheet (`SheetGrants`), so the number is read from
+ * that text; a trait that names no distance grants none, rather than a guess.
+ */
+export const darkvisionOf = (
+  traits: ReadonlyArray<{ readonly name: string; readonly text?: string | undefined }>,
+): number => {
+  let feet = 0;
+  for (const trait of traits) {
+    if (!/darkvision/i.test(trait.name)) continue;
+    const said = /(\d+)\s*(?:-\s*)?(?:feet|foot|ft\b)/i.exec(trait.text ?? "");
+    if (said !== null) feet = Math.max(feet, Number(said[1]));
+  }
+  return feet;
+};
+
+/** A prop as the party sees it: never a DM-only one, so it carries no such flag. */
+export const PlayerLevelProp = Schema.Struct(Struct.omit(LevelProp.fields, ["dmOnly"]));
+export type PlayerLevelProp = typeof PlayerLevelProp.Type;
+
+/** A light as the party sees it: only a lit one is sent, so it carries no switch. */
+export const PlayerLevelLight = Schema.Struct(Struct.omit(LevelLight.fields, ["lit"]));
+export type PlayerLevelLight = typeof PlayerLevelLight.Type;
+
+/** A region as the party sees it: never a secret one, and only its squares the party has seen. */
+export const PlayerLevelRegion = Schema.Struct(Struct.omit(LevelRegion.fields, ["secret"]));
+export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
+
+/**
+ * A fight's level as a seated player's table has it: what the party has seen,
+ * and nothing else (`0110_party_vision.ts`). A distinct schema, computed in SQL
+ * against the board's `party_sees` and `party_seen` with the DM's fog taken
+ * out, so nothing outside is ever selected:
+ *
+ * - `seen`, the squares explored, and `sees`, those in sight now (a subset),
+ *   each ascending;
+ * - `floor`, the material of each `seen` square, in `seen`'s order: no other
+ *   square's floor is sent;
+ * - walls touching a seen square; an unrevealed secret door is sent as a plain
+ *   `wall` with no door state, and a revealed one as its `secretDoor`;
+ * - props that are not DM-only whose footprint touches a seen square;
+ * - lights that are lit and stand on a seen square;
+ * - regions that are not secret, clipped to the seen squares.
+ */
+export const PlayerLiveLevel = Schema.Struct({
+  ambient: LevelAmbient,
+  sees: Schema.Array(Schema.Int),
+  seen: Schema.Array(Schema.Int),
+  floor: Schema.Array(Schema.Int),
+  walls: Schema.Array(LevelWall),
+  props: Schema.Array(PlayerLevelProp),
+  lights: Schema.Array(PlayerLevelLight),
+  regions: Schema.Array(PlayerLevelRegion),
+});
+export type PlayerLiveLevel = typeof PlayerLiveLevel.Type;
+
+/**
+ * The party's level as the geometry and the renderer read it: every square
+ * not seen is `void` (`LEVEL_MATERIALS[0]`), and every part is what the table
+ * was sent, so nothing drawn says more than the wire did.
+ */
+export const playerLevelLayout = (
+  board: { readonly columns: number; readonly rows: number; readonly feetPerCell: number },
+  level: PlayerLiveLevel,
+): LevelLayout => {
+  const floor = Array.from({ length: board.columns * board.rows }, () => 0);
+  level.seen.forEach((square, k) => {
+    if (square < floor.length) floor[square] = level.floor[k] ?? 0;
+  });
+  return {
+    columns: board.columns,
+    rows: board.rows,
+    feetPerCell: board.feetPerCell,
+    ambient: level.ambient,
+    floor,
+    walls: level.walls,
+    props: level.props.map((prop) => ({ ...prop, dmOnly: false })),
+    lights: level.lights.map((light) => ({ ...light, lit: true })),
+    regions: level.regions.map((region) => ({ ...region, secret: false })),
+  };
+};
+
+/** What the table knows of the secret doors on its level: every one it was sent is revealed. */
+export const playerSight = (level: Pick<PlayerLiveLevel, "walls">): SightOptions => ({
+  revealed: new Set(level.walls.filter((wall) => wall.kind === "secretDoor").map((w) => w.id)),
 });
 
 const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128)));

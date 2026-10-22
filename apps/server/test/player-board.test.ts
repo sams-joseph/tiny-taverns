@@ -585,6 +585,7 @@ describeLayer("player-board", shared, (it) => {
             "fog",
             "grid",
             "image",
+            "level",
             "rows",
             "tokens",
           ].sort(),
