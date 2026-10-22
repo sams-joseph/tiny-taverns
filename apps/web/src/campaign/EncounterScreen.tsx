@@ -364,7 +364,11 @@ function EncounterLevel({ levelId }: { readonly levelId: LevelId }) {
       {level.state === "failed" && <ApiFailureNotice failure={level.failure} onRetry={retry} />}
       {level.state === "ready" && (
         <>
-          <LevelPreview level={level.value} label={`The level ${level.value.name}, from above`} />
+          <LevelPreview
+            level={level.value}
+            label={`The level ${level.value.name}, from above`}
+            capped
+          />
           {level.value.description !== null && (
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">
               <span className="text-heading">What the place looks like:</span>{" "}

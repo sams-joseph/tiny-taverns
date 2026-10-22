@@ -9,6 +9,14 @@ const palette = {
   theme: Object.fromEntries(Object.keys(THEME_COLOURS).map((name) => [name, [0, 0, 0]])),
 } as unknown as Palette;
 
+/** Every colour its own grey by its place in the list, so tones between two can be told apart. */
+const toned = {
+  level: Object.fromEntries(
+    LEVEL_COLOURS.map((name, index) => [name, [index / LEVEL_COLOURS.length, 0.2, 0.4]]),
+  ),
+  theme: Object.fromEntries(Object.keys(THEME_COLOURS).map((name) => [name, [0, 0, 0]])),
+} as unknown as Palette;
+
 /** A 2D context that records what was drawn: enough of one for the thumbnail. */
 const recorder = () => {
   const calls: Array<string> = [];
@@ -42,11 +50,42 @@ describe("drawLevelThumbnail", () => {
     expect([canvas.width, canvas.height]).toEqual([level.columns * 4, level.rows * 4]);
 
     const floored = level.floor.filter((material) => material !== 0).length;
-    // The void, every floored square, the ambient shade, and one glow per lit light.
-    expect(calls.filter((call) => call.startsWith("fillRect("))).toHaveLength(
+    const squareFills = calls.filter((call) => /^fillRect\(\d+,\d+,4,4\)$/.test(call));
+    // The void, every floored square's own tone, its joints over it, the
+    // ambient shade, and one glow per lit light.
+    expect(squareFills).toHaveLength(floored);
+    const joints = calls.filter((call) =>
+      /^fillRect\([\d.]+,[\d.]+,[\d.]+,[\d.]+\)$/.test(call),
+    ).length;
+    expect(joints).toBeGreaterThan(
       1 + floored + 1 + level.lights.filter((light) => light.lit).length,
     );
     expect(calls.filter((call) => call === "stroke()")).toHaveLength(level.walls.length);
+  });
+
+  it("textures a floor rather than checkering it: a tone per square, the same every draw", () => {
+    const level = smallLevel();
+    const draw = () => {
+      const { calls, context } = recorder();
+      const canvas = document.createElement("canvas");
+      vi.spyOn(canvas, "getContext").mockReturnValue(context);
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+      const styles: Array<unknown> = [];
+      const seen = new Proxy(context, {
+        set: (_target, key, value) => {
+          if (key === "fillStyle" && typeof value === "string") styles.push(value);
+          return true;
+        },
+        get: (target, key) => Reflect.get(target, key) as unknown,
+      });
+      vi.spyOn(canvas, "getContext").mockReturnValue(seen);
+      drawLevelThumbnail(canvas, level, toned, 4);
+      return { calls, styles };
+    };
+    const first = draw();
+    expect(draw().styles).toEqual(first.styles);
+    // More than the two tones a checkerboard has.
+    expect(new Set(first.styles.slice(1, 1 + 20)).size).toBeGreaterThan(2);
   });
 
   it("draws nothing, and says so, with no 2D canvas", () => {
