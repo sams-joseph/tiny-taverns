@@ -15,6 +15,18 @@ export const libraryLevelsAtom = apiAtom(
   [reads.libraryLevels],
 );
 
+/**
+ * The encounters naming one of the owner's levels, for the delete
+ * confirmation. An encounter's save that picks or drops a level names the
+ * shelf's key, so this answers it.
+ */
+export const levelUsesAtom = Atom.family((levelId: LevelId) =>
+  apiAtom(
+    (client) => client.libraryLevels.uses({ params: { levelId } }),
+    [reads.libraryLevel(levelId), reads.libraryLevels],
+  ),
+);
+
 /** One of the owner's levels, the whole document. */
 export const libraryLevelAtom = Atom.family((levelId: LevelId) =>
   apiAtom(

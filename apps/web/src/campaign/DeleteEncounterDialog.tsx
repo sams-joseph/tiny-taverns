@@ -50,6 +50,8 @@ export function DeleteEncounterDialog({
         reads.encounters(campaignId),
         reads.notes(campaignId),
         ...(openNight === undefined ? [] : [reads.prep(openNight), reads.runs(openNight)]),
+        // Its level is used one place fewer, which the level's delete lists.
+        ...(encounter.levelId === null ? [] : [reads.libraryLevels]),
       ],
     );
     if (Result.isSuccess(done)) onDeleted();

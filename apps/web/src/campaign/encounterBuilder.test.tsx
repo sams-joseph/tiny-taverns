@@ -2,6 +2,7 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { apiUrl } from "../api/client";
+import { cryptLevelId } from "../levels/levels.fixtures";
 import { renderAt } from "../test/renderRoute";
 import {
   battleMap,
@@ -332,6 +333,59 @@ describe("writing a new encounter", () => {
   });
 });
 
+describe("the level a fight on it is played on", () => {
+  const pick = async (option: RegExp) => {
+    await userEvent.click(screen.getByRole("combobox", { name: "Level" }));
+    await userEvent.click(await screen.findByRole("option", { name: option }));
+  };
+
+  it("offers the creator's own levels on a new encounter, and sends the one picked", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
+    await userEvent.type(await openNew(), "Ambush in the reeds");
+    expect(screen.getByRole("combobox", { name: "Level" })).toHaveTextContent(
+      "None: the battle map",
+    );
+    await pick(/^The Crypt/);
+    // The way into the editor, for the level picked.
+    expect(screen.getByRole("link", { name: "Open The Crypt in the editor" })).toHaveAttribute(
+      "href",
+      `/library/levels/${cryptLevelId}`,
+    );
+    await save();
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({ levelId: cryptLevelId }),
+    );
+  });
+
+  it("sends no level for a new encounter left on its battle map", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
+    await userEvent.type(await openNew(), "Ambush in the reeds");
+    await save();
+    await waitFor(() => expect(bodyOf(server, "POST", "/encounters")).toBeDefined());
+    expect(bodyOf(server, "POST", "/encounters")).not.toHaveProperty("levelId");
+  });
+
+  it("opens on the encounter's level, and takes it off with a null", async () => {
+    server.routes.set(`GET ${encountersPath}`, {
+      status: 200,
+      body: page([{ ...encounter, levelId: cryptLevelId }]),
+    });
+    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
+    await openEdit();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Level" })).toHaveTextContent("The Crypt"),
+    );
+    await pick(/^None/);
+    expect(screen.queryByRole("link", { name: /in the editor/ })).not.toBeInTheDocument();
+    await save();
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
+        levelId: null,
+      }),
+    );
+  });
+});
+
 describe("editing an encounter", () => {
   beforeEach(() => {
     server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
@@ -360,8 +414,9 @@ describe("editing an encounter", () => {
     );
     // Difficulty is computed from the roster and the party: no field for it.
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("difficulty");
-    // An untouched line is not sent.
+    // An untouched line is not sent, nor an untouched level.
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("setting");
+    expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("levelId");
     await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
     expect(new URLSearchParams(globalThis.location.search).get("encounter")).toBe(encounterId);
   });

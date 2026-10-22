@@ -53,6 +53,7 @@ import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
 import { BuilderRail } from "./BuilderRail";
 import { CastLineDialog } from "./CastLineDialog";
+import { LevelPicker } from "./LevelPicker";
 import {
   addCreature,
   createPayload,
@@ -452,10 +453,13 @@ function EncounterBuilder({
       // the encounter row was never sent for — and the prep, the map's setting
       // line and the roster all answer this one key. A read-aloud is a note,
       // found over the notes by the preview and the Overview, so a save that
-      // wrote one names the notes too.
-      touchesNote
-        ? [reads.encounters(campaignId), reads.notes(campaignId)]
-        : [reads.encounters(campaignId)],
+      // wrote one names the notes too. A level picked or dropped moves where
+      // that level is used, which its delete confirmation lists.
+      [
+        reads.encounters(campaignId),
+        ...(touchesNote ? [reads.notes(campaignId)] : []),
+        ...(draft.levelId === (saved.encounter?.levelId ?? null) ? [] : [reads.libraryLevels]),
+      ],
     );
 
     if (Result.isSuccess(result)) {
@@ -637,6 +641,7 @@ function EncounterBuilder({
                   onChange={(event) => patch({ setting: event.target.value })}
                 />
               </Field>
+              <LevelPicker value={draft.levelId} onChange={(levelId) => patch({ levelId })} />
             </BattleMapCard>
 
             {showCreatures && (
@@ -1007,6 +1012,9 @@ function OtherReadAloud({
  *
  * The picture is the encounter page's read (`encounterPageAtom`), the one the
  * preview and the page already hold, so arriving from either costs no request.
+ *
+ * Under the setting line, the level a fight is played on instead of the
+ * picture, when the creator picks one of their own (`LevelPicker.tsx`).
  */
 function BattleMapCard({
   campaignId,
@@ -1015,7 +1023,7 @@ function BattleMapCard({
 }: {
   readonly campaignId: CampaignId;
   readonly encounterId: EncounterId | undefined;
-  /** The setting line's field. */
+  /** The setting line's field and the level picker. */
   readonly children: ReactNode;
 }) {
   return (
@@ -1029,7 +1037,7 @@ function BattleMapCard({
         </span>
       </div>
       {encounterId !== undefined && <DrawnMap campaignId={campaignId} encounterId={encounterId} />}
-      <div className="p-5">{children}</div>
+      <div className="flex flex-col gap-4 p-5">{children}</div>
     </Card>
   );
 }

@@ -79,6 +79,7 @@ export function BoardCanvas({
   focus,
   camera: cameraRef,
   controls,
+  backdrop,
   children,
 }: {
   readonly plane: PictureSize;
@@ -92,6 +93,13 @@ export function BoardCanvas({
   readonly camera?: RefObject<Camera | null>;
   /** The camera's own buttons, drawn beside the canvas rather than on it. */
   readonly controls?: (camera: Camera) => ReactNode;
+  /**
+   * Drawn behind the board, filling the canvas unscaled, and told the view:
+   * a level's renderer (`LevelBackdrop.tsx`) draws its own pixels at the
+   * zoom rather than a scaled bitmap. A point `p` of the plane is at
+   * `p * view.zoom + (view.x, view.y)` on the canvas. Takes no pointer.
+   */
+  readonly backdrop?: (view: CanvasView) => ReactNode;
   /** The board, drawn at the plane's size. */
   readonly children: ReactNode;
 }) {
@@ -300,6 +308,7 @@ export function BoardCanvas({
           event.preventDefault();
         }}
       >
+        {backdrop?.(view)}
         <div
           data-slot="board-canvas-content"
           className="absolute top-0 left-0 w-(--board-w) origin-top-left [transform:translate(var(--pan-x),var(--pan-y))_scale(var(--zoom))]"
