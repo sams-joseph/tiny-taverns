@@ -457,6 +457,7 @@
   --spacing-overview-aside: var(--overview-aside-w);
   --spacing-run-rail: var(--run-rail-w);
   --spacing-run-turn: var(--run-turn-w);
+  --spacing-run-target: var(--run-target-w);
   --spacing-overview-cover: var(--overview-cover-h);
   --spacing-overview-overlap: var(--overview-cover-overlap);
   --spacing-encounters-list-min: var(--encounters-list-min);

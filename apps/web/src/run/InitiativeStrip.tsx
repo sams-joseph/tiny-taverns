@@ -15,19 +15,19 @@ import {
   TooltipTrigger,
   cn,
 } from "@taverns/ui";
-import { type ReactNode, type WheelEvent, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { apiUrl } from "../api/client";
 import { DrawnImage } from "../hob/DrawnImage";
-import { wheelUnit } from "./canvas";
 import { outOfTheFight } from "./load";
 
 /**
  * The initiative while the fight takes turns: the encounter runner drawing's
  * strip (`Encounter Runner.dc.html`), a row of chips in the server's order with
- * the round boxed at its head. On the canvas it floats across the top of the
- * board (`RunStage.tsx`); in the narrow grid it heads the page
- * (`RunLayout.tsx`). While the fight rolls initiative *Roll initiative*
- * (`InitiativePhase.tsx`) stands in for it.
+ * the round boxed at its head. In the narrow grid it heads the page
+ * (`RunLayout.tsx`); on the canvas it is a column in the *Initiative* drawer
+ * the controls open (`RunStage.tsx`), put away until the DM wants it (the
+ * maintainer's call of 2026-10-22). While the fight rolls initiative *Roll
+ * initiative* (`InitiativePhase.tsx`) stands in for it.
  *
  * - **The order is the server's**, unsorted: it is what `nextTurn` walks, so a
  *   second sort here could disagree with the marker.
@@ -46,10 +46,9 @@ import { outOfTheFight } from "./load";
  *
  * Too many chips for the width scroll sideways with the scrollbar hidden, as
  * drawn: every chip is a button the keyboard reaches, brought onto the strip as
- * it takes focus; whoever is up is brought onto it when the turn moves; and on
- * the canvas, where no page scrolls under the pointer, a wheel walks the strip
- * along. In the window-scrolling grid the wheel stays the page's, and a
- * trackpad, a finger or shift and the wheel scroll the strip sideways.
+ * it takes focus, and whoever is up is brought onto it when the turn moves. The
+ * wheel stays the page's, and a trackpad, a finger or shift and the wheel
+ * scroll the strip sideways. The drawer's column scrolls with the drawer.
  */
 export function InitiativeStrip({
   run,
@@ -58,16 +57,15 @@ export function InitiativeStrip({
   hpOf,
   selectedId,
   board,
-  floating,
   disabled,
   onSelect,
   onAdd,
   onReroll,
   outOfRange,
-  compact = false,
+  list = false,
 }: {
-  /** The canvas's ribbon (`StripFrame`'s `compact`). */
-  readonly compact?: boolean;
+  /** The canvas's drawer (`StripFrame`'s `list`). */
+  readonly list?: boolean;
   /**
    * While a target is picked: who the line's reach and range leave out
    * (`run/options.ts`), faded and said in the chip's name, still pickable.
@@ -81,8 +79,6 @@ export function InitiativeStrip({
   readonly selectedId: CombatantId | undefined;
   /** Whether the fight has a board, which is what makes a token nobody put down worth a mark. */
   readonly board: boolean;
-  /** Over the canvas (`RunStage.tsx`) rather than heading the page, so a wheel is the strip's. */
-  readonly floating: boolean;
   readonly disabled: boolean;
   readonly onSelect: (combatant: Combatant) => void;
   readonly onAdd: () => void;
@@ -126,8 +122,7 @@ export function InitiativeStrip({
       labels={labels}
       activeId={run.activeCombatantId}
       selectedId={selectedId}
-      floating={floating}
-      compact={compact}
+      list={list}
       empty="Nobody is in the order. Add whoever is at the table, or end the fight and start one with a roster."
       onSelect={(row) => {
         const combatant = byId.get(row.id);
@@ -144,7 +139,7 @@ export function InitiativeStrip({
                 aria-label="Add combatant"
                 disabled={disabled}
                 onClick={onAdd}
-                className={cn("w-9 border-dashed", compact ? "h-12" : "h-13")}
+                className={cn("border-dashed", list ? "size-control" : "h-13 w-9")}
               >
                 <Icon name="plus" size={16} />
               </Button>
@@ -156,11 +151,7 @@ export function InitiativeStrip({
           <DropdownMenuTrigger
             aria-label="More about the order"
             render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn("w-9", compact ? "h-12" : "h-13")}
-              />
+              <Button variant="ghost" size="icon" className={list ? "size-control" : "h-13 w-9"} />
             }
           >
             <Icon name="ellipsis" size={16} className="pointer-events-none" />
@@ -226,11 +217,9 @@ export interface StripRow {
  * with whatever the caller adds at its end (the DM's *Add* and menu). Read-only
  * but for selection, so a player's table draws the same strip as the DM's.
  *
- * **Compact** is the canvas's ribbon (`Encounter Canvas.dc.html`): a disc per
- * row with its initiative under it, whoever is up first and larger, and the
- * order read on from them — the server's order turned, never re-sorted — with
- * the next round's mark where it comes back round. The name, the numbers and
- * the conditions are the disc's tooltip and accessible name, as a chip's are.
+ * **List** is the canvas's drawer (`RunStage.tsx`): the round and the
+ * caller's additions in a line over the same chips stacked down the drawer, in
+ * the same order. The drawer is its surface, so the strip draws none.
  */
 export function StripFrame({
   round,
@@ -238,8 +227,7 @@ export function StripFrame({
   labels,
   activeId,
   selectedId,
-  floating,
-  compact = false,
+  list = false,
   empty,
   onSelect,
   children,
@@ -249,9 +237,8 @@ export function StripFrame({
   readonly labels: ReadonlyMap<CombatantId, string>;
   readonly activeId: CombatantId | null;
   readonly selectedId: CombatantId | undefined;
-  readonly floating: boolean;
-  /** The canvas's ribbon of discs, from whoever is up. */
-  readonly compact?: boolean;
+  /** The canvas drawer's column. */
+  readonly list?: boolean;
   /** What an empty order says. */
   readonly empty: string;
   readonly onSelect: (row: StripRow) => void;
@@ -264,42 +251,37 @@ export function StripFrame({
     if (chip) reveal(chip);
   }, [activeId]);
 
-  // A mouse wheel has no sideways axis, and on the canvas nothing scrolls
-  // down under it: the wheel walks the strip along instead.
-  const walk = (event: WheelEvent<HTMLOListElement>) => {
-    const strip = event.currentTarget;
-    if (!floating || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    if (strip.scrollWidth <= strip.clientWidth) return;
-    strip.scrollLeft += event.deltaY * wheelUnit(event);
-  };
-
-  // The ribbon reads on from whoever is up; the round turns where the
-  // server's first row comes round again.
-  const upAt = compact ? rows.findIndex((row) => row.id === activeId) : -1;
-  const shown = upAt <= 0 ? rows : [...rows.slice(upAt), ...rows.slice(0, upAt)];
-
   return (
     <section
       aria-label="Initiative"
       data-slot="initiative-strip"
-      data-compact={compact ? "" : undefined}
+      data-list={list ? "" : undefined}
       className={cn(
-        "flex min-w-0 items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3",
-        compact && "max-w-full",
+        "flex min-w-0",
+        list
+          ? "flex-col gap-3"
+          : "items-center gap-2.5 rounded-card border border-strong bg-surface-card p-2 shadow-3",
       )}
     >
-      <div
-        data-slot="initiative-round"
-        className={cn(
-          "flex shrink-0 flex-col items-center justify-center gap-0.5",
-          compact
-            ? "h-12 w-12 border-r border-hairline pr-2"
-            : "h-13 w-14 rounded-md border border-hairline bg-surface-sunken",
-        )}
-      >
-        <span className="text-caption leading-none text-muted-foreground">Round</span>
-        <span className="text-title leading-none font-semibold text-heading">{round}</span>
-      </div>
+      {list ? (
+        <div className="flex items-center justify-between gap-2">
+          <p
+            data-slot="initiative-round"
+            className="mb-0 text-label leading-none font-semibold text-heading"
+          >
+            Round {round}
+          </p>
+          {children}
+        </div>
+      ) : (
+        <div
+          data-slot="initiative-round"
+          className="flex h-13 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-hairline bg-surface-sunken"
+        >
+          <span className="text-caption leading-none text-muted-foreground">Round</span>
+          <span className="text-title leading-none font-semibold text-heading">{round}</span>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="mb-0 min-w-0 flex-1 text-body-s leading-snug text-muted-foreground">
@@ -309,37 +291,20 @@ export function StripFrame({
         <ol
           ref={scroller}
           aria-label="Initiative order"
-          onWheel={walk}
           className={cn(
-            "flex min-w-0 items-center overflow-x-auto [scrollbar-width:none]",
-            compact ? "gap-1" : "flex-1 gap-1.5",
+            "flex min-w-0",
+            list
+              ? "flex-col gap-1.5"
+              : "flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]",
           )}
         >
-          {shown.map((row, index) => (
-            <li
-              key={row.id}
-              className={cn(
-                compact
-                  ? "flex shrink-0 items-center gap-1"
-                  : "flex min-w-38 max-w-44 flex-1 basis-0",
-              )}
-            >
-              {compact && index > 0 && row.id === rows[0]?.id && (
-                <span
-                  aria-hidden="true"
-                  data-slot="initiative-wrap"
-                  className="flex h-12 flex-col items-center justify-center gap-1 px-1"
-                >
-                  <span className="h-7 w-px bg-strong" />
-                  <span className="font-mono text-micro leading-none text-faint">R{round + 1}</span>
-                </span>
-              )}
+          {rows.map((row) => (
+            <li key={row.id} className={cn("flex", !list && "min-w-38 max-w-44 flex-1 basis-0")}>
               <StripChip
                 row={row}
                 label={labels.get(row.id) ?? "?"}
                 active={row.id === activeId}
                 selected={row.id === selectedId}
-                compact={compact}
                 onSelect={() => onSelect(row)}
               />
             </li>
@@ -347,7 +312,7 @@ export function StripFrame({
         </ol>
       )}
 
-      {children}
+      {!list && children}
     </section>
   );
 }
@@ -357,14 +322,12 @@ function StripChip({
   label,
   active,
   selected,
-  compact,
   onSelect,
 }: {
   readonly row: StripRow;
   readonly label: string;
   readonly active: boolean;
   readonly selected: boolean;
-  readonly compact: boolean;
   readonly onSelect: () => void;
 }) {
   const { out, hidden, unplaced, health, outOfRange = false } = row;
@@ -385,46 +348,7 @@ function StripChip({
     .filter((part) => part !== undefined)
     .join(", ");
 
-  const chip = compact ? (
-    <button
-      type="button"
-      data-combatant={row.id}
-      aria-label={name}
-      aria-pressed={selected}
-      aria-current={active ? "step" : undefined}
-      onClick={onSelect}
-      onFocus={(event) => reveal(event.currentTarget)}
-      data-range={outOfRange ? "out" : undefined}
-      className={cn(
-        "flex w-13 cursor-pointer flex-col items-center gap-1 rounded-md py-0.5",
-        "transition-control outline-none focus-visible:ring-focus hover:bg-surface-raised",
-        out && "opacity-45",
-        outOfRange && "opacity-60",
-      )}
-    >
-      <span className="flex h-12 items-center justify-center">
-        <StripDisc
-          label={label}
-          party={row.party}
-          hidden={hidden}
-          conditions={row.conditions.length}
-          portrait={row.portrait}
-          size={active ? "up" : "ribbon"}
-          ring={active ? "active" : selected ? "selected" : undefined}
-          dashed={outOfRange}
-        />
-      </span>
-      <span
-        className={cn(
-          "font-mono text-micro leading-none",
-          active ? "text-accent-ink" : "text-muted-foreground",
-          out && "line-through",
-        )}
-      >
-        {row.initiative ?? "—"}
-      </span>
-    </button>
-  ) : (
+  const chip = (
     <button
       type="button"
       data-combatant={row.id}
@@ -559,40 +483,22 @@ function StripDisc({
   hidden,
   conditions,
   portrait,
-  size = "chip",
-  ring,
-  dashed = false,
 }: {
   readonly label: string;
   readonly party: boolean;
   readonly hidden: boolean;
   readonly conditions: number;
   readonly portrait: string | undefined;
-  /** A chip's small disc, the ribbon's, or the ribbon's for whoever is up. */
-  readonly size?: "chip" | "ribbon" | "up";
-  /** The ribbon rings whoever is up in peach and the selection in the heading colour. */
-  readonly ring?: "active" | "selected" | undefined;
-  /** Beyond the reach of the line whose target is being picked. */
-  readonly dashed?: boolean;
 }) {
   return (
     <span aria-hidden="true" className="relative shrink-0">
       <span
         data-slot="strip-disc"
         className={cn(
-          "relative flex items-center justify-center overflow-hidden rounded-full border-2 bg-surface-raised",
-          "leading-none font-semibold text-heading",
-          size === "chip" && "size-7 text-micro",
-          size === "ribbon" && "size-9 text-label-s",
-          size === "up" && "size-12 text-label shadow-glow-accent",
-          ring === "active"
-            ? "border-accent"
-            : ring === "selected"
-              ? "border-heading"
-              : party
-                ? "border-info"
-                : "border-danger",
-          hidden || dashed ? "border-dashed" : "border-solid",
+          "relative flex size-7 items-center justify-center overflow-hidden rounded-full border-2 bg-surface-raised",
+          "text-micro leading-none font-semibold text-heading",
+          party ? "border-info" : "border-danger",
+          hidden ? "border-dashed" : "border-solid",
         )}
       >
         {label}

@@ -60,7 +60,7 @@ import { reads } from "../api/keys";
 import { useFullscreen, useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { HudIconButton, HudIconSwitch, StageDrawerButton, hudSurface } from "./hud";
-import { HOB_DRAWER, SHEET_DRAWER, type StageDrawer } from "./stageDrawers";
+import { HOB_DRAWER, INITIATIVE_DRAWER, SHEET_DRAWER, type StageDrawer } from "./stageDrawers";
 import { TargetFrame } from "./TargetFrame";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
@@ -1889,8 +1889,7 @@ export function RunScreen() {
         hpOf={controller.hpOf}
         selectedId={selected?.id}
         board={boardResource.state === "ready" && boardResource.value !== null}
-        floating={canvas}
-        compact={canvas}
+        list={canvas}
         disabled={frozen}
         outOfRange={marks?.out}
         onSelect={choose}
@@ -2464,6 +2463,16 @@ export function RunScreen() {
       {reconnect}
       {state !== undefined && !over && (
         <div className={cn(hudSurface, "flex items-center gap-0.5 p-1")}>
+          {strip !== null && (
+            <>
+              <StageDrawerButton
+                drawer={INITIATIVE_DRAWER}
+                icon="list-ordered"
+                label="Initiative"
+              />
+              <span aria-hidden="true" className="mx-1 h-6 w-px bg-hairline" />
+            </>
+          )}
           <HudIconSwitch
             icon="eye"
             label="Share"
@@ -2534,8 +2543,21 @@ export function RunScreen() {
     tableNpcs.state === "ready"
       ? tableNpcs.value.filter((npc) => npc.visibility === "shared" && !npcsInScene.has(npc.id))
       : [];
-  /** The canvas's drawers: the selected card, the NPCs at the table, Hob. */
+  /** The canvas's drawers: the order, the selected card, the NPCs at the table, Hob. */
   const drawers: ReadonlyArray<StageDrawer> = [
+    // The order opens from the controls while the fight is on, and from the
+    // rail once it is over, as Hob's does.
+    ...(strip !== null
+      ? [
+          {
+            key: INITIATIVE_DRAWER,
+            label: "Initiative",
+            icon: "list-ordered" as const,
+            rail: over,
+            content: strip,
+          },
+        ]
+      : []),
     ...(selected !== undefined && sheet !== false
       ? [
           {
@@ -2622,6 +2644,10 @@ export function RunScreen() {
         view === undefined
           ? undefined
           : `${view.campaign.name} · Session ${String(view.session.number)}`,
+        // The order is put away in its drawer, so the title keeps the round.
+        state === undefined || strip === null || over || scene !== undefined
+          ? undefined
+          : `Round ${String(state.run.round)}`,
         subtitle,
       ]
         .filter((part) => part !== undefined)
@@ -2715,7 +2741,6 @@ export function RunScreen() {
             ) : onCanvas ? (
               <RunStage
                 title={canvasTitle}
-                strip={strip}
                 controls={canvasControls}
                 notices={
                   <>

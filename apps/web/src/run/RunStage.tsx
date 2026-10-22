@@ -45,17 +45,19 @@ import { RunTokens } from "./RunTokens";
  * The regions:
  *
  * - **title** — top left: the way back, the fight's name and where it is.
- * - **strip** — top centre: the initiative ribbon while the fight takes turns
- *   (`InitiativeStrip.tsx`, `compact`).
- * - **controls** — top right: the icons over what the table sees, Hob, and
- *   the way to end the fight.
+ * - **target** — top centre: the target frame, while something other than
+ *   whoever is up is selected (`TargetFrame.tsx`). The top row is three
+ *   columns, the outer two of one width, so the frame stands on the window's
+ *   centre however long the title is; a title too long for its column is cut.
+ * - **controls** — top right: the icons over what the table sees, the
+ *   *Initiative* drawer, Hob, and the way to end the fight. The order is a
+ *   drawer, not a ribbon, so the board's top edge is the board's until the DM
+ *   asks for it (the maintainer's call of 2026-10-22).
  * - **notices** — under the top row: the autopilot's line, an ended or behind
  *   fight's.
  * - **rolling** — *Roll initiative* (`InitiativePhase.tsx`), on the left in the
  *   party's place while the fight rolls: a box per row needs a column.
  * - **party** — the party's portraits down the left (`PartyRail.tsx`).
- * - **target** — top centre, under the ribbon: the target frame, while
- *   something other than whoever is up is selected (`TargetFrame.tsx`).
  * - **corner** — bottom left: the board's tools and camera, which the board
  *   portals in (`StageCorner`), since they are the board's state.
  * - **turn** — bottom centre: whoever is up as an action bar (`TurnCard.tsx`),
@@ -65,7 +67,7 @@ import { RunTokens } from "./RunTokens";
  *   over the board beside the rail. A drawer stays mounted while closed, so
  *   what it watches (an NPC proposal's toast) keeps watching.
  * - **panel** — a right-hand column of cards instead of the rail: a seated
- *   player's table, until it takes the drawers too.
+ *   player's table. Its drawers open beside the column, from the controls.
  * - **rolls** — bottom right: the *Rolls* feed (`RollsDock.tsx`).
  *
  * Below `@3xl` of `main` the board is too small to play on and the runner is
@@ -75,7 +77,6 @@ import { RunTokens } from "./RunTokens";
  */
 export function RunStage({
   title,
-  strip,
   controls,
   notices,
   rolling,
@@ -90,8 +91,6 @@ export function RunStage({
   board,
 }: {
   readonly title: ReactNode;
-  /** The initiative ribbon, top centre; `null` while the fight rolls. */
-  readonly strip: ReactNode | null;
   readonly controls: ReactNode;
   /** The lines under the top row. */
   readonly notices: ReactNode;
@@ -99,7 +98,7 @@ export function RunStage({
   readonly rolling: ReactNode | null;
   /** The party's portraits, on the left once turns are taken. */
   readonly party: ReactNode | null;
-  /** The target frame, top centre under the ribbon; `null` with no target. */
+  /** The target frame, top centre; `null` with no target. */
   readonly target?: ReactNode | null;
   /** Over the turn: Hob's offer for the monster that is up. */
   readonly above?: ReactNode | null;
@@ -107,7 +106,7 @@ export function RunStage({
   readonly turn: ReactNode | null;
   /** A line over the turn card while a tool asks for a square: the attack's target. */
   readonly banner: ReactNode | undefined;
-  /** The rail's drawers; none draws no rail. */
+  /** The stage's drawers: the rail's, or with a panel, only the controls'. */
   readonly drawers?: ReadonlyArray<StageDrawer>;
   /** A right-hand column of cards in the rail's place. */
   readonly panel?: ReactNode;
@@ -150,6 +149,52 @@ export function RunStage({
     return { x, y, width: end - x, height: bottom - y };
   }, []);
 
+  // Over the board beside the rail or the panel, as tall as the middle row.
+  const drawerPanels = drawers.map((drawer) => (
+    <aside
+      key={drawer.key}
+      aria-label={drawer.label}
+      data-slot="run-drawer"
+      data-drawer={drawer.key}
+      hidden={drawer.key !== open}
+      // Esc closes the drawer it is pressed in, and nothing else;
+      // one typed into a field is the field's (`typedEscape`).
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        if (typedEscape(event.target)) return;
+        event.preventDefault();
+        setOpenKey(undefined);
+      }}
+      className={cn(
+        "pointer-events-auto absolute top-0 right-full mr-3 flex max-h-full w-aside flex-col",
+        drawer.bare !== true && cn(hudSurface, "bg-surface-card"),
+      )}
+    >
+      {drawer.bare !== true && (
+        <header className="flex shrink-0 items-center gap-2 border-b border-hairline py-1 pr-1 pl-card">
+          <Icon name={drawer.icon} size={15} className="text-muted-foreground" />
+          <SectionHeading as="h2" size="title" className="min-w-0 flex-1 truncate">
+            {drawer.label}
+          </SectionHeading>
+          <HudIconButton
+            icon="x"
+            label={`Close ${drawer.label}`}
+            onClick={() => setOpenKey(undefined)}
+          />
+        </header>
+      )}
+      <div
+        className={cn(
+          hudScroller,
+          "flex min-h-0 flex-1 flex-col gap-3",
+          drawer.bare !== true && "p-card",
+        )}
+      >
+        {drawer.content}
+      </div>
+    </aside>
+  ));
+
   return (
     <StageCorner.Provider value={corner}>
       <StageDrawers.Provider value={drawerState}>
@@ -163,26 +208,34 @@ export function RunStage({
             className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3 @container/hud"
           >
             <div ref={top} className="flex min-w-0 shrink-0 flex-col gap-3">
-              {/* The ribbon sits between the title and the controls where there is
-                  room, and on a row of its own under them where there is not. */}
+              {/* Below `@6xl` the frame takes a row of its own under the title
+                  and the controls, since three columns there would cut the
+                  title to nothing. */}
               <div
                 data-slot="run-hud-header"
-                className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-3"
+                className={cn(
+                  "grid grid-cols-[1fr_auto] items-start gap-x-4 gap-y-3",
+                  target !== null &&
+                    "@6xl/hud:grid-cols-[1fr_minmax(0,var(--spacing-run-target))_1fr]",
+                )}
               >
-                <div data-slot="run-hud-title" className="pointer-events-auto min-w-0 shrink">
+                <div
+                  data-slot="run-hud-title"
+                  className="pointer-events-auto col-start-1 row-start-1 max-w-full min-w-0 justify-self-start"
+                >
                   {title}
                 </div>
-                {strip !== null && (
+                {target !== null && (
                   <div
-                    data-slot="run-hud-strip"
-                    className="order-last flex min-w-0 basis-full justify-center *:pointer-events-auto @6xl/hud:order-none @6xl/hud:flex-1 @6xl/hud:basis-0"
+                    data-slot="run-hud-target"
+                    className="pointer-events-auto col-span-full row-start-2 flex w-full max-w-run-turn min-w-0 justify-self-center @6xl/hud:col-span-1 @6xl/hud:col-start-2 @6xl/hud:row-start-1"
                   >
-                    {strip}
+                    {target}
                   </div>
                 )}
                 <div
                   data-slot="run-hud-controls"
-                  className="pointer-events-auto flex shrink-0 flex-wrap items-center justify-end gap-2.5 empty:hidden"
+                  className="pointer-events-auto col-end-[-1] row-start-1 flex flex-wrap items-center justify-end gap-2.5 justify-self-end empty:hidden"
                 >
                   {controls}
                 </div>
@@ -219,25 +272,14 @@ export function RunStage({
                   )
                 )}
               </div>
-              <div
-                data-slot="run-hud-centre"
-                className="flex min-w-0 flex-1 flex-col items-center gap-2"
-              >
-                {target !== null && (
-                  <div
-                    data-slot="run-hud-target"
-                    className="pointer-events-auto flex w-full max-w-run-turn min-w-0 justify-center"
-                  >
-                    {target}
-                  </div>
-                )}
-              </div>
+              <div data-slot="run-hud-centre" className="min-w-0 flex-1" />
               {panel !== undefined ? (
                 <div
                   ref={right}
                   data-slot="run-hud-right"
-                  className="flex w-aside shrink-0 flex-col justify-end gap-3"
+                  className="relative flex w-aside shrink-0 flex-col justify-end gap-3"
                 >
+                  {drawerPanels}
                   <div
                     data-slot="run-hud-panel"
                     className={cn(hudScroller, "flex min-h-0 shrink flex-col gap-3")}
@@ -267,55 +309,7 @@ export function RunStage({
                         ))}
                       </nav>
                     )}
-                    {/* Over the board beside the rail, as tall as the middle row. */}
-                    {drawers.map((drawer) => (
-                      <aside
-                        key={drawer.key}
-                        aria-label={drawer.label}
-                        data-slot="run-drawer"
-                        data-drawer={drawer.key}
-                        hidden={drawer.key !== open}
-                        // Esc closes the drawer it is pressed in, and nothing else;
-                        // one typed into a field is the field's (`typedEscape`).
-                        onKeyDown={(event) => {
-                          if (event.key !== "Escape" || event.defaultPrevented) return;
-                          if (typedEscape(event.target)) return;
-                          event.preventDefault();
-                          setOpenKey(undefined);
-                        }}
-                        className={cn(
-                          "pointer-events-auto absolute top-0 right-full mr-3 flex max-h-full w-aside flex-col",
-                          drawer.bare !== true && cn(hudSurface, "bg-surface-card"),
-                        )}
-                      >
-                        {drawer.bare !== true && (
-                          <header className="flex shrink-0 items-center gap-2 border-b border-hairline py-1 pr-1 pl-card">
-                            <Icon name={drawer.icon} size={15} className="text-muted-foreground" />
-                            <SectionHeading
-                              as="h2"
-                              size="title"
-                              className="min-w-0 flex-1 truncate"
-                            >
-                              {drawer.label}
-                            </SectionHeading>
-                            <HudIconButton
-                              icon="x"
-                              label={`Close ${drawer.label}`}
-                              onClick={() => setOpenKey(undefined)}
-                            />
-                          </header>
-                        )}
-                        <div
-                          className={cn(
-                            hudScroller,
-                            "flex min-h-0 flex-1 flex-col gap-3",
-                            drawer.bare !== true && "p-card",
-                          )}
-                        >
-                          {drawer.content}
-                        </div>
-                      </aside>
-                    ))}
+                    {drawerPanels}
                   </div>
                 )
               )}

@@ -48,11 +48,18 @@ import {
 
 const server = installRunServer();
 
-/** The initiative strip's order, whose chips are the only buttons in it. */
-const initiative = () => within(screen.getByRole("list", { name: "Initiative order" }));
+/**
+ * The initiative strip's order, whose chips are the only buttons in it. On the
+ * canvas it is the *Initiative* drawer's, which the controls open, as the DM
+ * would.
+ */
+const initiative = () => {
+  const opener = screen.queryByRole("button", { name: "Initiative" });
+  if (opener !== null && opener.getAttribute("aria-expanded") !== "true") fireEvent.click(opener);
+  return within(screen.getByRole("list", { name: "Initiative order" }));
+};
 const rows = () => initiative().getAllByRole("button");
 const rowFor = (name: string): HTMLElement => {
-  // A chip's name is its accessible one: the canvas's ribbon draws only the disc.
   const found = rows().find((row) => row.getAttribute("aria-label")?.includes(name));
   if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
@@ -87,7 +94,10 @@ const openStatBlock = async () => {
   await userEvent.click(panel().getByRole("button", { name: "Stat block" }));
 };
 /** The strip itself: the round, the order and its trailing controls. */
-const strip = () => within(screen.getByRole("region", { name: "Initiative" }));
+const strip = () => {
+  initiative();
+  return within(screen.getByRole("region", { name: "Initiative" }));
+};
 /** Open the strip's overflow menu, where the visibility sentence and *Reroll* live. */
 const stripMenu = async () => {
   await userEvent.click(strip().getByRole("button", { name: "More about the order" }));
@@ -2547,12 +2557,23 @@ describe("the canvas", () => {
     expect(content()).toContainElement(board().querySelector("[data-slot=board]"));
     expect(content().style.getPropertyValue("--board-w")).toBe(`${String(24 * 64)}px`);
 
-    // Initiative, across the top; nothing rolls initiative in the column under it.
-    expect(hud("strip")).toContainElement(screen.getByRole("list", { name: "Initiative order" }));
+    // Initiative is a drawer the controls open, closed until it is wanted, and
+    // never the rail's; nothing rolls initiative in the column on the left.
+    expect(screen.queryByRole("list", { name: "Initiative order" })).toBeNull();
+    const order = within(hud("controls")).getByRole("button", { name: "Initiative" });
+    expect(order).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(order);
+    expect(drawer("initiative")).toContainElement(
+      screen.getByRole("list", { name: "Initiative order" }),
+    );
     expect(document.querySelector("[data-slot=run-hud-rolling]")).toBeNull();
-    // No target while the turn is followed; a creature picked is framed under the ribbon.
+    // The title keeps the round the order is put away with.
+    expect(hud("title")).toHaveTextContent("Round 1");
+    // No target while the turn is followed; a creature picked is framed in the
+    // top row's centre, between the title and the controls.
     expect(document.querySelector("[data-slot=run-hud-target]")).toBeNull();
     await userEvent.click(rowFor("Goblin Boss"));
+    expect(hud("header")).toContainElement(hud("target"));
     expect(hud("target")).toContainElement(
       screen.getByRole("region", { name: "Target, Goblin Boss" }),
     );
@@ -2605,7 +2626,7 @@ describe("the canvas", () => {
     expect(hud("controls")).toContainElement(screen.getByRole("button", { name: "End" }));
     expect(hud("turn")).toContainElement(screen.getByRole("button", { name: "Next turn" }));
     // Every floating region is on the one HUD rung.
-    for (const name of ["strip", "left", "target", "rail", "turn", "corner"])
+    for (const name of ["controls", "left", "target", "rail", "turn", "corner"])
       expect(hud(name).closest(".z-hud")).not.toBeNull();
   });
 
@@ -2708,7 +2729,7 @@ describe("the canvas", () => {
     await open();
     const zoom = zoomOf();
     const from = panOf();
-    for (const name of ["strip", "rolls", "party", "tools"]) {
+    for (const name of ["controls", "rolls", "party", "tools"]) {
       expect(canvasEl().contains(hud(name))).toBe(false);
       expect(fireEvent.wheel(hud(name), { deltaY: 100 })).toBe(true);
     }
@@ -2863,7 +2884,7 @@ describe("the canvas", () => {
     expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
   });
 
-  it("puts Roll initiative top left in the strip's place, and keeps Start round as the one way in", async () => {
+  it("puts Roll initiative on the left, with no order to open, and keeps Start round as the one way in", async () => {
     server.routes.set(`GET ${serverRunBase()}`, {
       status: 200,
       body: { ...liveRun, phase: "initiative", activeCombatantId: null },
@@ -2872,8 +2893,9 @@ describe("the canvas", () => {
     const roll = await screen.findByRole("region", { name: "Roll initiative" });
     expect(hud("rolling")).toContainElement(roll);
     expect(hud("left").firstElementChild).toBe(hud("rolling"));
-    // A box per row wants a column: nothing runs across the top while rolling.
-    expect(document.querySelector("[data-slot=run-hud-strip]")).toBeNull();
+    // A box per row wants a column, and it is the order while rolling: no drawer holds another.
+    expect(screen.queryByRole("button", { name: "Initiative" })).toBeNull();
+    expect(document.querySelector("[data-slot=run-drawer][data-drawer=initiative]")).toBeNull();
     expect(hud("rolling").className).toMatch(/overflow-y-auto/);
     expect(screen.getAllByRole("button", { name: /Start round/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
