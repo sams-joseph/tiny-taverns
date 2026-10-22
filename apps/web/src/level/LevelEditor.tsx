@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { LevelDocument } from "./document";
 import { Hud } from "./Hud";
 import { Inspector } from "./Inspector";
@@ -27,6 +27,8 @@ export interface LevelEditorProps {
   readonly onSave: SaveLevel;
   /** The owner's save is in flight, for the status in the top bar. */
   readonly saving?: boolean;
+  /** The way out of the editor, leading its top bar. */
+  readonly back?: ReactNode;
 }
 
 /**
@@ -38,7 +40,7 @@ export interface LevelEditorProps {
  * It fills the viewport and never scrolls the window: the second named
  * exception to "pages scroll with the window", beside the live runner's canvas.
  */
-export function LevelEditor({ level, onSave, saving = false }: LevelEditorProps) {
+export function LevelEditor({ level, onSave, saving = false, back }: LevelEditorProps) {
   const save = useRef(onSave);
   save.current = onSave;
   const [store] = useState(() => new EditorStore(level, (next) => save.current(next)));
@@ -70,7 +72,7 @@ export function LevelEditor({ level, onSave, saving = false }: LevelEditorProps)
     >
       <LevelCanvas store={store} onThumbnails={setFloorThumbs} />
       <div className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3">
-        <TopBar store={store} state={state} saving={saving} />
+        <TopBar store={store} state={state} saving={saving} back={back} />
         <div className="flex min-h-0 flex-1 items-start justify-between gap-3">
           <ToolRail store={store} tool={state.tool} />
           <Inspector store={store} state={state} />

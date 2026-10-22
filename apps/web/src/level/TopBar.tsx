@@ -1,6 +1,6 @@
 import type { LevelAmbient } from "@taverns/api";
 import { Button, Icon, Input, Label, Switch, cn, sectionHeadingVariants } from "@taverns/ui";
-import { useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import type { EditorState, EditorStore } from "./store";
 
 const AMBIENTS: ReadonlyArray<{ readonly value: LevelAmbient; readonly label: string }> = [
@@ -24,11 +24,14 @@ export function TopBar({
   store,
   state,
   saving,
+  back,
 }: {
   readonly store: EditorStore;
   readonly state: EditorState;
   /** The owner's own save is in flight (its mutation), on top of the editor's. */
   readonly saving: boolean;
+  /** The way out, leading the bar: the page that holds the editor names where it goes. */
+  readonly back?: ReactNode;
 }) {
   const doc = state.history.present;
   const [name, setName] = useState(doc.name);
@@ -41,6 +44,7 @@ export function TopBar({
   return (
     <header className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-2.5 rounded-panel border border-hairline bg-surface-card px-2.5 py-2 shadow-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
+        {back}
         <span className="shrink-0 text-label-s text-faint">Level</span>
         <Label htmlFor={nameId} className="sr-only">
           Level name

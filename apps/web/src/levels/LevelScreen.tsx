@@ -1,60 +1,82 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { BackLink, Loading, SectionHeading } from "@taverns/ui";
+import { LevelSave } from "@taverns/api";
+import { BackLink, Loading } from "@taverns/ui";
+import { Result, Schema } from "effect";
+import { useCallback } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useApiAtom } from "../api/atoms";
-import { LibraryNav } from "../library/LibraryNav";
-import { TopBar } from "../shell/TopBar";
+import { reads } from "../api/keys";
+import { useMutation } from "../api/mutation";
+import { type LevelDocument, LevelEditor } from "../level";
+import { useFullscreen } from "../shell/slots";
 import { libraryLevelAtom } from "./load";
-import { partsLine, sizeLine } from "./size";
+
+const toSave = Schema.decodeUnknownSync(LevelSave);
 
 /**
- * One of the owner's levels: its name, what it is, its size and how much is
- * built on it. An ordinary page under the Library's header for now; the
- * full-screen editor takes this path over, so nothing here edits.
+ * One of the owner's levels, open in the full-screen editor. The screen holds
+ * the whole window (`useFullscreen`), so the shell draws no nav and the editor's
+ * own bar carries the way back to the shelf.
+ *
+ * The editor saves the whole document with the `version` it was read at; a
+ * stale one is a `Conflict`, which the editor shows as not saved. A save
+ * changes the level and its card on the shelf.
  */
 export function LevelScreen() {
   const { levelId } = useParams({ from: "/_shell/library/levels/$levelId" });
   const [resource, reload] = useApiAtom(libraryLevelAtom(levelId));
-  const level = resource.state === "ready" ? resource.value : undefined;
+  const { busy, submit } = useMutation();
+  useFullscreen(resource.state === "ready");
 
-  return (
-    <>
-      <TopBar
-        title="Library"
-        {...(level !== undefined && { subtitle: level.name })}
-        tabs={<LibraryNav />}
-      >
-        <BackLink render={<Link to="/library/levels" />}>Levels</BackLink>
-      </TopBar>
+  const save = useCallback(
+    async (next: LevelDocument) => {
+      // Decoding checks the document against the wire before it leaves, and
+      // brands its ids; a document that fails is refused here as it would be there.
+      const payload = toSave({
+        name: next.name,
+        description: next.description,
+        columns: next.columns,
+        rows: next.rows,
+        feetPerCell: next.feetPerCell,
+        ambient: next.ambient,
+        floor: next.floor,
+        walls: next.walls,
+        props: next.props,
+        lights: next.lights,
+        regions: next.regions,
+        version: next.version,
+      });
+      const done = await submit(
+        (client) => client.libraryLevels.save({ params: { levelId }, payload }),
+        [reads.libraryLevel(levelId), reads.libraryLevels],
+      );
+      if (Result.isFailure(done)) throw new Error("The level was not saved.");
+      return { version: done.success.version };
+    },
+    [levelId, submit],
+  );
+
+  if (resource.state !== "ready") {
+    return (
       <div className="@container mx-auto w-full max-w-overview">
+        <BackLink render={<Link to="/library/levels" />}>Levels</BackLink>
         {resource.state === "loading" && <Loading label="Reading the level…" />}
         {resource.state === "failed" && (
           <div className="max-w-3xl">
             <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           </div>
         )}
-        {level !== undefined && (
-          <article aria-label={level.name} className="flex max-w-3xl flex-col gap-3">
-            <SectionHeading as="h2">{level.name}</SectionHeading>
-            {level.description !== null && (
-              <p className="text-body leading-body text-foreground">{level.description}</p>
-            )}
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-body-s leading-body">
-              <dt className="text-muted-foreground">Size</dt>
-              <dd>{sizeLine(level)}</dd>
-              <dt className="text-muted-foreground">On it</dt>
-              <dd>
-                {partsLine({
-                  walls: level.walls.length,
-                  props: level.props.length,
-                  lights: level.lights.length,
-                  regions: level.regions.length,
-                })}
-              </dd>
-            </dl>
-          </article>
-        )}
       </div>
-    </>
+    );
+  }
+
+  return (
+    <LevelEditor
+      key={resource.value.id}
+      level={resource.value}
+      onSave={save}
+      saving={busy}
+      back={<BackLink render={<Link to="/library/levels" />}>Levels</BackLink>}
+    />
   );
 }

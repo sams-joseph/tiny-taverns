@@ -38,7 +38,7 @@ describe("the Library's Levels shelf", () => {
     expect(screen.getByText("Empty")).toBeTruthy();
 
     await userEvent.click(name);
-    expect(await screen.findByRole("article", { name: "The Crypt" })).toBeTruthy();
+    expect(await screen.findByDisplayValue("The Crypt")).toBeTruthy();
   });
 
   it("makes a level at a chosen size and opens it", async () => {
@@ -53,7 +53,7 @@ describe("the Library's Levels shelf", () => {
     await waitFor(() =>
       expect(bodies("POST")).toEqual([JSON.stringify({ name: "Ford", columns: 48, rows: 32 })]),
     );
-    expect(await screen.findByRole("article", { name: "Ford" })).toBeTruthy();
+    expect(await screen.findByDisplayValue("Ford")).toBeTruthy();
     expect(server.calls.map((call) => call.pathname)).toContain(`/library/levels/${fordLevelId}`);
   });
 
@@ -75,13 +75,34 @@ describe("the Library's Levels shelf", () => {
 });
 
 describe("a level's page", () => {
-  it("names the level, its size and what is built on it", async () => {
+  it("opens the level in the full-screen editor, with the way back to the shelf", async () => {
     await at(`/library/levels/${cryptLevelId}`);
 
-    const page = await screen.findByRole("article", { name: "The Crypt" });
-    expect(within(page).getByText(crypt.description)).toBeTruthy();
-    expect(within(page).getByText("6 × 4 squares · 30 × 20 ft")).toBeTruthy();
-    expect(within(page).getByText("2 walls · 1 prop · 1 light · 1 region")).toBeTruthy();
-    expect(within(page).queryByRole("button")).toBeNull();
+    const name = await screen.findByRole("textbox", { name: "Level name" });
+    expect((name as HTMLInputElement).value).toBe("The Crypt");
+    expect(document.querySelector("[data-slot=level-editor]")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Levels" }).getAttribute("href")).toBe(
+      "/library/levels",
+    );
+  });
+
+  it("saves the whole document with the version it was read at", async () => {
+    server.routes.set(`PUT /library/levels/${cryptLevelId}`, {
+      status: 200,
+      body: { ...crypt, name: "The Drowned Crypt", version: crypt.version + 1 },
+    });
+    await at(`/library/levels/${cryptLevelId}`);
+
+    const name = await screen.findByRole("textbox", { name: "Level name" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "The Drowned Crypt{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: /^Save/ }));
+
+    await waitFor(() => expect(bodies("PUT")).toHaveLength(1));
+    const sent = JSON.parse(bodies("PUT")[0] as string) as Record<string, unknown>;
+    expect(sent["name"]).toBe("The Drowned Crypt");
+    expect(sent["version"]).toBe(crypt.version);
+    expect(sent["walls"]).toEqual(crypt.walls);
+    expect(sent).not.toHaveProperty("id");
   });
 });
