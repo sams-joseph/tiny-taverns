@@ -28,7 +28,7 @@ import { LevelSwitches } from "../run/LevelSwitches";
 import { useFogTool } from "../run/runBoard";
 import { InStageCorner } from "../run/RunStage";
 import { type LayerToken, TokenLayer } from "../run/RunTokens";
-import { labelsInOrder } from "../run/tokens";
+import { labelsInOrder, placedLabels } from "../run/tokens";
 
 /** The visit's two tools: the party's tokens and the level's switches, or the DM's fog. */
 const VISIT_TOOLS: ReadonlyArray<BoardTool> = ["move", "fog"];
@@ -139,10 +139,10 @@ export function VisitBoard({
     struck: false,
     hidden: false,
   }));
-  // Each placed creature drawn as the DM's hidden token, labelled by its
-  // encounter's initials and numbered within it ("A1", "A2"), so the markers
-  // group by encounter. One past the copy's edge has no square and is only
-  // listed (the stage's *Waiting here* drawer).
+  // Each placed creature drawn as the DM's hidden token, labelled as its
+  // encounter's placement and its fight label it (`placedLabels`: a placed
+  // Goblin 2 is "G2"), numbered within its encounter. One past the copy's edge
+  // has no square and is only listed (the stage's *Waiting here* drawer).
   const placed = visit.encounters.flatMap((encounter) =>
     encounter.creatures
       .filter((creature) => creature.problem !== "offBoard")
@@ -169,14 +169,16 @@ export function VisitBoard({
         ...labelsInOrder(
           visit.tokens.map((token) => ({ id: token.seatId, displayName: token.name })),
         ),
-        ...labelsInOrder(
-          visit.encounters.flatMap((encounter) =>
+        ...visit.encounters.flatMap((encounter) => [
+          ...placedLabels(
             encounter.creatures.map((creature) => ({
               id: placedId(creature),
-              displayName: encounter.name,
+              line: creature.name,
+              ordinal: creature.ordinal,
+              count: creature.count,
             })),
           ),
-        ),
+        ]),
       ]),
     [visit.tokens, visit.encounters],
   );

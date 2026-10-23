@@ -361,6 +361,7 @@ describe("a visit's stage", () => {
       encounterCreatureId: line,
       ordinal,
       name: "Goblin",
+      count: 3,
       column,
       row: 2,
       problem,
@@ -391,6 +392,11 @@ describe("a visit's stage", () => {
     // tokens; the trigger area and the one that needs moving marked.
     const waiting = await within(board).findAllByRole("button", { name: /Goblin, Ambush/ });
     expect(waiting).toHaveLength(2);
+    // Labelled as the placement and the fight label them: Goblin 1 and 2 of three.
+    expect(waiting.map((token) => token.textContent)).toEqual([
+      expect.stringContaining("G1"),
+      expect.stringContaining("G2"),
+    ]);
     expect(document.querySelectorAll("[data-trigger]")).toHaveLength(1);
     expect(document.querySelectorAll("[data-needs-moving]")).toHaveLength(1);
 
@@ -454,6 +460,7 @@ describe("a visit's stage", () => {
             encounterCreatureId: "2b1f2a1e-0000-4000-8000-000000000b01",
             ordinal: 0,
             name: "Goblin",
+            count: 1,
             column: 1,
             row: 2,
             problem: null,

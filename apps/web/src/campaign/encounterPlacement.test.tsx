@@ -64,6 +64,13 @@ describe("placing an encounter on its level", () => {
     pressSquare(board, 2, 3);
     expect(screen.getByRole("button", { name: "Goblin Boss 1, column 2, row 1" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Goblin Boss 2, column 3, row 4" })).toBeVisible();
+    // Each marker wears the label its token will in the fight, numbered in its line.
+    expect(
+      screen.getByRole("button", { name: "Goblin Boss 1, column 2, row 1" }),
+    ).toHaveTextContent(/^GB1$/);
+    expect(
+      screen.getByRole("button", { name: "Goblin Boss 2, column 3, row 4" }),
+    ).toHaveTextContent(/^GB2$/);
 
     // The altar's square, and a taken one, are refused before the save.
     pressSquare(board, 4, 2);

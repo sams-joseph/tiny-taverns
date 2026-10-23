@@ -14,6 +14,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { LevelPreview } from "../level/LevelPreview";
+import { placedLabels } from "../run/tokens";
 import { useArrivalScroll } from "../ui/arrival";
 import { levelVisitsAtom } from "../visits/load";
 import { encounterPrepAtom } from "./load";
@@ -109,6 +110,10 @@ function PlacementEditor({
   readonly saved: EncounterLevelPlacement;
 }) {
   const instances = useMemo(() => instancesOf(roster), [roster]);
+  const labels = useMemo(
+    () => placedLabels(instances.map((instance) => ({ ...instance, id: instance.key }))),
+    [instances],
+  );
   const [draft, setDraft] = useState<PlacementDraft>(() => draftOf(saved, instances));
   const [picked, setPicked] = useState<string | undefined>(
     () => instances.find((instance) => !draftOf(saved, instances).spots.has(instance.key))?.key,
@@ -325,7 +330,7 @@ function PlacementEditor({
                   height: percent(1 / rows),
                 }}
               >
-                {instance.name.charAt(0).toUpperCase()}
+                {labels.get(instance.key)}
               </button>
             );
           })}

@@ -21,7 +21,11 @@ export interface Instance {
   readonly key: string;
   readonly encounterCreatureId: EncounterCreatureId;
   readonly ordinal: number;
+  /** Its name in a list: the line's, numbered when the line has more than one. */
   readonly name: string;
+  /** Its roster line's name and size, which its token's label is made from (`placedLabels`). */
+  readonly line: string;
+  readonly count: number;
 }
 
 export interface PlacementDraft {
@@ -45,6 +49,8 @@ export const instancesOf = (
       encounterCreatureId: line.id,
       ordinal,
       name: line.count === 1 ? name : `${name} ${String(ordinal + 1)}`,
+      line: name,
+      count: line.count,
     }));
   });
 

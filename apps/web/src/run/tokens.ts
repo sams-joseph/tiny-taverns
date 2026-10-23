@@ -70,6 +70,48 @@ export const labelsInOrder = <I extends string>(
   return labels;
 };
 
+/** One placed creature of an encounter: an instance of a roster line of `count`. */
+export interface PlacedInstance<I extends string> {
+  readonly id: I;
+  /** The roster line's name: a member of the Cast's own, else the creature's. */
+  readonly line: string;
+  readonly ordinal: number;
+  /** How many the line has, placed or not. */
+  readonly count: number;
+}
+
+/**
+ * The labels a placed encounter's creatures wear before its fight, which are
+ * the ones their tokens wear once it is on: `labelsInOrder` over every
+ * instance of their lines, placed or not, by the line's name and in ordinal
+ * order, as the fight's start seeds them (`EncounterRuns.start`) and
+ * `tokenLabels` reads them back. A placed Goblin 2 is `G2` on the encounter's
+ * placement, on the level's stage and in the fight; a line of one is `G`.
+ */
+export const placedLabels = <I extends string>(
+  placed: ReadonlyArray<PlacedInstance<I>>,
+): ReadonlyMap<I, string> => {
+  const lines = new Map<string, number>();
+  for (const instance of placed) {
+    if (!lines.has(instance.line)) lines.set(instance.line, instance.count);
+  }
+  const key = (line: string, ordinal: number) => `${String(ordinal)}:${line}`;
+  const seeded = labelsInOrder(
+    [...lines].flatMap(([line, count]) =>
+      Array.from({ length: count }, (_, ordinal) => ({
+        id: key(line, ordinal),
+        displayName: line,
+      })),
+    ),
+  );
+  return new Map(
+    placed.map((instance) => [
+      instance.id,
+      seeded.get(key(instance.line, instance.ordinal)) ?? "?",
+    ]),
+  );
+};
+
 /**
  * The board's line about the DM's last move: `"Goblin Boss moved 30 ft"`, and
  * `", past their 30 ft speed"` when it went further than that — said, not

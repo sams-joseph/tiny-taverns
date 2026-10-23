@@ -407,7 +407,7 @@ const placedEncountersColumn = (sql: SqlClient.SqlClient): Statement.Fragment =>
     cross join lateral (
       select json_agg(json_build_object(
         'encounterCreatureId', line.id, 'ordinal', spot.ordinal,
-        'name', coalesce(npc.name, creature.name),
+        'name', coalesce(npc.name, creature.name), 'count', line.count,
         'column', spot.board_column, 'row', spot.board_row,
         'problem', case when spot.board_column >= level_visit.board_columns
                           or spot.board_row >= level_visit.board_rows

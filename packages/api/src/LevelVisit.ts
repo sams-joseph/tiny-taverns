@@ -55,6 +55,8 @@ export const LevelVisitPlacedCreature = Schema.Struct({
   ordinal: Schema.Int,
   /** The roster line's name: a member of the Cast's own, else the creature's. */
   name: Schema.String,
+  /** How many the roster line has, placed or not: whether its label is numbered (`placedLabels`). */
+  count: Schema.Int,
   column: Schema.Int,
   row: Schema.Int,
   /** `null` when it can stand there. */

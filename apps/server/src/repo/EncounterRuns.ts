@@ -1024,7 +1024,24 @@ export class EncounterRuns extends Context.Service<
                       }
                     }
                     if (seeded.length > 0) {
+                      // The seed is one statement, so every row would share
+                      // one `created_at` and its tokens' numbers (`tokenLabels`
+                      // on the web, by `created_at` then id) would follow the
+                      // random ids. A millisecond apart in seed order instead,
+                      // so a line's instances are numbered by their ordinal,
+                      // as their placement and the level's stage label them
+                      // (`placedLabels`): a placed Goblin 2 is G2 here too.
+                      const ids = seeded.map(() => crypto.randomUUID());
+                      seeded.forEach((row, index) => {
+                        row.id = ids[index];
+                      });
                       yield* sql`insert into combatant ${sql.insert(seeded)}`;
+                      yield* sql`
+                        update combatant
+                        set created_at = combatant.created_at + seed.at * interval '1 millisecond'
+                        from unnest(${textArray(ids)}::uuid[]) with ordinality as seed(id, at)
+                        where combatant.id = seed.id
+                      `;
                     }
 
                     // Put it on the table. Nobody is up yet in any run: a fight

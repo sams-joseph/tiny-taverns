@@ -485,6 +485,19 @@ describeLayer("level-visit-fights", shared, (it) => {
           { column: 6, row: 1 },
           { column: 6, row: 2 },
         ]);
+        // Seeded one after another, a line's instances in ordinal order: the
+        // order a token's number follows (`tokenLabels`, by `createdAt`), so the
+        // placed Goblin 2 is G2 in the fight as it was on the level.
+        const byAge = [...combatants].sort(
+          (a, b) => a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds,
+        );
+        expect(new Set(byAge.map((row) => row.createdAt.epochMilliseconds)).size).toBe(
+          combatants.length,
+        );
+        expect(byAge.filter((row) => row.kind === "npc").map(square)).toEqual([
+          { column: 6, row: 1 },
+          { column: 6, row: 2 },
+        ]);
 
         const borrowed = yield* dmVisit(table, visit);
         expect(borrowed.fight).toEqual({
