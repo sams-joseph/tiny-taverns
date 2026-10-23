@@ -92,6 +92,21 @@ describe("placing an encounter on its level", () => {
     );
   });
 
+  it("scrolls to itself when the page is opened at #placement, once it is drawn", async () => {
+    const scrolled: Array<Element> = [];
+    // jsdom has no `scrollIntoView`; the card skips it when it is missing.
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      await renderAt(`${pagePath}#placement`);
+      await screen.findByRole("heading", { name: "Where they wait" });
+      await waitFor(() => expect(scrolled).toEqual([document.getElementById("placement")]));
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
+
   it("opens on the saved placement, and takes a creature off the level", async () => {
     server.routes.set(`GET ${pagePath}/prep`, {
       status: 200,

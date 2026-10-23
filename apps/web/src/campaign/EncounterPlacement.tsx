@@ -14,6 +14,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { LevelPreview } from "../level/LevelPreview";
+import { useArrivalScroll } from "../ui/arrival";
 import { levelVisitsAtom } from "../visits/load";
 import { encounterPrepAtom } from "./load";
 import {
@@ -64,6 +65,9 @@ export function EncounterPlacement({
   readonly played: boolean;
 }) {
   const [prep, retry] = useApiAtom(encounterPrepAtom({ campaignId, encounterId: encounter.id }));
+  // The builder's *Place on the level* opens the page at `#placement`, and
+  // this card is drawn only once the encounter and its level have answered.
+  useArrivalScroll("placement");
   return (
     <Card id="placement" className="scroll-mt-(--chrome-height) gap-4 p-card">
       <SectionHeading size="title">Where they wait</SectionHeading>
