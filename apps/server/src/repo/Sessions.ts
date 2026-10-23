@@ -241,8 +241,9 @@ export class Sessions extends Context.Service<
                 kind: "run-carried",
                 encounterRunId: run.id,
                 // A borrowing fight's visit hears it too: carried, nothing is
-                // handed back, and the visit is not the fight's again until
-                // the fight is picked up (`EncounterRuns.resume`).
+                // handed back, and the visit stays the fight's, frozen, until
+                // the fight is picked up (`EncounterRuns.resume`) and
+                // resolves, or the level is reset (`LevelVisits.ts`' `heldBy`).
                 levelVisitId: run.levelVisitId ?? undefined,
                 payload: { round: run.round, encounterName: run.encounterName },
                 visibility: session.visibility,

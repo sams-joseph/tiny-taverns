@@ -578,6 +578,7 @@ describeLayer("encounter-placement", shared, (it) => {
             ],
             // Squares of the eight-wide level, on the seven-wide copy.
             trigger: [{ column: 1, row: 1 }],
+            noticed: true,
           },
         ]);
 
@@ -620,7 +621,8 @@ describeLayer("encounter-placement", shared, (it) => {
             trigger: null,
           });
           expect((yield* linesOf(visit.id)).slice(before)).toEqual(["visit-placement-updated:dm"]);
-          // In the west room, where the party stands: the table is rung.
+          // In the west room, where the party stands: the table is rung, and
+          // the DM is told the party has noticed the encounter.
           yield* place(jo, table, encounter.id, {
             spots: [{ encounterCreatureId: line, ordinal: 0, column: 1, row: 1 }],
             trigger: null,
@@ -628,6 +630,7 @@ describeLayer("encounter-placement", shared, (it) => {
           expect((yield* linesOf(visit.id)).slice(before + 1)).toEqual([
             "visit-placement-updated:dm",
             "visit-vision-updated:shared",
+            "visit-encounter-noticed:dm",
           ]);
         }),
     );

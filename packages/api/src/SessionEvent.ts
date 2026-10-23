@@ -164,6 +164,10 @@ export const SessionEventKind = Schema.Literals([
    * the visit ending resolved and handing the dungeon back
    * (`VisitReturnedPayload`): the table's line while the visit is on the
    * table, since the players' table goes back to the level.
+   * `visit-encounter-noticed` `{encounterId, name}` is an encounter placed on
+   * the visit coming into the party's notice (`LevelVisitEncounter.noticed`,
+   * `VisitEncounterNoticedPayload`), always the DM's line: the DM's runner
+   * offers to start it, and the players are told nothing new.
    */
   "visit-opened",
   "visit-tabled",
@@ -175,6 +179,7 @@ export const SessionEventKind = Schema.Literals([
   "visit-vision-updated",
   "visit-placement-updated",
   "visit-returned",
+  "visit-encounter-noticed",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 

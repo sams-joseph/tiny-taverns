@@ -487,7 +487,12 @@ describeLayer("level-visit-fights", shared, (it) => {
         ]);
 
         const borrowed = yield* dmVisit(table, visit);
-        expect(borrowed.fight).toEqual({ runId: run.id, sessionId, name: "Ambush" });
+        expect(borrowed.fight).toEqual({
+          runId: run.id,
+          sessionId,
+          name: "Ambush",
+          carried: false,
+        });
         // Played, so no longer waiting on the level.
         expect(borrowed.encounters).toEqual([]);
         expect(yield* linesOf(visit.id)).toContain("run-started:shared");
@@ -780,9 +785,14 @@ describeLayer("level-visit-fights", shared, (it) => {
         );
         yield* endNight(table, sessionId);
 
-        // Carried: nothing handed back, and the visit is no longer the fight's.
+        // Carried: nothing handed back, and the visit is still the fight's.
         const carried = yield* dmVisit(table, visit);
-        expect(carried.fight).toBeNull();
+        expect(carried.fight).toEqual({
+          runId: first.id,
+          sessionId,
+          name: "Ambush",
+          carried: true,
+        });
         expect(tamsinOf(carried)).toMatchObject({ column: 2, row: 1 });
         expect(
           (yield* linesOf(visit.id)).filter((line) => line.startsWith("visit-returned")),
@@ -800,6 +810,7 @@ describeLayer("level-visit-fights", shared, (it) => {
           runId: resumed.id,
           sessionId: nextNight,
           name: "Ambush",
+          carried: false,
         });
 
         yield* endRun(table, resumed);

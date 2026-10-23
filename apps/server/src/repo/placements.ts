@@ -12,7 +12,13 @@ import {
 } from "@taverns/api";
 import { Effect, Schema } from "effect";
 import type { SqlClient, SqlError } from "effect/sql";
-import { borrowedBy, type LoggedLine, seenPlacedColumn, tellTheNight } from "./LevelVisits.js";
+import {
+  heldBy,
+  type LoggedLine,
+  seenPlacedColumn,
+  tellTheNight,
+  watchNotice,
+} from "./LevelVisits.js";
 import { intArray } from "./rows.js";
 import { levelOwned, rowWritable } from "./visibility.js";
 
@@ -57,8 +63,9 @@ const at = (spot: { readonly column: number; readonly row: number }) =>
  * While a night is open and the campaign has a visit of the level, the
  * visit's log gains the DM's `visit-placement-updated` line and, when the
  * placed creatures the party sees there changed (the visit on the table and
- * no fight borrowing it), a contentless shared `visit-vision-updated` that
- * rings the players' doorbell. Answers the night the caller rings once it
+ * no fight holding it), a contentless shared `visit-vision-updated` that
+ * rings the players' doorbell, and the DM's `visit-encounter-noticed` when
+ * the encounter's new squares are ones the party notices (`watchNotice`). Answers the night the caller rings once it
  * has committed, or `null`.
  */
 export const writePlacement = (
@@ -183,7 +190,7 @@ export const writePlacement = (
     }>`
       select level_visit.id,
              (campaign.table_visit_id is not distinct from level_visit.id
-              and not ${borrowedBy(sql)}) as shown,
+              and not ${heldBy(sql)}) as shown,
              ${seenPlacedColumn(sql)}
       from level_visit
       join campaign on campaign.id = level_visit.campaign_id
@@ -192,6 +199,7 @@ export const writePlacement = (
       for update of level_visit
     `;
     const before = visits.map((visit) => JSON.stringify(visit.creatures));
+    const watched = yield* Effect.forEach(visits, (visit) => watchNotice(sql, visit.id));
 
     yield* sql`
       delete from encounter_creature_spot
@@ -238,6 +246,7 @@ export const writePlacement = (
       if (visit.shown && changed) {
         lines.push({ kind: "visit-vision-updated", payload: {}, visibility: "shared" });
       }
+      lines.push(...(yield* watched[index]!));
       night = (yield* tellTheNight(sql, campaignId, visit.id, lines)) ?? night;
     }
     return night;

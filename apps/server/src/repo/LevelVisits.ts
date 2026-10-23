@@ -31,6 +31,7 @@ import {
   startingSquares,
   tableSight,
   type EncounterRunId,
+  VisitEncounterNoticedPayload,
   VisitReturnedPayload,
   VisitTabledPayload,
   VisitTokenMovedPayload,
@@ -87,11 +88,17 @@ import {
  * and walks their own token on it (`playerVisitMove`), both through
  * `PlayerTable`, on predicates of their own (`levelVisitAtPlayerTable`).
  * Every write on a visit, the DM's or a player's, is one `visitWrite`: one
- * transaction holding the visit row, a `Conflict` while a live fight borrows
- * the visit, idempotent on its `requestId` through the visit's own ledger,
+ * transaction holding the visit row, a `Conflict` while a fight holds the
+ * visit (`heldBy`: live, or carried and not yet picked up), idempotent on its `requestId` through the visit's own ledger,
  * the party's vision recomputed over the visit (`refreshVisitVision`), and a
  * `visit-*` line logged on the night that is open, ringing its doorbell after
  * the commit. With no night open it logs nothing and rings nothing.
+ *
+ * **Noticed** (`noticedIn`) is the one predicate for an encounter placed in a
+ * visit coming into the party's notice, computed on every read; each write
+ * that moves what the party sees or where it stands compares it before and
+ * after (`watchNotice`) and logs the DM's `visit-encounter-noticed` for what
+ * it newly noticed, which the DM's runner offers to start.
  *
  * **Which lines are the table's** mirrors a fight's (`0110_party_vision.ts`):
  * a token's move is shared when the table sees that token; a door's when it
@@ -132,19 +139,48 @@ export const borrowedBy = (sql: SqlClient.SqlClient) =>
                 and encounter_run.ended_at is null)`;
 
 /**
- * Over `level_visit`: the live fight borrowing it (`LevelVisit.fight`), as one
- * `json` column, `fight`, or `null`. At most one, by
- * `encounter_run_level_visit_live`. **The creator's read only.**
+ * Over `encounter_run`: the run that borrowed a visit holds it, live, or
+ * carried at its night's end and not yet picked up (a successor that is gone
+ * with its night leaves it carried again). A held visit is the fight's: every
+ * write and walk on it is a `Conflict` (`visitWrite`) until the fight
+ * resolves, or the visit is reset, which a carried fight allows.
+ */
+const holding = (sql: SqlClient.SqlClient) => sql`
+  (encounter_run.ended_at is null
+   or (encounter_run.ended_reason = 'carried'
+       and not exists (select 1 from encounter_run successor
+                       where successor.continued_from = encounter_run.id)))
+`;
+
+/** Over `level_visit`: a fight holds it (`holding`), live or carried. */
+export const heldBy = (sql: SqlClient.SqlClient) =>
+  sql`exists (select 1 from encounter_run
+              where encounter_run.level_visit_id = level_visit.id and ${holding(sql)})`;
+
+/**
+ * Over `level_visit`: the fight holding it (`LevelVisit.fight`), live or
+ * carried, as one `json` column, `fight`, or `null`; a live one before a
+ * carried one, though by `encounter_run_level_visit_live` and the table rules
+ * there is at most one. **The creator's reads only.**
  */
 const fightColumn = (sql: SqlClient.SqlClient) => sql`
   (select json_build_object(
             'runId', encounter_run.id, 'sessionId', encounter_run.session_id,
-            'name', encounter_run.encounter_name
+            'name', encounter_run.encounter_name,
+            'carried', encounter_run.ended_at is not null
           )
    from encounter_run
-   where encounter_run.level_visit_id = level_visit.id and encounter_run.ended_at is null
+   where encounter_run.level_visit_id = level_visit.id and ${holding(sql)}
+   order by encounter_run.ended_at desc nulls first, encounter_run.started_at desc
+   limit 1
   ) as fight
 `;
+
+/** Why a write is refused while a fight holds the visit, said as what to do. */
+const heldMessage = (name: string, carried: boolean, then: string) =>
+  carried
+    ? `the fight in ${name} was carried: pick it up first, or reset the level, before ${then}`
+    : `a fight is being played in ${name}: end it before ${then}`;
 
 /**
  * Over `encounter` and `level_visit`: the encounter is placed in the visit
@@ -157,6 +193,111 @@ const placedIn = (sql: SqlClient.SqlClient) => sql`
   and encounter.level_id = level_visit.level_id
   and not exists (select 1 from encounter_run where encounter_run.encounter_id = encounter.id)
 `;
+
+/**
+ * Over `encounter_creature_spot` (as `spot`) and `level_visit`: the placed
+ * creature stands where the party sees now, on the copy and in `party_sees`
+ * with the DM's fog taken out. The one rule for what the party sees of a
+ * placement: the player's `creatures` and the DM's `noticed` both ask it.
+ */
+const spotInSight = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
+  spot.board_column < level_visit.board_columns
+  and spot.board_row < level_visit.board_rows
+  and (spot.board_row * level_visit.board_columns + spot.board_column)
+        = any(level_visit.party_sees)
+  and not (spot.board_row * level_visit.board_columns + spot.board_column)
+        = any(level_visit.fog_hidden)
+`;
+
+/**
+ * Over `encounter` and `level_visit`, for an encounter placed in the visit
+ * (`placedIn`): the party has **noticed** it (`LevelVisitEncounter.noticed`).
+ * One of its creatures stands in the party's sight (`spotInSight`), or a
+ * live seat's token stands in its trigger area, a square of the level, which
+ * the visit's copy shares while it is no smaller. Never while a fight holds
+ * the visit: the party is in the fight. The one predicate, computed on every
+ * read and never stored; `noticedNow` asks it before and after a write.
+ */
+const noticedIn = (sql: SqlClient.SqlClient): Statement.Fragment => sql`
+  (not ${heldBy(sql)}
+   and (exists (
+          select 1 from encounter_creature line
+          join encounter_creature_spot spot on spot.encounter_creature_id = line.id
+          where line.encounter_id = encounter.id and ${spotInSight(sql)}
+        )
+        or exists (
+          select 1 from encounter_prep trigger_prep
+          join level trigger_level on trigger_level.id = encounter.level_id
+                                  and trigger_level.account_id = encounter.level_owner_id
+          join level_visit_token token on token.visit_id = level_visit.id
+          join campaign_character seat on seat.id = token.seat_id and seat.left_at is null
+          where trigger_prep.encounter_id = encounter.id
+            and token.board_column < trigger_level.columns
+            and (token.board_row * trigger_level.columns + token.board_column)
+                  = any(trigger_prep.trigger_squares)
+        )))
+`;
+
+/** An encounter the party has noticed on a visit, by id and name. */
+interface Noticed {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * The encounters placed in a visit with a creature placed (as the DM's read
+ * lists them) that the party has noticed now (`noticedIn`), in the caller's
+ * transaction.
+ */
+const noticedNow = (sql: SqlClient.SqlClient, visitId: string) =>
+  sql<Noticed>`
+    select encounter.id, encounter.name
+    from level_visit
+    join encounter on ${placedIn(sql)}
+    where level_visit.id = ${visitId}
+      and exists (select 1 from encounter_creature placed_line
+                  join encounter_creature_spot placed_spot
+                    on placed_spot.encounter_creature_id = placed_line.id
+                  where placed_line.encounter_id = encounter.id)
+      and ${noticedIn(sql)}
+    order by encounter.id
+  `;
+
+/**
+ * What the party has noticed on a visit now, asked before a write, answering
+ * the effect to run after it: the DM's `visit-encounter-noticed` line for
+ * each encounter noticed then and not before. So the line is logged once as
+ * the party comes to notice an encounter, and again only once it has lost it
+ * and noticed it afresh.
+ */
+export const watchNotice = (sql: SqlClient.SqlClient, visitId: string) =>
+  Effect.map(noticedNow(sql, visitId), (before) =>
+    noticedSince(sql, visitId, new Set(before.map((encounter) => encounter.id))),
+  );
+
+/**
+ * The DM's `visit-encounter-noticed` line for each encounter the party has
+ * noticed on a visit now and had not in `was` (`watchNotice`; a fight handing
+ * a visit back asks it from none, since nothing is noticed while a fight
+ * holds the visit).
+ */
+export const noticedSince = (
+  sql: SqlClient.SqlClient,
+  visitId: string,
+  was: ReadonlySet<string>,
+): Effect.Effect<ReadonlyArray<LoggedLine>, SqlError.SqlError> =>
+  Effect.map(noticedNow(sql, visitId), (after) =>
+    after
+      .filter((encounter) => !was.has(encounter.id))
+      .map((encounter): LoggedLine => ({
+        kind: "visit-encounter-noticed",
+        payload: {
+          encounterId: encounter.id,
+          name: encounter.name,
+        } satisfies typeof VisitEncounterNoticedPayload.Encoded,
+        visibility: "dm",
+      })),
+  );
 
 /**
  * The encounters placed in a visit as the DM's read has them
@@ -173,6 +314,7 @@ const placedEncountersColumn = (sql: SqlClient.SqlClient): Statement.Fragment =>
     select json_agg(json_build_object(
       'id', encounter.id, 'name', encounter.name, 'kind', encounter.kind,
       'creatures', placed.creatures,
+      'noticed', ${noticedIn(sql)},
       'trigger', case when prep.trigger_squares is null then null else coalesce((
         select json_agg(json_build_object(
           'column', square % level.columns, 'row', square / level.columns
@@ -236,7 +378,7 @@ const withSpotProblems = (visit: LevelVisit): LevelVisit => {
  * The placed creatures the party sees now on a visit (`PlayerLevelVisit
  * .creatures`), as one `json` column, `creatures`, over `level_visit` in
  * scope: each instance of an encounter placed in the visit whose square is on
- * the copy and in `party_sees` with the DM's fog taken out, as its name
+ * the copy and in `party_sees` with the DM's fog taken out (`spotInSight`), as its name
  * (a member of the Cast's own, else the creature's: a fight's token's) and
  * its square, in reading order. Sight decides: the line's own `visibility`
  * is not asked, as a fight on a level does not ask it of a foe it shows. No
@@ -253,13 +395,7 @@ export const seenPlacedColumn = (sql: SqlClient.SqlClient): Statement.Fragment =
     join encounter_creature_spot spot on spot.encounter_creature_id = line.id
     join creature on creature.id = line.creature_id
     left join npc on npc.id = line.npc_id
-    where ${placedIn(sql)}
-      and spot.board_column < level_visit.board_columns
-      and spot.board_row < level_visit.board_rows
-      and (spot.board_row * level_visit.board_columns + spot.board_column)
-            = any(level_visit.party_sees)
-      and not (spot.board_row * level_visit.board_columns + spot.board_column)
-            = any(level_visit.fog_hidden)
+    where ${placedIn(sql)} and ${spotInSight(sql)}
   ), '[]'::json) as creatures
 `;
 
@@ -480,9 +616,11 @@ const standMissingSeats = (
 
 /**
  * A seat sat down at the table (`Party.join`): it stands on the visit on the
- * table, if there is one and no fight borrows it (`standMissingSeats`), and
+ * table, if there is one and no fight holds it (`standMissingSeats`), and
  * the party looks again, with a `visit-vision-updated` line on the open
- * night, shared, since the table draws a new token. In the joining write's
+ * night, shared, since the table draws a new token, and the DM's
+ * `visit-encounter-noticed` for what the party notices from there
+ * (`watchNotice`). In the joining write's
  * transaction; answers the night the caller rings once it has committed. A
  * visit off the table gives the seat its token when it is put on
  * (`LevelVisits.putOnTable`).
@@ -495,16 +633,18 @@ export const standNewSeats = (
     const visits = yield* sql<{ readonly id: string }>`
       select level_visit.id from campaign
       join level_visit on level_visit.id = campaign.table_visit_id
-      where campaign.id = ${campaign} and not ${borrowedBy(sql)}
+      where campaign.id = ${campaign} and not ${heldBy(sql)}
       for update of level_visit
     `;
     const visitId = visits[0]?.id;
     if (visitId === undefined) return null;
+    const noticed = yield* watchNotice(sql, visitId);
     const stood = yield* standMissingSeats(sql, campaign, visitId);
     if (stood === 0) return null;
     yield* refreshVisitVision(sql, visitId);
     return yield* tellTheNight(sql, campaign, visitId, [
       { kind: "visit-vision-updated", payload: {}, visibility: "shared" },
+      ...(yield* noticed),
     ]);
   });
 
@@ -525,27 +665,32 @@ export const dropSeatTokens = (
   seatIds.length === 0
     ? Effect.succeed([])
     : Effect.gen(function* () {
-        const gone = yield* sql<{ readonly visit_id: string; readonly campaign_id: string }>`
-          delete from level_visit_token
-          where level_visit_token.seat_id = any(${uuidArray([...seatIds])})
-          returning level_visit_token.visit_id, level_visit_token.campaign_id
-        `;
         // Every visit it stood on, on the table or not, so none keeps a
         // `party_sees` drawn from a token that is gone. Sorted, so two
         // retiring writes lock the boards in one order.
-        const visits = [
-          ...new Map(gone.map((row) => [row.visit_id, row.campaign_id] as const)).entries(),
-        ].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        const nights = yield* Effect.forEach(visits, ([visitId, campaignId]) =>
+        const stood = yield* sql<{ readonly visit_id: string; readonly campaign_id: string }>`
+          select distinct level_visit_token.visit_id, level_visit_token.campaign_id
+          from level_visit_token
+          where level_visit_token.seat_id = any(${uuidArray([...seatIds])})
+          order by level_visit_token.visit_id
+        `;
+        // What each had noticed before the token went (`watchNotice`).
+        const watched = yield* Effect.forEach(stood, (row) => watchNotice(sql, row.visit_id));
+        yield* sql`
+          delete from level_visit_token
+          where level_visit_token.seat_id = any(${uuidArray([...seatIds])})
+        `;
+        const nights = yield* Effect.forEach(stood, (row, index) =>
           Effect.gen(function* () {
-            const vision = yield* refreshVisitVision(sql, visitId);
+            const vision = yield* refreshVisitVision(sql, row.visit_id);
             if (vision === null) return null;
-            return yield* tellTheNight(sql, campaignId, visitId, [
+            return yield* tellTheNight(sql, row.campaign_id, row.visit_id, [
               {
                 kind: "visit-vision-updated",
                 payload: {},
                 visibility: vision.shown ? "shared" : "dm",
               },
+              ...(yield* watched[index]!),
             ]);
           }),
         );
@@ -557,14 +702,17 @@ export interface VisitOfEncounter {
   readonly id: LevelVisitId;
   readonly name: string;
   readonly on_table: boolean;
+  /** A live fight borrows it. */
   readonly borrowed: boolean;
+  /** A fight holds it, live or carried (`heldBy`). */
+  readonly held: boolean;
 }
 
 /**
  * The campaign's visit of the encounter's level, held `for update` until the
  * caller's transaction ends (as a visit write holds it, so none lands between
  * a fight's copy of it and the borrow), or `null` when the campaign has none:
- * whether it is on the table, and whether a live fight already borrows it.
+ * whether it is on the table, and whether a fight already holds it.
  * Beneath the caller's gate, which has proved the encounter the creator's.
  */
 export const visitOfEncounter = (
@@ -575,7 +723,7 @@ export const visitOfEncounter = (
   Effect.map(
     sql<VisitOfEncounter>`
       select level_visit.id, level_visit.name, ${onTableColumn(sql)},
-             ${borrowedBy(sql)} as borrowed
+             ${borrowedBy(sql)} as borrowed, ${heldBy(sql)} as held
       from encounter
       join level_visit on level_visit.campaign_id = encounter.campaign_id
                       and level_visit.level_id = encounter.level_id
@@ -619,7 +767,8 @@ export const visitPartySquares = (sql: SqlClient.SqlClient, visitId: string) =>
  * stands where the fight left them, a seat with no token on the visit gaining
  * one; the party looks again from there (`refreshVisitVision`); and the
  * fight's night logs `visit-returned`, shared while the visit is on the
- * table, whose players go back to it, else the DM's. Nothing for a fight that
+ * table, whose players go back to it, else the DM's, and the DM's
+ * `visit-encounter-noticed` for what the party notices from there. Nothing for a fight that
  * borrowed no visit, or whose visit was reset. A carried fight is not handed
  * back: its successor inherits the borrow and hands back when it resolves.
  */
@@ -671,16 +820,78 @@ export const handBack = (sql: SqlClient.SqlClient, runId: EncounterRunId, sessio
       payload: { name: visit.name } satisfies typeof VisitReturnedPayload.Encoded,
       visibility: vision?.shown === true ? "shared" : "dm",
     });
+    // What the party notices from where the fight left it: all of it is
+    // news, since nothing was noticed while the fight held the visit.
+    for (const line of yield* noticedSince(sql, visit.id, new Set())) {
+      yield* appendEvent(sql, { sessionId, levelVisitId: visit.id, ...line });
+    }
+  });
+
+/**
+ * Make a visit the one on its campaign's table, in place of any other, in the
+ * caller's transaction beneath its proof, the visit row already held: the
+ * `gate` over `level_visit` names it (`NotFound` otherwise). Refused while a
+ * fight holds another of the campaign's visits, the party being in that
+ * dungeon (the maintainer's decision of 2026-10-22): any fight holding one
+ * (`held`, `LevelVisits.putOnTable`), or only a live one (`live`, a carried
+ * fight being picked up, `EncounterRuns.resume`, which another carried fight
+ * must not wedge). The visit it took the place of logs `visit-tabled` off,
+ * and this one on; putting on the visit already there says nothing. Answers
+ * the night the lines went on, or `null`.
+ */
+export const tableVisit = (
+  sql: SqlClient.SqlClient,
+  args: {
+    readonly campaign: CampaignId;
+    readonly id: LevelVisitId | string;
+    readonly gate: Statement.Fragment;
+    readonly elsewhere: "held" | "live";
+  },
+): Effect.Effect<SessionId | null, NotFound | Conflict | SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const { campaign, id } = args;
+    const elsewhere = yield* sql<{ readonly name: string; readonly borrowed: boolean }>`
+      select level_visit.name, ${borrowedBy(sql)} as borrowed from level_visit
+      where level_visit.campaign_id = ${campaign}
+        and level_visit.id <> ${id}
+        and ${args.elsewhere === "held" ? heldBy(sql) : borrowedBy(sql)}
+      order by 2 desc, level_visit.id
+    `;
+    const busy = elsewhere[0];
+    if (busy !== undefined) {
+      return yield* new Conflict({
+        message: heldMessage(busy.name, !busy.borrowed, "putting another level on the table"),
+      });
+    }
+    const set = yield* sql<{ readonly was: string | null }>`
+      update campaign set table_visit_id = level_visit.id
+      from level_visit
+      where campaign.id = ${campaign}
+        and level_visit.id = ${id}
+        and level_visit.campaign_id = campaign.id
+        and ${args.gate}
+      returning old.table_visit_id as was
+    `;
+    const row = set[0];
+    if (row === undefined) return yield* new NotFound({ resource: "level_visit", id });
+    if (row.was === id) return null;
+    let night: SessionId | null = null;
+    if (row.was !== null) {
+      night = yield* tellTheNight(sql, campaign, row.was, [tabledLine(false)]);
+    }
+    return (yield* tellTheNight(sql, campaign, id, [tabledLine(true)])) ?? night;
   });
 
 /**
  * One write on a visit, the DM's or a player's, in one transaction: the visit
  * held `for update` beneath `gate`, the caller's predicate over `level_visit`
  * (`NotFound` otherwise), so the writes on one visit land one after the
- * other; refused while a live fight borrows it; its `requestId` entered in
- * the visit's ledger, a repeat answering `answer` with nothing written; then
- * `body`, the party's vision recomputed, and `body`'s lines logged on the
- * open night (`linesOf`). Answers `answer` as the write leaves the visit, and
+ * other; refused while a fight holds it (`heldBy`: live, or carried and not
+ * yet picked up); its `requestId` entered in the visit's ledger, a repeat
+ * answering `answer` with nothing written; then `body`, the party's vision
+ * recomputed, and `body`'s lines logged on the open night (`linesOf`), with
+ * the DM's `visit-encounter-noticed` for each encounter the write brought
+ * into the party's notice (`watchNotice`). Answers `answer` as the write leaves the visit, and
  * the night the caller rings once it has committed.
  */
 const visitWrite = <A>(
@@ -700,18 +911,25 @@ const visitWrite = <A>(
   sql.withTransaction(
     Effect.gen(function* () {
       const { campaign, id, requestId } = args;
-      const locked = yield* sql<{ readonly borrowed: boolean }>`
-        select ${borrowedBy(sql)} as borrowed from level_visit
+      const locked = yield* sql<{ readonly borrowed: boolean; readonly held: boolean }>`
+        select ${borrowedBy(sql)} as borrowed, ${heldBy(sql)} as held from level_visit
         where level_visit.id = ${id} and ${args.gate}
         for update of level_visit
       `;
       const visit = locked[0];
       if (visit === undefined) return yield* new NotFound({ resource: "level_visit", id });
       // A fight's start holds the visit too (`visitOfEncounter`), so once a
-      // fight borrows it nothing here writes until it ends.
+      // fight borrows it nothing here writes until it resolves; a carried
+      // one keeps it until it is picked up and resolves, or the level is
+      // reset.
       if (visit.borrowed) {
         return yield* new Conflict({
           message: "a fight is being played on this level: the board is the fight's until it ends",
+        });
+      }
+      if (visit.held) {
+        return yield* new Conflict({
+          message: "the fight on this level was carried: pick it up first",
         });
       }
       if (requestId !== undefined) {
@@ -723,11 +941,15 @@ const visitWrite = <A>(
         `;
         if (entered.length === 0) return { value: yield* args.answer, night: null };
       }
+      const noticed = yield* watchNotice(sql, id);
       const line = yield* args.body;
       yield* sql`update level_visit set updated_at = now() where level_visit.id = ${id}`;
       const vision = yield* refreshVisitVision(sql, id);
       const told = line.told === undefined ? DM_LINE : yield* line.told(vision);
-      const night = yield* tellTheNight(sql, campaign, id, linesOf(line, vision, told));
+      const night = yield* tellTheNight(sql, campaign, id, [
+        ...linesOf(line, vision, told),
+        ...(yield* noticed),
+      ]);
       return { value: yield* args.answer, night };
     }),
   );
@@ -828,7 +1050,8 @@ const moveVisitToken = (
 /**
  * The visit on the campaign's table as a seated player sees it
  * (`PlayerLevelVisit`), or `null`: beneath `levelVisitAtPlayerTable`, and not
- * while a live fight borrows it, when the table plays the fight. The level is
+ * while a fight holds it: a live one, when the table plays the fight, or a
+ * carried one, when the dungeon is the fight's until it is picked up. The level is
  * `playerLevelColumn` over the visit's copy, the narrowing a fight's player
  * board has; a token is a live seat the reader may see (shared, or their
  * own), and none the DM's fog covers but their own. No name, no level id, and
@@ -862,7 +1085,7 @@ export const playerVisitOnTable = (
              ${seenPlacedColumn(sql)}
       from level_visit
       where ${levelVisitAtPlayerTable(sql, campaignId, actor)}
-        and not ${borrowedBy(sql)}
+        and not ${heldBy(sql)}
     `;
     const row = rows[0];
     if (row === undefined) return null;
@@ -929,8 +1152,9 @@ export class LevelVisits extends Context.Service<
     /**
      * *Reset level*: deletes the visit, its parts and its tokens, and takes it
      * off the table, telling the table so when it was there. A fight that
-     * borrowed it keeps its own copy and loses the pointer. `Conflict` while
-     * a live fight is played on it.
+     * borrowed it keeps its own copy and loses the pointer, a carried one
+     * included, which then hands nothing back. `Conflict` while a live fight
+     * is played on it.
      */
     readonly remove: (
       creator: CampaignCreatorActor,
@@ -939,18 +1163,18 @@ export class LevelVisits extends Context.Service<
     /**
      * Makes the visit the one on the campaign's table, in place of any other,
      * and stands a token for any live seat that has none on it
-     * (`standMissingSeats`), unless a fight borrows it. `Conflict` while a
-     * live fight borrows another of the campaign's visits: the party is in
-     * that dungeon until the fight ends (the maintainer's decision of
-     * 2026-10-22).
+     * (`standMissingSeats`), unless a fight holds it (`tableVisit`).
+     * `Conflict` while a fight holds another of the campaign's visits, live
+     * or carried: the party is in that dungeon until the fight ends (the
+     * maintainer's decision of 2026-10-22).
      */
     readonly putOnTable: (
       creator: CampaignCreatorActor,
       id: LevelVisitId,
     ) => Effect.Effect<LevelVisit, NotFound | Conflict>;
     /**
-     * Leaves no visit on the campaign's table. `Conflict` while a live fight
-     * borrows the visit there: the party is in it.
+     * Leaves no visit on the campaign's table. `Conflict` while a fight
+     * holds the visit there, live or carried: the party is in it.
      */
     readonly takeOffTable: (creator: CampaignCreatorActor) => Effect.Effect<void, Conflict>;
     /**
@@ -1006,7 +1230,8 @@ export class LevelVisits extends Context.Service<
         execute: ({ campaign, actor }) => sql`
           select level_visit.id, level_visit.level_id, level_visit.name,
                  level_visit.board_columns, level_visit.board_rows, level_visit.feet_per_cell,
-                 ${onTableColumn(sql)}, level_visit.created_at, level_visit.updated_at
+                 ${onTableColumn(sql)}, ${fightColumn(sql)},
+                 level_visit.created_at, level_visit.updated_at
           from level_visit
           join campaign on campaign.id = level_visit.campaign_id
           where ${levelVisitWritable(sql, campaign, actor)}
@@ -1116,6 +1341,8 @@ export class LevelVisits extends Context.Service<
                   }
                   const visitId = opened.id;
                   yield* copyLevelParts(sql, VISIT_BOARD, visitId, payload.levelId, actor);
+                  // Nothing is noticed before the party stands on it.
+                  const noticed = yield* watchNotice(sql, visitId);
 
                   // The party on the level's way in: each live seat holding a
                   // character, in the order they sat down.
@@ -1144,6 +1371,7 @@ export class LevelVisits extends Context.Service<
                   yield* refreshVisitVision(sql, visitId);
                   const night = yield* tellTheNight(sql, campaign, visitId, [
                     { kind: "visit-opened", payload: { name: opened.name }, visibility: "dm" },
+                    ...(yield* noticed),
                   ]);
                   return { visit: yield* read(creator, visitId).pipe(Effect.orDie), night };
                 }),
@@ -1201,8 +1429,8 @@ export class LevelVisits extends Context.Service<
               .withTransaction(
                 Effect.gen(function* () {
                   const { actor, campaign } = creator;
-                  const locked = yield* sql<{ readonly borrowed: boolean }>`
-                    select ${borrowedBy(sql)} as borrowed from level_visit
+                  const locked = yield* sql<{ readonly held: boolean }>`
+                    select ${heldBy(sql)} as held from level_visit
                     where level_visit.id = ${id} and ${levelVisitWritable(sql, campaign, actor)}
                     for update of level_visit
                   `;
@@ -1210,44 +1438,26 @@ export class LevelVisits extends Context.Service<
                   if (found === undefined) {
                     return yield* new NotFound({ resource: "level_visit", id });
                   }
-                  const elsewhere = yield* sql<{ readonly name: string }>`
-                    select level_visit.name from level_visit
-                    where level_visit.campaign_id = ${campaign}
-                      and level_visit.id <> ${id}
-                      and ${borrowedBy(sql)}
-                  `;
-                  const busy = elsewhere[0];
-                  if (busy !== undefined) {
-                    return yield* new Conflict({
-                      message: `a fight is being played in ${busy.name}: end it before putting another level on the table`,
-                    });
-                  }
-                  const set = yield* sql<{ readonly was: string | null }>`
-                    update campaign set table_visit_id = level_visit.id
-                    from level_visit
-                    where campaign.id = ${campaign}
-                      and level_visit.id = ${id}
-                      and ${levelVisitWritable(sql, campaign, actor)}
-                    returning old.table_visit_id as was
-                  `;
-                  const row = set[0];
-                  if (row === undefined)
-                    return yield* new NotFound({ resource: "level_visit", id });
+                  const tabled = yield* tableVisit(sql, {
+                    campaign,
+                    id,
+                    gate: levelVisitWritable(sql, campaign, actor),
+                    elsewhere: "held",
+                  });
                   // Every seat at the table stands on the level it plays: one
                   // that sat down since the visit was opened gets its token.
-                  if (!found.borrowed && (yield* standMissingSeats(sql, campaign, id)) > 0) {
-                    yield* refreshVisitVision(sql, id);
-                  }
-                  // A visit put on in place of another: the other's line says it
-                  // came off. Putting on the visit already there says nothing.
-                  let night: SessionId | null = null;
-                  if (row.was !== id) {
-                    if (row.was !== null) {
-                      night = yield* tellTheNight(sql, campaign, row.was, [tabledLine(false)]);
+                  let noticedNight: SessionId | null = null;
+                  if (!found.held) {
+                    const noticed = yield* watchNotice(sql, id);
+                    if ((yield* standMissingSeats(sql, campaign, id)) > 0) {
+                      yield* refreshVisitVision(sql, id);
+                      noticedNight = yield* tellTheNight(sql, campaign, id, yield* noticed);
                     }
-                    night = yield* tellTheNight(sql, campaign, id, [tabledLine(true)]);
                   }
-                  return { visit: yield* read(creator, id).pipe(Effect.orDie), night };
+                  return {
+                    visit: yield* read(creator, id).pipe(Effect.orDie),
+                    night: tabled ?? noticedNight,
+                  };
                 }),
               )
               .pipe(Effect.flatMap(({ visit, night }) => Effect.as(ring(night), visit))),
@@ -1261,17 +1471,27 @@ export class LevelVisits extends Context.Service<
                   const { actor, campaign } = creator;
                   // Held as a visit write holds it, so a fight's start that
                   // would borrow it lands before this or after it.
-                  const tabled = yield* sql<{ readonly name: string; readonly borrowed: boolean }>`
-                    select level_visit.name, ${borrowedBy(sql)} as borrowed
+                  const tabled = yield* sql<{
+                    readonly name: string;
+                    readonly borrowed: boolean;
+                    readonly held: boolean;
+                  }>`
+                    select level_visit.name, ${borrowedBy(sql)} as borrowed,
+                           ${heldBy(sql)} as held
                     from campaign
                     join level_visit on level_visit.id = campaign.table_visit_id
                     where campaign.id = ${campaign}
                       and ${campaignWritableById(sql, campaign, actor)}
                     for update of level_visit
                   `;
-                  if (tabled[0]?.borrowed === true) {
+                  const there = tabled[0];
+                  if (there?.held === true) {
                     return yield* new Conflict({
-                      message: `a fight is being played in ${tabled[0].name}: end it before taking the level off the table`,
+                      message: heldMessage(
+                        there.name,
+                        !there.borrowed,
+                        "taking the level off the table",
+                      ),
                     });
                   }
                   const cleared = yield* sql<{ readonly was: string | null }>`

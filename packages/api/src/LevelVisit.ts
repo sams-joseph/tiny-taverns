@@ -78,20 +78,35 @@ export const LevelVisitEncounter = Schema.Struct({
    * none. Squares of the level past the copy's edge are left out.
    */
   trigger: Schema.NullOr(Schema.Array(CombatantPosition)),
+  /**
+   * The party has come to see it: one of its creatures stands where the party
+   * sees now with the DM's fog taken out (the squares `PlayerLevelVisit
+   * .creatures` is drawn from), or a live party token stands in its trigger
+   * area. Computed on read, never stored, and `false` while a fight holds the
+   * visit. The DM's runner offers to start it (`visit-encounter-noticed`).
+   */
+  noticed: Schema.Boolean,
 });
 export type LevelVisitEncounter = typeof LevelVisitEncounter.Type;
 
 /**
- * The live fight borrowing a visit: the run, on its night, so the DM's stage
- * can go to it. While a fight borrows the visit, every write to the visit is a
- * `Conflict` and the board is the fight's; ending it resolved hands the
- * dungeon back (`EncounterRun.levelVisitId`).
+ * The fight holding a visit: the run, on its night, so the DM's stage can go
+ * to it. A fight holds the visit it borrowed while it is live, and while it
+ * is carried and not yet picked up (`carried`): every write to the visit is
+ * a `Conflict` meanwhile, and the board is the fight's; ending it resolved
+ * hands the dungeon back (`EncounterRun.levelVisitId`).
  */
 export const LevelVisitFight = Schema.Struct({
   runId: EncounterRunId,
   sessionId: SessionId,
   /** The fight's name: its encounter's, as it was when the fight started. */
   name: Schema.String,
+  /**
+   * The fight's night ended with it still on, so it was carried: it is
+   * picked up (`runs.resume`, which puts the visit back on the table) before
+   * the party explores again. *Reset level* stays allowed meanwhile.
+   */
+  carried: Schema.Boolean,
 });
 export type LevelVisitFight = typeof LevelVisitFight.Type;
 
@@ -123,13 +138,16 @@ export class LevelVisit extends Schema.Class<LevelVisit>("LevelVisit")({
   encounters: Schema.Array(LevelVisitEncounter),
   /** Whether this is the visit on the campaign's table. */
   onTable: Schema.Boolean,
-  /** The live fight played on the visit, or `null` while the party explores it. */
+  /** The fight holding the visit, live or carried, or `null` while the party explores it. */
   fight: Schema.NullOr(LevelVisitFight),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/** One of a campaign's visits in its list: what it is and whether it is on the table. */
+/**
+ * One of a campaign's visits in its list: what it is, whether it is on the
+ * table, and the fight holding it, if one does.
+ */
 export class LevelVisitSummary extends Schema.Class<LevelVisitSummary>("LevelVisitSummary")({
   id: LevelVisitId,
   levelId: Schema.NullOr(LevelId),
@@ -138,6 +156,8 @@ export class LevelVisitSummary extends Schema.Class<LevelVisitSummary>("LevelVis
   rows: Schema.Int,
   feetPerCell: Schema.Int,
   onTable: Schema.Boolean,
+  /** As `LevelVisit.fight`. */
+  fight: Schema.NullOr(LevelVisitFight),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
@@ -160,8 +180,8 @@ export type LevelVisitOpen = typeof LevelVisitOpen.Type;
  * Every write to a visit (this, and its fog, doors, lights and regions, which
  * take a fight board's payloads: `BoardFogUpdate`, `BoardDoorUpdate`,
  * `BoardLightUpdate`, `BoardRegionUpdate`) is answered with the visit,
- * recomputes what the party sees, and is a `Conflict` while a live fight is
- * played on the visit. A repeated `requestId` changes nothing.
+ * recomputes what the party sees, and is a `Conflict` while a fight holds the
+ * visit (`LevelVisitFight`), live or carried. A repeated `requestId` changes nothing.
  */
 export const LevelVisitTokenMove = Schema.Struct({
   position: CombatantPosition,

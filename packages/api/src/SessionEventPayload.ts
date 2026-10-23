@@ -143,3 +143,16 @@ export type VisitPlacementUpdatedPayload = typeof VisitPlacementUpdatedPayload.T
  */
 export const VisitReturnedPayload = Schema.Struct({ name: Schema.String });
 export type VisitReturnedPayload = typeof VisitReturnedPayload.Type;
+
+/**
+ * `visit-encounter-noticed`: an encounter placed on the visit became noticed
+ * (`LevelVisitEncounter.noticed`), by its id and name, and the DM's runner
+ * offers to start it. The DM's line, logged once on the write that made it
+ * so; it is logged again only after the party has stopped noticing it and
+ * notices it once more.
+ */
+export const VisitEncounterNoticedPayload = Schema.Struct({
+  encounterId: Schema.String,
+  name: Schema.String,
+});
+export type VisitEncounterNoticedPayload = typeof VisitEncounterNoticedPayload.Type;

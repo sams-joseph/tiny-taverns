@@ -70,7 +70,7 @@ import {
   runLevel,
   unstandable,
 } from "./levelFights.js";
-import { handBack, visitOfEncounter, visitPartySquares } from "./LevelVisits.js";
+import { handBack, tableVisit, visitOfEncounter, visitPartySquares } from "./LevelVisits.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   campaignWritableById,
@@ -714,6 +714,11 @@ export class EncounterRuns extends Context.Service<
                         message: `a fight is already being played in ${visit.name}; end it first`,
                       });
                     }
+                    if (visit !== null && visit.held) {
+                      return yield* new Conflict({
+                        message: `the fight in ${visit.name} was carried: pick it up first, or reset ${visit.name}`,
+                      });
+                    }
 
                     // An insert answers with its row; not getting one is a defect.
                     const run = yield* insert(
@@ -1089,7 +1094,10 @@ export class EncounterRuns extends Context.Service<
          * - **A fight that borrowed a level visit borrows it again**
          *   (`level_visit_id` copied), and hands it back when it resolves. Its
          *   board is the predecessor's, not the visit's as it stands tonight:
-         *   the fight is the dungeon until it ends.
+         *   the fight is the dungeon until it ends, carried or not. The visit
+         *   goes on the table in the same transaction (`tableVisit`), in
+         *   place of whichever was there, refused while a live fight borrows
+         *   another of the campaign's visits.
          */
         resume: ({ actor, campaign: campaignId }, sessionId, payload) =>
           dieOnSqlError(
@@ -1110,6 +1118,26 @@ export class EncounterRuns extends Context.Service<
                           from.endedAt === null
                             ? "that fight is still on the table"
                             : "that fight was ended rather than carried, and an encounter is played once",
+                      });
+                    }
+
+                    // Back in the dungeon it borrowed: that visit goes on the
+                    // table, held from here to the commit as a visit write
+                    // holds it. Taken before the insert, so a fight live in
+                    // another of the campaign's dungeons refuses this first.
+                    let tabledNight: SessionId | null = null;
+                    if (from.levelVisitId !== null) {
+                      yield* sql`
+                        select level_visit.id from level_visit
+                        where level_visit.id = ${from.levelVisitId}
+                          and level_visit.campaign_id = ${campaignId}
+                        for update of level_visit
+                      `;
+                      tabledNight = yield* tableVisit(sql, {
+                        campaign: campaignId,
+                        id: from.levelVisitId,
+                        gate: sql`true`,
+                        elsewhere: "live",
                       });
                     }
 
@@ -1296,10 +1324,20 @@ export class EncounterRuns extends Context.Service<
                     // the board; what it sees now is from where it stands.
                     yield* refreshPartyVision(sql, run.id);
 
-                    return resumed;
+                    return { resumed, tabledNight };
                   }),
                 )
-                .pipe(Effect.tap(() => live.touched(sessionId))),
+                .pipe(
+                  // The visit's tabling lines are on the campaign's open
+                  // night, which need not be this one.
+                  Effect.tap(({ tabledNight }) =>
+                    tabledNight === null || tabledNight === sessionId
+                      ? Effect.void
+                      : live.touched(tabledNight),
+                  ),
+                  Effect.tap(() => live.touched(sessionId)),
+                  Effect.map(({ resumed }) => resumed),
+                ),
             ),
           ),
 

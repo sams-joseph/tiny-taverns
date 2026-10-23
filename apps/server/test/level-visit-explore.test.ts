@@ -760,7 +760,7 @@ describeLayer("level-visit-explore", shared, (it) => {
           ),
         ).toEqual({
           ...visit,
-          fight: { runId: fight.id, sessionId, name: "Borrowing" },
+          fight: { runId: fight.id, sessionId, name: "Borrowing", carried: false },
         });
 
         yield* as(jo.token, (client) =>
