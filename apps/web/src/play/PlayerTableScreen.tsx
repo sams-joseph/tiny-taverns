@@ -146,6 +146,25 @@ export function PlayerTableScreen() {
   const moveWrite = useMutation();
   const savesWrite = useMutation();
 
+  // A refused move speaks for the board it was refused on: once the table
+  // plays another board (a fight starts or hands back) or your token stands
+  // somewhere else (the DM moved it), its words are stale. A move that lands
+  // clears it as it is sent (`useMutation`).
+  const ownSquare = (fight === null ? visit?.tokens.filter((token) => token.own) : undefined)
+    ?.map((token) => `${String(token.column)},${String(token.row)}`)
+    .join(" ");
+  const youAt = fight?.board?.tokens.find(
+    (token) => token.combatantId === you?.combatantId,
+  )?.position;
+  const moveScene = [
+    fight?.id ?? "",
+    visit?.id ?? "",
+    ownSquare ?? "",
+    youAt === undefined ? "" : `${String(youAt.column)},${String(youAt.row)}`,
+  ].join("|");
+  const clearMove = moveWrite.clear;
+  useEffect(() => clearMove(), [moveScene, clearMove]);
+
   // Every tick re-reads the table, and tells the NPC card to re-read its own.
   const [tableTicks, setTableTicks] = useState(0);
   const refreshTable = useCallback(() => {

@@ -216,6 +216,91 @@ describe("a level visit on a seated player's canvas", () => {
     expect(await screen.findByText("No way there")).toBeInTheDocument();
   });
 
+  it("does not send a step its own walk calls No way there", async () => {
+    stageWidth(1024);
+    // A wall between columns 1 and 2 down the seen row: nothing gets round it
+    // but through the dark, where a walk only ever ends.
+    const walled = {
+      ...visit,
+      level: {
+        ...visit.level,
+        walls: [
+          {
+            id: "1e7e5000-0000-4000-8000-000000000010",
+            x1: 2,
+            y1: 0,
+            x2: 2,
+            y2: 4,
+            kind: "wall",
+            doorState: null,
+            low: false,
+          },
+        ],
+      },
+    };
+    server.routes.set(...playing(campaignId, null, walled));
+    await renderTable();
+    const level = within(await screen.findByRole("region", { name: "Level" }));
+    const you = level.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
+    you.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    await userEvent.keyboard("{ArrowLeft}");
+    await waitFor(() => expect(moves()).toHaveLength(1));
+    // Only the step the walk reaches went to the server.
+    expect(JSON.parse(moves()[0]!.body)).toMatchObject({ position: { column: 0, row: 1 } });
+  });
+
+  it("clears a refused walk's words once the DM moves your token, and once a fight starts", async () => {
+    stageWidth(1024);
+    let table: "refused" | "moved" | "fight" = "refused";
+    const [route, answer] = playing(campaignId, null, visit);
+    const moved = playing(campaignId, null, {
+      ...visit,
+      tokens: visit.tokens.map((token) => (token.own ? { ...token, column: 0 } : token)),
+    })[1];
+    const fight = playing(campaignId, { order: tableOrder, board: sharedBoard }, null)[1];
+    server.routes.set(route, {
+      status: 200,
+      body: () => (table === "refused" ? answer : table === "moved" ? moved : fight).body as never,
+    });
+    server.routes.set(moveRoute(brannocSeatRef.campaignCharacterId), {
+      status: 409,
+      body: { _tag: "Conflict", message: "No way there" },
+    });
+    await renderTable();
+    const level = within(await screen.findByRole("region", { name: "Level" }));
+    level.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(await screen.findByText("No way there")).toBeInTheDocument();
+
+    // The doorbell rings: the DM moved your token.
+    const ring = () => {
+      server.routes.set(`GET /campaigns/${campaignId}/table/sessions/${sessionId}/events`, {
+        status: 200,
+        sse: 'id: 9\nevent: tick\ndata: {"tick":"session"}\n\n',
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    table = "moved";
+    ring();
+    await waitFor(() =>
+      expect(
+        level.getByRole("button", { name: /^Brannoc Duskharrow \(you\), column 1, row 2/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("No way there")).toBeNull();
+
+    // Refused again, then a fight starts: the battle map has no word of it.
+    level.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    await waitFor(() => expect(moves()).toHaveLength(2));
+    expect(await screen.findByText("No way there")).toBeInTheDocument();
+    table = "fight";
+    ring();
+    expect(await screen.findByRole("region", { name: "Battle map" })).toBeInTheDocument();
+    expect(screen.queryByText("No way there")).toBeNull();
+  });
+
   it("is a card of where everyone stands below the canvas's width", async () => {
     stageWidth(0);
     server.routes.set(...playing(campaignId, null, visit));

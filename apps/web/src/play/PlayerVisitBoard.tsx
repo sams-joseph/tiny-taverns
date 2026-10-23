@@ -27,7 +27,8 @@ import { PartyLevelStage } from "./PlayerBoard";
  * and no speed (`TokenLayer`'s `exploring`): the range is every square the
  * walk reaches over the party's view of the level (`playerWalk`, the walk the
  * server holds the move to), and the ruler reads the distance, or *No way
- * there*. The server is the answer: a refused walk puts the token back. The
+ * there*, and a walk it calls that is not sent (`walkBound`). The server is
+ * the answer to every walk sent: a refused one puts the token back. The
  * level and the tokens are already narrowed by the server, so neither is
  * narrowed here.
  */
@@ -126,6 +127,7 @@ function VisitTokens({ visit, diagonals, movable, onMove }: PlayerVisitBoardProp
       fog={{ squares: fog, veil: "opaque" }}
       rangeShown
       exploring
+      walkBound
       onSelect={(token) => (token.kind === "seat" ? setPicked(token.seatId) : undefined)}
       onTarget={undefined}
       onMove={(token, to) =>

@@ -212,6 +212,12 @@ export interface TokenLayerProps<T extends LayerToken> {
    * alone. `feetLeftOf` and `activeId` are not asked for either.
    */
   readonly exploring?: boolean;
+  /**
+   * A seated player's board: a move the walk does not reach (its ruler's *No
+   * way there*) is never sent, and the token goes back. The DM places freely,
+   * so the runner leaves this off. The server still answers every move sent.
+   */
+  readonly walkBound?: boolean;
   /** The attacks and areas this reader may see drawn; a player's board has none yet. */
   readonly acts?: ReadonlyArray<Act>;
 }
@@ -555,12 +561,19 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     if (square !== undefined && !same(square, drag.over)) setDrag({ ...drag, over: square });
   };
 
+  /** Whether a seated player's walk refuses the move outright (`walkBound`), so it is not sent. */
+  const refused = (from: BoardSquare, to: BoardSquare): boolean =>
+    props.walkBound === true &&
+    props.walk !== undefined &&
+    pathCost(props.walk.layout, from, to, props.walk.sight, diagonals, props.walk.ends) === null;
+
   const drop = (combatant: Placed<T>) => (event: PointerEvent<HTMLButtonElement>) => {
     if (drag === undefined || drag.pointerId !== event.pointerId) return;
     setDrag(undefined);
     const to = drag.over;
     if (same(to, drag.from)) return;
     if (heldBesides(combatant.id).some((held) => same(held, to))) return;
+    if (refused(drag.from, to)) return;
     setLanding({ id: combatant.id, at: to });
     dropped.current.set(combatant.id, to);
     void onMove(combatant, to).finally(() =>
@@ -583,7 +596,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         row: Math.min(board.rows - 1, Math.max(0, combatant.position.row + delta[1])),
       };
       onSelect(combatant);
-      if (same(to, combatant.position)) return;
+      if (same(to, combatant.position) || refused(combatant.position, to)) return;
       void onMove(combatant, to);
     };
 

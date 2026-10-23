@@ -133,6 +133,7 @@ function PlayerTokens(props: PlayerBoardProps) {
       names="active"
       fog={{ squares: board.fog, veil: "opaque" }}
       rangeShown
+      walkBound
       onSelect={(token) => props.onSelect(token.row)}
       onTarget={
         props.onTarget === undefined
