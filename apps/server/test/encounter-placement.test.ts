@@ -505,6 +505,46 @@ describeLayer("encounter-placement", shared, (it) => {
         });
       }),
     );
+
+    it.effect("follows its squares when the level is resized, dropping those now off it", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        const table = yield* aTable;
+        const level = yield* aHall;
+        const { encounter } = yield* anAmbush(table, level);
+        const other = yield* anAmbush(table, level, 1, "Far corner");
+        yield* place(jo, table, encounter.id, {
+          spots: [],
+          trigger: [at(1, 1), at(6, 2), at(2, 3)],
+        });
+        yield* place(jo, table, other.encounter.id, { spots: [], trigger: [at(6, 0)] });
+        const resave = (version: number, columns: number) =>
+          as(jo.token, (client) =>
+            client.libraryLevels.save({
+              params: { levelId: level.id },
+              // No lights, so the lamp in the east is not left off a
+              // narrower board.
+              payload: { ...hall({ ...level, version }, { columns }), lights: [] },
+            }),
+          );
+
+        // Two columns wider: each square is the same column and row.
+        const wider = yield* resave(level.version, 9);
+        expect((yield* prepOf(table, encounter.id)).placement.trigger).toEqual([
+          at(1, 1, 9),
+          at(6, 2, 9),
+          at(2, 3, 9),
+        ]);
+
+        // Five wide: column 6 is off the board, and an area left with none is none.
+        yield* resave(wider.version, 5);
+        expect((yield* prepOf(table, encounter.id)).placement.trigger).toEqual([
+          at(1, 1, 5),
+          at(2, 3, 5),
+        ]);
+        expect((yield* prepOf(table, other.encounter.id)).placement.trigger).toBeNull();
+      }),
+    );
   });
 
   describe("the DM's visit", () => {

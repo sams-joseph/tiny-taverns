@@ -297,8 +297,12 @@ export class Levels extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const current = yield* sql<{ readonly version: number }>`
-                  select level.version from level
+                const current = yield* sql<{
+                  readonly version: number;
+                  readonly columns: number;
+                  readonly rows: number;
+                }>`
+                  select level.version, level.columns, level.rows from level
                   where level.id = ${id} and ${levelOwned(sql, actor)}
                   for update
                 `;
@@ -329,6 +333,38 @@ export class Levels extends Context.Service<
                   where level.id = ${id} and ${levelOwned(sql, actor)}
                 `;
                 yield* writeParts(id, payload);
+                // The one thing outside the level stored as its square
+                // numbers, `row * columns + column`: each encounter's trigger
+                // area on it (`0115_encounter_placement.ts`). A new width
+                // renumbers every square, so each is carried to the same
+                // column and row, those now off the board dropped, and an
+                // area left with none is none. A placed creature's spot is a
+                // column and a row, and a fight's or a visit's copy never
+                // resizes, so nothing else follows.
+                const was = current[0]!;
+                if (was.columns !== payload.columns || was.rows !== payload.rows) {
+                  yield* sql`
+                    update encounter_prep set
+                      trigger_squares = (
+                        select array_agg(moved.square order by moved.square)
+                        from (
+                          select distinct
+                                 (square / ${was.columns}) * ${payload.columns}
+                                   + square % ${was.columns} as square
+                          from unnest(encounter_prep.trigger_squares) square
+                          where square % ${was.columns} < ${payload.columns}
+                            and square / ${was.columns} < ${payload.rows}
+                        ) moved
+                      ),
+                      updated_at = now()
+                    from encounter, level
+                    where encounter_prep.encounter_id = encounter.id
+                      and encounter.level_id = level.id
+                      and encounter.level_owner_id = level.account_id
+                      and encounter_prep.trigger_squares is not null
+                      and level.id = ${id} and ${levelOwned(sql, actor)}
+                  `;
+                }
                 return yield* read(id).pipe(Effect.orDie);
               }),
             ),
