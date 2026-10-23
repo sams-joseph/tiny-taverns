@@ -226,10 +226,12 @@ export function VisitBoard({
                 onShape={() => undefined}
                 onStep={() => undefined}
                 fog={<FogActions onWhole={fogTool.whole} />}
+                moveHint="Drag a party token to any square it may stand on."
               />
               <span aria-hidden="true" className="mx-0.5 h-6 w-px bg-hairline" />
               <CameraBar
                 camera={camera}
+                centreLabel="Centre on the party"
                 onCentre={firstAt === undefined ? undefined : () => camera.centre(firstAt)}
               />
             </div>

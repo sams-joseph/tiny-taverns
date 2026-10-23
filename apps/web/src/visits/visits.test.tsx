@@ -290,6 +290,14 @@ describe("a visit's stage", () => {
         .getAllByRole("button")
         .map((tool) => tool.getAttribute("aria-label")),
     ).toEqual(["Move", "Fog"]);
+    // In a visit's own words: nobody is up, and no creature shows a range.
+    expect(within(tools).getByRole("button", { name: "Move" })).toHaveAttribute(
+      "title",
+      "Drag a party token to any square it may stand on.",
+    );
+    expect(screen.getByRole("button", { name: "Centre on the party" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Centre on whoever is up" })).toBeNull();
+    expect(screen.queryByTitle(/active creature/)).toBeNull();
   });
 
   it("opens a door on a click, and draws the server's answer", async () => {

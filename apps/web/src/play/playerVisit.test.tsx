@@ -146,6 +146,9 @@ describe("a level visit on a seated player's canvas", () => {
     expect(level.getByRole("button", { name: /^Ilse Thornbury/ })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
     expect(screen.getAllByText(/exploring/).length).toBeGreaterThan(0);
+    // Nobody is up on a visit: Centre finds your own token.
+    expect(screen.getByRole("button", { name: "Centre on your token" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Centre on whoever is up" })).toBeNull();
   });
 
   it("walks your own token, and nobody else's", async () => {

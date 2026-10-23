@@ -156,6 +156,7 @@ export function PlayerVisitStage({
   return (
     <PartyLevelStage
       label="Level"
+      centreLabel="Centre on your token"
       board={props.visit}
       centre={centre}
       focus={centre}

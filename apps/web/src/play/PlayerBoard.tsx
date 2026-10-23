@@ -188,6 +188,7 @@ export function PlayerBoardStage({
   return (
     <PartyLevelStage
       label="Battle map"
+      centreLabel="Centre on whoever is up"
       board={map}
       centre={upAt === undefined ? undefined : centreOf(upAt)}
       freeArea={freeArea}
@@ -213,11 +214,14 @@ export function PartyLevelStage({
   label,
   board,
   centre,
+  centreLabel,
   focus,
   freeArea,
   children,
 }: {
   readonly label: string;
+  /** What *Centre* centres on, as its name (`CameraBar`). */
+  readonly centreLabel: string;
   readonly focus?: { readonly x: number; readonly y: number } | undefined;
   readonly board: {
     readonly columns: number;
@@ -272,6 +276,7 @@ export function PartyLevelStage({
             <div className="rounded-card border border-strong bg-surface-card p-2 shadow-3">
               <CameraBar
                 camera={camera}
+                centreLabel={centreLabel}
                 onCentre={centre === undefined ? undefined : () => camera.centre(centre)}
               />
             </div>

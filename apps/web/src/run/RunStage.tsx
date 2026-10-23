@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BoardCanvas, type Camera } from "./BoardCanvas";
 import { centreOf } from "./canvas";
-import { AreaBanner, AreaLayer, BoardToolPicker, ToolSurface } from "./BoardTools";
+import { AreaBanner, AreaLayer, BoardToolPicker, FIGHT_MOVE_HINT, ToolSurface } from "./BoardTools";
 import { CameraBar } from "./CameraBar";
 import { FogActions, FogBrush } from "./Fog";
 import { typedEscape } from "./escape";
@@ -498,10 +498,12 @@ export function RunBoardStage({
                 onShape={tools.pickShape}
                 onStep={tools.step}
                 fog={<FogActions onWhole={fogTool.whole} />}
+                moveHint={FIGHT_MOVE_HINT}
               />
               <span aria-hidden="true" className="mx-0.5 h-6 w-px bg-hairline" />
               <CameraBar
                 camera={at}
+                centreLabel="Centre on whoever is up"
                 onCentre={activeAt === undefined ? undefined : () => at.centre(activeAt)}
               />
             </div>
