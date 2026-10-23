@@ -1,4 +1,11 @@
-import type { CampaignId, Encounter, EncounterPlayed, EncounterPrep, Session } from "@taverns/api";
+import type {
+  CampaignId,
+  Encounter,
+  EncounterPlayed,
+  EncounterPrep,
+  LevelVisitSummary,
+  Session,
+} from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
@@ -21,7 +28,9 @@ const clockOf = (at: DateTime.Utc): string => {
 };
 
 /**
- * Where an open night stands with nothing on the table.
+ * Where an open night stands with no fight on the table: a level the party
+ * explores (`CampaignActs.visit`, the one the campaign's press reads), or
+ * nothing.
  *
  * **`startedAt === null` no longer means the night has not begun.** Opening a
  * session stamps it (`session/start.ts`), best effort, so an unstamped open
@@ -29,10 +38,39 @@ const clockOf = (at: DateTime.Utc): string => {
  * the campaign points at it, so the line says what is still true — it is open —
  * rather than a start time it does not have.
  */
-const stateOf = (session: Session): string =>
-  session.startedAt !== null
-    ? `Playing since ${clockOf(session.startedAt)}. Nothing is on the table.`
-    : "Open. Nothing has been put on the table yet.";
+function NightState({
+  session,
+  visit,
+}: {
+  readonly session: Session;
+  readonly visit: LevelVisitSummary | undefined;
+}) {
+  const since =
+    session.startedAt !== null ? `Playing since ${clockOf(session.startedAt)}. ` : "Open. ";
+  return (
+    <p className="mb-0 text-body-s leading-body text-muted-foreground">
+      {visit === undefined ? (
+        session.startedAt !== null ? (
+          `${since}Nothing is on the table.`
+        ) : (
+          "Open. Nothing has been put on the table yet."
+        )
+      ) : (
+        <>
+          {since}
+          <Link
+            to="/campaigns/$campaignId/levels/$visitId"
+            params={{ campaignId: session.campaignId, visitId: visit.id }}
+            className={sectionLink}
+          >
+            {visit.name}
+          </Link>{" "}
+          is on the table.
+        </>
+      )}
+    </p>
+  );
+}
 
 function EncounterRow({
   index,
@@ -236,6 +274,7 @@ function PlannedNightSection({
 export function NextSession({
   view,
   prep,
+  visit,
   onRun,
   onPickUp,
   onFinish,
@@ -243,6 +282,8 @@ export function NextSession({
   readonly view: CampaignView;
   /** Every encounter's prep, for each row's *Ready* or *Draft*. */
   readonly prep: ReadonlyArray<EncounterPrep>;
+  /** The level on the table with no fight on it (`CampaignActs.visit`). */
+  readonly visit: LevelVisitSummary | undefined;
   readonly onRun: (encounter: Encounter) => void;
   readonly onPickUp: (encounter: Encounter, carried: EncounterPlayed) => void;
   readonly onFinish: () => void;
@@ -367,7 +408,7 @@ export function NextSession({
 
       {session !== undefined && live === undefined && (
         <CardFooter className="flex-wrap justify-between">
-          <p className="mb-0 text-body-s leading-body text-muted-foreground">{stateOf(session)}</p>
+          <NightState session={session} visit={visit} />
           {/* Outline, not destructive: it opens a confirmation, and a red
               button here would read as the ending itself. */}
           <Button variant="outline" size="sm" className="text-muted-foreground" onClick={onFinish}>

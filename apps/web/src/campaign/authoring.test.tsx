@@ -703,7 +703,7 @@ describe("finishing the night", () => {
     expect(within(card as HTMLElement).getByText("Session 12")).toBeInTheDocument();
     // **It used to read "Not started yet", and that stopped being true.** A
     // night with no stamp is not a night nobody has played now that opening one
-    // is its own act — see `stateOf` in `NextSession`. What the card can still
+    // is its own act — see `NightState` in `NextSession`. What the card can still
     // see is that the campaign points at this night and nothing is on its table.
     expect(
       within(card as HTMLElement).getByText("Open. Nothing has been put on the table yet."),
@@ -727,6 +727,51 @@ describe("finishing the night", () => {
     expect(
       within(card as HTMLElement).getByText(/^Playing since \d\d:04\. Nothing is on the table\.$/),
     ).toBeInTheDocument();
+  });
+
+  it("says which level is on the table, and the campaign's press goes back to it", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${sessionId}`, {
+      status: 200,
+      body: { ...session, startedAt: "2026-08-04T19:04:00.000Z" },
+    });
+    const visitId = "1e7e6000-0000-4000-8000-000000000001";
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [
+        {
+          id: visitId,
+          levelId: null,
+          name: "The Sunken Chapel",
+          columns: 26,
+          rows: 16,
+          feetPerCell: 5,
+          onTable: true,
+          fight: null,
+          createdAt: "2026-08-04T19:00:00.000Z",
+          updatedAt: "2026-08-04T19:00:00.000Z",
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+
+    const card = (await screen.findByRole("button", { name: "Finish the night" })).closest(
+      "[data-slot='card']",
+    ) as HTMLElement;
+    await waitFor(() =>
+      expect(card).toHaveTextContent(/Playing since \d\d:04\. The Sunken Chapel is on the table\./),
+    );
+    expect(within(card).getByRole("link", { name: "The Sunken Chapel" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/levels/${visitId}`,
+    );
+    expect(screen.queryByText(/Nothing is on the table/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start an encounter" })).toBeNull();
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: "Back to The Sunken Chapel" }))[0]!,
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`/campaigns/${campaignId}/levels/${visitId}`),
+    );
   });
 
   it("says what will happen, and does nothing until the DM confirms", async () => {

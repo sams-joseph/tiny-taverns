@@ -7,6 +7,7 @@ import type {
   EncounterCreature,
   EncounterId,
   EncounterRun,
+  LevelVisitSummary,
   Note,
   PlannedOrder,
   PrepItem,
@@ -21,6 +22,7 @@ import { apiAtom, combine } from "../api/atoms";
 import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";
 import { plannedNightsOf } from "../session/start";
+import { levelVisitsAtom } from "../visits/load";
 
 /** Everything the campaign view renders, in one shape. */
 export interface CampaignView {
@@ -227,6 +229,12 @@ export interface CampaignNight {
   readonly campaign: Campaign;
   readonly session: Session | undefined;
   readonly run: EncounterRun | undefined;
+  /**
+   * The level visit on the table while the night is open: the dungeon the
+   * party explores when no fight is on (a fight on it is `run`). Asked only
+   * with a night open, as a player's table shows it only then.
+   */
+  readonly visit: LevelVisitSummary | undefined;
 }
 
 /**
@@ -246,7 +254,7 @@ export const campaignNightAtom = Atom.family((campaignId: CampaignId) =>
         const sessionId = campaign.currentSessionId;
         if (sessionId === null) {
           return AsyncResult.success<CampaignNight, unknown>(
-            { campaign, session: undefined, run: undefined },
+            { campaign, session: undefined, run: undefined, visit: undefined },
             { waiting: previous.waiting },
           );
         }
@@ -254,11 +262,13 @@ export const campaignNightAtom = Atom.family((campaignId: CampaignId) =>
         const tonight = AsyncResult.all({
           session: get(sessionAtom(night)),
           runs: get(runsAtom(night)),
+          visits: get(levelVisitsAtom(campaignId)),
         });
         return AsyncResult.map(tonight, (parts) => ({
           campaign,
           session: parts.session,
           run: liveRun(parts.runs),
+          visit: parts.visits.find((visit) => visit.onTable),
         })) as AsyncResult.AsyncResult<CampaignNight, unknown>;
       }),
     ),

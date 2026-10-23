@@ -1,4 +1,10 @@
-import type { CampaignId, Encounter, EncounterId, EncounterPlayed } from "@taverns/api";
+import type {
+  CampaignId,
+  Encounter,
+  EncounterId,
+  EncounterPlayed,
+  LevelVisitSummary,
+} from "@taverns/api";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import type { IconName } from "@taverns/ui";
@@ -11,12 +17,12 @@ import { StartRun } from "./StartRun";
 import { StartSessionDialog } from "./StartSessionDialog";
 
 /**
- * The one press the campaign offers, whichever of its three things it is.
+ * The one press the campaign offers, whichever of its four things it is.
  *
  * **It is drawn in more than one place** — at the end of the campaign row on
  * every tab, and in the Overview's live banner while a fight is on the table —
  * and every one must say the same thing: controls computing the same
- * three-way branch independently are controls that can differ. So all of them
+ * branch independently are controls that can differ. So all of them
  * call `useCampaignAct`, and `actFor` is the branch.
  */
 export interface CampaignAct {
@@ -26,34 +32,40 @@ export interface CampaignAct {
 }
 
 /**
- * The three states, and the words for each.
+ * The four states, and the words for each.
  *
  * They used to be two — `live === undefined ? "Start session" : "Back to the
  * fight"` — and that was wrong the moment a night could be open with nothing on
  * the table: `live` is still undefined there, so the campaign would offer *Start
  * session* for a session already running and the press would try to open a
  * second one. **The session and the run are two questions and are asked
- * separately.**
+ * separately.** So is the level: with a night open and no fight, a level visit
+ * on the table is where the party is, and the press goes back to its stage.
  */
 const actFor = (
   night: CampaignNight,
   onRun: () => void,
   onStartSession: () => void,
-): CampaignAct =>
-  night.run !== undefined
+  onVisit: (visit: LevelVisitSummary) => void,
+): CampaignAct => {
+  const visit = night.visit;
+  return night.run !== undefined
     ? { label: `Back to the ${sceneNoun(night.run.mode)}`, icon: "swords", press: onRun }
     : night.session === undefined
       ? { label: "Start session", icon: "play", press: onStartSession }
-      : // The night is open. What is left to do is the DM's discretion — an
-        // encounter goes on the table when the party reaches one — so the press
-        // is the fight rather than a second night.
-        { label: "Start an encounter", icon: "swords", press: onRun };
+      : visit !== undefined
+        ? { label: `Back to ${visit.name}`, icon: "map", press: () => onVisit(visit) }
+        : // The night is open. What is left to do is the DM's discretion — an
+          // encounter goes on the table when the party reaches one — so the press
+          // is the fight rather than a second night.
+          { label: "Start an encounter", icon: "swords", press: onRun };
+};
 
 export interface CampaignActs {
   /**
    * The press, or `undefined` while tonight is still being read — and on the
-   * fight it would send you back to, where a press that goes where you already
-   * are is not a press.
+   * fight or the level's stage it would send you back to, where a press that
+   * goes where you already are is not a press.
    */
   readonly act: CampaignAct | undefined;
   /**
@@ -72,6 +84,12 @@ export interface CampaignActs {
    * running it again is refused (`encounterList.ts`, `playthroughOf`).
    */
   readonly pickUp: (encounter: Encounter, carried: EncounterPlayed) => void;
+  /**
+   * The level visit on the table with the night open, as `actFor` reads it
+   * (`CampaignNight.visit`): what the Overview says is on the table while no
+   * fight is.
+   */
+  readonly visit: LevelVisitSummary | undefined;
   /** The dialogs the presses open. The caller renders this wherever it is. */
   readonly dialogs: ReactNode;
 }
@@ -88,7 +106,7 @@ export interface CampaignActs {
 export function useCampaignAct(campaignId: CampaignId): CampaignActs {
   const result = useAtomValue(campaignNightAtom(campaignId));
   const night = AsyncResult.isSuccess(result) ? result.value : undefined;
-  const here = useParams({ strict: false }).runId;
+  const { runId: here, visitId: hereVisit } = useParams({ strict: false });
   const navigate = useNavigate();
   /** The encounter the DM pressed Run on, while the start dialog is open. */
   const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
@@ -140,10 +158,24 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
   const startSession = useCallback(() => setOpening(true), []);
   const stopStarting = useCallback(() => setStarting(undefined), []);
 
+  const toVisit = useCallback(
+    (visit: LevelVisitSummary) =>
+      void navigate({
+        to: "/campaigns/$campaignId/levels/$visitId",
+        params: { campaignId, visitId: visit.id },
+      }),
+    [campaignId, navigate],
+  );
+
   const act =
-    night === undefined || (night.run !== undefined && night.run.id === here)
+    night === undefined ||
+    (night.run !== undefined && night.run.id === here) ||
+    (night.run === undefined &&
+      night.session !== undefined &&
+      night.visit !== undefined &&
+      night.visit.id === hereVisit)
       ? undefined
-      : actFor(night, () => run(), startSession);
+      : actFor(night, () => run(), startSession, toVisit);
 
   const dialogs =
     night === undefined ? null : (
@@ -185,5 +217,5 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
       </>
     );
 
-  return { act, run, pickUp, dialogs };
+  return { act, run, pickUp, visit: night?.visit, dialogs };
 }

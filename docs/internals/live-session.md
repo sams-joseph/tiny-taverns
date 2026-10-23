@@ -62,7 +62,7 @@ A session can start over roleplay with no encounter in sight, so opening a night
 
 `startSession` is three statements in order, and only the last is best effort: create the session (or take the planned one), point `campaign.currentSessionId` at it (fatal, because a session nothing points at is a night the DM cannot find again), then stamp `startedAt` under `Effect.ignore`.
 
-`startedAt` therefore belongs to the night, not the fight: a running session with `activeEncounterRunId` null is the ordinary state of an evening. The campaign's button has three states computed once by `actFor` in `campaign/act.tsx`, asking the session and the run separately: `run` is undefined both with no night and with a night that has nothing on the table.
+`startedAt` therefore belongs to the night, not the fight: a running session with `activeEncounterRunId` null is the ordinary state of an evening. The campaign's button has four states computed once by `actFor` in `campaign/act.tsx`, asking the session, the run and the level visit on the table separately: `run` is undefined both with no night and with a night that has nothing on the table, and with a night open and no fight, a visit on the table is where the press goes (`CampaignNight.visit`, which the Overview's _Next session_ card also says is on the table).
 
 ### Which board a fight starts on
 
