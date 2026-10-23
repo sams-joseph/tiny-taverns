@@ -99,7 +99,11 @@ const at = (column: number, row: number) => row * COLUMNS + column;
  * east; an unlit lamp in the west; a secret trap in the west, and mud across
  * both rooms' top rows; the way in (`entry`) in the west.
  */
-const twoRooms = (level: Level, ambient: "bright" | "dark" = "bright"): LevelSave => ({
+const twoRooms = (
+  level: Level,
+  ambient: "bright" | "dark" = "bright",
+  more: LevelSave["props"] = [],
+): LevelSave => ({
   name: "Two Rooms",
   description: null,
   columns: COLUMNS,
@@ -147,6 +151,7 @@ const twoRooms = (level: Level, ambient: "bright" | "dark" = "bright"): LevelSav
       difficult: null,
       dmOnly: true,
     },
+    ...more,
   ],
   lights: [
     {
@@ -236,14 +241,17 @@ const night = () =>
  * room and Tamsin on (1, 2) in the west, taking turns with Tamsin up and the
  * map shown to the table.
  */
-const aFight = (ambient: "bright" | "dark" = "bright") =>
+const aFight = (ambient: "bright" | "dark" = "bright", props: LevelSave["props"] = []) =>
   Effect.gen(function* () {
     const { jo, table } = yield* Fixture;
     const made = yield* as(jo.token, (client) =>
       client.libraryLevels.create({ payload: { name: "Two Rooms", columns: COLUMNS, rows: 5 } }),
     );
     const level = yield* as(jo.token, (client) =>
-      client.libraryLevels.save({ params: { levelId: made.id }, payload: twoRooms(made, ambient) }),
+      client.libraryLevels.save({
+        params: { levelId: made.id },
+        payload: twoRooms(made, ambient, props),
+      }),
     );
     const sessionId: SessionId = yield* night();
     const encounter = yield* as(jo.token, (client) =>
@@ -463,6 +471,42 @@ describeLayer("party-vision", shared, (it) => {
         expect((yield* eventsOf(fight.id, "board-vision-updated")).at(-1)?.visibility).toBe(
           "shared",
         );
+      }),
+    );
+  });
+
+  describe("a sight-blocking prop is seen by its face", () => {
+    const pillar = (id: LevelPartId, x: number, y: number, dmOnly = false) => ({
+      id,
+      kind: "pillar" as const,
+      x,
+      y,
+      rotation: 0,
+      blocksMovement: null,
+      blocksSight: null,
+      cover: null,
+      difficult: null,
+      dmOnly,
+    });
+    const PILLAR_WEST = part(12);
+    const PILLAR_DM = part(13);
+    const PILLAR_EAST = part(14);
+
+    it.effect("sends a pillar in sight with its square, and not one out of sight or the DM's", () =>
+      Effect.gen(function* () {
+        yield* aFight("bright", [
+          pillar(PILLAR_WEST, 2, 0),
+          pillar(PILLAR_DM, 3, 4, true),
+          pillar(PILLAR_EAST, 6, 4),
+        ]);
+        const level = levelOf(yield* tableOf);
+        // The pillar's centre is inside it; its square is seen by the face Tamsin sees.
+        expect(level.seen).toEqual(WEST);
+        expect(level.sees).toContain(at(2, 0));
+        expect(level.props.map((prop) => prop.id)).toEqual([BARREL_WEST, PILLAR_WEST]);
+        const raw = yield* rawTable;
+        expect(raw.body).not.toContain(PILLAR_DM);
+        expect(raw.body).not.toContain(PILLAR_EAST);
       }),
     );
   });
