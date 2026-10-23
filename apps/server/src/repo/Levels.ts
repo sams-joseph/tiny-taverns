@@ -1,7 +1,9 @@
 import {
   Actor,
+  type CampaignId,
   Conflict,
   CurrentActor,
+  type EncounterId,
   LEVEL_FEET_PER_CELL_DEFAULT,
   Level,
   LevelAmbient,
@@ -15,9 +17,13 @@ import {
   LevelUse,
   LevelWall,
   NotFound,
+  type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
+import { placedOnLevel } from "./LevelVisits.js";
+import { watchPlacement } from "./placements.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -99,8 +105,10 @@ export class Levels extends Context.Service<
     ) => Effect.Effect<Level, NotFound | Conflict, CurrentActor>;
     /**
      * The level and every part of it. Each encounter naming it goes back to
-     * the plain grid (`on delete set null`); a fight already started keeps
-     * its own copy (`0109_level_fights.ts`).
+     * the plain grid (`on delete set null`), its placement gone, which each
+     * campaign's visit of the level tells on an open night and rings; a fight
+     * already started keeps its own copy (`0109_level_fights.ts`), and one
+     * holding a visit refuses nothing.
      */
     readonly remove: (id: LevelId) => Effect.Effect<void, NotFound, CurrentActor>;
     /**
@@ -114,6 +122,7 @@ export class Levels extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
 
       const shelf = SqlSchema.findAll({
         Request: Schema.toType(Actor),
@@ -370,43 +379,77 @@ export class Levels extends Context.Service<
             ),
           ),
 
+        // The level goes from each encounter naming it, across the owner's
+        // campaigns, and with it each one's placement, which the campaign's
+        // visit of the level stops showing (`watchPlacement`, as
+        // `Encounters.remove` tells it). The locks are taken in the order
+        // every placement write takes them: the encounters (`placementOf`, a
+        // fight's start), then the level (`writePlacement`'s and
+        // `copyLevel`'s `for share`), then the visits. A fight holding a
+        // visit refuses nothing here: it plays on its own copy, and its
+        // table is not rung (`watchPlacement` asks `held`).
         remove: (id) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                const named = yield* sql<{
+                  readonly id: EncounterId;
+                  readonly campaign_id: CampaignId;
+                  readonly name: string;
+                  readonly placed: boolean;
+                }>`
+                  select encounter.id, encounter.campaign_id, encounter.name,
+                         (${placedOnLevel(sql)}) as placed
+                  from encounter
+                  join level on level.id = encounter.level_id
+                    and level.account_id = encounter.level_owner_id
+                  where level.id = ${id} and ${levelOwned(sql, actor)}
+                  order by encounter.id
+                  for no key update of encounter
+                `;
+                const held = yield* sql<{ readonly id: string }>`
+                  select level.id from level
+                  where level.id = ${id} and ${levelOwned(sql, actor)}
+                  for update
+                `;
+                if (held.length === 0) return yield* new NotFound({ resource: "level", id });
                 // Each encounter naming it goes back to none, so its placed
-                // creatures' squares go first (`0113_level_visits.ts`): they
-                // were squares of this level.
-                yield* sql`
-                  delete from encounter_creature_spot
-                  using encounter_creature, encounter, level
-                  where encounter_creature_spot.encounter_creature_id = encounter_creature.id
-                    and encounter_creature.encounter_id = encounter.id
-                    and encounter.level_id = level.id
-                    and encounter.level_owner_id = level.account_id
-                    and level.id = ${id} and ${levelOwned(sql, actor)}
-                `;
-                // And their trigger areas (`0115_encounter_placement.ts`).
-                yield* sql`
-                  update encounter_prep set trigger_squares = null
-                  from encounter, level
-                  where encounter_prep.encounter_id = encounter.id
-                    and encounter.level_id = level.id
-                    and encounter.level_owner_id = level.account_id
-                    and encounter_prep.trigger_squares is not null
-                    and level.id = ${id} and ${levelOwned(sql, actor)}
-                `;
+                // creatures' squares and its trigger area go first, squares
+                // of this level (`0113_level_visits.ts`,
+                // `0115_encounter_placement.ts`): one encounter at a time,
+                // each told while the visit still names the level, which the
+                // delete sets null.
+                const nights = new Set<SessionId>();
+                for (const encounter of named) {
+                  const told = yield* watchPlacement(sql, {
+                    campaignId: encounter.campaign_id,
+                    encounter,
+                    levelIds: [id],
+                  });
+                  yield* sql`
+                    delete from encounter_creature_spot
+                    using encounter_creature
+                    where encounter_creature_spot.encounter_creature_id = encounter_creature.id
+                      and encounter_creature.encounter_id = ${encounter.id}
+                  `;
+                  yield* sql`
+                    update encounter_prep set trigger_squares = null
+                    where encounter_prep.encounter_id = ${encounter.id}
+                      and encounter_prep.trigger_squares is not null
+                  `;
+                  const night = yield* told(encounter.placed);
+                  if (night !== null) nights.add(night);
+                }
                 // Every part's key cascades from the level. A visit of it
                 // keeps its own copy (`on delete set null`).
-                const gone = yield* sql<{ readonly id: string }>`
-                  delete from level
-                  where level.id = ${id} and ${levelOwned(sql, actor)}
-                  returning level.id
-                `;
-                if (gone.length === 0) return yield* new NotFound({ resource: "level", id });
+                yield* sql`delete from level where level.id = ${id} and ${levelOwned(sql, actor)}`;
+                return nights;
               }),
             ),
+          ).pipe(
+            // Each visit's doorbell, once the delete has committed.
+            Effect.flatMap((nights) => Effect.forEach(nights, live.touched, { discard: true })),
           ),
 
         uses: (id) =>
@@ -419,5 +462,5 @@ export class Levels extends Context.Service<
           ),
       };
     }),
-  );
+  ).pipe(Layer.provide(LiveEvents.layer));
 }

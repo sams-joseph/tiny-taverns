@@ -67,11 +67,13 @@ const at = (spot: { readonly column: number; readonly row: number }) =>
  *
  * The one before-and-after compare for every write that moves a placement:
  * `writePlacement`, an encounter's level changing (`Encounters.update`), a
- * roster line counted down or removed (`EncounterCreatures`), and an
- * encounter deleted (`Encounters.remove`). Each caller holds the encounter
- * `for no key update` first (`placementOf`, or `writePlacement`'s own read),
- * as a fight's start does, so the locks are taken encounter, then visit, on
- * every path.
+ * roster line counted down or removed (`EncounterCreatures`), an encounter
+ * deleted (`Encounters.remove`), and its level deleted from the Library
+ * (`Levels.remove`, for each encounter naming it). Each caller holds the
+ * encounter `for no key update` first (`placementOf`, or `writePlacement`'s
+ * and `Levels.remove`'s own read), as a fight's start does, and any lock on
+ * the level after it, so the locks are taken encounter, then level, then
+ * visit, on every path.
  */
 export const watchPlacement = (
   sql: SqlClient.SqlClient,
