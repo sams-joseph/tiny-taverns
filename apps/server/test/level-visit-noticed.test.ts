@@ -611,6 +611,169 @@ describeLayer("level-visit-noticed", shared, (it) => {
     );
   });
 
+  describe("a trigger with no creature placed", () => {
+    it.effect("is listed on the DM's read and noticed when the party steps on it", () =>
+      Effect.gen(function* () {
+        const { jo, ilse } = yield* People;
+        const { table, level, visit } = yield* exploring;
+        const ambush = yield* anAmbush(table, level, 2);
+        yield* as(jo.token, (client) =>
+          client.encounters.place({
+            params: { campaignId: table, encounterId: ambush.encounter.id },
+            payload: { spots: [], trigger: [at(2, 2)] },
+          }),
+        );
+        const before = yield* dmVisit(table, visit);
+        const listed = before.encounters.find((encounter) => encounter.id === ambush.encounter.id);
+        expect(listed?.creatures).toEqual([]);
+        expect(listed?.trigger).toEqual([{ column: 2, row: 2 }]);
+        expect(listed?.noticed).toBe(false);
+
+        yield* as(ilse.token, (client) =>
+          client.table.moveOnVisit({
+            params: { campaignId: table, visitId: visit.id, seatId: tamsinOf(visit).seatId },
+            payload: { position: { column: 2, row: 2 } },
+          }),
+        );
+        expect(noticedOf(yield* dmVisit(table, visit), ambush.encounter.id)).toBe(true);
+        expect(yield* noticedLines(visit.id)).toEqual([
+          { encounterId: ambush.encounter.id, name: "Ambush", visibility: "dm" },
+        ]);
+      }),
+    );
+  });
+
+  describe("a roster or encounter edit that moves a placement", () => {
+    /**
+     * Each edit takes the one goblin the party sees off the visit: the line
+     * removed, counted down past the placed instance, the encounter moved to
+     * another level, the encounter deleted.
+     */
+    type Ambush = Effect.Success<ReturnType<typeof anAmbush>>;
+    const edits = [
+      [
+        "a roster line removed",
+        (campaignId: CampaignId, ambush: Ambush) =>
+          Effect.gen(function* () {
+            const { jo } = yield* People;
+            yield* as(jo.token, (client) =>
+              client.encounterCreatures.remove({
+                params: {
+                  campaignId,
+                  encounterId: ambush.encounter.id,
+                  encounterCreatureId: ambush.line,
+                },
+              }),
+            );
+          }),
+      ],
+      [
+        "a roster line counted down",
+        (campaignId: CampaignId, ambush: Ambush) =>
+          Effect.gen(function* () {
+            const { jo } = yield* People;
+            yield* as(jo.token, (client) =>
+              client.encounterCreatures.update({
+                params: {
+                  campaignId,
+                  encounterId: ambush.encounter.id,
+                  encounterCreatureId: ambush.line,
+                },
+                payload: { count: 1 },
+              }),
+            );
+          }),
+      ],
+      [
+        "the encounter moved to another level",
+        (campaignId: CampaignId, ambush: Ambush) =>
+          Effect.gen(function* () {
+            const { jo } = yield* People;
+            const elsewhere = yield* aHall();
+            yield* as(jo.token, (client) =>
+              client.encounters.update({
+                params: { campaignId, encounterId: ambush.encounter.id },
+                payload: { levelId: elsewhere.id },
+              }),
+            );
+          }),
+      ],
+      [
+        "the encounter deleted",
+        (campaignId: CampaignId, ambush: Ambush) =>
+          Effect.gen(function* () {
+            const { jo } = yield* People;
+            yield* as(jo.token, (client) =>
+              client.encounters.remove({
+                params: { campaignId, encounterId: ambush.encounter.id },
+              }),
+            );
+          }),
+      ],
+    ] as const;
+
+    for (const [name, edit] of edits) {
+      it.effect(`tells the DM and rings the table for ${name}`, () =>
+        Effect.gen(function* () {
+          const { jo, ilse } = yield* People;
+          const { table, level, visit } = yield* exploring;
+          const ambush = yield* anAmbush(table, level, 2);
+          // The second goblin in the west room with the party, the first
+          // behind the plain wall: the count down takes only the second.
+          yield* as(jo.token, (client) =>
+            client.encounters.place({
+              params: { campaignId: table, encounterId: ambush.encounter.id },
+              payload: {
+                spots: [
+                  { encounterCreatureId: ambush.line, ordinal: 0, column: 6, row: 3 },
+                  { encounterCreatureId: ambush.line, ordinal: 1, column: 2, row: 2 },
+                ],
+                trigger: null,
+              },
+            }),
+          );
+          const seen = () =>
+            Effect.map(
+              as(ilse.token, (client) => client.table.read({ params: { campaignId: table } })),
+              (read) => read!.visit!.creatures.map((creature) => creature.name),
+            );
+          expect(yield* seen()).toEqual(["Goblin"]);
+          const before = (yield* linesOf(visit.id)).length;
+
+          yield* edit(table, ambush);
+
+          expect(yield* seen()).toEqual([]);
+          expect((yield* linesOf(visit.id)).slice(before)).toEqual([
+            "visit-placement-updated:dm",
+            "visit-vision-updated:shared",
+          ]);
+        }),
+      );
+    }
+
+    it.effect("tells nothing when the edit leaves the placement as it was", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        const { table, level, visit } = yield* exploring;
+        const ambush = yield* anAmbush(table, level, 2);
+        yield* placeOne(table, ambush, 2, 2);
+        const before = (yield* linesOf(visit.id)).length;
+        // Counted down to the one placed: no spot goes.
+        yield* as(jo.token, (client) =>
+          client.encounterCreatures.update({
+            params: {
+              campaignId: table,
+              encounterId: ambush.encounter.id,
+              encounterCreatureId: ambush.line,
+            },
+            payload: { count: 1 },
+          }),
+        );
+        expect((yield* linesOf(visit.id)).slice(before)).toEqual([]);
+      }),
+    );
+  });
+
   describe("a carried fight", () => {
     it.effect("keeps the visit frozen until it is picked up, and lets the level be reset", () =>
       Effect.gen(function* () {

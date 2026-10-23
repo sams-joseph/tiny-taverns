@@ -11,15 +11,16 @@ import {
   VisitPlacementUpdatedPayload,
 } from "@taverns/api";
 import { Effect, Schema } from "effect";
-import type { SqlClient, SqlError } from "effect/sql";
+import type { SqlClient, SqlError, Statement } from "effect/sql";
 import {
-  heldBy,
+  placedOnLevel,
+  holdVisits,
   type LoggedLine,
   seenPlacedColumn,
   tellTheNight,
   watchNotice,
 } from "./LevelVisits.js";
-import { intArray } from "./rows.js";
+import { intArray, uuidArray } from "./rows.js";
 import { levelOwned, rowWritable } from "./visibility.js";
 
 /**
@@ -51,6 +52,109 @@ const at = (spot: { readonly column: number; readonly row: number }) =>
   `column ${String(spot.column + 1)}, row ${String(spot.row + 1)}`;
 
 /**
+ * The visits a change to an encounter's placement shows on: the campaign's
+ * visits of `levelIds` (the level it is placed on; for a change of level, the
+ * one it had), held as a visit write holds them (`holdVisits`), and what
+ * each one's party sees placed there and has noticed, asked now, before the
+ * change. Answers the effect to run once the change is written, in the same
+ * transaction: given whether the placement changed at all (`false` logs
+ * nothing), each visit's log on the open night gains the DM's
+ * `visit-placement-updated` line naming the encounter, a contentless shared
+ * `visit-vision-updated` when the placed creatures the table sees there
+ * changed (the visit on the table and no fight holding it), and the DM's
+ * `visit-encounter-noticed` for what the party newly notices (`watchNotice`).
+ * Answers the night the caller rings once it has committed, or `null`.
+ *
+ * The one before-and-after compare for every write that moves a placement:
+ * `writePlacement`, an encounter's level changing (`Encounters.update`), a
+ * roster line counted down or removed (`EncounterCreatures`), and an
+ * encounter deleted (`Encounters.remove`). Each caller holds the encounter
+ * `for no key update` first (`placementOf`, or `writePlacement`'s own read),
+ * as a fight's start does, so the locks are taken encounter, then visit, on
+ * every path.
+ */
+export const watchPlacement = (
+  sql: SqlClient.SqlClient,
+  args: {
+    readonly campaignId: CampaignId;
+    readonly encounter: { readonly id: EncounterId; readonly name: string };
+    readonly levelIds: ReadonlyArray<string | null>;
+  },
+): Effect.Effect<
+  (changed: boolean) => Effect.Effect<SessionId | null, SqlError.SqlError>,
+  SqlError.SqlError
+> =>
+  Effect.gen(function* () {
+    const { campaignId, encounter } = args;
+    const levels = [...new Set(args.levelIds.filter((level): level is string => level !== null))];
+    const none = () => Effect.succeed(null);
+    if (levels.length === 0) return none;
+    const visits = yield* holdVisits(
+      sql,
+      sql`level_visit.campaign_id = ${campaignId}
+          and level_visit.level_id = any(${uuidArray(levels)})`,
+    );
+    if (visits.length === 0) return none;
+    const seen = (visitId: string) =>
+      Effect.map(
+        sql<{ readonly creatures: unknown }>`
+          select ${seenPlacedColumn(sql)} from level_visit where level_visit.id = ${visitId}
+        `,
+        (rows) => JSON.stringify(rows[0]?.creatures),
+      );
+    const before = yield* Effect.forEach(visits, (visit) => seen(visit.id));
+    const watched = yield* Effect.forEach(visits, (visit) => watchNotice(sql, visit.id));
+    return (changed: boolean) =>
+      Effect.gen(function* () {
+        if (!changed) return null;
+        let night: SessionId | null = null;
+        for (const [index, visit] of visits.entries()) {
+          const lines: Array<LoggedLine> = [
+            {
+              kind: "visit-placement-updated",
+              payload: {
+                encounterId: encounter.id,
+                name: encounter.name,
+              } satisfies typeof VisitPlacementUpdatedPayload.Encoded,
+              visibility: "dm",
+            },
+          ];
+          const shown = visit.on_table && !visit.held;
+          if (shown && (yield* seen(visit.id)) !== before[index]) {
+            lines.push({ kind: "visit-vision-updated", payload: {}, visibility: "shared" });
+          }
+          lines.push(...(yield* watched[index]!));
+          night = (yield* tellTheNight(sql, campaignId, visit.id, lines)) ?? night;
+        }
+        return night;
+      });
+  });
+
+/**
+ * An encounter as a change to its placement finds it, held `for no key
+ * update` until the commit beneath `gate`, a predicate over `encounter`: its
+ * name, its level, and whether a visit of that level shows it placed now (a
+ * spot or a trigger, and never played: `placedOnLevel`), or `null` beneath no
+ * gate.
+ */
+export const placementOf = (sql: SqlClient.SqlClient, id: string, gate: Statement.Fragment) =>
+  Effect.map(
+    sql<{
+      readonly id: EncounterId;
+      readonly name: string;
+      readonly level_id: string | null;
+      readonly placed: boolean;
+    }>`
+      select encounter.id, encounter.name, encounter.level_id,
+             (${placedOnLevel(sql)}) as placed
+      from encounter
+      where encounter.id = ${id} and ${gate}
+      for no key update of encounter
+    `,
+    (rows) => rows[0] ?? null,
+  );
+
+/**
  * Replace an encounter's placement, in the caller's transaction, beneath
  * `rowWritable` over the encounter (`NotFound` for any other asker). Every
  * square is checked against the encounter's level as it is now: on its board,
@@ -61,12 +165,8 @@ const at = (spot: { readonly column: number; readonly row: number }) =>
  * ascending and distinct, and an empty one as none.
  *
  * While a night is open and the campaign has a visit of the level, the
- * visit's log gains the DM's `visit-placement-updated` line and, when the
- * placed creatures the party sees there changed (the visit on the table and
- * no fight holding it), a contentless shared `visit-vision-updated` that
- * rings the players' doorbell, and the DM's `visit-encounter-noticed` when
- * the encounter's new squares are ones the party notices (`watchNotice`). Answers the night the caller rings once it
- * has committed, or `null`.
+ * visit's log tells of it (`watchPlacement`). Answers the night the caller
+ * rings once it has committed, or `null`.
  */
 export const writePlacement = (
   sql: SqlClient.SqlClient,
@@ -181,25 +281,13 @@ export const writePlacement = (
       return yield* new Conflict({ message: "the trigger area is on the level's squares" });
     }
 
-    // The campaign's visit of the level, if it has one, held as a visit
-    // write holds it, and what its party sees placed there before this.
-    const visits = yield* sql<{
-      readonly id: string;
-      readonly shown: boolean;
-      readonly creatures: unknown;
-    }>`
-      select level_visit.id,
-             (campaign.table_visit_id is not distinct from level_visit.id
-              and not ${heldBy(sql)}) as shown,
-             ${seenPlacedColumn(sql)}
-      from level_visit
-      join campaign on campaign.id = level_visit.campaign_id
-      where level_visit.campaign_id = ${campaignId}
-        and level_visit.level_id = ${encounter.level_id}
-      for update of level_visit
-    `;
-    const before = visits.map((visit) => JSON.stringify(visit.creatures));
-    const watched = yield* Effect.forEach(visits, (visit) => watchNotice(sql, visit.id));
+    // The campaign's visit of the level, if it has one, and what its party
+    // sees placed there before this.
+    const told = yield* watchPlacement(sql, {
+      campaignId,
+      encounter: { id: encounterId, name: encounter.name },
+      levelIds: [encounter.level_id],
+    });
 
     yield* sql`
       delete from encounter_creature_spot
@@ -227,27 +315,5 @@ export const writePlacement = (
         and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
     `;
 
-    let night: SessionId | null = null;
-    for (const [index, visit] of visits.entries()) {
-      const after = yield* sql<{ readonly creatures: unknown }>`
-        select ${seenPlacedColumn(sql)} from level_visit where level_visit.id = ${visit.id}
-      `;
-      const changed = JSON.stringify(after[0]?.creatures) !== before[index];
-      const lines: Array<LoggedLine> = [
-        {
-          kind: "visit-placement-updated",
-          payload: {
-            encounterId,
-            name: encounter.name,
-          } satisfies typeof VisitPlacementUpdatedPayload.Encoded,
-          visibility: "dm",
-        },
-      ];
-      if (visit.shown && changed) {
-        lines.push({ kind: "visit-vision-updated", payload: {}, visibility: "shared" });
-      }
-      lines.push(...(yield* watched[index]!));
-      night = (yield* tellTheNight(sql, campaignId, visit.id, lines)) ?? night;
-    }
-    return night;
+    return yield* told(true);
   });

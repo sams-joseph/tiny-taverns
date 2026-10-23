@@ -29,13 +29,14 @@ import {
   plannedPageFilter,
   type PlannedPageFilterValues,
   PlayerEncounter,
+  type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { Levels } from "./Levels.js";
-import { type PlacementWrite, writePlacement } from "./placements.js";
+import { type PlacementWrite, placementOf, watchPlacement, writePlacement } from "./placements.js";
 import { RUN } from "./liveTables.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
@@ -415,6 +416,9 @@ export class Encounters extends Context.Service<
       const encounterCreatures = yield* EncounterCreatures;
       const levels = yield* Levels;
       const live = yield* LiveEvents;
+      /** Ring the night a write logged on, once its transaction has committed. */
+      const ring = (night: SessionId | null) =>
+        night === null ? Effect.void : live.touched(night);
       /**
        * The DM's planned order, then the id — the tiebreak `Ordering`
        * requires, though the unique slot leaves nothing for it to break.
@@ -829,6 +833,42 @@ export class Encounters extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                let night: SessionId | null = null;
+                const level =
+                  patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId);
+                // A placed creature's square is a square of the encounter's
+                // level (`0113_level_visits.ts`): another level, or none,
+                // clears every placement on the roster, which the visit of
+                // the level it had stops showing (`watchPlacement`).
+                if ("level_id" in level) {
+                  const before = yield* placementOf(
+                    sql,
+                    id,
+                    rowWritable(sql, "encounter", campaignId, actor),
+                  );
+                  const moved = before !== null && before.level_id !== level.level_id;
+                  if (moved) {
+                    const told = yield* watchPlacement(sql, {
+                      campaignId,
+                      encounter: before,
+                      levelIds: [before.level_id],
+                    });
+                    yield* sql`
+                      delete from encounter_creature_spot
+                      using encounter_creature
+                      where encounter_creature_spot.encounter_creature_id = encounter_creature.id
+                        and encounter_creature.encounter_id = ${id}
+                    `;
+                    // And its trigger area, squares of the same level
+                    // (`0115_encounter_placement.ts`).
+                    yield* sql`
+                      update encounter_prep set trigger_squares = null
+                      where encounter_prep.encounter_id = ${id}
+                        and encounter_prep.trigger_squares is not null
+                    `;
+                    night = yield* told(before.placed);
+                  }
+                }
                 // A new kind clears a challenge written for another, before the
                 // kind moves: the prep row carries its encounter's kind through
                 // its key, and its check would refuse the cascade otherwise
@@ -840,33 +880,6 @@ export class Encounters extends Context.Service<
                     where encounter_prep.encounter_id = ${id}
                       and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
                       and encounter_prep.challenge ->> 'kind' <> ${patch.kind}
-                  `;
-                }
-                const level =
-                  patch.levelId === undefined ? {} : yield* levelColumns(actor, patch.levelId);
-                // A placed creature's square is a square of the encounter's
-                // level (`0113_level_visits.ts`): another level, or none,
-                // clears every placement on the roster.
-                if ("level_id" in level) {
-                  yield* sql`
-                    delete from encounter_creature_spot
-                    using encounter_creature, encounter
-                    where encounter_creature_spot.encounter_creature_id = encounter_creature.id
-                      and encounter_creature.encounter_id = encounter.id
-                      and encounter.id = ${id}
-                      and encounter.level_id is distinct from ${level.level_id}
-                      and ${rowWritable(sql, "encounter", campaignId, actor)}
-                  `;
-                  // And its trigger area, squares of the same level
-                  // (`0115_encounter_placement.ts`).
-                  yield* sql`
-                    update encounter_prep set trigger_squares = null
-                    from encounter
-                    where encounter_prep.encounter_id = encounter.id
-                      and encounter.id = ${id}
-                      and encounter.level_id is distinct from ${level.level_id}
-                      and encounter_prep.trigger_squares is not null
-                      and ${rowWritable(sql, "encounter", campaignId, actor)}
                   `;
                 }
                 const columns = defined({
@@ -885,11 +898,15 @@ export class Encounters extends Context.Service<
                       and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
                   `;
                 }
-                return yield* readOne({ campaign: campaignId, actor }, id).pipe(
+                const encounter = yield* readOne({ campaign: campaignId, actor }, id).pipe(
                   Effect.catchTag("NotFound", Effect.die),
                 );
+                return { encounter, night };
               }),
             ),
+          ).pipe(
+            // The visit's doorbell, once the change has committed.
+            Effect.flatMap(({ encounter, night }) => Effect.as(ring(night), encounter)),
           ),
 
         // Its level stays in the creator's Library (`on delete set null` is
@@ -905,8 +922,30 @@ export class Encounters extends Context.Service<
         // this fight" and means nothing once the fight is gone, whereas the
         // read-aloud is prose that stands on its own. The creatures themselves
         // are untouched — the roster row is not the creature.
+        //
+        // Its placement goes with it, which the campaign's visit of its level
+        // stops showing (`watchPlacement`).
         remove: (campaignId, id) =>
-          dieOnSqlError(Effect.asVoid(erase({ campaignId, id }).pipe(orNotFound("encounter", id)))),
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const before = yield* placementOf(
+                  sql,
+                  id,
+                  rowWritable(sql, "encounter", campaignId, actor),
+                );
+                if (before === null) return yield* new NotFound({ resource: "encounter", id });
+                const told = yield* watchPlacement(sql, {
+                  campaignId,
+                  encounter: before,
+                  levelIds: [before.level_id],
+                });
+                yield* erase({ campaignId, id }).pipe(orNotFound("encounter", id));
+                return yield* told(before.placed);
+              }),
+            ),
+          ).pipe(Effect.flatMap(ring)),
 
         // Not an edit, so no `setClause`: that stamps `updated_at`, and moving
         // an encounter changes nothing about it — the note pin's rule

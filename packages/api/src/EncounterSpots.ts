@@ -13,8 +13,10 @@ import { LEVEL_SQUARES_MAX } from "./LevelKit.js";
  * table (`PlayerLevelVisit.creatures`).
  *
  * An encounter is *placed in a visit* when the campaign has a visit of the
- * encounter's level, the encounter has spots, and it has never been played;
- * that is computed on every read, never stored.
+ * encounter's level, the encounter has spots or a trigger area (either
+ * alone), and it has never been played; that is computed on every read, never
+ * stored. A trigger square is the level's own `row * columns + column`, so a
+ * resize of the level carries it to the same column and row.
  */
 
 /** A square of a level, `row * columns + column`. */

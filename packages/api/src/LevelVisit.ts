@@ -64,14 +64,14 @@ export type LevelVisitPlacedCreature = typeof LevelVisitPlacedCreature.Type;
 
 /**
  * An encounter placed in the visit: the campaign's, on the visit's level,
- * with creatures placed, and never played (`EncounterSpots.ts`). Computed on
- * read, never stored.
+ * with creatures placed or a trigger area, and never played
+ * (`EncounterSpots.ts`). Computed on read, never stored.
  */
 export const LevelVisitEncounter = Schema.Struct({
   id: EncounterId,
   name: Schema.String,
   kind: EncounterKind,
-  /** By roster line, then instance. */
+  /** By roster line, then instance; empty for a trigger area with no creature placed. */
   creatures: Schema.Array(LevelVisitPlacedCreature),
   /**
    * The trigger area on the visit's board, in reading order, or `null` for

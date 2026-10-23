@@ -1,4 +1,5 @@
 import {
+  type Actor,
   CampaignId,
   Conflict,
   CreatureId,
@@ -11,10 +12,13 @@ import {
   EncounterId,
   NotFound,
   NpcId,
+  type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import { placementOf, watchPlacement } from "./placements.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -173,6 +177,33 @@ export class EncounterCreatures extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
+
+      /** Ring the night a write logged on, once its transaction has committed. */
+      const ring = (night: SessionId | null) =>
+        night === null ? Effect.void : live.touched(night);
+
+      /**
+       * A roster line's write that may take placed instances with it: the
+       * encounter held, and the visits of its level watched across the write
+       * (`watchPlacement`), when it is placed there now; else nothing to tell.
+       */
+      const watchLine = (campaignId: CampaignId, encounterId: EncounterId, actor: Actor) =>
+        Effect.gen(function* () {
+          const before = yield* placementOf(
+            sql,
+            encounterId,
+            rowWritable(sql, "encounter", campaignId, actor),
+          );
+          if (before === null || !before.placed) {
+            return (_changed: boolean) => Effect.succeed<SessionId | null>(null);
+          }
+          return yield* watchPlacement(sql, {
+            campaignId,
+            encounter: before,
+            levelIds: [before.level_id],
+          });
+        });
 
       /**
        * The creature this roster line will be built from, or the `NotFound`
@@ -477,10 +508,14 @@ export class EncounterCreatures extends Context.Service<
                 }
                 // A placed instance past the new count goes first: each spot
                 // carries the line's count through its key, and its check
-                // would refuse the cascade (`0113_level_visits.ts`).
+                // would refuse the cascade (`0113_level_visits.ts`). The
+                // visit of the encounter's level stops showing it
+                // (`watchPlacement`).
+                let night: SessionId | null = null;
                 if (patch.count !== undefined) {
                   const actor = yield* CurrentActor;
-                  yield* sql`
+                  const told = yield* watchLine(campaignId, encounterId, actor);
+                  const dropped = yield* sql`
                     delete from encounter_creature_spot
                     where encounter_creature_spot.encounter_creature_id = ${id}
                       and encounter_creature_spot.ordinal >= ${patch.count}
@@ -489,7 +524,9 @@ export class EncounterCreatures extends Context.Service<
                         where encounter_creature.id = ${id}
                           and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
                       )
+                    returning encounter_creature_spot.encounter_creature_id
                   `;
+                  night = yield* told(dropped.length > 0);
                 }
                 const columns = defined({
                   count: patch.count,
@@ -499,18 +536,31 @@ export class EncounterCreatures extends Context.Service<
                 yield* change({ campaignId, encounterId, id, columns }).pipe(
                   orNotFound("encounter_creature", id),
                 );
-                return yield* readBack(id);
+                return { line: yield* readBack(id), night };
               }),
             ),
-          ),
+          ).pipe(Effect.flatMap(({ line, night }) => Effect.as(ring(night), line))),
 
+        // Its placed instances cascade with it, which the visit of the
+        // encounter's level stops showing (`watchPlacement`).
         remove: (campaignId, encounterId, id) =>
           dieOnSqlError(
-            Effect.asVoid(
-              erase({ campaignId, encounterId, id }).pipe(orNotFound("encounter_creature", id)),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const told = yield* watchLine(campaignId, encounterId, actor);
+                const spots = yield* sql`
+                  select 1 from encounter_creature_spot
+                  where encounter_creature_spot.encounter_creature_id = ${id}
+                `;
+                yield* erase({ campaignId, encounterId, id }).pipe(
+                  orNotFound("encounter_creature", id),
+                );
+                return yield* told(spots.length > 0);
+              }),
             ),
-          ),
+          ).pipe(Effect.flatMap(ring)),
       };
     }),
-  );
+  ).pipe(Layer.provide(LiveEvents.layer));
 }

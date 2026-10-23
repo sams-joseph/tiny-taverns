@@ -54,8 +54,11 @@ export function WaitingHere({
               )}
             </span>
             <span className="text-body-s leading-body text-muted-foreground">
-              {count} {count === 1 ? "creature waits" : "creatures wait"}
-              {encounter.trigger === null ? "" : ", with a trigger area"}
+              {count === 0
+                ? "A trigger area, with no creature placed"
+                : `${String(count)} ${count === 1 ? "creature waits" : "creatures wait"}${
+                    encounter.trigger === null ? "" : ", with a trigger area"
+                  }`}
             </span>
             {stuck.length > 0 && (
               <span className="flex items-start gap-1.5 text-body-s leading-body text-danger-ink">

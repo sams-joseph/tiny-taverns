@@ -11,7 +11,7 @@ import {
   type SessionId,
   TavernsApi,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { Context, DateTime, Deferred, Effect, Fiber, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
@@ -853,6 +853,240 @@ describeLayer("level-visit-fights", shared, (it) => {
             payload: { position: { column: 1, row: 1 } },
           }),
         );
+      }),
+    );
+
+    it.effect("stands a seat that sat down while the fight held the visit", () =>
+      Effect.gen(function* () {
+        const { table, level, visit, sessionId } = yield* explored();
+        const { encounter } = yield* anAmbush(table, level);
+        const run = yield* start(table, sessionId, encounter.id);
+        // Wren sits down mid-fight: the held visit gives the seat no token,
+        // and nobody adds Pell to the fight.
+        const wren = yield* aPerson("Wren").pipe(Effect.orDie);
+        yield* admittedTo(table, wren.actor, "Wren");
+        yield* aCharacterAt(
+          table,
+          wren.actor,
+          { name: "Pell", hpMax: 20 },
+          {
+            seatVisibility: "shared",
+          },
+        );
+        expect((yield* dmVisit(table, visit)).tokens.map((token) => token.name)).toEqual([
+          "Tamsin",
+        ]);
+
+        yield* endRun(table, run);
+        const back = yield* dmVisit(table, visit);
+        expect(back.tokens.map((token) => token.name)).toEqual(["Tamsin", "Pell"]);
+      }),
+    );
+  });
+
+  /**
+   * Two writes racing on one visit: a transaction of the test's own holds a
+   * lock the way a write in flight would, and the real writes queue behind
+   * it. Under `read committed` a statement that waited on a lock sees other
+   * tables as they were when it began, so each write asks what holds the
+   * visit only once it has the lock (`holdVisits`).
+   */
+  describe("racing", () => {
+    /** Hold `lock` in a transaction until the answered `release` is run. */
+    const holdOpen = <A>(lock: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
+      Effect.gen(function* () {
+        const client = yield* SqlClient.SqlClient;
+        const held = yield* Deferred.make<void>();
+        const go = yield* Deferred.make<void>();
+        const fiber = yield* Effect.forkChild(
+          client.withTransaction(
+            Effect.gen(function* () {
+              yield* lock(client);
+              yield* Deferred.succeed(held, undefined);
+              yield* Deferred.await(go);
+            }),
+          ),
+        );
+        yield* Deferred.await(held);
+        return Effect.gen(function* () {
+          yield* Deferred.succeed(go, undefined);
+          yield* Fiber.join(fiber).pipe(Effect.orDie);
+        });
+      });
+
+    const lockVisit = (visitId: LevelVisitId) => (sql: SqlClient.SqlClient) =>
+      sql`select level_visit.id from level_visit where level_visit.id = ${visitId} for update`;
+
+    /** A DM's call as `failure` answers it. */
+    const byJo = <A, E extends { readonly _tag: string }>(
+      call: (client: Client) => Effect.Effect<A, E>,
+    ) =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        return yield* failure(jo.token, call);
+      });
+
+    const writes = [
+      [
+        "a token's move",
+        (table: CampaignId, visit: LevelVisit) =>
+          byJo((client) =>
+            client.levelVisits.moveToken({
+              params: { campaignId: table, visitId: visit.id, seatId: tamsinOf(visit).seatId },
+              payload: { position: { column: 1, row: 1 } },
+            }),
+          ),
+      ],
+      [
+        "taking it off the table",
+        (table: CampaignId) =>
+          byJo((client) => client.levelVisits.takeOffTable({ params: { campaignId: table } })),
+      ],
+      [
+        "resetting it",
+        (table: CampaignId, visit: LevelVisit) =>
+          byJo((client) =>
+            client.levelVisits.remove({ params: { campaignId: table, visitId: visit.id } }),
+          ),
+      ],
+    ] as const;
+
+    for (const [name, write] of writes) {
+      it.effect(`refuses ${name} that waited on a fight's start`, () =>
+        Effect.gen(function* () {
+          const { table, level, visit, sessionId } = yield* explored();
+          const { encounter } = yield* anAmbush(table, level);
+          const release = yield* holdOpen(lockVisit(visit.id));
+          // The start queues on the visit first, then the write behind it.
+          const starting = yield* Effect.forkChild(start(table, sessionId, encounter.id));
+          yield* Effect.sleep("300 millis");
+          const writing = yield* Effect.forkChild(write(table, visit));
+          yield* Effect.sleep("300 millis");
+          expect(starting.pollUnsafe()).toBeUndefined();
+          expect(writing.pollUnsafe()).toBeUndefined();
+          yield* release;
+          const run = yield* Fiber.join(starting);
+          expect(run.levelVisitId).toBe(visit.id);
+          expect((yield* Fiber.join(writing)).tag).toBe("Conflict");
+          const after = yield* dmVisit(table, visit);
+          expect(after.onTable).toBe(true);
+          expect(after.fight?.runId).toBe(run.id);
+          expect(tamsinOf(after)).toMatchObject({ column: 2, row: 1 });
+          yield* endRun(table, run);
+        }),
+      );
+    }
+
+    it.effect("refuses a start while another visit is being put on the table", () =>
+      Effect.gen(function* () {
+        const { table, level, visit, sessionId } = yield* explored();
+        const other = yield* openVisit(table, yield* aHall());
+        const { encounter } = yield* anAmbush(table, level);
+        // Putting the other visit on the table, in flight: the campaign row
+        // written and not yet committed.
+        const release = yield* holdOpen(
+          (sql) => sql`
+            update campaign set table_visit_id = ${other.id} where campaign.id = ${table}
+          `,
+        );
+        const starting = yield* Effect.forkChild(
+          byJo((client) =>
+            client.runs.start({
+              params: { campaignId: table, sessionId },
+              payload: { encounterId: encounter.id, visibility: "shared" },
+            }),
+          ),
+        );
+        yield* Effect.sleep("300 millis");
+        // The start waits on the table rather than borrowing a visit that is
+        // leaving it.
+        expect(starting.pollUnsafe()).toBeUndefined();
+        yield* release;
+        const refused = yield* Fiber.join(starting);
+        expect(refused.tag).toBe("Conflict");
+        expect(refused.message).toContain("it is not on the table");
+        expect((yield* dmVisit(table, visit)).fight).toBeNull();
+      }),
+    );
+
+    it.effect("refuses putting another visit on the table while a start is in flight", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        const { table, level, visit, sessionId } = yield* explored();
+        const other = yield* openVisit(table, yield* aHall());
+        const { encounter } = yield* anAmbush(table, level);
+        // A start in flight, in the shape `EncounterRuns.start` takes its
+        // locks (`visitOfEncounter`): the visit, then its campaign `for
+        // share`, then the fight borrowing it, not yet committed.
+        const release = yield* holdOpen((sql) =>
+          Effect.gen(function* () {
+            yield* lockVisit(visit.id)(sql);
+            yield* sql`select campaign.id from campaign where campaign.id = ${table} for share`;
+            yield* sql`
+              insert into encounter_run (session_id, encounter_id, encounter_name, level_visit_id)
+              values (${sessionId}, ${encounter.id}, ${encounter.name}, ${visit.id})
+            `;
+          }),
+        );
+        const putting = yield* Effect.forkChild(
+          failure(jo.token, (client) =>
+            client.levelVisits.putOnTable({
+              params: { campaignId: table },
+              payload: { visitId: other.id },
+            }),
+          ),
+        );
+        yield* Effect.sleep("300 millis");
+        expect(putting.pollUnsafe()).toBeUndefined();
+        yield* release;
+        const refused = yield* Fiber.join(putting);
+        expect(refused.tag).toBe("Conflict");
+        expect(refused.message).toContain("end it before putting another level on the table");
+        expect((yield* dmVisit(table, visit)).onTable).toBe(true);
+        expect((yield* dmVisit(table, other)).onTable).toBe(false);
+      }),
+    );
+
+    it.effect("lets a seat leave while a write holds the visit, with no deadlock", () =>
+      Effect.gen(function* () {
+        const { ilse } = yield* People;
+        const { table, visit } = yield* explored();
+        const seatId = tamsinOf(visit).seatId;
+        // A visit write in flight: the visit held, the token it moves next.
+        const tokenLocked = yield* Deferred.make<void>();
+        const client = yield* SqlClient.SqlClient;
+        const go = yield* Deferred.make<void>();
+        const held = yield* Deferred.make<void>();
+        const writer = yield* Effect.forkChild(
+          client.withTransaction(
+            Effect.gen(function* () {
+              yield* lockVisit(visit.id)(client);
+              yield* Deferred.succeed(held, undefined);
+              yield* Deferred.await(go);
+              yield* client`
+                select level_visit_token.seat_id from level_visit_token
+                where level_visit_token.visit_id = ${visit.id}
+                  and level_visit_token.seat_id = ${seatId}
+                for update
+              `;
+              yield* Deferred.succeed(tokenLocked, undefined);
+            }),
+          ),
+        );
+        yield* Deferred.await(held);
+        const leaving = yield* Effect.forkChild(
+          failure(ilse.token, (client) =>
+            client.party.leave({ params: { campaignId: table, campaignCharacterId: seatId } }),
+          ),
+        );
+        yield* Effect.sleep("300 millis");
+        // The leave waits on the visit before it touches the token, so the
+        // write takes the token at once and commits.
+        yield* Deferred.succeed(go, undefined);
+        yield* Deferred.await(tokenLocked).pipe(Effect.timeout("700 millis"), Effect.orDie);
+        yield* Fiber.join(writer).pipe(Effect.orDie);
+        expect((yield* Fiber.join(leaving)).tag).toBe("succeeded");
+        expect((yield* dmVisit(table, visit)).tokens).toEqual([]);
       }),
     );
   });
