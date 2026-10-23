@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import {
+  type CanvasFocus,
   type CanvasView,
   fitView,
   keepInView,
@@ -88,8 +89,8 @@ export function BoardCanvas({
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
   readonly freeArea: (canvas: DOMRect) => PlaneRect;
-  /** What the view opens on until the DM moves it (`openingView`): whoever is up, in the plane's units. */
-  readonly focus?: { readonly x: number; readonly y: number } | undefined;
+  /** What the view opens on until it is moved (`openingView`): a point of the plane, and how near. */
+  readonly focus?: CanvasFocus | undefined;
   /** Where the camera is handed to whoever drives it from outside the canvas. */
   readonly camera?: RefObject<Camera | null>;
   /** The camera's own buttons, drawn beside the canvas rather than on it. */

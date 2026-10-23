@@ -14,7 +14,7 @@ import {
 } from "@taverns/api";
 import { type ReactNode, useMemo, useState } from "react";
 import { CameraBar } from "../run/CameraBar";
-import { centreOf } from "../run/canvas";
+import { type CanvasFocus, centreOf } from "../run/canvas";
 import { canDrawWebGL } from "../run/fx3d/support";
 import { LevelBackdrop } from "../run/LevelBackdrop";
 import { InStageCorner } from "../run/RunStage";
@@ -222,7 +222,7 @@ export function PartyLevelStage({
   readonly label: string;
   /** What *Centre* centres on, as its name (`CameraBar`). */
   readonly centreLabel: string;
-  readonly focus?: { readonly x: number; readonly y: number } | undefined;
+  readonly focus?: CanvasFocus | undefined;
   readonly board: {
     readonly columns: number;
     readonly rows: number;

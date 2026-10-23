@@ -64,35 +64,45 @@ export const fitView = (plane: PlaneSize, area: PlaneRect, limits: ZoomLimits): 
 };
 
 /**
+ * Where a view opens when the whole board will not fit at a size: a point of
+ * the plane to open on, and the drawn square (`SQUARE_PX`) below which the
+ * fitted board is given up for it.
+ */
+export interface CanvasFocus {
+  readonly at: { readonly x: number; readonly y: number };
+  readonly squarePx: number;
+}
+
+/**
  * What the runner opens on: the fitted board, unless that would draw a square
  * smaller than a pointer can hit, in which case the board is drawn at that
  * smallest playable size from the area's top-left corner and the rest is a pan
  * away. A board that fits at that size is centred.
  *
- * Given a `focus` (whoever is up, in the plane's units), it opens on them
- * instead: the fitted board when its squares are readable, else readable
- * squares as near centred on them as the board allows (`withinArea`): a
- * board wider than the area is never pulled in from its edge, leaving a bare
- * band on one side while the other is cut off.
+ * Given a `focus`, it opens on its point instead: the fitted board when its
+ * squares are at least `focus.squarePx`, else squares of that size as near
+ * centred on the point as the board allows (`withinArea`): a board wider than
+ * the area is never pulled in from its edge, leaving a bare band on one side
+ * while the other is cut off. The DM's boards open on whoever is up, or the
+ * party, at `readable`; a player's on their own token at `target`, so a
+ * board a pointer can play whole is shown whole, party and all.
  */
 export const openingView = (
   plane: PlaneSize,
   area: PlaneRect,
   cellPx: number,
-  focus?: { readonly x: number; readonly y: number },
+  focus?: CanvasFocus,
 ): CanvasView => {
   const limits = zoomLimits(cellPx);
   const fitted = fitView(plane, area, limits);
   if (focus !== undefined) {
-    // On whoever is up: the whole board when it fits at a readable size,
-    // otherwise that size, centred on them.
-    const readable = SQUARE_PX.readable / cellPx;
-    if (fitted.zoom >= readable) return fitted;
+    const zoom = focus.squarePx / cellPx;
+    if (fitted.zoom >= zoom) return fitted;
     return withinArea(
       {
-        zoom: readable,
-        x: area.x + area.width / 2 - focus.x * readable,
-        y: area.y + area.height / 2 - focus.y * readable,
+        zoom,
+        x: area.x + area.width / 2 - focus.at.x * zoom,
+        y: area.y + area.height / 2 - focus.at.y * zoom,
       },
       plane,
       area,

@@ -16,7 +16,7 @@ import { LevelSwitches } from "./LevelSwitches";
 import { createPortal } from "react-dom";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BoardCanvas, type Camera } from "./BoardCanvas";
-import { centreOf } from "./canvas";
+import { centreOf, SQUARE_PX } from "./canvas";
 import { AreaBanner, AreaLayer, BoardToolPicker, FIGHT_MOVE_HINT, ToolSurface } from "./BoardTools";
 import { CameraBar } from "./CameraBar";
 import { FogActions, FogBrush } from "./Fog";
@@ -458,7 +458,7 @@ export function RunBoardStage({
         plane={plane}
         cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
-        focus={activeAt}
+        focus={activeAt === undefined ? undefined : { at: activeAt, squarePx: SQUARE_PX.readable }}
         camera={camera}
         backdrop={
           drawsLevel

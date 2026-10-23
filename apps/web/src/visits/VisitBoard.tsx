@@ -16,7 +16,7 @@ import { useMemo, useState } from "react";
 import { BoardCanvas } from "../run/BoardCanvas";
 import { type BoardTool, BoardToolPicker } from "../run/BoardTools";
 import { CameraBar } from "../run/CameraBar";
-import { centreOf } from "../run/canvas";
+import { centreOf, SQUARE_PX } from "../run/canvas";
 import { useEscapeAway } from "../run/escape";
 import { FogActions, FogBrush } from "../run/Fog";
 import type { FogEdit } from "../run/fog";
@@ -191,7 +191,7 @@ export function VisitBoard({
         plane={boardPlane(board)}
         cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
-        focus={firstAt}
+        focus={firstAt === undefined ? undefined : { at: firstAt, squarePx: SQUARE_PX.readable }}
         backdrop={
           levelDrawable
             ? (view) => (

@@ -9,7 +9,7 @@ import {
 } from "@taverns/api";
 import { Card, Icon, SectionHeading } from "@taverns/ui";
 import { useMemo, useState } from "react";
-import { centreOf } from "../run/canvas";
+import { centreOf, SQUARE_PX } from "../run/canvas";
 import { GridBoard } from "../run/GridBoard";
 import { describeBoard } from "../run/runBoard";
 import { type LayerToken, TokenLayer } from "../run/RunTokens";
@@ -159,7 +159,8 @@ export function PlayerVisitStage({
       centreLabel="Centre on your token"
       board={props.visit}
       centre={centre}
-      focus={centre}
+      // On your token, but the whole level while a pointer can still play it.
+      focus={centre === undefined ? undefined : { at: centre, squarePx: SQUARE_PX.target }}
       freeArea={freeArea}
     >
       <VisitTokens {...props} />
