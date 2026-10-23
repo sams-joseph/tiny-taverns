@@ -481,7 +481,7 @@ describeLayer("party-vision", shared, (it) => {
       kind: "pillar" as const,
       x,
       y,
-      rotation: 0,
+      rotation: 0 as const,
       blocksMovement: null,
       blocksSight: null,
       cover: null,
