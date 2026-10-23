@@ -4,12 +4,16 @@ import type {
   BoardSquare,
   CampaignCharacterId,
   CampaignId,
+  EncounterId,
   LevelPartId,
   LevelVisit,
+  LevelVisitEncounter,
   LevelVisitFight,
   LevelVisitId,
+  SessionEvent,
   SessionId,
 } from "@taverns/api";
+import { VisitEncounterNoticedPayload } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Button,
@@ -21,13 +25,14 @@ import {
   cn,
   toast,
 } from "@taverns/ui";
-import { Effect, Result } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
 import { AsyncResult, AtomRegistry } from "effect/reactivity";
 import { useCallback, useContext, useRef, useState } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
+import { useCampaignAct } from "../campaign/act";
 import { campaignAtom } from "../campaign/load";
 import { CanvasTitle } from "../run/CanvasTitle";
 import { type FogEdit, fogPayload } from "../run/fog";
@@ -57,10 +62,20 @@ import { WaitingHere } from "./WaitingHere";
  * is open the visit's stream rings when another tab writes, and the visit is
  * read again. Below the canvas's width there is no stage, and it says so.
  *
- * While a fight borrows the visit (`LevelVisit.fight`) the stage is the
- * dungeon as the fight found it, read-only, under a banner that goes to the
- * fight; the fight's start and end are lines on the visit's stream, so the
- * stage turns on its own.
+ * While a fight holds the visit (`LevelVisit.fight`), live or carried, the
+ * stage is the dungeon as the fight found it, read-only, under a banner that
+ * goes to the fight; the fight's start, carry and end are lines on the
+ * visit's stream, so the stage turns on its own.
+ *
+ * **The prompt.** When the party comes to notice an encounter placed here
+ * (`LevelVisitEncounter.noticed`), the stage asks over the board whether to
+ * start it (`NoticedPrompt`): *Start* opens the campaign's ordinary start
+ * flow with it picked (`useCampaignAct`), where the DM still confirms, and
+ * *Not yet* only closes the prompt. Which encounters were answered is this
+ * tab's alone and never stored: an encounter noticed when the stage loads
+ * asks once, and its `visit-encounter-noticed` line, logged as the party
+ * notices it afresh, asks again. The *Waiting here* drawer keeps it marked
+ * *In sight* with a *Start* of its own, so nothing is lost by *Not yet*.
  */
 export function VisitScreen() {
   const { campaignId, visitId } = useParams({
@@ -77,6 +92,10 @@ export function VisitScreen() {
   const navigate = useNavigate();
   const writes = useMutation();
   const tabling = useMutation();
+  const { run: startEncounter, dialogs } = useCampaignAct(campaignId);
+  /** The noticed encounters this tab has answered, *Start* or *Not yet*. */
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(() => new Set());
+  const answer = (encounterId: EncounterId) => setAnswered((was) => new Set([...was, encounterId]));
 
   const visit = resource.state === "ready" ? resource.value : undefined;
   // The campaign says how a diagonal counts on the board, so the stage waits for it.
@@ -100,6 +119,23 @@ export function VisitScreen() {
         ).catch(() => undefined);
       }),
     [inLine, reload, registry, atom],
+  );
+  /** A line of the visit's: read it again, and an encounter noticed afresh asks again. */
+  const onLine = useCallback(
+    (event?: SessionEvent) => {
+      const noticed =
+        event?.kind === "visit-encounter-noticed" ? decodeNoticed(event.payload) : undefined;
+      if (noticed !== undefined) {
+        setAnswered((was) => {
+          if (!was.has(noticed.encounterId)) return was;
+          const next = new Set(was);
+          next.delete(noticed.encounterId);
+          return next;
+        });
+      }
+      reread();
+    },
+    [reread],
   );
 
   const night =
@@ -190,6 +226,15 @@ export function VisitScreen() {
   const back = { to: "/campaigns/$campaignId/levels", params: { campaignId } } as const;
   /** The fight borrowing the visit, while one is on: the dungeon is its until it ends. */
   const fight = visit?.fight ?? null;
+  /** The first noticed encounter this tab has not answered, while no fight holds the visit. */
+  const asking =
+    visit === undefined || fight !== null
+      ? undefined
+      : visit.encounters.find((encounter) => encounter.noticed && !answered.has(encounter.id));
+  const start = (encounterId: EncounterId) => {
+    answer(encounterId);
+    startEncounter(encounterId);
+  };
   const title = visit?.name ?? "Level";
   const subtitle = [
     campaign.state === "ready" ? campaign.value.name : undefined,
@@ -205,7 +250,7 @@ export function VisitScreen() {
           campaignId={campaignId}
           sessionId={night}
           visitId={visitId}
-          onRing={reread}
+          onRing={onLine}
         />
       )}
       <div className={cn(hudSurface, "flex items-center gap-0.5 p-1")}>
@@ -260,7 +305,15 @@ export function VisitScreen() {
             <RunStage
               title={<CanvasTitle back={back} title={title} subtitle={subtitle} />}
               controls={controls}
-              notices={null}
+              notices={
+                asking === undefined ? null : (
+                  <NoticedPrompt
+                    encounter={asking}
+                    onStart={() => start(asking.id)}
+                    onLater={() => answer(asking.id)}
+                  />
+                )
+              }
               rolling={null}
               party={null}
               turn={null}
@@ -273,7 +326,13 @@ export function VisitScreen() {
                   label: "Waiting here",
                   icon: "swords",
                   badge: visit.encounters.length === 0 ? undefined : visit.encounters.length,
-                  content: <WaitingHere campaignId={campaignId} encounters={visit.encounters} />,
+                  content: (
+                    <WaitingHere
+                      campaignId={campaignId}
+                      encounters={visit.encounters}
+                      onStart={fight === null ? start : undefined}
+                    />
+                  ),
                 },
               ]}
               rolls={null}
@@ -302,6 +361,7 @@ export function VisitScreen() {
           </div>
         )}
       </div>
+      {dialogs}
       <Toaster />
     </TooltipProvider>
   );
@@ -321,7 +381,7 @@ function VisitDoorbell({
   readonly campaignId: CampaignId;
   readonly sessionId: SessionId;
   readonly visitId: LevelVisitId;
-  readonly onRing: () => void;
+  readonly onRing: (event?: SessionEvent) => void;
 }) {
   const connection = useVisitStream({
     campaignId,
@@ -329,7 +389,7 @@ function VisitDoorbell({
     visitId,
     enabled: true,
     onEvent: onRing,
-    onReconnected: onRing,
+    onReconnected: () => onRing(),
   });
   if (connection.status === "live" || connection.status === "connecting") return null;
   return (
@@ -340,9 +400,49 @@ function VisitDoorbell({
   );
 }
 
+const decodeNoticed = (payload: unknown) =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(VisitEncounterNoticedPayload)(payload));
+
 /**
- * Over a visit a fight borrows: the fight's name and the way to it. The board
- * under it is read-only until the fight ends and hands the dungeon back.
+ * The party has noticed an encounter placed here: start it, or not yet. Over
+ * the board, under the top row, as the runner's notices are; the board stays
+ * the DM's while it asks.
+ */
+function NoticedPrompt({
+  encounter,
+  onStart,
+  onLater,
+}: {
+  readonly encounter: LevelVisitEncounter;
+  readonly onStart: () => void;
+  readonly onLater: () => void;
+}) {
+  return (
+    <section
+      aria-label={`${encounter.name} is in sight`}
+      data-slot="visit-noticed"
+      className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-card border border-danger bg-surface-raised py-2 pr-2 pl-3.5 shadow-3"
+    >
+      <Icon name="eye" size={16} className="shrink-0 text-danger" />
+      <span className="min-w-0 flex-1 text-label leading-snug font-medium text-heading">
+        {encounter.name} — the party has seen them. Start it?
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Button size="sm" onClick={onStart}>
+          Start
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onLater}>
+          Not yet
+        </Button>
+      </span>
+    </section>
+  );
+}
+
+/**
+ * Over a visit a fight holds: the fight's name and the way to it. The board
+ * under it is read-only until the fight resolves and hands the dungeon back;
+ * a carried one is picked up from the campaign's encounters, so it says so.
  */
 function FightBanner({
   campaignId,
@@ -359,7 +459,9 @@ function FightBanner({
     >
       <Icon name="swords" size={16} className="shrink-0 text-danger" />
       <span className="min-w-0 text-label leading-snug font-medium text-heading">
-        {fight.name} is being played here. The level is the fight's until it ends.
+        {fight.carried
+          ? `${fight.name} was carried over. The level is the fight's until you pick it up and it ends.`
+          : `${fight.name} is being played here. The level is the fight's until it ends.`}
       </span>
       <Button
         variant="secondary"

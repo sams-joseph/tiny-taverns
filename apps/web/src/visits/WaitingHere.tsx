@@ -1,6 +1,6 @@
-import type { CampaignId, LevelVisitEncounter } from "@taverns/api";
+import type { CampaignId, EncounterId, LevelVisitEncounter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Icon } from "@taverns/ui";
+import { Badge, Button, Icon } from "@taverns/ui";
 
 /**
  * The encounters placed on a visit's level and not yet played
@@ -9,14 +9,19 @@ import { Icon } from "@taverns/ui";
  * creatures wait, whether it has a trigger area, and which creatures cannot
  * stand where they were put on this copy of the level (past its edge, or on a
  * square the copy blocks), by name, so the DM moves them on the encounter's
- * page. No start: a fight is not started from here yet.
+ * page. One the party has noticed (`LevelVisitEncounter.noticed`) is marked
+ * *In sight*, with *Start*, the start flow the stage's prompt opens: the
+ * prompt's *Not yet* only closes the prompt, so nothing is lost here.
  */
 export function WaitingHere({
   campaignId,
   encounters,
+  onStart,
 }: {
   readonly campaignId: CampaignId;
   readonly encounters: ReadonlyArray<LevelVisitEncounter>;
+  /** Open the start flow for a noticed encounter; absent while a fight holds the visit. */
+  readonly onStart: ((encounterId: EncounterId) => void) | undefined;
 }) {
   if (encounters.length === 0) {
     return (
@@ -32,14 +37,22 @@ export function WaitingHere({
         const count = encounter.creatures.length;
         return (
           <li key={encounter.id} className="flex flex-col gap-1">
-            <Link
-              to="/campaigns/$campaignId/encounters/$encounterId"
-              params={{ campaignId, encounterId: encounter.id }}
-              hash="placement"
-              className="font-sans text-body leading-body font-semibold text-link hover:text-link-hover"
-            >
-              {encounter.name}
-            </Link>
+            <span className="flex items-center gap-2">
+              <Link
+                to="/campaigns/$campaignId/encounters/$encounterId"
+                params={{ campaignId, encounterId: encounter.id }}
+                hash="placement"
+                className="min-w-0 font-sans text-body leading-body font-semibold text-link hover:text-link-hover"
+              >
+                {encounter.name}
+              </Link>
+              {encounter.noticed && (
+                <Badge variant="destructive" data-slot="waiting-in-sight">
+                  <Icon name="eye" size={12} />
+                  In sight
+                </Badge>
+              )}
+            </span>
             <span className="text-body-s leading-body text-muted-foreground">
               {count} {count === 1 ? "creature waits" : "creatures wait"}
               {encounter.trigger === null ? "" : ", with a trigger area"}
@@ -56,6 +69,14 @@ export function WaitingHere({
                     )
                     .join(", ")}
                 </span>
+              </span>
+            )}
+            {encounter.noticed && onStart !== undefined && (
+              <span>
+                <Button size="sm" onClick={() => onStart(encounter.id)}>
+                  <Icon name="swords" size={13} />
+                  Start
+                </Button>
               </span>
             )}
           </li>

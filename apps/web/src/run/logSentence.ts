@@ -6,6 +6,7 @@ import {
   type LightPreset,
   type SessionEventKind,
   VisitPlacementUpdatedPayload,
+  VisitEncounterNoticedPayload,
   VisitReturnedPayload,
   VisitTabledPayload,
 } from "@taverns/api";
@@ -94,11 +95,17 @@ export const SENTENCE: Record<
       onNone: () => "The fight is over; the party is back on the level",
       onSome: ({ name }) => `The fight is over; the party is back in ${name}`,
     }),
+  "visit-encounter-noticed": (_who, _noun, payload) =>
+    Option.match(decodeNoticed(payload), {
+      onNone: () => "The party has seen an encounter waiting on the level",
+      onSome: ({ name }) => `The party has seen ${name}`,
+    }),
 };
 
 const decodeTabled = Schema.decodeUnknownOption(VisitTabledPayload);
 const decodePlaced = Schema.decodeUnknownOption(VisitPlacementUpdatedPayload);
 const decodeReturned = Schema.decodeUnknownOption(VisitReturnedPayload);
+const decodeNoticed = Schema.decodeUnknownOption(VisitEncounterNoticedPayload);
 
 const decodeDoor = Schema.decodeUnknownOption(BoardDoorUpdatedPayload);
 const decodeLight = Schema.decodeUnknownOption(BoardLightUpdatedPayload);

@@ -79,10 +79,15 @@ export function PickUpRunDialog({
         }),
       // What `StartRunDialog` names, for the same reasons: the night's fights,
       // and the campaign with its spine only when this opened the night. The
-      // encounters too: the one picked up moves to the table.
-      session === undefined
-        ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
-        : [reads.runs(session.id), reads.encounters(campaignId)],
+      // encounters too: the one picked up moves to the table. And the
+      // table's levels: a fight that borrowed one puts it back on the table
+      // and is live there again.
+      [
+        ...(session === undefined
+          ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
+          : [reads.runs(session.id), reads.encounters(campaignId)]),
+        reads.levelVisits(campaignId),
+      ],
     );
     if (Result.isSuccess(picked)) {
       onPickedUp(picked.success.sessionId, picked.success.run.id);

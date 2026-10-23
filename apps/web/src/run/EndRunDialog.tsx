@@ -109,7 +109,9 @@ export function EndRunDialog({
           : [reads.runs(path.sessionId), reads.encounters(path.campaignId)]),
         // The dungeon the fight hands back: doors, lights, fog and where the
         // party stands now, and that the visit is the fight's no longer.
-        ...(levelVisitId === null ? [] : [reads.levelVisit(levelVisitId)]),
+        ...(levelVisitId === null
+          ? []
+          : [reads.levelVisit(levelVisitId), reads.levelVisits(path.campaignId)]),
       ],
     );
 

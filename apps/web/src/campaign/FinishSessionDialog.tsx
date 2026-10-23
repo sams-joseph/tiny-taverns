@@ -78,6 +78,8 @@ export function FinishSessionDialog({
       reads.campaign(campaign.id),
       reads.sessions(campaign.id),
       reads.runs(session.id),
+      // A fight carried in a level it borrowed holds that level now.
+      reads.levelVisits(campaign.id),
     ]);
     if (Result.isSuccess(done)) onFinished();
   };

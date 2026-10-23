@@ -522,6 +522,7 @@ describe("starting a session", () => {
       rows: 4,
       feetPerCell: 5,
       onTable,
+      fight: null,
       createdAt: "2026-10-22T19:00:00.000Z",
       updatedAt: "2026-10-22T19:00:00.000Z",
     });
@@ -567,6 +568,44 @@ describe("starting a session", () => {
         visibility: "dm",
       }),
     );
+  });
+
+  it("offers no start on a level a carried fight holds", async () => {
+    const levelId = "1e7e7000-0000-4000-8000-0000000000c1";
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, {
+      status: 200,
+      body: page([{ ...encounter, levelId }]),
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [
+        {
+          id: "1e7e7000-0000-4000-8000-0000000000c2",
+          levelId,
+          name: "The Undercroft",
+          columns: 6,
+          rows: 4,
+          feetPerCell: 5,
+          onTable: true,
+          fight: {
+            runId: "1e7e7000-0000-4000-8000-0000000000c3",
+            sessionId,
+            name: "Bridge toll",
+            carried: true,
+          },
+          createdAt: "2026-10-22T19:00:00.000Z",
+          updatedAt: "2026-10-22T19:00:00.000Z",
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
+    await screen.findByText("Put an encounter on the table");
+    expect(
+      screen.getByText(/Bridge toll was carried over in The Undercroft. Pick it up/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start the fight" })).toBeDisabled();
   });
 
   it("still goes from a cold campaign to a fight in one step", async () => {

@@ -51,6 +51,12 @@ export function ResetVisitDialog({
             lights, the secrets found and everything they have seen. Your level in the Library stays
             as it is, and opening it again starts fresh.
           </p>
+          {visit.fight?.carried === true && (
+            <p className="mb-0">
+              {visit.fight.name} was carried over here. It keeps its own copy of the level, and when
+              you pick it up and it ends, nothing is handed back.
+            </p>
+          )}
         </div>
         <DialogFooter>
           {failure !== undefined && (

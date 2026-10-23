@@ -50,7 +50,20 @@ const cellarId = "1e7e7000-0000-4000-8000-0000000000a2";
 const doorId = "1e7e7000-0000-4000-8000-000000000d01";
 const stamp = "2026-10-22T19:00:00.000Z";
 
-const summary = (id: string, name: string, levelId: string | null, onTable: boolean) => ({
+interface Fight {
+  readonly runId: string;
+  readonly sessionId: string;
+  readonly name: string;
+  readonly carried: boolean;
+}
+
+const summary = (
+  id: string,
+  name: string,
+  levelId: string | null,
+  onTable: boolean,
+  fight: Fight | null = null,
+) => ({
   id,
   levelId,
   name,
@@ -58,6 +71,7 @@ const summary = (id: string, name: string, levelId: string | null, onTable: bool
   rows: 4,
   feetPerCell: 5,
   onTable,
+  fight,
   createdAt: stamp,
   updatedAt: stamp,
 });
@@ -68,7 +82,7 @@ const hall = (
     doorState?: "open" | "closed";
     column?: number;
     onTable?: boolean;
-    fight?: { runId: string; sessionId: string; name: string };
+    fight?: Fight;
   } = {},
 ) => ({
   ...summary(hallId, "The Hall", cryptLevelId, over.onTable ?? true),
@@ -143,6 +157,48 @@ describe("a table's levels", () => {
     expect(
       within(cellar as HTMLElement).getByText(/has been deleted from your Library/),
     ).toBeTruthy();
+  });
+
+  it("names the fight holding a visit, and offers only what the server would take", async () => {
+    const runId = "2b1f2a1e-0000-4000-8000-00000000f003";
+    const fight = (carried: boolean) => ({ runId, sessionId, name: "Ambush", carried });
+    server.routes.set(`GET ${base}/visits`, {
+      status: 200,
+      body: [
+        summary(cellarId, "The Cellar", null, false),
+        summary(hallId, "The Hall", cryptLevelId, true, fight(false)),
+      ],
+    });
+    await at(`${base}/levels`);
+    const card = (name: string) =>
+      screen.getByRole("link", { name }).closest("[data-slot=card]") as HTMLElement;
+    await screen.findByRole("link", { name: "The Hall" });
+    // Live: the way to it, and no table change or reset anywhere.
+    expect(within(card("The Hall")).getByRole("link", { name: "Ambush" })).toHaveAttribute(
+      "href",
+      `${base}/sessions/${sessionId}/runs/${runId}`,
+    );
+    expect(within(card("The Hall")).queryByRole("button")).toBeNull();
+    expect(
+      within(card("The Cellar")).queryByRole("button", { name: "Put on the table" }),
+    ).toBeNull();
+    expect(within(card("The Cellar")).getByRole("button", { name: "Reset level" })).toBeTruthy();
+    cleanup();
+
+    // Carried: still no table change, but the level may be reset.
+    server.routes.set(`GET ${base}/visits`, {
+      status: 200,
+      body: [summary(hallId, "The Hall", cryptLevelId, true, fight(true))],
+    });
+    await at(`${base}/levels`);
+    await screen.findByRole("link", { name: "The Hall" });
+    expect(card("The Hall").textContent).toContain("was carried over here");
+    expect(
+      within(card("The Hall")).queryByRole("button", { name: "Take off the table" }),
+    ).toBeNull();
+    await userEvent.click(within(card("The Hall")).getByRole("button", { name: "Reset level" }));
+    const dialog = await screen.findByRole("dialog", { name: /Reset The Hall/ });
+    expect(within(dialog).getByText(/nothing is handed back/)).toBeTruthy();
   });
 
   it("puts a visit on the table, and the list reads again", async () => {
@@ -316,6 +372,7 @@ describe("a visit's stage", () => {
               creature(2, 9, "offBoard"),
             ],
             trigger: [{ column: 0, row: 3 }],
+            noticed: false,
           },
         ],
       },
@@ -352,7 +409,7 @@ describe("a visit's stage", () => {
     const runId = "2b1f2a1e-0000-4000-8000-00000000f001";
     server.routes.set(`GET ${base}/visits/${hallId}`, {
       status: 200,
-      body: hall({ fight: { runId, sessionId, name: "Ambush" } }),
+      body: hall({ fight: { runId, sessionId, name: "Ambush", carried: false } }),
     });
     await at(`${base}/levels/${hallId}`);
     const board = await screen.findByRole("region", { name: "Level" });
@@ -374,6 +431,113 @@ describe("a visit's stage", () => {
     expect(screen.getByRole("switch", { name: "On the table" })).toHaveAttribute(
       "aria-disabled",
       "true",
+    );
+  });
+
+  const noticedHall = (noticed: boolean) => ({
+    ...hall(),
+    encounters: [
+      {
+        id: encounterId,
+        name: "Ambush",
+        kind: "combat",
+        creatures: [
+          {
+            encounterCreatureId: "2b1f2a1e-0000-4000-8000-000000000b01",
+            ordinal: 0,
+            name: "Goblin",
+            column: 1,
+            row: 2,
+            problem: null,
+          },
+        ],
+        trigger: null,
+        noticed,
+      },
+    ],
+  });
+
+  it("asks to start an encounter the party has noticed, and Not yet leaves it In sight", async () => {
+    onTheCanvas();
+    server.routes.set(`GET ${base}/visits/${hallId}`, { status: 200, body: noticedHall(true) });
+    await at(`${base}/levels/${hallId}`);
+    const prompt = await screen.findByRole("region", { name: "Ambush is in sight" });
+    expect(prompt.textContent).toContain("Ambush — the party has seen them. Start it?");
+    // The board is still the DM's while it asks.
+    expect(screen.getByRole("region", { name: "Level" })).toBeTruthy();
+
+    await userEvent.click(within(prompt).getByRole("button", { name: "Not yet" }));
+    expect(screen.queryByRole("region", { name: "Ambush is in sight" })).toBeNull();
+    // Nothing was written: no dismissal is stored.
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+    await userEvent.click(screen.getByRole("button", { name: "Waiting here" }));
+    const list = document.querySelector<HTMLElement>("[data-slot=waiting-here]")!;
+    expect(within(list).getByText("In sight")).toBeTruthy();
+    expect(within(list).getByRole("button", { name: "Start" })).toBeTruthy();
+  });
+
+  it("asks when the visit's stream says the party noticed an encounter", async () => {
+    onTheCanvas();
+    server.routes.set(`GET ${base}`, { status: 200, body: campaign });
+    let reads = 0;
+    server.routes.set(`GET ${base}/visits/${hallId}`, {
+      status: 200,
+      body: () => noticedHall((reads += 1) > 1),
+    });
+    const line = {
+      id: "2b1f2a1e-0000-4000-8000-000000009002",
+      sessionId,
+      seq: 42,
+      kind: "visit-encounter-noticed",
+      encounterRunId: null,
+      combatantId: null,
+      levelVisitId: hallId,
+      payload: { encounterId, name: "Ambush" },
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    server.routes.set(`GET ${base}/sessions/${sessionId}/visits/${hallId}/events`, {
+      status: 200,
+      sse: `id: 42\nevent: session-event\ndata: ${JSON.stringify(line)}\n\n`,
+    } as never);
+    await at(`${base}/levels/${hallId}`);
+    expect(await screen.findByRole("region", { name: "Ambush is in sight" })).toBeTruthy();
+  });
+
+  it("opens the start flow with the noticed encounter picked on Start", async () => {
+    onTheCanvas();
+    server.routes.set(`GET ${base}/visits/${hallId}`, { status: 200, body: noticedHall(true) });
+    await at(`${base}/levels/${hallId}`);
+    const prompt = await screen.findByRole("region", { name: "Ambush is in sight" });
+    await userEvent.click(within(prompt).getByRole("button", { name: "Start" }));
+    const title = await screen.findByText("Put an encounter on the table");
+    const dialog = title.closest<HTMLElement>("[role=dialog]")!;
+    expect(within(dialog).getByRole("combobox", { name: "Encounter" }).textContent).toContain(
+      "Ambush in the reeds",
+    );
+    // Answered: the prompt does not ask again behind the dialog.
+    expect(screen.queryByRole("region", { name: "Ambush is in sight" })).toBeNull();
+    // Nothing starts until the DM confirms there.
+    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+  });
+
+  it("says a carried fight holds the visit, and goes to it", async () => {
+    onTheCanvas();
+    const runId = "2b1f2a1e-0000-4000-8000-00000000f002";
+    server.routes.set(`GET ${base}/visits/${hallId}`, {
+      status: 200,
+      body: hall({ fight: { runId, sessionId, name: "Ambush", carried: true } }),
+    });
+    await at(`${base}/levels/${hallId}`);
+    await screen.findByRole("region", { name: "Level" });
+    const banner = document.querySelector<HTMLElement>("[data-slot=visit-fight-banner]");
+    expect(banner!.textContent).toContain("Ambush was carried over");
+    expect(banner!.querySelector("a")).toHaveAttribute(
+      "href",
+      `${base}/sessions/${sessionId}/runs/${runId}`,
     );
   });
 

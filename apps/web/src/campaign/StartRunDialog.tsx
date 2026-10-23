@@ -78,7 +78,9 @@ import { runNumberAtom } from "./runNumber";
  * encounter whose level has a visit on the table starts where the party
  * stands, the dungeon as they left it (`EncounterRunStart`), and the dialog
  * says so. One whose level's visit is off the table would be refused, so the
- * start is not offered: *Put it on the table* is, and the start follows.
+ * start is not offered: *Put it on the table* is, and the start follows. Nor
+ * is one whose level a fight holds (`LevelVisitSummary.fight`): a live one is
+ * gone back to, and a carried one picked up, first.
  */
 
 /** The one value the encounter select takes that is not an encounter. */
@@ -132,8 +134,11 @@ export function StartRunDialog({
       ? undefined
       : visits.find((one) => one.levelId === chosen.levelId);
   const visitOnTable = visit !== undefined && (visit.onTable || tabled === visit.id);
+  /** The fight holding the level's visit, live or carried: a start would be refused. */
+  const holding = visit?.fight ?? null;
   /** A start the server would refuse: the level's visit is off the table. */
-  const offTable = visit !== undefined && !visitOnTable;
+  const offTable = visit !== undefined && !visitOnTable && holding === null;
+  const refused = offTable || holding !== null;
   // Worded as the kind it will be run as; a fight until one is picked.
   const kind = chosen?.kind ?? "combat";
   const noun = sceneNoun(kind);
@@ -157,7 +162,7 @@ export function StartRunDialog({
 
   const start = async () => {
     setShowProblems(true);
-    if (chosen === undefined || number.state !== "ready" || offTable) return;
+    if (chosen === undefined || number.state !== "ready" || refused) return;
     const opening = number.value;
 
     const started = await submit(
@@ -196,7 +201,7 @@ export function StartRunDialog({
         ...(session === undefined
           ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
           : [reads.runs(session.id), reads.encounters(campaignId)]),
-        ...(visit === undefined ? [] : [reads.levelVisit(visit.id)]),
+        ...(visit === undefined ? [] : [reads.levelVisit(visit.id), reads.levelVisits(campaignId)]),
       ],
     );
 
@@ -322,7 +327,17 @@ export function StartRunDialog({
               }
             />
 
-            {visit !== undefined && visitOnTable && (
+            {visit !== undefined && holding !== null && (
+              <p
+                data-slot="run-visit-held"
+                className="text-body-s leading-body text-muted-foreground"
+              >
+                {holding.carried
+                  ? `${holding.name} was carried over in ${visit.name}. Pick it up from its encounter before starting another there.`
+                  : `${holding.name} is being played in ${visit.name}. End it before starting another there.`}
+              </p>
+            )}
+            {visit !== undefined && visitOnTable && holding === null && (
               <p
                 data-slot="run-on-visit"
                 className="text-body-s leading-body text-muted-foreground"
@@ -363,7 +378,7 @@ export function StartRunDialog({
           </Button>
           <Button
             size="sm"
-            disabled={busy || number.state !== "ready" || playable.length === 0 || offTable}
+            disabled={busy || number.state !== "ready" || playable.length === 0 || refused}
             onClick={() => void start()}
           >
             {busy ? "Starting…" : `Start the ${noun}`}
