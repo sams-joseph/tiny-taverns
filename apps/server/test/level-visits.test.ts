@@ -763,4 +763,24 @@ describeLayer("level-visits", shared, (it) => {
       }),
     );
   });
+
+  describe("the table's pointer", () => {
+    it.effect("is indexed for a visit's delete, and is no key of the campaign's", () =>
+      Effect.gen(function* () {
+        // A reset asks `campaign` which row names the visit (`on delete set
+        // null`): by an index, not a scan. Not a unique one, which would
+        // make putting a visit on the table lock the row against every seat
+        // sitting down.
+        const indexes = yield* sql(
+          (sql) => sql<{ readonly indexdef: string }>`
+            select indexdef from pg_indexes
+            where tablename = 'campaign' and indexname = 'campaign_table_visit_idx'
+          `,
+        );
+        expect(indexes.map((index) => index.indexdef)).toEqual([
+          "CREATE INDEX campaign_table_visit_idx ON public.campaign USING btree (table_visit_id) WHERE (table_visit_id IS NOT NULL)",
+        ]);
+      }),
+    );
+  });
 });
