@@ -76,6 +76,7 @@ import {
 } from "./encounterDraft";
 import { KIND_ICON } from "./encounterList";
 import { encounterPrepListAtom } from "./load";
+import { useVisitsOfLevels } from "../visits/load";
 
 /**
  * Writing an encounter, new or already made: the redesign's encounter builder
@@ -315,6 +316,11 @@ function EncounterBuilder({
   const [draft, setDraft] = useState(initial);
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
+  /** The stages of the visits of the level it was on and the one it is going to. */
+  const visitStages = useVisitsOfLevels(campaignId, [
+    saved.encounter?.levelId ?? null,
+    draft.levelId,
+  ]);
   const navigate = useNavigate();
   const hash = useLocation({ select: (location) => location.hash });
   /** Where the page was opened: `#creatures` from the preview's *Add creature*. */
@@ -453,6 +459,9 @@ function EncounterBuilder({
         ...(encounter === undefined || draft.levelId !== (saved.encounter?.levelId ?? null)
           ? [reads.libraryLevels]
           : []),
+        // A roster line removed or counted down, or another level, takes
+        // placed creatures off the visit of the level it was placed on.
+        ...(encounter === undefined ? [] : visitStages),
       ],
     );
 

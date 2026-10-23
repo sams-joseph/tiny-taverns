@@ -1,7 +1,7 @@
-import type { CampaignId, LevelVisit, LevelVisitId } from "@taverns/api";
+import type { CampaignId, LevelId, LevelVisit, LevelVisitId } from "@taverns/api";
 import type { Effect } from "effect";
 import { Atom } from "effect/reactivity";
-import { apiAtom, writableApiAtom } from "../api/atoms";
+import { apiAtom, useApiAtom, writableApiAtom } from "../api/atoms";
 import { type Invalidation, reads } from "../api/keys";
 
 /**
@@ -47,3 +47,22 @@ export const tableVisitWrites = (
   campaignId: CampaignId,
   visitIds: ReadonlyArray<LevelVisitId>,
 ): Invalidation => [reads.levelVisits(campaignId), ...visitIds.map(reads.levelVisit)];
+
+/**
+ * The stages of the table's visits of `levelIds`, for a write that moves what
+ * is placed on them without sending it: an encounter's level changed, its
+ * roster edited, or the encounter deleted takes its placed creatures off the
+ * visit of its level (`LevelVisit.encounters`). Read off the table's list of
+ * visits, so nothing until it has loaded; a key nobody listens on costs
+ * nothing.
+ */
+export const useVisitsOfLevels = (
+  campaignId: CampaignId,
+  levelIds: ReadonlyArray<LevelId | null>,
+): Invalidation => {
+  const [visits] = useApiAtom(levelVisitsAtom(campaignId));
+  if (visits.state !== "ready") return [];
+  return visits.value
+    .filter((visit) => visit.levelId !== null && levelIds.includes(visit.levelId))
+    .map((visit) => reads.levelVisit(visit.id));
+};

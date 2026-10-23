@@ -12,6 +12,7 @@ import { Result } from "effect";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
+import { useVisitsOfLevels } from "../visits/load";
 
 /**
  * Deleting an encounter: `DELETE /campaigns/:c/encounters/:e`.
@@ -43,6 +44,8 @@ export function DeleteEncounterDialog({
   readonly onDeleted: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
+  /** The stage of the visit of its level, which its placed creatures leave. */
+  const visitStages = useVisitsOfLevels(campaignId, [encounter.levelId]);
 
   const remove = async () => {
     const done = await submit(
@@ -53,6 +56,7 @@ export function DeleteEncounterDialog({
         ...(openNight === undefined ? [] : [reads.prep(openNight), reads.runs(openNight)]),
         // Its level is used one place fewer, which the level's delete lists.
         ...(encounter.levelId === null ? [] : [reads.libraryLevels]),
+        ...visitStages,
       ],
     );
     if (Result.isSuccess(done)) onDeleted();

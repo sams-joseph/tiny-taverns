@@ -43,7 +43,7 @@ import { newRequestId } from "../run/state";
 import { useVisitStream } from "../run/stream";
 import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
-import { levelVisitAtom, tableVisitWrites } from "./load";
+import { levelVisitAtom, levelVisitsAtom, tableVisitWrites } from "./load";
 import { VisitBoard } from "./VisitBoard";
 import { WaitingHere } from "./WaitingHere";
 
@@ -86,6 +86,8 @@ export function VisitScreen() {
   const [resource, reload] = useApiAtom(atom);
   const writeVisit = useAtomSet(atom);
   const [campaign] = useApiAtom(campaignAtom(campaignId));
+  // The table's levels, for which one this would take the place of on the table.
+  const [visits] = useApiAtom(levelVisitsAtom(campaignId));
   const registry = useContext(RegistryContext);
   const stage = useStage();
   const [partyView, setPartyView] = useState(false);
@@ -209,6 +211,13 @@ export function VisitScreen() {
 
   const setOnTable = (next: boolean) =>
     void inLine(async () => {
+      // Putting this one on takes whichever was there off: its stage reads again too.
+      const replaced =
+        next && visits.state === "ready"
+          ? visits.value
+              .filter((other) => other.onTable && other.id !== visitId)
+              .map((other) => other.id)
+          : [];
       const done = await tabling.submit(
         (client) =>
           next
@@ -216,7 +225,7 @@ export function VisitScreen() {
                 client.levelVisits.putOnTable({ params: { campaignId }, payload: { visitId } }),
               )
             : client.levelVisits.takeOffTable({ params: { campaignId } }),
-        tableVisitWrites(campaignId, [visitId]),
+        tableVisitWrites(campaignId, [visitId, ...replaced]),
       );
       if (Result.isSuccess(done)) {
         writeVisit((current) => AsyncResult.map(current, (now) => ({ ...now, onTable: next })));
