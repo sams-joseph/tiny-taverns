@@ -275,7 +275,11 @@ describe("a fight on a level, on a seated player's canvas", () => {
     const map = within(await screen.findByRole("region", { name: "Battle map" }));
     const you = map.getByRole("button", { name: /^Brannoc Duskharrow \(you\)/ });
     you.focus();
+    // The barrel on (6, 4) is the table's to see: that step is never sent.
     await userEvent.keyboard("{ArrowRight}");
+    expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(false);
+    // One step into the dark below is the walk's to allow and the server's to answer.
+    await userEvent.keyboard("{ArrowDown}");
     expect(
       await screen.findByText("you cannot get there from where you stand"),
     ).toBeInTheDocument();
