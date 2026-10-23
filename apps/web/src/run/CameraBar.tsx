@@ -4,7 +4,7 @@ import type { Camera } from "./BoardCanvas";
 /**
  * The canvas's camera, in the stage's bottom-left corner (`Encounter
  * Canvas.dc.html`): zoom out, the zoom against the view the canvas opened on
- * (a press on it fits the board again), zoom in, and centre on whoever is up.
+ * (a press on it fits the whole board in), zoom in, and centre on whoever is up.
  * The wheel, a pinch and a drag do the same; these are for a DM without a wheel.
  */
 export function CameraBar({

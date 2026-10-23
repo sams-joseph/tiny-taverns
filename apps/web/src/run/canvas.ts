@@ -71,7 +71,9 @@ export const fitView = (plane: PlaneSize, area: PlaneRect, limits: ZoomLimits): 
  *
  * Given a `focus` (whoever is up, in the plane's units), it opens on them
  * instead: the fitted board when its squares are readable, else readable
- * squares centred on them.
+ * squares as near centred on them as the board allows (`withinArea`): a
+ * board wider than the area is never pulled in from its edge, leaving a bare
+ * band on one side while the other is cut off.
  */
 export const openingView = (
   plane: PlaneSize,
@@ -86,11 +88,15 @@ export const openingView = (
     // otherwise that size, centred on them.
     const readable = SQUARE_PX.readable / cellPx;
     if (fitted.zoom >= readable) return fitted;
-    return {
-      zoom: readable,
-      x: area.x + area.width / 2 - focus.x * readable,
-      y: area.y + area.height / 2 - focus.y * readable,
-    };
+    return withinArea(
+      {
+        zoom: readable,
+        x: area.x + area.width / 2 - focus.x * readable,
+        y: area.y + area.height / 2 - focus.y * readable,
+      },
+      plane,
+      area,
+    );
   }
   const playable = SQUARE_PX.target / cellPx;
   if (fitted.zoom >= playable) return fitted;
@@ -100,6 +106,23 @@ export const openingView = (
     zoom: playable,
     x: width <= area.width ? area.x + (area.width - width) / 2 : area.x,
     y: height <= area.height ? area.y + (area.height - height) / 2 : area.y,
+  };
+};
+
+/**
+ * `view` panned as little as it takes to use `area` well along each axis: a
+ * board that fits that way is centred in it, and one that does not covers it,
+ * edge to edge, with no bare band inside it.
+ */
+export const withinArea = (view: CanvasView, plane: PlaneSize, area: PlaneRect): CanvasView => {
+  const along = (at: number, size: number, start: number, length: number) =>
+    size <= length
+      ? start + (length - size) / 2
+      : Math.min(start, Math.max(start + length - size, at));
+  return {
+    zoom: view.zoom,
+    x: along(view.x, plane.width * view.zoom, area.x, area.width),
+    y: along(view.y, plane.height * view.zoom, area.y, area.height),
   };
 };
 

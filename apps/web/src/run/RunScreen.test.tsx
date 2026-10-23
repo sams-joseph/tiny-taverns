@@ -27,6 +27,7 @@ import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
 import { TEST_SESSION, TEST_SESSION_TOKEN } from "../test/session";
+import { SQUARE_PX } from "./canvas";
 import {
   boardAreaWrites,
   boardFogWrites,
@@ -2723,6 +2724,29 @@ describe("the canvas", () => {
       expect(fireEvent.wheel(layer, { deltaY: 100 })).toBe(false);
       expect(zoomOf()).toBeLessThan(zoom);
     }
+  });
+
+  it("fits the whole board on the camera's zoom, though it opened readable on whoever is up", async () => {
+    // A canvas 600 × 400 with no panel measured: the 24 × 16 board fits at
+    // 25px squares, too small to read, so it opens at 44px on Brannoc.
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset.slot === "board-canvas"
+        ? DOMRect.fromRect({ x: 0, y: 0, width: 600, height: 400 })
+        : rect.call(this);
+    });
+    await open();
+    await waitFor(() => expect(zoomOf() * 64).toBeCloseTo(SQUARE_PX.readable));
+    const fitButton = screen.getByRole("button", { name: "Zoom 100%, fit the board" });
+    await userEvent.click(fitButton);
+    // The whole board, centred: 1536 × 1024 at 600 / 1536.
+    const fitted = 600 / (24 * 64);
+    expect(zoomOf()).toBeCloseTo(fitted);
+    expect(panOf().x).toBeCloseTo(0);
+    expect(panOf().y).toBeCloseTo((400 - 16 * 64 * fitted) / 2);
+    expect(screen.getByRole("button", { name: /^Zoom 57%, fit the board$/ })).toBeInTheDocument();
   });
 
   it("leaves a scroll over a floating panel to the panel, and never zooms for it", async () => {
