@@ -435,6 +435,165 @@ describeLayer("hob-levels", shared, (it) => {
       }),
     );
 
+    /** A Library goblin of Jo's, which the campaign can use. */
+    const aGoblin = Effect.gen(function* () {
+      const { jo } = yield* Fixture;
+      return yield* as(jo.token, (client) =>
+        client.library.create({
+          payload: { name: "Goblin", size: "Small", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
+        }),
+      );
+    });
+
+    it.effect("places the creatures in a room Hob named, and the keep writes the placement", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const goblin = yield* aGoblin;
+        const { events, requests } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [
+            aParley({
+              kind: "combat",
+              creatures: [
+                { creatureId: goblin.id, count: 2 },
+                { creatureId: goblin.id, count: 1 },
+              ],
+              rooms: [{ purpose: "shrine" }, { purpose: "cistern", size: "large" }],
+              placement: [
+                { line: 1, room: 2, squares: null },
+                { line: 2, room: 2 },
+              ],
+              triggerRoom: 2,
+            }),
+            textChunks("Goblins in the cistern."),
+          ],
+        );
+        expect(JSON.stringify(requests[1]?.messages)).toContain("3 of them placed");
+        const proposal = proposedIn(events);
+        if (proposal?.target !== "encounter") throw new Error("no encounter was offered");
+        // Two lines of one creature are one roster line of three.
+        expect(proposal.roster.map((line) => line.count)).toEqual([3]);
+        const placement = proposal.placement!;
+        expect(placement.spots.map((spot) => [spot.line, spot.ordinal])).toEqual([
+          [0, 0],
+          [0, 1],
+          [0, 2],
+        ]);
+        // Inside the second room the level lays out, one a square.
+        const { rooms, level } = generateLevel(proposal.level!);
+        const cistern = rooms[1]!;
+        for (const spot of placement.spots) {
+          expect(spot.column).toBeGreaterThanOrEqual(cistern.x);
+          expect(spot.column).toBeLessThan(cistern.x + cistern.width);
+          expect(spot.row).toBeGreaterThanOrEqual(cistern.y);
+          expect(spot.row).toBeLessThan(cistern.y + cistern.height);
+        }
+        expect(new Set(placement.spots.map((spot) => `${spot.column}:${spot.row}`)).size).toBe(3);
+        expect(placement.trigger?.length).toBeGreaterThan(0);
+        expect(
+          placement.trigger?.every((square) => {
+            const column = square % level.columns;
+            const row = Math.floor(square / level.columns);
+            return (
+              column >= cistern.x &&
+              column < cistern.x + cistern.width &&
+              row >= cistern.y &&
+              row < cistern.y + cistern.height
+            );
+          }),
+        ).toBe(true);
+
+        const { threadId, turnId } = begunIn(events);
+        const kept = yield* as(jo.token, (client) =>
+          client.hob.accept({ params: { campaignId: table.id, threadId, turnId }, payload: {} }),
+        );
+        if (kept.accepted !== "encounter") throw new Error("no encounter was kept");
+        const prep = yield* as(jo.token, (client) =>
+          client.encounterPrep.find({
+            params: { campaignId: table.id, encounterId: kept.encounter.id },
+          }),
+        );
+        const lines = yield* as(jo.token, (client) =>
+          client.encounterCreatures.list({
+            params: { campaignId: table.id, encounterId: kept.encounter.id },
+          }),
+        );
+        expect(prep.placement).toEqual({
+          spots: placement.spots.map((spot) => ({
+            encounterCreatureId: lines[0]!.id,
+            ordinal: spot.ordinal,
+            column: spot.column,
+            row: spot.row,
+          })),
+          trigger: placement.trigger,
+        });
+      }),
+    );
+
+    it.effect("places a creature on a square of the empty level", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const goblin = yield* aGoblin;
+        const { events } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [
+            aParley({
+              creatures: [{ creatureId: goblin.id, count: 1 }],
+              placement: [{ line: 1, squares: [{ column: 20, row: 3 }] }],
+            }),
+            textChunks("One goblin."),
+          ],
+        );
+        const proposal = proposedIn(events);
+        if (proposal?.target !== "encounter") throw new Error("no encounter was offered");
+        expect(proposal.placement).toEqual({
+          spots: [{ line: 0, ordinal: 0, column: 20, row: 3 }],
+          trigger: null,
+        });
+        const { threadId, turnId } = begunIn(events);
+        const kept = yield* as(jo.token, (client) =>
+          client.hob.accept({ params: { campaignId: table.id, threadId, turnId }, payload: {} }),
+        );
+        if (kept.accepted !== "encounter") throw new Error("no encounter was kept");
+        const prep = yield* as(jo.token, (client) =>
+          client.encounterPrep.find({
+            params: { campaignId: table.id, encounterId: kept.encounter.id },
+          }),
+        );
+        expect(prep.placement.spots.map(({ column, row }) => ({ column, row }))).toEqual([
+          { column: 20, row: 3 },
+        ]);
+      }),
+    );
+
+    it.effect("refuses a room the level does not have, offering nothing", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const goblin = yield* aGoblin;
+        const { events, requests } = yield* asked(
+          jo.token,
+          (client) =>
+            client.hob.ask({ params: { campaignId: table.id }, payload: { text: ENCOUNTER_TEXT } }),
+          [
+            aParley({
+              creatures: [{ creatureId: goblin.id, count: 1 }],
+              rooms: [{ purpose: "shrine" }],
+              placement: [{ line: 1, room: 4 }],
+            }),
+            textChunks("I could not."),
+          ],
+        );
+        expect(proposedIn(events)).toBeUndefined();
+        const said = JSON.stringify(requests[1]?.messages);
+        expect(said).toContain("there is no room 4");
+        expect(said).toContain("call proposeEncounter again");
+      }),
+    );
+
     it.effect("refuses more rooms than the size holds, offering nothing", () =>
       Effect.gen(function* () {
         const { jo, table } = yield* Fixture;

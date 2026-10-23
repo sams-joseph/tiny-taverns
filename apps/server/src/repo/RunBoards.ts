@@ -7,12 +7,10 @@ import {
   type BoardLightUpdate,
   type BoardRegionUpdate,
   BoardRegionUpdatedPayload,
-  type LevelRegionKind,
   Conflict,
   EncounterRunBoard,
   EncounterRunId,
   type LevelPartId,
-  type LevelLightTone,
   BoardDoorUpdatedPayload,
   BoardLightUpdatedPayload,
   lightPresetOf,
@@ -24,8 +22,9 @@ import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { boardShown, clearArea, RUNS } from "./liveTables.js";
-import { classFromColumns, dieOnSqlError, fromColumns, intArray, orNotFound } from "./rows.js";
-import { levelColumn, partSeen, refreshPartyVision, ringVision } from "./levelFights.js";
+import { doorTold, writeDoor, writeFog, writeLight, writeRegion } from "./boardWrites.js";
+import { classFromColumns, dieOnSqlError, fromColumns, orNotFound } from "./rows.js";
+import { levelColumn, partSeen, RUN_BOARD, refreshPartyVision, ringVision } from "./levelFights.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { nestedRowWritable } from "./visibility.js";
 
@@ -42,16 +41,20 @@ import { nestedRowWritable } from "./visibility.js";
 /**
  * A fight's fog as the wire spells it: the squares in `fog_hidden`, each
  * `row * board_columns + column` (`0087_run_board_fog.ts`), as `{column, row}`
- * in reading order. `encounter_run_board` must be in scope.
+ * in reading order. The board's table (`encounter_run_board`, or a visit's
+ * `level_visit`, which spells its fog the same) must be in scope.
  */
-export const fogColumn = (sql: SqlClient.SqlClient) => sql`
+export const fogColumn = (
+  sql: SqlClient.SqlClient,
+  board: "encounter_run_board" | "level_visit",
+) => sql`
   coalesce(
     (select jsonb_agg(
        jsonb_build_object(
-         'column', square % encounter_run_board.board_columns,
-         'row', square / encounter_run_board.board_columns)
+         'column', square % ${sql(board)}.board_columns,
+         'row', square / ${sql(board)}.board_columns)
        order by square)
-     from unnest(encounter_run_board.fog_hidden) as square),
+     from unnest(${sql(board)}.fog_hidden) as square),
     '[]'::jsonb
   ) as fog
 `;
@@ -202,7 +205,7 @@ export class RunBoards extends Context.Service<
         Result: RunBoardRow,
         execute: ({ runId }) => sql`
           select encounter_run_board.board_columns, encounter_run_board.board_rows,
-                 encounter_run_board.feet_per_cell, ${fogColumn(sql)},
+                 encounter_run_board.feet_per_cell, ${fogColumn(sql, "encounter_run_board")},
                  ${areaColumn(sql)}, ${levelColumn(sql)}
           from encounter_run_board
           where encounter_run_board.run_id = ${runId}
@@ -230,44 +233,6 @@ export class RunBoards extends Context.Service<
             return yield* new Conflict({ message: "this fight is not on a level" });
           }
         });
-
-      /**
-       * The fight's fog, rewritten as one set: the whole-board change first,
-       * then `hide` added and `reveal` taken out, distinct and in order. A
-       * square is `row * board_columns + column`, the column's own spelling.
-       */
-      const fog = SqlSchema.findOne({
-        Request: Schema.toType(
-          Schema.Struct({
-            runId: EncounterRunId,
-            whole: Schema.Literals(["revealAll", "coverAll", "reset", "none"]),
-            hide: Schema.Array(Schema.Int),
-            reveal: Schema.Array(Schema.Int),
-          }),
-        ),
-        Result: fromColumns(Schema.Struct({ hidden: Schema.Int, shown: Schema.Boolean })),
-        execute: ({ runId, whole, hide, reveal }) => sql`
-          update encounter_run_board
-          set fog_hidden = array(
-            select distinct square
-            from unnest(
-              case ${whole}::text
-                when 'revealAll' then '{}'::integer[]
-                when 'coverAll' then array(
-                  select generate_series(0, board_columns * board_rows - 1))
-                when 'reset' then fog_start
-                else fog_hidden
-              end || ${intArray([...hide])}
-            ) as square
-            where square <> all(${intArray([...reveal])})
-            order by square
-          )
-          where run_id = ${runId}
-          returning cardinality(fog_hidden) as hidden,
-            (select ${boardShown(sql)} from encounter_run
-              where encounter_run.id = encounter_run_board.run_id) as shown
-        `,
-      });
 
       return {
         forRun: (creator, sessionId, runId) =>
@@ -298,45 +263,17 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
 
-                  // The board's size, locked for the rest of this write, so
-                  // two strokes of the brush land one after the other.
-                  const boards = yield* sql<{
-                    readonly board_columns: number;
-                    readonly board_rows: number;
-                  }>`
-                    select encounter_run_board.board_columns, encounter_run_board.board_rows
-                    from encounter_run_board
-                    where encounter_run_board.run_id = ${runId}
-                    for update
-                  `;
-                  const size = boards[0];
-                  if (size === undefined) {
+                  const changed = yield* writeFog(
+                    sql,
+                    RUN_BOARD,
+                    runId,
+                    update,
+                    sql`(select ${boardShown(sql)} from encounter_run
+                         where encounter_run.id = encounter_run_board.run_id)`,
+                  );
+                  if (changed === null) {
                     return yield* new Conflict({ message: "this fight has no board" });
                   }
-                  const squares = [...(update.hide ?? []), ...(update.reveal ?? [])];
-                  if (
-                    squares.some(
-                      (square) =>
-                        square.column >= size.board_columns || square.row >= size.board_rows,
-                    )
-                  ) {
-                    return yield* new Conflict({ message: "that square is off the board" });
-                  }
-                  const index = (square: { readonly column: number; readonly row: number }) =>
-                    square.row * size.board_columns + square.column;
-
-                  const changed = yield* fog({
-                    runId,
-                    whole: update.revealAll
-                      ? "revealAll"
-                      : update.coverAll
-                        ? "coverAll"
-                        : update.reset
-                          ? "reset"
-                          : "none",
-                    hide: (update.hide ?? []).map(index),
-                    reveal: (update.reveal ?? []).map(index),
-                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-fog-updated",
@@ -489,52 +426,13 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
                   yield* levelFight(runId);
-                  const walls = yield* sql<{ readonly kind: "wall" | "door" | "secretDoor" }>`
-                    select encounter_run_wall.kind from encounter_run_wall
-                    where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
-                    for update
-                  `;
-                  const wall = walls[0];
-                  if (wall === undefined)
-                    return yield* new NotFound({ resource: "wall", id: wallId });
-                  if (wall.kind === "wall") {
-                    return yield* new Conflict({ message: "that wall is not a door" });
-                  }
-                  if (update.revealed !== undefined && wall.kind !== "secretDoor") {
-                    return yield* new Conflict({ message: "only a secret door is revealed" });
-                  }
-                  const changed = yield* sql<{
-                    readonly door_state: "open" | "closed" | "locked";
-                    readonly revealed: boolean;
-                    readonly was_door_state: "open" | "closed" | "locked";
-                    readonly was_revealed: boolean;
-                  }>`
-                    update encounter_run_wall
-                    set door_state = coalesce(${update.doorState ?? null}::text, door_state),
-                        revealed = coalesce(${update.revealed ?? null}::boolean, revealed)
-                    where encounter_run_wall.run_id = ${runId} and encounter_run_wall.id = ${wallId}
-                    returning encounter_run_wall.door_state, encounter_run_wall.revealed,
-                      old.door_state as was_door_state, old.revealed as was_revealed
-                  `;
+                  const after = yield* writeDoor(sql, RUN_BOARD, runId, wallId, update);
                   // What the party sees through it now, then whether the table
-                  // is told. The table knows a door as open or shut: a locked
-                  // door reads as closed to it (`playerLevelColumn`), so a lock
-                  // is never news to it. The line is shared for a door they
-                  // have seen, on a board they are shown, that opened or shut
-                  // with no lock in it: a plain door, or a secret door that
-                  // stood revealed before and after. Its finding or hiding,
-                  // and any lock, is the DM's line; the table is rung for
-                  // whatever it draws differently now.
-                  const after = changed[0]!;
+                  // is told (`doorTold`, the rule a visit's door shares).
                   const vision = yield* refreshPartyVision(sql, runId);
-                  const seen = yield* partSeen(sql, runId, { wallId });
-                  const asTable = (state: "open" | "closed" | "locked") =>
-                    state === "locked" ? "closed" : state;
-                  const tableMoved = asTable(after.door_state) !== asTable(after.was_door_state);
-                  const noLock = after.door_state !== "locked" && after.was_door_state !== "locked";
-                  const knownDoor = wall.kind === "door" || (after.revealed && after.was_revealed);
-                  const lineShared =
-                    vision?.shown === true && seen && knownDoor && tableMoved && noLock;
+                  const seen = yield* partSeen(sql, RUN_BOARD, runId, { wallId });
+                  const told = doorTold(after, seen, vision?.shown === true);
+                  const lineShared = told.shared;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-door-updated",
@@ -543,7 +441,7 @@ export class RunBoards extends Context.Service<
                     // (`BoardDoorUpdatedPayload`).
                     payload: {
                       wallId,
-                      wallKind: wall.kind,
+                      wallKind: after.kind,
                       doorState: after.door_state,
                       revealed: after.revealed,
                       wasDoorState: after.was_door_state,
@@ -557,13 +455,7 @@ export class RunBoards extends Context.Service<
                     runId,
                     vision,
                     lineShared,
-                    // A door they have seen that their table draws
-                    // differently now: a secret door turned from wall to
-                    // door or back, or a door they know opened or shut.
-                    force:
-                      seen &&
-                      (after.revealed !== after.was_revealed ||
-                        ((wall.kind === "door" || after.revealed) && tableMoved)),
+                    force: told.force,
                   });
                   return yield* current;
                 }),
@@ -599,26 +491,13 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
                   yield* levelFight(runId);
-                  const changed = yield* sql<{
-                    readonly bright: number;
-                    readonly dim: number;
-                    readonly tone: LevelLightTone;
-                  }>`
-                    update encounter_run_light set lit = ${update.lit}
-                    where encounter_run_light.run_id = ${runId}
-                      and encounter_run_light.id = ${lightId}
-                    returning encounter_run_light.bright, encounter_run_light.dim,
-                      encounter_run_light.tone
-                  `;
-                  if (changed.length === 0) {
-                    return yield* new NotFound({ resource: "light", id: lightId });
-                  }
+                  const changed = yield* writeLight(sql, RUN_BOARD, runId, lightId, update.lit);
                   // What the party sees by it now, then whether the table is
                   // told: a light standing where they have seen, on a board
                   // they are shown.
                   const vision = yield* refreshPartyVision(sql, runId);
                   const lineShared =
-                    vision?.shown === true && (yield* partSeen(sql, runId, { lightId }));
+                    vision?.shown === true && (yield* partSeen(sql, RUN_BOARD, runId, { lightId }));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-light-updated",
@@ -627,7 +506,7 @@ export class RunBoards extends Context.Service<
                     payload: {
                       lightId,
                       lit: update.lit,
-                      preset: lightPresetOf(changed[0]!),
+                      preset: lightPresetOf(changed),
                     } satisfies typeof BoardLightUpdatedPayload.Encoded,
                     requestId: update.requestId,
                     visibility: lineShared ? "shared" : "dm",
@@ -667,35 +546,18 @@ export class RunBoards extends Context.Service<
                     return yield* current;
                   }
                   yield* levelFight(runId);
-                  const regions = yield* sql<{
-                    readonly kind: LevelRegionKind;
-                    readonly secret: boolean;
-                    readonly revealed: boolean;
-                  }>`
-                    select encounter_run_region.kind, encounter_run_region.secret,
-                           encounter_run_region.revealed
-                    from encounter_run_region
-                    where encounter_run_region.run_id = ${runId}
-                      and encounter_run_region.id = ${regionId}
-                    for update
-                  `;
-                  const region = regions[0];
-                  if (region === undefined) {
-                    return yield* new NotFound({ resource: "region", id: regionId });
-                  }
-                  if (!region.secret) {
-                    return yield* new Conflict({ message: "only a secret region is revealed" });
-                  }
-                  yield* sql`
-                    update encounter_run_region set revealed = ${update.revealed}
-                    where encounter_run_region.run_id = ${runId}
-                      and encounter_run_region.id = ${regionId}
-                  `;
+                  const region = yield* writeRegion(
+                    sql,
+                    RUN_BOARD,
+                    runId,
+                    regionId,
+                    update.revealed,
+                  );
                   // The line is the DM's whatever happens: a shared one would
                   // say where a secret was. The table is rung when it draws
                   // the region differently now: one it has seen a square of.
                   const vision = yield* refreshPartyVision(sql, runId);
-                  const seen = yield* partSeen(sql, runId, { regionId });
+                  const seen = yield* partSeen(sql, RUN_BOARD, runId, { regionId });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "board-region-updated",
@@ -704,7 +566,7 @@ export class RunBoards extends Context.Service<
                       regionId,
                       regionKind: region.kind,
                       revealed: update.revealed,
-                      wasRevealed: region.revealed,
+                      wasRevealed: region.wasRevealed,
                     } satisfies typeof BoardRegionUpdatedPayload.Encoded,
                     requestId: update.requestId,
                     visibility: "dm",
@@ -714,7 +576,7 @@ export class RunBoards extends Context.Service<
                     runId,
                     vision,
                     lineShared: false,
-                    force: seen && region.revealed !== update.revealed,
+                    force: seen && region.wasRevealed !== update.revealed,
                   });
                   return yield* current;
                 }),

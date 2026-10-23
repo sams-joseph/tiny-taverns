@@ -1,8 +1,8 @@
-import type { LiveEvent, SessionEvent } from "@taverns/api";
+import type { CampaignId, LevelVisitId, LiveEvent, SessionEvent, SessionId } from "@taverns/api";
 import { Duration, Effect, Fiber, Result, Stream } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { FetchHttpClient, type HttpClient } from "effect/http";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { makeClient } from "../api/client";
+import { makeClient, type TavernsClient } from "../api/client";
 import { classifyFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import type { RunPath } from "./load";
@@ -126,7 +126,8 @@ export interface LiveConnection {
   readonly reconnect: () => void;
 }
 
-export interface LiveStreamOptions extends RunPath {
+/** What every log stream's hook takes, whatever it streams the lines of. */
+interface LogStreamOptions {
   /** Off while the initial load is in flight, and once the fight has ended. */
   readonly enabled: boolean;
   /**
@@ -152,15 +153,80 @@ export interface LiveStreamOptions extends RunPath {
   readonly silenceMs?: number;
 }
 
+export interface LiveStreamOptions extends RunPath, LogStreamOptions {}
+
+/** A fight's stream (`live.events`): its log, replayed after the cursor, then tailed. */
 export function useLiveStream({
   campaignId,
   sessionId,
   runId,
+  ...options
+}: LiveStreamOptions): LiveConnection {
+  return useLogStream({
+    ...options,
+    stream: `run:${campaignId}:${sessionId}:${runId}`,
+    open: (client, since) =>
+      client.live.events({
+        params: { campaignId, sessionId, runId },
+        query: { since },
+        // The endpoint declares the header for a browser's native
+        // `EventSource`, which cannot rewrite its query string on the automatic
+        // reconnect but does resend this. We are not that client — a plain
+        // `fetch` never resends it — so the cursor travels in `?since=` and
+        // this stays absent rather than duplicating it.
+        headers: {},
+      }),
+  });
+}
+
+export interface VisitStreamOptions extends LogStreamOptions {
+  readonly campaignId: CampaignId;
+  readonly sessionId: SessionId;
+  readonly visitId: LevelVisitId;
+}
+
+/**
+ * A level visit's stream on the open night (`live.visitEvents`): the same
+ * connection over the night's lines naming the visit, so a second tab on the
+ * visit re-reads when the first writes.
+ */
+export function useVisitStream({
+  campaignId,
+  sessionId,
+  visitId,
+  ...options
+}: VisitStreamOptions): LiveConnection {
+  return useLogStream({
+    ...options,
+    stream: `visit:${campaignId}:${sessionId}:${visitId}`,
+    open: (client, since) =>
+      client.live.visitEvents({
+        params: { campaignId, sessionId, visitId },
+        query: { since },
+        headers: {},
+      }),
+  });
+}
+
+/**
+ * The connection itself, over whichever log `open` streams: `stream` names
+ * it, so another stream is another connection with its own cursor, and
+ * `open` is held in a ref, so its identity never reopens it.
+ */
+function useLogStream({
+  stream: streamKey,
+  open,
   enabled,
   onEvent,
   onReconnected,
   silenceMs = SILENCE_MS,
-}: LiveStreamOptions): LiveConnection {
+}: LogStreamOptions & {
+  readonly stream: string;
+  readonly open: (
+    client: TavernsClient,
+    since: number,
+  ) => Effect.Effect<Stream.Stream<LiveEvent, unknown>, unknown, HttpClient.HttpClient>;
+}): LiveConnection {
   const fetchCredential = useCredential();
   const [status, setStatus] = useState<LiveStatus>("connecting");
   const [cursor, setCursor] = useState(0);
@@ -178,6 +244,8 @@ export function useLiveStream({
   onReconnectedRef.current = onReconnected;
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
+  const openRef = useRef(open);
+  openRef.current = open;
   /** Survives the effect being torn down, which is what makes "re-" mean re-. */
   const everConnected = useRef(false);
 
@@ -211,16 +279,7 @@ export function useLiveStream({
       // every other read and write in the app; `auth/credential.ts` says why.
       const token = yield* Effect.promise(() => credentialRef.current());
       const client = yield* makeClient(token);
-      const stream = yield* client.live.events({
-        params: { campaignId, sessionId, runId },
-        query: { since: cursorRef.current },
-        // The endpoint declares the header for a browser's native
-        // `EventSource`, which cannot rewrite its query string on the automatic
-        // reconnect but does resend this. We are not that client — a plain
-        // `fetch` never resends it — so the cursor travels in `?since=` and
-        // this stays absent rather than duplicating it.
-        headers: {},
-      });
+      const stream = yield* openRef.current(client, cursorRef.current);
 
       // The response has arrived and it was a 200: the endpoint authorises
       // before it returns a stream at all, so reaching here means connected.
@@ -280,7 +339,7 @@ export function useLiveStream({
       document.removeEventListener("visibilitychange", wake);
       Effect.runFork(Fiber.interrupt(fiber));
     };
-  }, [campaignId, sessionId, runId, enabled, silenceMs, generation, reconnect]);
+  }, [streamKey, enabled, silenceMs, generation, reconnect]);
 
   return { status, cursor, reconnect };
 }

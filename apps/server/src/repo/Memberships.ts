@@ -18,6 +18,7 @@ import { LiveEvents } from "../live/LiveEvents.js";
 import { campaignImageColumns, campaignImageSigner, campaignRow } from "./Campaigns.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { levelFightsOf, refreshFights } from "./levelFights.js";
+import { dropSeatTokens } from "./LevelVisits.js";
 import { classFromColumns, classWithRow, dieOnSqlError, orNotFound } from "./rows.js";
 import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibility.js";
 
@@ -158,19 +159,24 @@ export const revokeMemberAt = (
     // player was removed is not at the table any more. The seat row stands as
     // history, which is what retiring rather than deleting buys.
     if (rows.length === 0) return { revoked: 0, sessions: [] };
-    const seats = yield* sql<{ readonly character_id: string | null }>`
+    const seats = yield* sql<{ readonly id: string; readonly character_id: string | null }>`
       update campaign_character set left_at = now(), updated_at = now()
       where campaign_character.campaign_id = ${campaignId}
         and campaign_character.account_id = ${accountId}
         and campaign_character.left_at is null
-      returning campaign_character.character_id
+      returning campaign_character.id, campaign_character.character_id
     `;
-    // Their characters are no longer the party's eyes on a level fight.
+    // Their characters are no longer the party's eyes on a level fight, and
+    // stand on none of the table's level visits.
+    const visitNights = yield* dropSeatTokens(
+      sql,
+      seats.map((seat) => seat.id),
+    );
     const characters = seats.flatMap((seat) =>
       seat.character_id === null ? [] : [seat.character_id],
     );
-    const sessions = yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
-    return { revoked: rows.length, sessions };
+    const fightNights = yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+    return { revoked: rows.length, sessions: [...new Set([...fightNights, ...visitNights])] };
   });
 
 /**

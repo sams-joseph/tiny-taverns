@@ -32,6 +32,7 @@ import { describeDifficulty } from "./difficulty";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { describeRoster, playthroughOf } from "./encounterList";
 import { encounterPageAtom, type EncounterPage } from "./load";
+import { EncounterPlacement } from "./EncounterPlacement";
 import { NoteCard } from "./NoteCard";
 import { sceneNoun } from "../run/scene";
 
@@ -238,7 +239,12 @@ function EncounterBody({
           </p>
         </section>
       ) : (
-        <EncounterLevel levelId={encounter.levelId} />
+        <EncounterLevel
+          levelId={encounter.levelId}
+          encounter={encounter}
+          roster={roster}
+          played={encounter.lastPlayed !== null || running}
+        />
       )}
 
       <div className="grid gap-6 @3xl:grid-cols-2">
@@ -332,7 +338,17 @@ function EncounterBody({
  * its size, and the way into the Library's editor. The level is the
  * creator's own Library object, read through the shelf's own read.
  */
-function EncounterLevel({ levelId }: { readonly levelId: LevelId }) {
+function EncounterLevel({
+  levelId,
+  encounter,
+  roster,
+  played,
+}: {
+  readonly levelId: LevelId;
+  readonly encounter: Encounter;
+  readonly roster: EncounterPage["roster"];
+  readonly played: boolean;
+}) {
   const [level, retry] = useApiAtom(libraryLevelAtom(levelId));
   return (
     <section aria-labelledby="encounter-map" className="flex flex-col gap-3">
@@ -375,6 +391,13 @@ function EncounterLevel({ levelId }: { readonly levelId: LevelId }) {
               {level.value.description}
             </p>
           )}
+          <EncounterPlacement
+            campaignId={encounter.campaignId}
+            encounter={encounter}
+            roster={roster}
+            level={level.value}
+            played={played}
+          />
         </>
       )}
     </section>

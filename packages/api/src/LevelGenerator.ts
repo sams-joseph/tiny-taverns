@@ -10,6 +10,7 @@ import {
   LEVEL_WALLS_MAX,
   type LevelLight,
   type LevelProp,
+  type LevelRegion,
   type LevelSave,
   type LevelSize,
   type LevelWall,
@@ -175,6 +176,9 @@ const AMBIENT: Readonly<Record<LevelMood, LevelAmbient>> = {
   moonlit: "dim",
   arcane: "dark",
 };
+
+/** How many squares the way in holds: room for a party of six. */
+const ENTRY_SQUARES = 6;
 
 /** Every how many corridor squares a light hangs, by mood; none in the dark. */
 const CORRIDOR_LIGHT_EVERY: Readonly<Record<LevelMood, number | null>> = {
@@ -661,6 +665,29 @@ export const generateLevel = (spec: LevelSpec): GeneratedLevel => {
     });
   });
 
+  // ---- The way in: the first room's clear squares nearest its middle, where
+  // a visit of the level stands the party (`entry`). Last, so it moves no
+  // other part's id.
+  const regions: Array<LevelRegion> = [];
+  const way = rects[0];
+  if (way !== undefined) {
+    const mx = way.x + (way.w - 1) / 2;
+    const my = way.y + (way.h - 1) / 2;
+    const clear: Array<number> = [];
+    for (let y = way.y; y < way.y + way.h; y++) {
+      for (let x = way.x; x < way.x + way.w; x++) {
+        if (occ[y * W + x] !== 1 && occ[y * W + x] !== 3) clear.push(y * W + x);
+      }
+    }
+    const near = (square: number) =>
+      Math.abs((square % W) - mx) + Math.abs(Math.floor(square / W) - my);
+    const squares = clear
+      .sort((a, b) => near(a) - near(b) || a - b)
+      .slice(0, ENTRY_SQUARES)
+      .sort((a, b) => a - b);
+    if (squares.length > 0) regions.push({ id: nid(), kind: "entry", squares, secret: false });
+  }
+
   const description = spec.description?.trim() ?? "";
   return {
     level: {
@@ -674,7 +701,7 @@ export const generateLevel = (spec: LevelSpec): GeneratedLevel => {
       walls: walls.slice(0, LEVEL_WALLS_MAX),
       props: props.slice(0, LEVEL_PROPS_MAX),
       lights: lights.slice(0, LEVEL_LIGHTS_MAX),
-      regions: [],
+      regions,
     },
     rooms,
   };

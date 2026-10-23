@@ -5,6 +5,7 @@ import type {
   EncounterRunId,
   FeatId,
   LevelId,
+  LevelVisitId,
   NpcId,
   RuleArticleId,
   SessionId,
@@ -363,6 +364,19 @@ export const reads = {
    * names `locations` too.
    */
   partyTravel: (campaignId: CampaignId): ReadKey => key`party-travel:${campaignId}`,
+
+  /**
+   * A table's level visits, on its Levels screen: each visit, and which is on
+   * the table. Opening, resetting and putting on or taking off the table name it.
+   */
+  levelVisits: (campaignId: CampaignId): ReadKey => key`level-visits:${campaignId}`,
+
+  /**
+   * One level visit, whole, as its stage reads it. An exploring write answers
+   * with the visit and writes it into the stage's atom; putting it on or off
+   * the table, and resetting it, name this too.
+   */
+  levelVisit: (visitId: LevelVisitId): ReadKey => key`level-visit:${visitId}`,
 
   /** A Shared World's atlas: every place placed in it. */
   worldLocations: (worldId: SharedWorldId): ReadKey => key`world-locations:${worldId}`,

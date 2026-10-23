@@ -511,6 +511,103 @@ describe("starting a session", () => {
     ).toBe(false);
   });
 
+  it("offers a level the party has been to on the table before a fight starts there", async () => {
+    const levelId = "1e7e7000-0000-4000-8000-0000000000c1";
+    const visitId = "1e7e7000-0000-4000-8000-0000000000c2";
+    const visitOf = (onTable: boolean) => ({
+      id: visitId,
+      levelId,
+      name: "The Undercroft",
+      columns: 6,
+      rows: 4,
+      feetPerCell: 5,
+      onTable,
+      fight: null,
+      createdAt: "2026-10-22T19:00:00.000Z",
+      updatedAt: "2026-10-22T19:00:00.000Z",
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, {
+      status: 200,
+      body: page([{ ...encounter, levelId }]),
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [visitOf(false)],
+    });
+    server.routes.set(`PUT /campaigns/${campaignId}/table-visit`, {
+      status: 200,
+      body: {
+        ...visitOf(true),
+        level: { ambient: "dim", floor: [], walls: [], props: [], lights: [], regions: [] },
+        fog: [],
+        partySees: [],
+        partySeen: [],
+        tokens: [],
+        encounters: [],
+        fight: null,
+      },
+    });
+    server.routes.set(`POST ${runsPath}`, { status: 200, body: liveRun });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
+    await screen.findByText("Put an encounter on the table");
+    // Off the table, the start would be refused, so it is not offered.
+    expect(screen.getByText(/is not on the table/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start the fight" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Put The Undercroft on the table" }));
+    await waitFor(() => expect(bodyOf(server, "PUT", "/table-visit")).toEqual({ visitId }));
+    expect(await screen.findByText(/where the party\s+stands/)).toBeInTheDocument();
+    const start = screen.getByRole("button", { name: "Start the fight" });
+    expect(start).toBeEnabled();
+    await userEvent.click(start);
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/sessions/${sessionId}/runs`)).toEqual({
+        encounterId,
+        visibility: "dm",
+      }),
+    );
+  });
+
+  it("offers no start on a level a carried fight holds", async () => {
+    const levelId = "1e7e7000-0000-4000-8000-0000000000c1";
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, {
+      status: 200,
+      body: page([{ ...encounter, levelId }]),
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [
+        {
+          id: "1e7e7000-0000-4000-8000-0000000000c2",
+          levelId,
+          name: "The Undercroft",
+          columns: 6,
+          rows: 4,
+          feetPerCell: 5,
+          onTable: true,
+          fight: {
+            runId: "1e7e7000-0000-4000-8000-0000000000c3",
+            sessionId,
+            name: "Bridge toll",
+            carried: true,
+          },
+          createdAt: "2026-10-22T19:00:00.000Z",
+          updatedAt: "2026-10-22T19:00:00.000Z",
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Run Ambush in the reeds" }));
+    await screen.findByText("Put an encounter on the table");
+    expect(
+      screen.getByText(/Bridge toll was carried over in The Undercroft. Pick it up/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start the fight" })).toBeDisabled();
+  });
+
   it("still goes from a cold campaign to a fight in one step", async () => {
     // The branch this change had to keep. A DM who goes straight to a fight
     // must not be made to open the night first — so the run dialog opens one on
@@ -606,7 +703,7 @@ describe("finishing the night", () => {
     expect(within(card as HTMLElement).getByText("Session 12")).toBeInTheDocument();
     // **It used to read "Not started yet", and that stopped being true.** A
     // night with no stamp is not a night nobody has played now that opening one
-    // is its own act — see `stateOf` in `NextSession`. What the card can still
+    // is its own act — see `NightState` in `NextSession`. What the card can still
     // see is that the campaign points at this night and nothing is on its table.
     expect(
       within(card as HTMLElement).getByText("Open. Nothing has been put on the table yet."),
@@ -630,6 +727,51 @@ describe("finishing the night", () => {
     expect(
       within(card as HTMLElement).getByText(/^Playing since \d\d:04\. Nothing is on the table\.$/),
     ).toBeInTheDocument();
+  });
+
+  it("says which level is on the table, and the campaign's press goes back to it", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${sessionId}`, {
+      status: 200,
+      body: { ...session, startedAt: "2026-08-04T19:04:00.000Z" },
+    });
+    const visitId = "1e7e6000-0000-4000-8000-000000000001";
+    server.routes.set(`GET /campaigns/${campaignId}/visits`, {
+      status: 200,
+      body: [
+        {
+          id: visitId,
+          levelId: null,
+          name: "The Sunken Chapel",
+          columns: 26,
+          rows: 16,
+          feetPerCell: 5,
+          onTable: true,
+          fight: null,
+          createdAt: "2026-08-04T19:00:00.000Z",
+          updatedAt: "2026-08-04T19:00:00.000Z",
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+
+    const card = (await screen.findByRole("button", { name: "Finish the night" })).closest(
+      "[data-slot='card']",
+    ) as HTMLElement;
+    await waitFor(() =>
+      expect(card).toHaveTextContent(/Playing since \d\d:04\. The Sunken Chapel is on the table\./),
+    );
+    expect(within(card).getByRole("link", { name: "The Sunken Chapel" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/levels/${visitId}`,
+    );
+    expect(screen.queryByText(/Nothing is on the table/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start an encounter" })).toBeNull();
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: "Back to The Sunken Chapel" }))[0]!,
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe(`/campaigns/${campaignId}/levels/${visitId}`),
+    );
   });
 
   it("says what will happen, and does nothing until the DM confirms", async () => {

@@ -16,6 +16,13 @@ export interface PartySight {
   readonly seen: ReadonlyArray<number>;
 }
 
+/** The party's sight as the renderer takes it: no viewers' fans, the squares it was told. */
+const sightOf = (layout: LevelLayout, sight: PartySight) => {
+  const seen = new Uint8Array(layout.columns * layout.rows);
+  for (const square of sight.seen) if (square < seen.length) seen[square] = 1;
+  return { part: { viewers: [], sees: sight.sees }, seen };
+};
+
 /**
  * The level under a fight's board, drawn by the editor's own renderer
  * (`level/renderer.ts`) in its play mode: no tool's marks, the DM's reader
@@ -45,6 +52,7 @@ export function LevelBackdrop({
   view,
   grid,
   party,
+  vision,
   onFailed,
 }: {
   readonly layout: LevelLayout;
@@ -53,6 +61,12 @@ export function LevelBackdrop({
   readonly grid: boolean;
   /** The party's sight, on a seated player's table; absent on the DM's board. */
   readonly party?: PartySight | undefined;
+  /**
+   * On the DM's board, what the party sees, drawn as the party's view of the
+   * DM's whole level: a level visit's *Party's view* (`visits/VisitBoard.tsx`).
+   * Absent, the DM's board is lit as the DM sees it.
+   */
+  readonly vision?: PartySight | undefined;
   /** Three could not load, or the browser dropped the WebGL context. */
   readonly onFailed: () => void;
 }) {
@@ -137,20 +151,19 @@ export function LevelBackdrop({
     if (r === null) return;
     if (party === undefined) {
       r.setLevel(layout, dmReader(layout));
-      r.setVision(null);
+      r.setVision(vision === undefined ? null : sightOf(layout, vision));
       r.setOverlay(levelMarks(layout, { lights: false }));
       return;
     }
     r.setLevel(layout, partyReader);
-    const seen = new Uint8Array(layout.columns * layout.rows);
-    for (const square of party.seen) if (square < seen.length) seen[square] = 1;
-    r.setVision({ part: { viewers: [], sees: party.sees }, seen });
+    r.setVision(sightOf(layout, party));
     r.setOverlay(partyMarks(layout));
-  }, [ready, layout, party, partyReader]);
+  }, [ready, layout, party, vision, partyReader]);
 
+  const viewAs = viewing || vision !== undefined;
   useEffect(() => {
-    renderer.current?.setOptions({ lit: true, grid, viewAs: viewing });
-  }, [ready, grid, viewing]);
+    renderer.current?.setOptions({ lit: true, grid, viewAs });
+  }, [ready, grid, viewAs]);
 
   useEffect(() => {
     renderer.current?.setView(levelView(view, cellPx));

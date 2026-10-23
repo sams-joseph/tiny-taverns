@@ -126,6 +126,7 @@ const run = (id: string, sessionId: string, round: number) => ({
   mapShown: false,
   hostileTokensHidden: false,
   continuedFrom: null,
+  levelVisitId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,

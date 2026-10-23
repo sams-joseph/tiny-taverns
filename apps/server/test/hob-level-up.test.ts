@@ -373,20 +373,24 @@ describeLayer(
           // Hashed when the fight toolkit was written (`hob-fight-turn.test.ts`).
           fight: shown(FightToolkit),
         }).toEqual({
-          // Moved when the creator's `proposeEncounter` took a level's rooms and its
+          // Moved when the creator's `proposeEncounter` could place its
+          // creatures and a trigger area on the level (by room, or by square);
+          // before that, when `proposeLevel` (the creator's and the account's) said the
+          // first room is the way in; before that, when the creator's
+          // `proposeEncounter` took a level's rooms and its
           // setting stopped being what a picture is drawn from; before that, when
           // the creator's and the account's gained `proposeLevel`;
           // before that, when `proposeLocation` (the creator's, the Shared
           // World's and the account's) took a layout, `x` and `y`, for the
           // places it drafts, and when the creator's gained `proposePartyMove`.
-          creator: "766438acf4094e647728e80541c603034eb53b544b6857e90d84ad70fd5f917c",
+          creator: "216d0707fa827d4cd29bcb919234b8cce0f9dcca8fa48718c92da9cec4b8f795",
           sharedWorld: "77cbbc1e05e17b3a7dff267daada442e45289efd475f6ab771b68d512d0b4393",
           player: "9e020ea51ee08f9b492682c991710708543ab6d52e0414eff40dc034ea8447f2",
           playerListing: "ecde02bdb58c2c0bfe0b325b018b42ae351be184dea9757d70fc503d6785d6a9",
           core: "5b6ccff95f0751239118a2196f51d2d918d90acdad03b01e8a96eda86ba22abd",
           coreListing: "3b51f22a3bdeab5ffd5472160933fe6011ae8707b4469790f26e9f4d80212f73",
-          account: "9928e69a1b367a319da6254585d6ed94cf45ff169d39c62e3f3fd6ebdee3eb67",
-          accountListing: "b370a7e061dccbb0143fcace1a79b995606f9ae38d94f836b40251630dcd32bc",
+          account: "c5c4428199c7355b97ed9e4d91c69e850a771fcba3163dbb1f7a058f84c527ff",
+          accountListing: "f53c097529c124da1489b8f142cb2b6091c55f2fab822a8dffc995ef50f9a2de",
           // Moved when a turn could carry a line the creature says aloud.
           fight: "9c6b5cb33f80e7187d85b2e2e529bb6c96d1fb27d64911b6ba09f23bb1fb98fa",
         });

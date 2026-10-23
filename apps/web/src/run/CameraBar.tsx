@@ -4,14 +4,18 @@ import type { Camera } from "./BoardCanvas";
 /**
  * The canvas's camera, in the stage's bottom-left corner (`Encounter
  * Canvas.dc.html`): zoom out, the zoom against the view the canvas opened on
- * (a press on it fits the board again), zoom in, and centre on whoever is up.
+ * (a press on it fits the whole board in), zoom in, and centre on what the
+ * board follows (`centreLabel`: whoever is up in a fight, the party on a level).
  * The wheel, a pinch and a drag do the same; these are for a DM without a wheel.
  */
 export function CameraBar({
   camera,
   onCentre,
+  centreLabel,
 }: {
   readonly camera: Camera;
+  /** What *Centre* centres on, as its name: `"Centre on whoever is up"` in a fight. */
+  readonly centreLabel: string;
   /** Absent while nobody is up, or whoever is has no square. */
   readonly onCentre: (() => void) | undefined;
 }) {
@@ -48,7 +52,7 @@ export function CameraBar({
         variant="ghost"
         size="icon"
         className="size-control-sm"
-        aria-label="Centre on whoever is up"
+        aria-label={centreLabel}
         disabled={onCentre === undefined}
         onClick={onCentre}
       >

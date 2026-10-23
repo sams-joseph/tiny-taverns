@@ -2,6 +2,7 @@ import type {
   BoardArea,
   BoardDoorUpdate,
   BoardSquare,
+  CampaignId,
   Combatant,
   CombatantId,
   DeathSaves,
@@ -10,6 +11,7 @@ import type {
   EncounterRunUpdate,
   HobDirectResourceUpdate,
   LevelPartId,
+  LevelVisitId,
   Npc,
   NpcSessionMonitor,
   Roll,
@@ -54,6 +56,7 @@ import { Effect, Result } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { levelVisitsAtom } from "../visits/load";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
@@ -2396,9 +2399,18 @@ export function RunScreen() {
     </Button>
   );
   const backToCampaign = over && (
-    <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
-      Back to the campaign
-    </Button>
+    <>
+      {/* A fight that borrowed a level visit and resolved handed the dungeon
+          back: the way on is the level, where the party now stands. */}
+      {state !== undefined &&
+        state.run.levelVisitId !== null &&
+        state.run.endedReason === "resolved" && (
+          <BackToLevel campaignId={campaignId} visitId={state.run.levelVisitId} />
+        )}
+      <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
+        Back to the campaign
+      </Button>
+    </>
   );
 
   /** The header's controls, off the canvas. */
@@ -2822,6 +2834,7 @@ export function RunScreen() {
           session={view.session}
           encounterName={state?.run.encounterName ?? "this fight"}
           mode={state?.run.mode ?? "combat"}
+          levelVisitId={state?.run.levelVisitId ?? null}
           fight={state}
           hpOf={controller.hpOf}
           onClose={() => setEnding(false)}
@@ -2837,5 +2850,31 @@ export function RunScreen() {
           `z-dialog` is for. */}
       <Toaster />
     </TooltipProvider>
+  );
+}
+
+/**
+ * After a fight that borrowed a level visit resolves: back to the visit's
+ * stage, named by the visit (the campaign's list of them, which the stage's
+ * Levels tab reads too). Until the list is read it is *Back to the level*.
+ */
+function BackToLevel({
+  campaignId,
+  visitId,
+}: {
+  readonly campaignId: CampaignId;
+  readonly visitId: LevelVisitId;
+}) {
+  const [visits] = useApiAtom(levelVisitsAtom(campaignId));
+  const name =
+    visits.state === "ready" ? visits.value.find((visit) => visit.id === visitId)?.name : undefined;
+  return (
+    <Button
+      size="sm"
+      nativeButton={false}
+      render={<Link to="/campaigns/$campaignId/levels/$visitId" params={{ campaignId, visitId }} />}
+    >
+      {name === undefined ? "Back to the level" : `Back to ${name}`}
+    </Button>
   );
 }

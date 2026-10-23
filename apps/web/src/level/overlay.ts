@@ -67,6 +67,7 @@ export const REGION_COLOUR: Readonly<Record<LevelRegionKind, MarkColour>> = {
   heavyObscurement: "muted",
   hazard: "accent",
   trap: "danger",
+  entry: "success",
 };
 
 /** Break a segment into dashes `dash` squares long with gaps as long. */

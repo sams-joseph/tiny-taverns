@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CombatantId, EncounterRunId, SessionEventId, SessionId } from "./Ids.js";
+import { CombatantId, EncounterRunId, LevelVisitId, SessionEventId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -146,6 +146,40 @@ export const SessionEventKind = Schema.Literals([
    * place's name, and a player's map re-reads the travel log.
    */
   "party-moved",
+  /**
+   * The DM's hand on a level visit (`LevelVisit.ts`), logged on the night that
+   * is open when it happens, with `levelVisitId` naming the visit; with no
+   * night open a visit write logs nothing. Each is the DM's own line for now.
+   *
+   * `visit-opened` carries `{name}`; `visit-tabled` `{onTable}`, the visit put
+   * on the table or taken off it; `visit-token-moved` `{seatId, from, to}`
+   * (`VisitTokenMovedPayload`); `visit-door-updated`, `visit-light-updated`
+   * and `visit-region-updated` a board line's payload (`BoardDoorUpdatedPayload`
+   * and its siblings); `visit-fog-updated` `{hidden}`. `visit-vision-updated`
+   * carries nothing: what the party sees of the visit changed with no line of
+   * its own (a seat left the table, or a placed creature came into or out of
+   * its sight). `visit-placement-updated` `{encounterId, name}` is the DM's
+   * placing an encounter on the visit's level (`VisitPlacementUpdatedPayload`),
+   * always the DM's line. `visit-returned` `{name}` is a fight that borrowed
+   * the visit ending resolved and handing the dungeon back
+   * (`VisitReturnedPayload`): the table's line while the visit is on the
+   * table, since the players' table goes back to the level.
+   * `visit-encounter-noticed` `{encounterId, name}` is an encounter placed on
+   * the visit coming into the party's notice (`LevelVisitEncounter.noticed`,
+   * `VisitEncounterNoticedPayload`), always the DM's line: the DM's runner
+   * offers to start it, and the players are told nothing new.
+   */
+  "visit-opened",
+  "visit-tabled",
+  "visit-token-moved",
+  "visit-door-updated",
+  "visit-light-updated",
+  "visit-region-updated",
+  "visit-fog-updated",
+  "visit-vision-updated",
+  "visit-placement-updated",
+  "visit-returned",
+  "visit-encounter-noticed",
 ]);
 export type SessionEventKind = typeof SessionEventKind.Type;
 
@@ -186,6 +220,8 @@ export class SessionEvent extends Schema.Class<SessionEvent>("SessionEvent")({
   encounterRunId: Schema.NullOr(EncounterRunId),
   /** The combatant this concerns, if it concerns one. Null once they are removed. */
   combatantId: Schema.NullOr(CombatantId),
+  /** The level visit this concerns, if it concerns one. Null once the level is reset. */
+  levelVisitId: Schema.NullOr(LevelVisitId),
   /**
    * The details, shaped by `kind`.
    *

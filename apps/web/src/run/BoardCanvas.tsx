@@ -12,7 +12,9 @@ import {
   useState,
 } from "react";
 import {
+  type CanvasFocus,
   type CanvasView,
+  fitView,
   keepInView,
   openingView,
   wheelUnit,
@@ -64,7 +66,7 @@ export interface Camera {
   readonly scale: number;
   readonly zoomIn: () => void;
   readonly zoomOut: () => void;
-  /** Back to the opening view. */
+  /** The whole board in the free area (`fitView`), whatever the view opened on. */
   readonly fit: () => void;
   /** Centre a point of the plane in the free area. */
   readonly centre: (point: { readonly x: number; readonly y: number }) => void;
@@ -87,8 +89,8 @@ export function BoardCanvas({
   readonly cellPx: number;
   /** The part of the canvas no panel covers, in its own pixels, to open and fit the board into. */
   readonly freeArea: (canvas: DOMRect) => PlaneRect;
-  /** What the view opens on until the DM moves it (`openingView`): whoever is up, in the plane's units. */
-  readonly focus?: { readonly x: number; readonly y: number } | undefined;
+  /** What the view opens on until it is moved (`openingView`): a point of the plane, and how near. */
+  readonly focus?: CanvasFocus | undefined;
   /** Where the camera is handed to whoever drives it from outside the canvas. */
   readonly camera?: RefObject<Camera | null>;
   /** The camera's own buttons, drawn beside the canvas rather than on it. */
@@ -268,7 +270,10 @@ export function BoardCanvas({
     scale: view.zoom / opened.zoom,
     zoomIn: () => zoomBy(ZOOM_STEP, centreOfFree()),
     zoomOut: () => zoomBy(1 / ZOOM_STEP, centreOfFree()),
-    fit: () => setChosen(undefined),
+    fit: () => {
+      const clear = area();
+      if (clear !== undefined) setChosen(fitView(plane, clear, limits));
+    },
     centre: centreIn,
     reveal: (point) => {
       const clear = area();

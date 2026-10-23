@@ -58,6 +58,7 @@ export type Section =
   /* The campaign row. */
   | "overview"
   | "encounters"
+  | "levels"
   | "notes"
   | "cast"
   | "locations"
@@ -78,6 +79,8 @@ export function useSection(): Section {
   if (matchRoute({ to: "/campaigns/$campaignId/party", fuzzy: true })) return "party";
   // One encounter's page is *within* the list, as an NPC's is within the cast.
   if (matchRoute({ to: "/campaigns/$campaignId/encounters", fuzzy: true })) return "encounters";
+  // One visit's stage is *within* the table's levels.
+  if (matchRoute({ to: "/campaigns/$campaignId/levels", fuzzy: true })) return "levels";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";
   if (matchRoute({ to: "/campaigns/$campaignId/locations" })) return "locations";
   // One NPC's screen is *within* the cast, the way a sheet is within the roster.

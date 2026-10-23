@@ -26,6 +26,7 @@ import {
   type PlayerLiveSeat,
   type PlayerLiveToken,
   type PlayerLiveTurn,
+  type LevelVisitId,
   type PlayerMove,
   partyPathCost,
   partyWalk,
@@ -59,10 +60,12 @@ import { ensureOnBoard, feetWalked, fightForMove } from "./moves.js";
 import {
   partySeen,
   playerLevelColumn,
+  RUN_BOARD,
   refreshPartyVision,
   ringVision,
   runLevel,
 } from "./levelFights.js";
+import { playerVisitMove, playerVisitOnTable } from "./LevelVisits.js";
 import { defined, dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -323,6 +326,18 @@ export class PlayerTable extends Context.Service<
       payload: CombatantTurn,
     ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
     /**
+     * Walk your own character's token on the level visit on the table
+     * (`LevelVisits.ts`' `playerVisitMove`). Another seat, a visit off the
+     * table, a night not open or an asker with no seat is `NotFound`; a walk
+     * that cannot get there, or a visit a fight borrows, a `Conflict`.
+     */
+    readonly moveOnVisit: (
+      campaignId: CampaignId,
+      visitId: LevelVisitId,
+      seatId: CampaignCharacterId,
+      payload: PlayerMove,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
+    /**
      * Contentless player live ticks. The cursor is `session_event.seq`; the
      * event payload is deliberately not returned, and clients re-read the
      * table/log through narrow endpoints.
@@ -449,8 +464,8 @@ export class PlayerTable extends Context.Service<
         Result: PlayerBoardRow,
         execute: ({ runId }) => sql`
           select encounter_run_board.board_columns, encounter_run_board.board_rows,
-                 encounter_run_board.feet_per_cell, ${playerLevelColumn(sql)},
-                 ${fogColumn(sql)}, ${areaColumn(sql)}
+                 encounter_run_board.feet_per_cell, ${playerLevelColumn(sql, RUN_BOARD)},
+                 ${fogColumn(sql, "encounter_run_board")}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
           where encounter_run_board.run_id = ${runId}
@@ -571,6 +586,8 @@ export class PlayerTable extends Context.Service<
               const session = sessions[0];
               if (session === undefined) return null;
 
+              // The level on the table, while no fight borrows it.
+              const visit = yield* playerVisitOnTable(sql, campaignId, actor);
               const found = yield* liveRun({ campaignId, sessionId: session.id });
               if (Option.isNone(found)) {
                 return new PlayerLiveTable({
@@ -578,6 +595,7 @@ export class PlayerTable extends Context.Service<
                   sessionId: session.id,
                   sessionNumber: session.number,
                   fight: null,
+                  visit,
                 });
               }
               const run = found.value;
@@ -643,6 +661,7 @@ export class PlayerTable extends Context.Service<
                   narration,
                   acts,
                 },
+                visit,
               });
             }),
           ),
@@ -730,7 +749,9 @@ export class PlayerTable extends Context.Service<
                     // seen. The DM still places freely.
                     const level = yield* runLevel(sql, runId);
                     const walk =
-                      level === null ? null : partyWalk(level.layout, yield* partySeen(sql, runId));
+                      level === null
+                        ? null
+                        : partyWalk(level.layout, yield* partySeen(sql, RUN_BOARD, runId));
                     if (level !== null && walk !== null) {
                       if (row.board_column === null || row.board_row === null) {
                         return yield* new Conflict({
@@ -851,6 +872,23 @@ export class PlayerTable extends Context.Service<
                   }),
                 ),
               );
+            }),
+          ),
+
+        moveOnVisit: (campaignId, visitId, seatId, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const night = yield* playerVisitMove(
+                sql,
+                actor,
+                campaignId,
+                visitId,
+                seatId,
+                payload,
+              );
+              if (night !== null) yield* live.touched(night);
             }),
           ),
 

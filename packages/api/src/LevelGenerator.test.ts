@@ -13,7 +13,7 @@ import {
   type LevelSpec,
   LevelSpec as LevelSpecSchema,
 } from "./LevelGenerator.js";
-import { movementCost, propBehaviour, propFootprint } from "./LevelGeometry.js";
+import { movementCost, propBehaviour, propFootprint, standable } from "./LevelGeometry.js";
 
 const SIZES: ReadonlyArray<LevelSize> = ["small", "medium", "large"];
 const ROOM_SIZES: ReadonlyArray<LevelRoomSize> = ["small", "medium", "large"];
@@ -229,6 +229,27 @@ describe("generateLevel", () => {
     });
     expect(level.name).toBe("Vault");
     expect(level.description).toBeNull();
+  });
+
+  it("marks the way in: an entry region of clear squares inside the first room", () => {
+    for (const size of SIZES) {
+      for (const seed of SEEDS.slice(0, 10)) {
+        const { level, rooms } = generateLevel(specFor(size, seed));
+        const entries = level.regions.filter((region) => region.kind === "entry");
+        expect(entries).toHaveLength(1);
+        const entry = entries[0]!;
+        expect(entry.secret).toBe(false);
+        expect(entry.squares.length).toBeGreaterThan(0);
+        const first = rooms[0]!;
+        for (const square of entry.squares) {
+          const column = square % level.columns;
+          const row = Math.floor(square / level.columns);
+          expect(column >= first.x && column < first.x + first.width).toBe(true);
+          expect(row >= first.y && row < first.y + first.height).toBe(true);
+          expect(standable(level, { column, row })).toBe(true);
+        }
+      }
+    }
   });
 
   it("is what the spec schema accepts", () => {

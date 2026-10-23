@@ -79,6 +79,10 @@ const NOT_CONTENT = [
   "creature_spell",
   "damage_type",
   "effect_sql_migrations",
+  // Where a placed creature stands on its encounter's level: part of its
+  // roster line, which carries the visibility and provenance. See
+  // 0113_level_visits.ts.
+  "encounter_creature_spot",
   // An encounter's DM prep — tactics, treasure, challenge numbers: part of its
   // encounter, the creator's alone through the creator proof, and its
   // provenance is the encounter's. See 0060_encounter_prep.ts.
@@ -144,6 +148,19 @@ const NOT_CONTENT = [
   "level_light",
   "level_prop",
   "level_region",
+  // A campaign's visit of its creator's level, its copy of the parts and where
+  // each seat stands: live-play state the creator alone reads, through the
+  // creator proof, with no dm/shared switch, and never Hob's, so no
+  // provenance. See 0113_level_visits.ts.
+  "level_visit",
+  "level_visit_light",
+  "level_visit_prop",
+  "level_visit_region",
+  // A visit write's requestId, so a repeat changes nothing with no night
+  // open. See 0114_level_visit_writes.ts.
+  "level_visit_request",
+  "level_visit_token",
+  "level_visit_wall",
   "level_wall",
   // An account's place: who may read it is its owner, a member of a world it
   // is placed in, or a player of a table that revealed it — never a dm/shared

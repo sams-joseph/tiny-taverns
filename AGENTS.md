@@ -28,7 +28,7 @@ Any object a person can create, Hob can also create through the creator toolkit'
 
 The maintainer's standing exceptions:
 
-- Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote). Two exceptions: Hob may take a monster's turn in a fight through a proposal the DM keeps, or that the DM's runner keeps on its own while the DM has that fight's autopilot on, and the server carries it out with its own dice; and Hob may propose moving the party to a place at the table, which only the DM's keep makes. It still never starts a fight, adds a combatant, or rolls for a player.
+- Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls, level visits: it does not open, table or reset one) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote). Two exceptions: Hob may take a monster's turn in a fight through a proposal the DM keeps, or that the DM's runner keeps on its own while the DM has that fight's autopilot on, and the server carries it out with its own dice; and Hob may propose moving the party to a place at the table, which only the DM's keep makes. It still never starts a fight, adds a combatant, or rolls for a player.
 - Hob does not upload pictures; it draws them. An upload is a person's own file.
 - Rolls and ended fights are deleted only with their night.
 - Shared campaign and Shared World conversation threads may be hidden rather than hard-deleted.
@@ -118,7 +118,7 @@ The web client sends requests through a client derived from `TavernsApi`. `Autho
 - Structural over remembered: a constraint the schema refuses, a grep a test performs, a type that does not compile. A rule that has to be remembered gets a test that remembers it.
 - Provenance is a pointer, never an access path. Nothing is read through `derived_from`, `continued_from` or `equipmentId` to grant reach.
 - Optional keys are omitted, not sent as `undefined`; a required argument beats a default nobody names.
-- Pages scroll with the window. Never bound a page to the viewport and hand its scrolling to an inner container; `sticky` is fine (pin under the chrome with `--chrome-height`), and a modal dialog scrolling its own body is a separate case. The named exceptions are the live runner's canvas at desktop widths (`run/RunStage.tsx`), which a seated player's table shares, and the full-screen level editor (`level/LevelEditor.tsx`): each fills the viewport and its panels scroll themselves.
+- Pages scroll with the window. Never bound a page to the viewport and hand its scrolling to an inner container; `sticky` is fine (pin under the chrome with `--chrome-height`), and a modal dialog scrolling its own body is a separate case. The named exceptions are the live runner's canvas at desktop widths (`run/RunStage.tsx`), which a seated player's table and a level visit's stage (`visits/VisitScreen.tsx`) share, and the full-screen level editor (`level/LevelEditor.tsx`): each fills the viewport and its panels scroll themselves.
 - A card that stands for an object opens it from anywhere on its face, with no separate Open button: `<Card linked>` plus a name link carrying `data-card-link` and `cardLinkClassName` (`packages/ui` card). Secondary actions inside stay usable and do not navigate.
 - If a rule here fights the task, say so and get a decision before breaking it.
 

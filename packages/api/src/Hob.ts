@@ -175,6 +175,25 @@ export const HobRosterLine = Schema.Struct({
 });
 export type HobRosterLine = typeof HobRosterLine.Type;
 
+/**
+ * An encounter proposal's placement (`EncounterLevelPlacement`, by roster
+ * index rather than by a line id no row has yet): each placed instance as
+ * `line`, its index in the proposal's `roster`, and `ordinal`, which of that
+ * line's `count`, on a square of the encounter's level; and the trigger area
+ * as squares of that level, `row * columns + column`, ascending, or `null`.
+ */
+export const HobEncounterPlacement = Schema.Struct({
+  spots: Schema.Array(
+    Schema.Struct({
+      line: Schema.Int,
+      ordinal: Schema.Int,
+      ...CombatantPosition.fields,
+    }),
+  ),
+  trigger: Schema.NullOr(Schema.Array(Schema.Int)),
+});
+export type HobEncounterPlacement = typeof HobEncounterPlacement.Type;
+
 /** A creature a step is aimed at, with its name as it stood when Hob proposed. */
 const NpcTurnTarget = Schema.Struct({ combatantId: CombatantId, name: Schema.String });
 
@@ -372,6 +391,16 @@ export const HobProposal = Schema.Union([
     treasure: Schema.optional(Schema.String),
     challenge: Schema.optional(EncounterChallenge),
     roster: Schema.Array(HobRosterLine),
+    /**
+     * Where the creatures stand on the encounter's level, and its trigger
+     * area, when Hob placed them: each spot names its roster line by its
+     * index in `roster` and the instance by `ordinal`, on a square of the
+     * level `level` lays out (or of the empty level the accept makes without
+     * one), checked when it was offered. The accept writes it through the
+     * placement's own statements once the roster lines exist
+     * (`EncounterLevelPlacement`). Absent when Hob placed nothing.
+     */
+    placement: Schema.optional(HobEncounterPlacement),
   }),
   /**
    * A character, drafted for the player who asked — **the fourth member, and

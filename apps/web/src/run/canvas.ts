@@ -64,33 +64,49 @@ export const fitView = (plane: PlaneSize, area: PlaneRect, limits: ZoomLimits): 
 };
 
 /**
+ * Where a view opens when the whole board will not fit at a size: a point of
+ * the plane to open on, and the drawn square (`SQUARE_PX`) below which the
+ * fitted board is given up for it.
+ */
+export interface CanvasFocus {
+  readonly at: { readonly x: number; readonly y: number };
+  readonly squarePx: number;
+}
+
+/**
  * What the runner opens on: the fitted board, unless that would draw a square
  * smaller than a pointer can hit, in which case the board is drawn at that
  * smallest playable size from the area's top-left corner and the rest is a pan
  * away. A board that fits at that size is centred.
  *
- * Given a `focus` (whoever is up, in the plane's units), it opens on them
- * instead: the fitted board when its squares are readable, else readable
- * squares centred on them.
+ * Given a `focus`, it opens on its point instead: the fitted board when its
+ * squares are at least `focus.squarePx`, else squares of that size as near
+ * centred on the point as the board allows (`withinArea`): a board wider than
+ * the area is never pulled in from its edge, leaving a bare band on one side
+ * while the other is cut off. The DM's boards open on whoever is up, or the
+ * party, at `readable`; a player's on their own token at `target`, so a
+ * board a pointer can play whole is shown whole, party and all.
  */
 export const openingView = (
   plane: PlaneSize,
   area: PlaneRect,
   cellPx: number,
-  focus?: { readonly x: number; readonly y: number },
+  focus?: CanvasFocus,
 ): CanvasView => {
   const limits = zoomLimits(cellPx);
   const fitted = fitView(plane, area, limits);
   if (focus !== undefined) {
-    // On whoever is up: the whole board when it fits at a readable size,
-    // otherwise that size, centred on them.
-    const readable = SQUARE_PX.readable / cellPx;
-    if (fitted.zoom >= readable) return fitted;
-    return {
-      zoom: readable,
-      x: area.x + area.width / 2 - focus.x * readable,
-      y: area.y + area.height / 2 - focus.y * readable,
-    };
+    const zoom = focus.squarePx / cellPx;
+    if (fitted.zoom >= zoom) return fitted;
+    return withinArea(
+      {
+        zoom,
+        x: area.x + area.width / 2 - focus.at.x * zoom,
+        y: area.y + area.height / 2 - focus.at.y * zoom,
+      },
+      plane,
+      area,
+    );
   }
   const playable = SQUARE_PX.target / cellPx;
   if (fitted.zoom >= playable) return fitted;
@@ -100,6 +116,23 @@ export const openingView = (
     zoom: playable,
     x: width <= area.width ? area.x + (area.width - width) / 2 : area.x,
     y: height <= area.height ? area.y + (area.height - height) / 2 : area.y,
+  };
+};
+
+/**
+ * `view` panned as little as it takes to use `area` well along each axis: a
+ * board that fits that way is centred in it, and one that does not covers it,
+ * edge to edge, with no bare band inside it.
+ */
+export const withinArea = (view: CanvasView, plane: PlaneSize, area: PlaneRect): CanvasView => {
+  const along = (at: number, size: number, start: number, length: number) =>
+    size <= length
+      ? start + (length - size) / 2
+      : Math.min(start, Math.max(start + length - size, at));
+  return {
+    zoom: view.zoom,
+    x: along(view.x, plane.width * view.zoom, area.x, area.width),
+    y: along(view.y, plane.height * view.zoom, area.y, area.height),
   };
 };
 

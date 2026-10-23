@@ -1,6 +1,7 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
 import { useNavigate } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
+import { levelVisitsAtom } from "../visits/load";
 import { encountersAtom, type CampaignNight } from "./load";
 import { StartRunDialog } from "./StartRunDialog";
 
@@ -25,13 +26,18 @@ export function StartRun({
 }) {
   const navigate = useNavigate();
   const [encounters] = useApiAtom(encountersAtom(campaignId));
-  if (encounters.state !== "ready") return null;
+  // Which levels the party has been to, and which is on the table: a fight on
+  // one of them is played there (`StartRunDialog`). A list that would not
+  // read offers every start, and the server's refusal says what to do.
+  const [visits] = useApiAtom(levelVisitsAtom(campaignId));
+  if (encounters.state !== "ready" || visits.state === "loading") return null;
 
   return (
     <StartRunDialog
       campaign={night.campaign}
       session={night.session}
       encounters={encounters.value}
+      visits={visits.state === "ready" ? visits.value : []}
       preselected={preselected}
       onClose={onClose}
       onStarted={(sessionId, runId) => {

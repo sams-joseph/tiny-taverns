@@ -387,12 +387,15 @@ export const presetOf = lightPresetOf;
 // ---------------------------------------------------------------------------
 // Regions
 
+/** A way in is never secret: the table is never shown one (`LevelRegionKind`). */
+const secretFor = (kind: LevelRegionKind, secret: boolean) => kind !== "entry" && secret;
+
 /** A new, empty region; it exists in the document once it has a square. */
 export const newRegion = (kind: LevelRegionKind, secret: boolean): LayoutRegion => ({
   id: newPartId(),
   kind,
   squares: [],
-  secret,
+  secret: secretFor(kind, secret),
 });
 
 /**
@@ -456,7 +459,8 @@ export const updateRegion = (
   let changed = false;
   const regions = doc.regions.map((region) => {
     if (region.id !== id) return region;
-    const next = { ...region, ...patch };
+    const merged = { ...region, ...patch };
+    const next = { ...merged, secret: secretFor(merged.kind, merged.secret) };
     if (next.kind === region.kind && next.secret === region.secret) return region;
     changed = true;
     return next;

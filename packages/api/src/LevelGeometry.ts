@@ -920,6 +920,52 @@ export const lightLevels = (
 // ---------------------------------------------------------------------------
 // Party vision
 
+/** The squares of every sight-blocking prop's footprint on the board, as square indices. */
+const facedSquares = (level: LevelLayout): ReadonlySet<number> => {
+  const out = new Set<number>();
+  for (const prop of level.props) {
+    if (!propBehaviour(prop).blocksSight) continue;
+    const { column, row, width, height } = propFootprint(prop);
+    for (let r = row; r < row + height; r++) {
+      for (let c = column; c < column + width; c++) {
+        if (onLevel(level, { column: c, row: r }))
+          out.add(levelSquareIndex(level, { column: c, row: r }));
+      }
+    }
+  }
+  return out;
+};
+
+/** How far inside a square its rim's points sit: well short of a prop's outline (`PROP_INSET`). */
+const RIM = 0.02;
+
+/**
+ * Where a square under a sight-blocking prop shows the prop's face: its four
+ * corners and the middles of its four sides, each a hair inside the square.
+ * A box prop's outline sits `PROP_INSET` in and a round one's well inside the
+ * corners, so a point on a side the prop's footprint ends at is in front of
+ * its face; one on a side shared with more of the prop is inside it and seen
+ * by nobody.
+ */
+const facePoints = (square: BoardSquare): ReadonlyArray<LevelPoint> => {
+  const left = square.column + RIM;
+  const right = square.column + 1 - RIM;
+  const top = square.row + RIM;
+  const bottom = square.row + 1 - RIM;
+  const midX = square.column + 0.5;
+  const midY = square.row + 0.5;
+  return [
+    { x: left, y: top },
+    { x: midX, y: top },
+    { x: right, y: top },
+    { x: right, y: midY },
+    { x: right, y: bottom },
+    { x: midX, y: bottom },
+    { x: left, y: bottom },
+    { x: left, y: midY },
+  ];
+};
+
 /** A creature looking: where it stands and its darkvision in feet (0 for none). */
 export interface PartyViewer {
   readonly square: BoardSquare;
@@ -935,6 +981,14 @@ export interface PartyViewer {
  * its darkvision and is not magically dark. A viewer always sees the square
  * it stands on; one standing in magical darkness or heavy obscurement sees
  * only that. The party sees the union. A viewer off the board sees nothing.
+ *
+ * A square under a sight-blocking prop (a pillar, a statue) hides its own
+ * centre inside the prop's outline, so it is seen when the prop's face is:
+ * when one of {@link facePoints} (the square's rim, a hair inside it, where
+ * the prop's outline does not reach) passes the same test, lit or in
+ * darkvision at that point. A pillar is seen from the side it is seen from,
+ * and not through a wall, a closed door or from another room, since the rim
+ * of its square is on its own side of every wall.
  */
 export const partyVision = (
   level: LevelLayout,
@@ -949,6 +1003,14 @@ export const partyVision = (
     const dark = regionMask(level, ["magicalDarkness"]);
     const segments = visionSegments(level, options);
     const reach = Math.hypot(columns, rows) + 1;
+    const faced = facedSquares(level);
+    const sources = faced.size > 0 ? lightSources(level) : [];
+    const lightIndex = faced.size > 0 ? indexOf(sightSegments(level, options)) : null;
+    const litAt = (at: number, point: LevelPoint): boolean => {
+      if (light[at]! > 0) return true;
+      if (dark[at] === 1 || lightIndex === null) return false;
+      return sources.some((source) => glow(lightIndex, source, feetPerCell, point) > 0);
+    };
     for (const viewer of onBoard) {
       seen[levelSquareIndex(level, viewer.square)] = 1;
       const origin = centreOf(viewer.square);
@@ -964,7 +1026,22 @@ export const partyVision = (
             (darkvision > 0 &&
               dark[at] === 0 &&
               Math.hypot(centre.x - origin.x, centre.y - origin.y) <= darkvision + 1e-9);
-          if (visible && withinVisibility(polygon, centre)) seen[at] = 1;
+          if (visible && withinVisibility(polygon, centre)) {
+            seen[at] = 1;
+            continue;
+          }
+          if (!faced.has(at)) continue;
+          for (const point of facePoints({ column, row })) {
+            const inSight =
+              litAt(at, point) ||
+              (darkvision > 0 &&
+                dark[at] === 0 &&
+                Math.hypot(point.x - origin.x, point.y - origin.y) <= darkvision + 1e-9);
+            if (inSight && withinVisibility(polygon, point)) {
+              seen[at] = 1;
+              break;
+            }
+          }
         }
       }
     }

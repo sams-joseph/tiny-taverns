@@ -142,6 +142,8 @@ export interface CampaignChromeSlots<Extra = undefined> {
   readonly run: (encounterId?: EncounterId) => void;
   /** Pick a carried encounter back up — see `CampaignActs.pickUp`. */
   readonly pickUp: CampaignActs["pickUp"];
+  /** The level on the table with no fight on it — see `CampaignActs.visit`. */
+  readonly visit: CampaignActs["visit"];
   /** Open the confirmation that ends the night. */
   readonly finishSession: () => void;
   /**
@@ -259,7 +261,7 @@ export function CampaignChrome<Extra = undefined>({
     invalidate(campaignViewKeys(campaignId, nightIds));
     refreshExtra();
   }, [invalidate, campaignId, nightIds, refreshExtra]);
-  const { run, pickUp, dialogs } = useCampaignAct(campaignId);
+  const { run, pickUp, visit, dialogs } = useCampaignAct(campaignId);
   const [editing, setEditing] = useState<CampaignEditing | undefined>();
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
@@ -291,6 +293,7 @@ export function CampaignChrome<Extra = undefined>({
           extra: extra as Extra,
           run,
           pickUp,
+          visit,
           finishSession,
           openSettings,
         };

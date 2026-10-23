@@ -3,6 +3,13 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/ht
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { BoardAreaSet, BoardFogUpdate, EncounterRunBoard } from "./Board.js";
+import {
+  LevelVisit,
+  LevelVisitOpen,
+  LevelVisitSummary,
+  LevelVisitTokenMove,
+  TableVisitSet,
+} from "./LevelVisit.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import {
   ImageSubject,
@@ -72,6 +79,7 @@ import {
   EncounterPrep,
   EncounterUpdate,
 } from "./Encounter.js";
+import { EncounterLevelPlacement } from "./EncounterSpots.js";
 import { Feat, FeatFilter, FeatLibraryCreate, FeatLibraryUpdate, FeatSort } from "./Feat.js";
 import {
   Equipment,
@@ -180,6 +188,7 @@ import {
   RollId,
   SpellId,
   LevelId,
+  LevelVisitId,
   LevelPartId,
   LocationId,
   NoteId,
@@ -1158,6 +1167,113 @@ class LocationsGroup extends HttpApiGroup.make("locations")
   .middleware(Authorization) {}
 
 /**
+ * A table's level visits, as its **creator** runs them: the campaign's live
+ * state of each of the creator's levels it has been to, one per level, for
+ * good (`LevelVisit.ts`). Behind the creator proof, so a player and a stranger
+ * are `NotFound` at every endpoint.
+ *
+ * `open` copies one of the creator's own levels into a new visit, the party
+ * standing on its entry squares (down its left edge on a level with none);
+ * another account's level is `NotFound`, and a level the campaign already has
+ * a visit of is a `Conflict`. `remove` is the DM's *Reset level*: a real
+ * delete of the visit and everything on it, which takes it off the table, and
+ * is refused with a `Conflict` while a live fight is played on it.
+ * `putOnTable` makes a visit the one on the campaign's table, and
+ * `takeOffTable` leaves none there. While a live fight borrows a visit
+ * (`LevelVisit.fight`), the dungeon is the fight's: putting another visit on
+ * the table, taking it off and resetting it are each a `Conflict`. The rest
+ * are the DM exploring the visit:
+ * tokens, fog, doors, lights and regions, each answered with the visit.
+ *
+ * While a night is open, each write here is a line in its log naming the
+ * visit, and rings its doorbell (`live.visitEvents`).
+ */
+class LevelVisitsGroup extends HttpApiGroup.make("levelVisits")
+  .add(
+    HttpApiEndpoint.get("list", "/visits", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(LevelVisitSummary),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("open", "/visits", {
+      params: { campaignId: CampaignId },
+      payload: LevelVisitOpen,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.get("findById", "/visits/:visitId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      success: LevelVisit,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/visits/:visitId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.put("putOnTable", "/table-visit", {
+      params: { campaignId: CampaignId },
+      payload: TableVisitSet,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("takeOffTable", "/table-visit", {
+      params: { campaignId: CampaignId },
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * The DM stands a seat's token on a square of the visit. `NotFound` for a
+     * seat with no token on it; `Conflict` for a square off the board or one
+     * no token may stand on. See `LevelVisitTokenMove`, which says what every
+     * write below shares.
+     */
+    HttpApiEndpoint.put("moveToken", "/visits/:visitId/tokens/:seatId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, seatId: CampaignCharacterId },
+      payload: LevelVisitTokenMove,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /** Hide or reveal squares of the visit under the DM's fog. See `BoardFogUpdate`. */
+    HttpApiEndpoint.patch("updateFog", "/visits/:visitId/fog", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId },
+      payload: BoardFogUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Open, close or lock a door of the visit, or reveal or hide a secret one.
+     * `NotFound` for a wall the visit does not have; `Conflict` for a plain
+     * wall and a reveal of a door that is not secret. See `BoardDoorUpdate`.
+     */
+    HttpApiEndpoint.patch("updateDoor", "/visits/:visitId/doors/:wallId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, wallId: LevelPartId },
+      payload: BoardDoorUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /** Light or snuff a light of the visit. See `BoardLightUpdate`. */
+    HttpApiEndpoint.patch("updateLight", "/visits/:visitId/lights/:lightId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, lightId: LevelPartId },
+      payload: BoardLightUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Reveal a secret region of the visit, or hide it again. `Conflict` for a
+     * region that is not secret. See `BoardRegionUpdate`.
+     */
+    HttpApiEndpoint.patch("updateRegion", "/visits/:visitId/regions/:regionId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, regionId: LevelPartId },
+      payload: BoardRegionUpdate,
+      success: LevelVisit,
+      error: [NotFound, Conflict],
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
+  .middleware(Authorization) {}
+
+/**
  * Where the party is, as the record of where it has been: the campaign's
  * travel log, newest first, behind the creator proof. The newest move is
  * where the party stands. `move` goes to a place in the campaign's world and
@@ -1772,6 +1888,20 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
       payload: EncounterPlacement,
       success: HttpApiSchema.NoContent,
       error: NotFound,
+    }),
+    /**
+     * Place the encounter's creatures on squares of its level and mark its
+     * trigger area, replacing every spot and the trigger it had, answered
+     * with its prep (`EncounterPrep.placement`). See `EncounterLevelPlacement`
+     * for what is refused. While a night is open and the campaign has a visit
+     * of the level, the visit's log has a line for it and its doorbell rings
+     * (`live.visitEvents`).
+     */
+    HttpApiEndpoint.put("place", "/:encounterId/placement", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      payload: EncounterLevelPlacement,
+      success: EncounterPrep,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns/:campaignId/encounters")
@@ -2683,6 +2813,25 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
     HttpApiEndpoint.post("turn", "/table/runs/:runId/combatants/:combatantId/turn", {
       params: { campaignId: CampaignId, runId: EncounterRunId, combatantId: CombatantId },
       payload: CombatantTurn,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Walk your own character's token on the level visit on the table.
+     *
+     * It reaches one token: one of your own live seats, on the visit
+     * `read` shows you (`PlayerLiveTable.visit`), on the campaign's open
+     * night. Any other seat, visit or asker is `NotFound`, as the read would
+     * be. There is no speed limit, but the square must be one a token may
+     * stand on and reachable by a walk from where the token stands over the
+     * visit's copy and what the party has seen, as a fight's walk is
+     * (`partyPathCost`); otherwise a `Conflict`, *No way there*, in the same
+     * words whatever stood in the way. `Conflict` too while a fight borrows
+     * the visit. A repeated `requestId` changes nothing.
+     */
+    HttpApiEndpoint.put("moveOnVisit", "/table/visits/:visitId/tokens/:seatId", {
+      params: { campaignId: CampaignId, visitId: LevelVisitId, seatId: CampaignCharacterId },
+      payload: PlayerMove,
       success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),
@@ -3869,6 +4018,20 @@ class LiveGroup extends HttpApiGroup.make("live")
       success: HttpApiSchema.StreamSse({ events: LiveEvent }),
       error: NotFound,
     }),
+    /**
+     * The DM's stream of a level visit's lines on this night: `events`' contract
+     * (replay after `since` or `Last-Event-ID`, then tail; a heartbeat with no
+     * `id`), over the lines naming the visit rather than a fight. A visit and
+     * a night that are not this creator's campaign's are an ordinary 404
+     * before any stream.
+     */
+    HttpApiEndpoint.get("visitEvents", "/visits/:visitId/events", {
+      params: { campaignId: CampaignId, sessionId: SessionId, visitId: LevelVisitId },
+      query: { since: SessionLogFilter.since },
+      headers: { "last-event-id": Schema.optional(Schema.String) },
+      success: HttpApiSchema.StreamSse({ events: LiveEvent }),
+      error: NotFound,
+    }),
   )
   .prefix("/campaigns/:campaignId/sessions/:sessionId")
   .middleware(Authorization) {}
@@ -3907,6 +4070,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PlayerLocationsGroup)
   .add(PartyTravelGroup)
   .add(PlayerPartyTravelGroup)
+  .add(LevelVisitsGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
   .add(EncounterPrepGroup)

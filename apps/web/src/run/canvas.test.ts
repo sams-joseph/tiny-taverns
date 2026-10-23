@@ -86,15 +86,50 @@ describe("the canvas view", () => {
   it("opens on whoever is up at a readable size when the fitted board is too small to read", () => {
     const plane = { width: 1536, height: 1024 };
     const area = { x: 100, y: 50, width: 600, height: 400 };
-    const view = openingView(plane, area, 64, { x: 640, y: 320 });
+    const view = openingView(plane, area, 64, {
+      at: { x: 640, y: 320 },
+      squarePx: SQUARE_PX.readable,
+    });
     expect(view.zoom * 64).toBeCloseTo(SQUARE_PX.readable);
     // The focus lands in the middle of the area.
     expect(640 * view.zoom + view.x).toBeCloseTo(400);
     expect(320 * view.zoom + view.y).toBeCloseTo(250);
+    // A focus near the board's edge pulls the board no further than its edge:
+    // no bare band inside the area while the far side is cut off.
+    const edge = openingView(plane, area, 64, {
+      at: { x: 32, y: 32 },
+      squarePx: SQUARE_PX.readable,
+    });
+    expect(edge.x).toBeCloseTo(area.x);
+    expect(edge.y).toBeCloseTo(area.y);
+    const far = openingView(plane, area, 64, {
+      at: { x: 1504, y: 992 },
+      squarePx: SQUARE_PX.readable,
+    });
+    expect(far.x + plane.width * far.zoom).toBeCloseTo(area.x + area.width);
+    expect(far.y + plane.height * far.zoom).toBeCloseTo(area.y + area.height);
+    // A board a little too big to read whole: 26 squares across 1088 pixels
+    // opens readable, with its left edge on the area's, not pulled past it.
+    const visit = { width: 26 * 64, height: 16 * 64 };
+    const wide = { x: 12, y: 80, width: 1076, height: 800 };
+    const opened = openingView(visit, wide, 64, {
+      at: { x: 15.5 * 64, y: 7.5 * 64 },
+      squarePx: SQUARE_PX.readable,
+    });
+    expect(opened.x).toBeGreaterThanOrEqual(wide.x + wide.width - visit.width * opened.zoom - 1e-9);
+    expect(opened.x).toBeLessThanOrEqual(wide.x);
+    // A player's board opens on their token only once the whole is too small
+    // to play: this one fits whole at 41px squares.
+    expect(
+      openingView(visit, wide, 64, {
+        at: { x: 15.5 * 64, y: 7.5 * 64 },
+        squarePx: SQUARE_PX.target,
+      }),
+    ).toEqual(fitView(visit, wide, zoomLimits(64)));
     // A board that fits readably is fitted, focus or none.
     const small = { width: 640, height: 320 };
-    expect(openingView(small, area, 64, { x: 10, y: 10 })).toEqual(
-      fitView(small, area, zoomLimits(64)),
-    );
+    expect(
+      openingView(small, area, 64, { at: { x: 10, y: 10 }, squarePx: SQUARE_PX.readable }),
+    ).toEqual(fitView(small, area, zoomLimits(64)));
   });
 });

@@ -227,6 +227,9 @@ describeLayer("creator-actor", shared, (it) => {
         // because it always took its actor as an argument. Ungated it would have
         // left the other two decorative — the stream is the wide read.
         pollForRun: true,
+        // A level visit's lines, read and streamed as a fight's are.
+        listForVisit: true,
+        pollForVisit: true,
       };
 
       // `Recap` is the fourth, and the only one that is gated in part: `read`
@@ -293,7 +296,7 @@ describeLayer("creator-actor", shared, (it) => {
         Object.keys(memberships).length,
         Object.keys(direct).length,
         Object.keys(scenes).length,
-      ]).toEqual([12, 5, 10, 3, 4, 2, 4, 4]);
+      ]).toEqual([12, 5, 10, 5, 4, 2, 4, 4]);
     });
   });
 
@@ -618,9 +621,20 @@ describeLayer("creator-actor", shared, (it) => {
       // a player reads `PartyTravel.forPlayer`, ungated for the same reason.
       // A hundred and seventy to seventy-two are `RunBoards.updateDoor`,
       // `updateLight` and `updateRegion`: the DM's hand on a fight's level,
-      // the board's like fog. Less the three unused ordinals, that is a
-      // hundred and sixty-nine.
-      expect(gated).toBe(169);
+      // the board's like fog. A hundred and seventy-three to seventy-nine are
+      // a table's level visits: `LevelVisits.list`, `findById`, `open`,
+      // `remove`, `putOnTable`, `takeOffTable` and the read they share. A
+      // visit is live-play state with no player read yet, the creator's from
+      // the day it was declared. A hundred and eighty to eighty-five are the
+      // DM exploring a visit: `LevelVisits.moveToken`, `updateFog`,
+      // `updateDoor`, `updateLight`, `updateRegion` and the transaction they
+      // share; eighty-six and eighty-seven are `SessionEvents.listForVisit`
+      // and `pollForVisit`, the visit's lines and the DM's visit stream.
+      // Eighty-eight is `Encounters.place`: where an encounter's creatures
+      // wait on its level is the DM's prep, written beside the prep read that
+      // returns it, and no player read selects it. Less the three unused
+      // ordinals, that is a hundred and eighty-five.
+      expect(gated).toBe(185);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service
@@ -941,7 +955,12 @@ describeLayer("creator-actor", shared, (it) => {
       // `create`, `save`, `remove` and `uses`, the owner's shelf, for
       // `Locations.library`'s reason: a level is in no campaign, and
       // `levelOwned` is already the owner predicate.
-      expect(ungated).toBe(206);
+      // `PlayerTable.moveOnVisit` is the two hundred and seventh, a player's
+      // own token on the level visit on the table, for `PlayerTable.move`'s
+      // reason: it reaches exactly the token `ownVisitToken` allows on the
+      // visit `levelVisitAtPlayerTable` shows them, and the DM, who holds no
+      // seat, moves tokens through the gated `LevelVisits` instead.
+      expect(ungated).toBe(207);
     });
   });
 });

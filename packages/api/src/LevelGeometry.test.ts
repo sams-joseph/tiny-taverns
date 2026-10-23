@@ -527,6 +527,68 @@ describe("party vision", () => {
   });
 });
 
+describe("party vision of a sight-blocking prop", () => {
+  const index = (column: number, row: number) => row * 20 + column;
+  const hall = (parts: Partial<LevelLayout> = {}) =>
+    level({ columns: 20, rows: 20, props: [prop("pillar", 8, 5), prop("statue", 8, 9)], ...parts });
+
+  it("sees a pillar's and a statue's square by its face, though its centre is inside it", () => {
+    const seen = partyVision(hall(), [{ square: at(3, 5), darkvision: 0 }]);
+    expect(seen).toContain(index(8, 5));
+    expect(seen).toContain(index(8, 9));
+    // What stands behind the pillar is still in its shadow.
+    expect(seen).not.toContain(index(9, 5));
+  });
+
+  it("sees a prop in the dark by its lit face, or within darkvision, and not otherwise", () => {
+    const unlit = hall({ ambient: "dark" });
+    expect(partyVision(unlit, [{ square: at(3, 5), darkvision: 0 }])).not.toContain(index(8, 5));
+    expect(partyVision(unlit, [{ square: at(3, 5), darkvision: 60 }])).toContain(index(8, 5));
+    expect(partyVision(unlit, [{ square: at(3, 5), darkvision: 20 }])).not.toContain(index(8, 5));
+    const torchlit = hall({ ambient: "dark", lights: [torch(6.5, 5.5, { bright: 10, dim: 0 })] });
+    expect(partyVision(torchlit, [{ square: at(3, 5), darkvision: 0 }])).toContain(index(8, 5));
+  });
+
+  it("does not see a prop through a wall, a closed door or from another room", () => {
+    const walled = (state: "open" | "closed") =>
+      hall({
+        walls: [
+          wall(6, 0, 6, 5),
+          wall(6, 5, 6, 6, { kind: "door", doorState: state }),
+          wall(6, 6, 6, 20),
+        ],
+      });
+    expect(partyVision(walled("closed"), [{ square: at(3, 5), darkvision: 0 }])).not.toContain(
+      index(8, 5),
+    );
+    expect(partyVision(walled("open"), [{ square: at(3, 5), darkvision: 0 }])).toContain(
+      index(8, 5),
+    );
+    // A pillar hard against the far side of a wall: its square's rim is on the pillar's side.
+    const flush = level({
+      columns: 20,
+      rows: 20,
+      walls: [wall(8, 0, 8, 20)],
+      props: [prop("pillar", 8, 5)],
+    });
+    expect(partyVision(flush, [{ square: at(3, 5), darkvision: 0 }])).not.toContain(index(8, 5));
+    expect(partyVision(flush, [{ square: at(12, 5), darkvision: 0 }])).toContain(index(8, 5));
+  });
+
+  it("sees each square of a long prop by the face it shows, and none from inside the prop", () => {
+    // A sight-blocking table two squares wide, seen end on from the left.
+    const table = level({
+      columns: 20,
+      rows: 20,
+      props: [prop("table", 8, 5, { blocksSight: true })],
+      walls: [wall(0, 5, 20, 5), wall(0, 6, 20, 6)],
+    });
+    const seen = partyVision(table, [{ square: at(3, 5), darkvision: 0 }]);
+    expect(seen).toContain(index(8, 5));
+    expect(seen).not.toContain(index(9, 5));
+  });
+});
+
 describe("a step's cost", () => {
   const open = (parts: Partial<LevelLayout> = {}) => level({ columns: 12, rows: 12, ...parts });
 

@@ -1,6 +1,7 @@
 import {
   LIGHT_PRESETS,
   LEVEL_LIGHT_FEET_MAX,
+  LEVEL_REGION_KINDS,
   PROP_KINDS,
   propBehaviour,
   propFootprint,
@@ -219,13 +220,7 @@ function Facts({ rows }: { readonly rows: ReadonlyArray<readonly [string, ReactN
 const COVERS: ReadonlyArray<LevelCover> = ["none", "half", "threeQuarters", "total"];
 const TONES: ReadonlyArray<LevelLightTone> = ["fire", "arcane", "moon", "radiant"];
 const DOOR_STATES: ReadonlyArray<LevelDoorState> = ["closed", "open", "locked"];
-const REGION_KINDS: ReadonlyArray<LevelRegionKind> = [
-  "difficult",
-  "magicalDarkness",
-  "heavyObscurement",
-  "hazard",
-  "trap",
-];
+const REGION_KINDS: ReadonlyArray<LevelRegionKind> = LEVEL_REGION_KINDS;
 
 function PropPanel({ store, prop, feet }: { store: EditorStore; prop: LayoutProp; feet: number }) {
   const kit = PROP_KINDS[prop.kind];
@@ -400,11 +395,14 @@ function RegionPanel({
         options={REGION_KINDS.map((value) => ({ value, label: REGION_LABEL[value] }))}
         onChange={(kind) => set({ kind })}
       />
-      <Check
-        label="Secret (the DM's until revealed)"
-        checked={region.secret}
-        onChange={(secret) => set({ secret })}
-      />
+      {/* A way in is the DM's overlay and never secret. */}
+      {region.kind === "entry" ? null : (
+        <Check
+          label="Secret (the DM's until revealed)"
+          checked={region.secret}
+          onChange={(secret) => set({ secret })}
+        />
+      )}
       <Remove onClick={() => store.remove({ type: "region", id: region.id })} />
     </>
   );

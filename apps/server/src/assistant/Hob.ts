@@ -2667,6 +2667,11 @@ const offered = (turn: HobTurn): string | undefined => {
           : `skills ${challenge.skills.join(", ")}`,
         proposal.tactics === undefined ? undefined : `tactics: ${proposal.tactics.join(" / ")}`,
         proposal.treasure === undefined ? undefined : `treasure: ${proposal.treasure}`,
+        // Said, so a redraft knows to place them again rather than drop it.
+        proposal.placement === undefined
+          ? undefined
+          : `${String(proposal.placement.spots.length)} placed on the level` +
+            (proposal.placement.trigger === null ? "" : ", with a trigger area"),
       ].filter((part) => part !== undefined);
       return `[You offered the DM a ${kind} encounter called "${proposal.name}"${tags} — ${kept}: ${parts.join("; ")}]`;
     }

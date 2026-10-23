@@ -238,6 +238,7 @@ export const encounterPrep = {
   ],
   treasure: "28 sp and a bone whistle",
   challenge: null,
+  placement: { spots: [], trigger: null },
 };
 
 export const sketch = {
@@ -1418,6 +1419,7 @@ export const liveRun = {
   mapShown: false,
   hostileTokensHidden: false,
   continuedFrom: null,
+  levelVisitId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,
@@ -1741,6 +1743,7 @@ const prepFor = (encounterId: string, over: object = {}) => ({
   tactics: [],
   treasure: null,
   challenge: null,
+  placement: { spots: [], trigger: null },
   ...over,
 });
 
@@ -1854,6 +1857,8 @@ export const encounterShelf = (): Map<string, Answer> => {
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+    // The party has been to no level at this table yet.
+    [`GET /campaigns/${campaignId}/visits`, { status: 200, body: [] }],
     // The membership list decides which projection a campaign URL renders —
     // the relation replaced the global mode. A test that wants the player
     // side re-aims this at `relation: "player"`, which makes the same URL

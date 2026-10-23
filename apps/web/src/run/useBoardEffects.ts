@@ -45,20 +45,20 @@ const MOST = 24;
  */
 export function useBoardEffects(
   tokens: ReadonlyArray<EffectToken>,
-  settled: (id: CombatantId, to: BoardSquare) => boolean,
+  settled: (id: string, to: BoardSquare) => boolean,
   acts: ReadonlyArray<Act> = [],
 ): {
   readonly playing: ReadonlyArray<Playing>;
-  readonly hopOf: (id: CombatantId) => "a" | "b" | undefined;
+  readonly hopOf: (id: string) => "a" | "b" | undefined;
   readonly ended: (key: number) => void;
 } {
   const last = useRef<ReadonlyArray<EffectToken> | undefined>(undefined);
   const next = useRef(0);
   const [playing, setPlaying] = useState<ReadonlyArray<Playing>>([]);
-  const [hops, setHops] = useState<ReadonlyMap<CombatantId, number>>(new Map());
+  const [hops, setHops] = useState<ReadonlyMap<string, number>>(new Map());
   const settledRef = useRef(settled);
   settledRef.current = settled;
-  const squares = useRef(new Map<CombatantId, BoardSquare>());
+  const squares = useRef(new Map<string, BoardSquare>());
   squares.current = new Map(tokens.map((token) => [token.id, token.square]));
   const seen = useRef<Set<string> | undefined>(undefined);
 
@@ -116,7 +116,7 @@ export function useBoardEffects(
 /** One act as the board plays it, from the squares its creatures stand on now. */
 const playOf = (
   act: Act,
-  squares: ReadonlyMap<CombatantId, BoardSquare>,
+  squares: ReadonlyMap<string, BoardSquare>,
 ): ReadonlyArray<StrikePlay | BlastPlay> => {
   if (act.kind === "blast") {
     const { key: _key, from, ...what } = act;

@@ -52,6 +52,7 @@ import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
 import { Memberships } from "./repo/Memberships.js";
 import { Levels } from "./repo/Levels.js";
+import { LevelVisits } from "./repo/LevelVisits.js";
 import { Locations } from "./repo/Locations.js";
 import { PartyTravel } from "./repo/PartyTravel.js";
 import { Notes } from "./repo/Notes.js";
@@ -753,6 +754,56 @@ const PartyTravelLive = HttpApiBuilder.group(
   }),
 );
 
+/** A table's visits of its creator's levels: the creator's alone, behind the proof. */
+const LevelVisitsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "levelVisits",
+  Effect.fnUntraced(function* (handlers) {
+    const visits = yield* LevelVisits;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => asDm(params.campaignId, (creator) => visits.list(creator)))
+      .handle("open", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => visits.open(creator, payload)),
+      )
+      .handle("findById", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.findById(creator, params.visitId)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.remove(creator, params.visitId)),
+      )
+      .handle("putOnTable", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => visits.putOnTable(creator, payload.visitId)),
+      )
+      .handle("takeOffTable", ({ params }) =>
+        asDm(params.campaignId, (creator) => visits.takeOffTable(creator)),
+      )
+      .handle("moveToken", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) =>
+          visits.moveToken(creator, params.visitId, params.seatId, payload),
+        ),
+      )
+      .handle("updateFog", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => visits.updateFog(creator, params.visitId, payload)),
+      )
+      .handle("updateDoor", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) =>
+          visits.updateDoor(creator, params.visitId, params.wallId, payload),
+        ),
+      )
+      .handle("updateLight", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) =>
+          visits.updateLight(creator, params.visitId, params.lightId, payload),
+        ),
+      )
+      .handle("updateRegion", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) =>
+          visits.updateRegion(creator, params.visitId, params.regionId, payload),
+        ),
+      );
+  }),
+);
+
 /** The party's travels, as a player at the table is told them. */
 const PlayerPartyTravelLive = HttpApiBuilder.group(
   TavernsApi,
@@ -798,6 +849,11 @@ const EncountersLive = HttpApiBuilder.group(
         )
         .handle("move", ({ params, payload }) =>
           encounters.move(params.campaignId, params.encounterId, payload),
+        )
+        .handle("place", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) =>
+            encounters.place(creator, params.encounterId, payload),
+          ),
         )
         // Its level stays in the creator's Library: a Library object is
         // deleted from the Library.
@@ -1203,6 +1259,9 @@ const PlayerTableLive = HttpApiBuilder.group(
       )
       .handle("turn", ({ params, payload }) =>
         table.turn(params.campaignId, params.runId, params.combatantId, payload),
+      )
+      .handle("moveOnVisit", ({ params, payload }) =>
+        table.moveOnVisit(params.campaignId, params.visitId, params.seatId, payload),
       )
       .handle("events", ({ params, query, request }) =>
         Effect.gen(function* () {
@@ -1979,6 +2038,74 @@ const LiveLive = HttpApiBuilder.group(
     // every caller of `ApiLive`, for a value that has a committed default.
     const heartbeat = Duration.seconds(yield* Effect.orDie(liveHeartbeatSeconds));
 
+    /**
+     * Where a stream resumes: `?since=`, which the derived client sends,
+     * because `HttpApiClient` issues a plain `fetch` and a plain `fetch` does
+     * not resend `Last-Event-ID`; else the header, which a browser's native
+     * `EventSource` sends by itself when it reconnects, and honouring it is
+     * what makes that reconnect correct rather than silently lossy.
+     */
+    const resumeFrom = (since: number | undefined, lastEventId: string | undefined) => {
+      const resume = since ?? Number(lastEventId ?? Number.NaN);
+      return Number.isSafeInteger(resume) && resume >= 0 ? resume : 0;
+    };
+
+    /**
+     * Replay after `resume`, then tail, with heartbeats: steps 2 and 3 of
+     * `events` below, over the log rows `poll` reads after a cursor. One
+     * implementation for a fight's stream and a visit's.
+     */
+    const logStream = (
+      sessionId: SessionId,
+      resume: number,
+      poll: (cursor: number) => Effect.Effect<ReadonlyArray<SessionEvent>>,
+    ) => {
+      let cursor = resume;
+
+      const pull = Effect.gen(function* () {
+        const drained: Array<SessionEvent> = [];
+        for (;;) {
+          const page = yield* poll(cursor);
+          if (page.length === 0) break;
+          cursor = page[page.length - 1]!.seq;
+          drained.push(...page);
+          if (page.length < PAGE) break;
+        }
+        return drained;
+      });
+
+      const asEvents = Stream.flatMap((rows: ReadonlyArray<SessionEvent>) =>
+        Stream.fromIterable(
+          rows.map((row): LiveEvent => ({
+            id: String(row.seq),
+            event: "session-event",
+            data: row,
+          })),
+        ),
+      );
+
+      const body = Stream.concat(
+        Stream.fromEffect(pull).pipe(asEvents),
+        live.subscribe(sessionId).pipe(
+          Stream.mapEffect(() => pull),
+          asEvents,
+        ),
+      );
+
+      // No `id` on a heartbeat, deliberately: `Sse.encoder` writes no `id`
+      // line for an event without one, so a browser keeps the last real
+      // `seq` as its `Last-Event-ID` and a reconnect after a quiet minute
+      // still resumes from the right place rather than from the beginning.
+      const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
+        Stream.map((): LiveEvent => ({
+          event: "heartbeat",
+          data: new Heartbeat({ seq: cursor }),
+        })),
+      );
+
+      return Stream.merge(body, heartbeats);
+    };
+
     return (
       handlers
         .handle("log", ({ params, query }) =>
@@ -2029,62 +2156,28 @@ const LiveLive = HttpApiBuilder.group(
             // campaign, and that this run is in that session.
             yield* runs.findById(as, params.sessionId, params.runId);
 
-            // `?since=` is what the derived client sends, because `HttpApiClient`
-            // issues a plain `fetch` and a plain `fetch` does not resend
-            // `Last-Event-ID`. The header is what a browser's native
-            // `EventSource` sends by itself when it reconnects, and honouring it
-            // is what makes that reconnect correct rather than silently lossy.
-            const resume = query.since ?? Number(headers["last-event-id"] ?? Number.NaN);
-            let cursor = Number.isSafeInteger(resume) && resume >= 0 ? resume : 0;
-
-            const pull = Effect.gen(function* () {
-              const drained: Array<SessionEvent> = [];
-              for (;;) {
-                const page = yield* events.pollForRun(
-                  as,
-                  params.sessionId,
-                  params.runId,
-                  cursor,
-                  PAGE,
-                );
-                if (page.length === 0) break;
-                cursor = page[page.length - 1]!.seq;
-                drained.push(...page);
-                if (page.length < PAGE) break;
-              }
-              return drained;
-            });
-
-            const asEvents = Stream.flatMap((rows: ReadonlyArray<SessionEvent>) =>
-              Stream.fromIterable(
-                rows.map((row): LiveEvent => ({
-                  id: String(row.seq),
-                  event: "session-event",
-                  data: row,
-                })),
-              ),
+            return logStream(
+              params.sessionId,
+              resumeFrom(query.since, headers["last-event-id"]),
+              (cursor) => events.pollForRun(as, params.sessionId, params.runId, cursor, PAGE),
             );
-
-            const body = Stream.concat(
-              Stream.fromEffect(pull).pipe(asEvents),
-              live.subscribe(params.sessionId).pipe(
-                Stream.mapEffect(() => pull),
-                asEvents,
-              ),
+          }),
+        )
+        /**
+         * The DM's stream of a level visit's lines on this night: `events`'
+         * three steps over the lines naming the visit. Authorised by the
+         * ordinary read of the visit's log (`listForVisit`), which proves the
+         * night and the visit this creator's campaign's, so a denial is a 404
+         * before a byte of stream.
+         */
+        .handle("visitEvents", ({ params, query, headers }) =>
+          Effect.gen(function* () {
+            const as = yield* dmActors.of(params.campaignId);
+            const resume = resumeFrom(query.since, headers["last-event-id"]);
+            yield* events.listForVisit(as, params.sessionId, params.visitId, resume, 1);
+            return logStream(params.sessionId, resume, (cursor) =>
+              events.pollForVisit(as, params.sessionId, params.visitId, cursor, PAGE),
             );
-
-            // No `id` on a heartbeat, deliberately: `Sse.encoder` writes no `id`
-            // line for an event without one, so a browser keeps the last real
-            // `seq` as its `Last-Event-ID` and a reconnect after a quiet minute
-            // still resumes from the right place rather than from the beginning.
-            const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
-              Stream.map((): LiveEvent => ({
-                event: "heartbeat",
-                data: new Heartbeat({ seq: cursor }),
-              })),
-            );
-
-            return Stream.merge(body, heartbeats);
           }),
         )
     );
@@ -2123,6 +2216,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     PlayerLocationsLive,
     PartyTravelLive,
     PlayerPartyTravelLive,
+    LevelVisitsLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

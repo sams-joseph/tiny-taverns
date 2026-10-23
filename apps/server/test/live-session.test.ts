@@ -1176,7 +1176,13 @@ describeLayer("live-session", shared, (it) => {
         // There is no `create`, `update` or `remove` on the service and no endpoint
         // that could reach one. Appends happen inside the transaction of the
         // mutation being recorded, through a plain function that needs an `sql`.
-        expect(Object.keys(events).sort()).toEqual(["list", "listForRun", "pollForRun"]);
+        expect(Object.keys(events).sort()).toEqual([
+          "list",
+          "listForRun",
+          "listForVisit",
+          "pollForRun",
+          "pollForVisit",
+        ]);
       }),
     );
   });

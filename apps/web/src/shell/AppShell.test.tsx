@@ -42,6 +42,7 @@ const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
 const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
 const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
+const visitId = "2b1f2a1e-0000-4000-8000-0000000071e1";
 const locationId = gullportId;
 
 /**
@@ -90,6 +91,9 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns/$campaignId/encounters/$encounterId/": `/campaigns/${campaignId}/encounters/${encounterId}`,
   "/_shell/campaigns/$campaignId/encounters/$encounterId/edit": `/campaigns/${campaignId}/encounters/${encounterId}/edit`,
   "/_shell/campaigns/$campaignId/encounters/$": `/campaigns/${campaignId}/encounters/not-a-uuid`,
+  "/_shell/campaigns/$campaignId/levels/": `/campaigns/${campaignId}/levels`,
+  "/_shell/campaigns/$campaignId/levels/$visitId": `/campaigns/${campaignId}/levels/${visitId}`,
+  "/_shell/campaigns/$campaignId/levels/$": `/campaigns/${campaignId}/levels/not-a-uuid`,
   "/_shell/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
   "/_shell/campaigns/$campaignId/cast/": `/campaigns/${campaignId}/cast`,
   "/_shell/campaigns/$campaignId/cast/follow-up": `/campaigns/${campaignId}/cast/follow-up`,
@@ -503,6 +507,7 @@ describe("the shell's top bar", () => {
       expect(links.map((link) => link.textContent)).toEqual([
         "Overview",
         "Encounters",
+        "Levels",
         "Party",
         "Cast",
         "Notes",

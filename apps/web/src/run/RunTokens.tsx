@@ -163,7 +163,7 @@ export interface TokenProps {
  * disagree about a move.
  */
 export interface LayerToken extends Omit<TokenState, "health"> {
-  readonly id: CombatantId;
+  readonly id: string;
   readonly displayName: string;
   readonly position: BoardSquare | null;
   /** The party's colour rather than everyone else's. */
@@ -185,9 +185,9 @@ export interface LayerToken extends Omit<TokenState, "health"> {
 export interface TokenLayerProps<T extends LayerToken> {
   readonly board: DrawnBoard;
   readonly tokens: ReadonlyArray<T>;
-  readonly labels: ReadonlyMap<CombatantId, string>;
+  readonly labels: ReadonlyMap<string, string>;
   readonly selected: T | undefined;
-  readonly activeId: CombatantId | null;
+  readonly activeId: string | null;
   readonly feetLeftOf: (token: T) => number | undefined;
   readonly diagonals: DiagonalRule;
   /** Whether this token may be dragged, stepped or put down now. */
@@ -205,6 +205,19 @@ export interface TokenLayerProps<T extends LayerToken> {
   readonly onMove: (token: T, to: BoardSquare | null) => Promise<unknown>;
   /** A level fight's walk: the range and the ruler go by it. Absent on a plain grid. */
   readonly walk?: LevelWalk | undefined;
+  /**
+   * Exploring a level visit (`play/PlayerVisitBoard.tsx`): there is no turn
+   * and no speed, so the range is drawn for any selected token that may move,
+   * reaching every square the walk does, and the ruler reads the distance
+   * alone. `feetLeftOf` and `activeId` are not asked for either.
+   */
+  readonly exploring?: boolean;
+  /**
+   * A seated player's board: a move the walk does not reach (its ruler's *No
+   * way there*) is never sent, and the token goes back. The DM places freely,
+   * so the runner leaves this off. The server still answers every move sent.
+   */
+  readonly walkBound?: boolean;
   /** The attacks and areas this reader may see drawn; a player's board has none yet. */
   readonly acts?: ReadonlyArray<Act>;
 }
@@ -218,7 +231,7 @@ const same = (a: BoardSquare, b: BoardSquare): boolean => a.column === b.column 
 
 /** A token being dragged: from its square, over the one under the pointer. */
 interface Drag {
-  readonly id: CombatantId;
+  readonly id: string;
   readonly pointerId: number;
   readonly from: BoardSquare;
   readonly over: BoardSquare;
@@ -235,9 +248,19 @@ function Range<T extends LayerToken>({
   readonly occupied: ReadonlyArray<BoardSquare>;
 }) {
   const { board, selected, activeId, feetLeftOf, diagonals, rangeShown } = props;
-  if (!rangeShown || selected === undefined || selected.id !== activeId || from === null)
+  const exploring = props.exploring === true;
+  if (
+    !rangeShown ||
+    selected === undefined ||
+    (exploring ? !props.movable(selected) : selected.id !== activeId) ||
+    from === null
+  )
     return null;
-  const left = feetLeftOf(selected);
+  // Exploring has no speed: a budget no walk on the board can spend, at
+  // double for difficult ground and half again for diagonals.
+  const left = exploring
+    ? board.columns * board.rows * board.feetPerCell * 3
+    : feetLeftOf(selected);
   if (left === undefined) return null;
   const walk = props.walk;
   const squares =
@@ -452,7 +475,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
   const layer = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>();
   /** A dropped token, held on its square until the server answers the move. */
-  const [landing, setLanding] = useState<{ readonly id: CombatantId; readonly at: BoardSquare }>();
+  const [landing, setLanding] = useState<{ readonly id: string; readonly at: BoardSquare }>();
 
   const standing = placed(tokens);
   /** Where everyone stands now, for an area's knock-back. */
@@ -473,7 +496,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     [],
   );
   /** Squares this board dropped a token on, until the server's answer puts it there. */
-  const dropped = useRef(new Map<CombatantId, BoardSquare>());
+  const dropped = useRef(new Map<string, BoardSquare>());
   const effects = useBoardEffects(
     standing.map((token) => ({
       id: token.id,
@@ -496,7 +519,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         ? landing.at
         : combatant.position;
   /** The squares other tokens hold, where they are drawn. */
-  const heldBesides = (id: CombatantId): ReadonlyArray<BoardSquare> =>
+  const heldBesides = (id: string): ReadonlyArray<BoardSquare> =>
     standing.filter((other) => other.id !== id).map(squareOf);
 
   // A token in the tray goes down on the square clicked.
@@ -538,12 +561,19 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
     if (square !== undefined && !same(square, drag.over)) setDrag({ ...drag, over: square });
   };
 
+  /** Whether a seated player's walk refuses the move outright (`walkBound`), so it is not sent. */
+  const refused = (from: BoardSquare, to: BoardSquare): boolean =>
+    props.walkBound === true &&
+    props.walk !== undefined &&
+    pathCost(props.walk.layout, from, to, props.walk.sight, diagonals, props.walk.ends) === null;
+
   const drop = (combatant: Placed<T>) => (event: PointerEvent<HTMLButtonElement>) => {
     if (drag === undefined || drag.pointerId !== event.pointerId) return;
     setDrag(undefined);
     const to = drag.over;
     if (same(to, drag.from)) return;
     if (heldBesides(combatant.id).some((held) => same(held, to))) return;
+    if (refused(drag.from, to)) return;
     setLanding({ id: combatant.id, at: to });
     dropped.current.set(combatant.id, to);
     void onMove(combatant, to).finally(() =>
@@ -566,7 +596,7 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
         row: Math.min(board.rows - 1, Math.max(0, combatant.position.row + delta[1])),
       };
       onSelect(combatant);
-      if (same(to, combatant.position)) return;
+      if (same(to, combatant.position) || refused(combatant.position, to)) return;
       void onMove(combatant, to);
     };
 
@@ -576,7 +606,10 @@ export function TokenLayer<T extends LayerToken>(props: TokenLayerProps<T>) {
       ? rulerReading({
           from: drag.from,
           to: drag.over,
-          remaining: dragged.id === activeId ? (feetLeftOf(dragged) ?? null) : null,
+          remaining:
+            props.exploring !== true && dragged.id === activeId
+              ? (feetLeftOf(dragged) ?? null)
+              : null,
           occupied: heldBesides(dragged.id).some((held) => same(held, drag.over)),
           feetPerCell: board.feetPerCell,
           diagonals,

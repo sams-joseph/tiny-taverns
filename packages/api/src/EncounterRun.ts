@@ -5,6 +5,7 @@ import {
   EncounterId,
   EncounterRunId,
   HobAutopilotDriverId,
+  LevelVisitId,
   SessionId,
 } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
@@ -160,6 +161,17 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    */
   continuedFrom: Schema.NullOr(EncounterRunId),
   /**
+   * The level visit this fight borrowed (`LevelVisit.ts`), or `null` for a
+   * fight on its own copy of its level or on the plain grid. A fight started
+   * on an encounter whose level's visit is on the table plays on the dungeon
+   * as it stands, copied from the visit; ending it resolved hands doors,
+   * lights, reveals, fog, what the party saw and where it stands back to the
+   * visit. A carried fight's successor inherits it. `null` too once the
+   * visit is reset: the fight keeps its own copy. The creator's only: not on
+   * a player's read (`PlayerEncounterRun`).
+   */
+  levelVisitId: Schema.NullOr(LevelVisitId),
+  /**
    * The runner's `Share` switch (`EncounterRunner.jsx:122`) — the master toggle
    * over the whole fight, with each combatant's own `visibility` as the
    * per-row override (`:139`, "Hide from players").
@@ -184,11 +196,12 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
  * A fight, to a player who was at it (`PlayerRecapFight.run`,
  * `PlayerChronicleNight.runs`): `EncounterRun` without the DM's two Hob
  * switches, which say how the DM ran the fight rather than what happened in
- * it. The server selects it without those columns (`playerRunColumns`), so
- * they never leave Postgres for a player.
+ * it, and without the level visit it borrowed, which is the DM's own record.
+ * The server selects it without those columns (`playerRunColumns`), so they
+ * never leave Postgres for a player.
  */
 export class PlayerEncounterRun extends Schema.Class<PlayerEncounterRun>("PlayerEncounterRun")(
-  Struct.omit(EncounterRun.fields, ["allowHobDirectWrites", "hobAutopilotDriver"]),
+  Struct.omit(EncounterRun.fields, ["allowHobDirectWrites", "hobAutopilotDriver", "levelVisitId"]),
 ) {}
 
 /**
@@ -199,6 +212,15 @@ export class PlayerEncounterRun extends Schema.Class<PlayerEncounterRun>("Player
  * of six goblins becomes six rows that can be damaged apart — plus one row per
  * party member. §1.4: "created when the run starts (seeded from
  * `encounter_creature` × count, plus the party)".
+ *
+ * On a level, which board the fight plays on is the campaign's: an encounter
+ * whose level has a visit on the table borrows that visit (`levelVisitId`),
+ * played on the dungeon as it stands with the party where its tokens are; one
+ * whose level has a visit that is not on the table is a `Conflict` (put it on
+ * the table, or reset it), since a fight on a fresh copy would fork the
+ * dungeon; one whose level has no visit plays on a fresh copy of the level.
+ * Either way a placed creature starts on its spot (`EncounterLevelPlacement`)
+ * where it can stand there, and down its side's edge where it cannot.
  */
 export const EncounterRunStart = Schema.Struct({
   encounterId: EncounterId,

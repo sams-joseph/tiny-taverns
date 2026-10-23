@@ -2,7 +2,14 @@ import { Combatant } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { brannoc, goblinBoss } from "../campaign/campaign.fixtures";
-import { labelsInOrder, moveLine, nameShown, tokenLabels, tokenState } from "./tokens";
+import {
+  labelsInOrder,
+  moveLine,
+  nameShown,
+  placedLabels,
+  tokenLabels,
+  tokenState,
+} from "./tokens";
 
 const decode = Schema.decodeUnknownSync(Combatant);
 const row = (id: string, displayName: string, createdAt: string) =>
@@ -39,6 +46,32 @@ describe("a token's label", () => {
       "GA2",
       "MH",
     ]);
+  });
+
+  it("is, for a placed creature, the label its fight gives it, placed or not beside it", () => {
+    // Goblin 2 and 3 of three placed, Goblin 1 not; a lone Marsh Hag.
+    const labels = placedLabels([
+      { id: "goblin-3", line: "Goblin", ordinal: 2, count: 3 },
+      { id: "goblin-2", line: "Goblin", ordinal: 1, count: 3 },
+      { id: "hag", line: "Marsh Hag", ordinal: 0, count: 1 },
+    ]);
+    expect([labels.get("goblin-2"), labels.get("goblin-3"), labels.get("hag")]).toEqual([
+      "G2",
+      "G3",
+      "MH",
+    ]);
+    // The fight seeds the line in ordinal order, so `tokenLabels` agrees.
+    const fight = tokenLabels(
+      [0, 1, 2].map((ordinal) =>
+        row(
+          `00000000d0${String(9 - ordinal)}0`,
+          "Goblin",
+          `2026-08-04T19:00:0${String(ordinal)}.000Z`,
+        ),
+      ),
+    );
+    expect([...fight.values()].sort()).toEqual(["G1", "G2", "G3"]);
+    expect(fight.get(row("00000000d080", "Goblin", "2026-08-04T19:00:01.000Z").id)).toBe("G2");
   });
 });
 

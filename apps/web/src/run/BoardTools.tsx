@@ -37,6 +37,9 @@ import { Ruler } from "./RunTokens";
 /** The dock's tools, one at a time. Fog's brush is `Fog.tsx`'s. */
 export type BoardTool = "move" | "measure" | "area" | "fog";
 
+/** Every tool, in the dock's order. */
+const BOARD_TOOLS: ReadonlyArray<BoardTool> = ["move", "measure", "area", "fog"];
+
 export type DrawnBoard = BoardSize & { readonly feetPerCell: number };
 
 /**
@@ -230,6 +233,7 @@ export function ToolSurface({
  */
 export function BoardToolPicker({
   tool,
+  offered = BOARD_TOOLS,
   disabled,
   onTool,
   shape,
@@ -237,8 +241,11 @@ export function BoardToolPicker({
   onShape,
   onStep,
   fog,
+  moveHint,
 }: {
   readonly tool: BoardTool;
+  /** The tools this board offers, in the dock's order: a fight's all four, a level visit's fewer. */
+  readonly offered?: ReadonlyArray<BoardTool>;
   readonly disabled: boolean;
   readonly onTool: (tool: BoardTool) => void;
   readonly shape: AreaShape;
@@ -247,6 +254,8 @@ export function BoardToolPicker({
   readonly onStep: (by: 1 | -1) => void;
   /** Fog's own controls, drawn beside the tools while it is on. */
   readonly fog: ReactNode;
+  /** What Move does on this board, as its button's title says: a fight's ({@link FIGHT_MOVE_HINT}) or a visit's. */
+  readonly moveHint: string;
 }) {
   const choice = (
     value: BoardTool,
@@ -260,7 +269,7 @@ export function BoardToolPicker({
       // A pressed tool stays on: another tool, or Esc, is the way off it.
       onPressedChange={() => onTool(value)}
       aria-label={label}
-      title={TOOL_HINT[value]}
+      title={value === "move" ? moveHint : TOOL_HINT[value]}
     >
       <Icon name={icon} size={13} />
       {/* Between the canvas's two columns at a laptop's width the dock is a
@@ -275,10 +284,10 @@ export function BoardToolPicker({
         aria-label="Tools"
         className="flex flex-wrap items-center justify-center gap-1.5"
       >
-        {choice("move", "Move", "move")}
-        {choice("measure", "Measure", "ruler")}
-        {choice("area", "Area", "circle-dashed")}
-        {choice("fog", "Fog", "cloud")}
+        {offered.includes("move") && choice("move", "Move", "move")}
+        {offered.includes("measure") && choice("measure", "Measure", "ruler")}
+        {offered.includes("area") && choice("area", "Area", "circle-dashed")}
+        {offered.includes("fog") && choice("fog", "Fog", "cloud")}
       </div>
       {tool === "fog" && fog}
       {tool === "area" && (
@@ -316,9 +325,11 @@ export function BoardToolPicker({
   );
 }
 
-/** What each tool does, as its button's title says. */
-const TOOL_HINT: Readonly<Record<BoardTool, string>> = {
-  move: "Drag tokens. The active creature shows its range.",
+/** What Move does on a fight's board, where the creature whose turn it is shows its range. */
+export const FIGHT_MOVE_HINT = "Drag tokens. The active creature shows its range.";
+
+/** What each other tool does, as its button's title says; Move's is the board's (`moveHint`). */
+const TOOL_HINT: Readonly<Record<Exclude<BoardTool, "move">, string>> = {
   measure: "Drag on the grid to measure",
   area: "Click to place a spell area",
   fog: "Click or drag to hide and reveal squares",

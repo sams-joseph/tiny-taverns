@@ -1,4 +1,4 @@
-import type { Combatant, EncounterKind, Session } from "@taverns/api";
+import type { Combatant, EncounterKind, LevelVisitId, Session } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -53,6 +53,7 @@ export function EndRunDialog({
   session,
   encounterName,
   mode,
+  levelVisitId,
   fight,
   hpOf,
   onClose,
@@ -62,6 +63,11 @@ export function EndRunDialog({
   readonly session: Session;
   readonly encounterName: string;
   readonly mode: EncounterKind;
+  /**
+   * The level visit the fight borrowed, or `null`: ending it hands the
+   * dungeon back, so the visit's stage and list read again.
+   */
+  readonly levelVisitId: LevelVisitId | null;
   /** The fight as the runner holds it, for the summary line; without one, there is no line. */
   readonly fight: LiveState | undefined;
   /** The hit points the runner draws, so the line agrees with the order on screen. */
@@ -92,14 +98,21 @@ export function EndRunDialog({
       // now"*, and the encounters, whose `lastPlayed` this fight now is; and
       // when the switch is on, the campaign row and the spine too — finishing
       // a night clears `campaign.current_session_id` server-side.
-      finishNight
-        ? [
-            reads.runs(path.sessionId),
-            reads.encounters(path.campaignId),
-            reads.campaign(path.campaignId),
-            reads.sessions(path.campaignId),
-          ]
-        : [reads.runs(path.sessionId), reads.encounters(path.campaignId)],
+      [
+        ...(finishNight
+          ? [
+              reads.runs(path.sessionId),
+              reads.encounters(path.campaignId),
+              reads.campaign(path.campaignId),
+              reads.sessions(path.campaignId),
+            ]
+          : [reads.runs(path.sessionId), reads.encounters(path.campaignId)]),
+        // The dungeon the fight hands back: doors, lights, fog and where the
+        // party stands now, and that the visit is the fight's no longer.
+        ...(levelVisitId === null
+          ? []
+          : [reads.levelVisit(levelVisitId), reads.levelVisits(path.campaignId)]),
+      ],
     );
 
     if (Result.isSuccess(ended)) onEnded();
@@ -116,6 +129,8 @@ export function EndRunDialog({
               ? "The initiative order and hit points"
               : "The checks and saves"} for{" "}
             {encounterName} are saved to Session {session.number}. Nothing is deleted.
+            {levelVisitId !== null &&
+              " The level goes back to the party as the fight leaves it: its doors, lights and fog, and where everyone stands."}
           </DialogDescription>
         </DialogHeader>
 

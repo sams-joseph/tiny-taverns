@@ -45,15 +45,30 @@ export type LevelDoorState = typeof LevelDoorState.Type;
  * A painted area with a rule of its own. A `trap` and a `hazard` are the DM's
  * until revealed; magical darkness and heavy obscurement block sight without a
  * wall (PHB, vision and light).
+ *
+ * `entry` is where the party comes in: the squares a level visit stands the
+ * party on when it is opened (`LevelVisit.ts`). It is the DM's overlay and
+ * has no rule: it changes no move and no sight, a fight ignores it, it is
+ * never secret, and a seated player's table is never sent it
+ * (`TABLE_REGION_KINDS`).
  */
-export const LevelRegionKind = Schema.Literals([
+export const LEVEL_REGION_KINDS = [
   "difficult",
   "magicalDarkness",
   "heavyObscurement",
   "hazard",
   "trap",
-]);
+  "entry",
+] as const;
+export const LevelRegionKind = Schema.Literals(LEVEL_REGION_KINDS);
 export type LevelRegionKind = typeof LevelRegionKind.Type;
+
+/** The region kinds a seated player's table can be sent: every kind but the DM's `entry`. */
+export const TABLE_REGION_KINDS = LEVEL_REGION_KINDS.filter(
+  (kind): kind is Exclude<LevelRegionKind, "entry"> => kind !== "entry",
+);
+export const TableRegionKind = Schema.Literals(TABLE_REGION_KINDS);
+export type TableRegionKind = typeof TableRegionKind.Type;
 
 /** The DMG's degrees of cover. */
 export const LevelCover = Schema.Literals(["none", "half", "threeQuarters", "total"]);

@@ -5,15 +5,16 @@ import {
   type PlaneRect,
   type PlayerLiveBoard,
   type PlayerLiveCombatant,
+  type PlayerLiveLevel,
   BOARD_CELL_PX,
   boardPlane,
   playerLevelLayout,
   playerWalk,
   playerSight,
 } from "@taverns/api";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { CameraBar } from "../run/CameraBar";
-import { centreOf } from "../run/canvas";
+import { type CanvasFocus, centreOf } from "../run/canvas";
 import { canDrawWebGL } from "../run/fx3d/support";
 import { LevelBackdrop } from "../run/LevelBackdrop";
 import { InStageCorner } from "../run/RunStage";
@@ -132,6 +133,7 @@ function PlayerTokens(props: PlayerBoardProps) {
       names="active"
       fog={{ squares: board.fog, veil: "opaque" }}
       rangeShown
+      walkBound
       onSelect={(token) => props.onSelect(token.row)}
       onTarget={
         props.onTarget === undefined
@@ -183,26 +185,74 @@ export function PlayerBoardStage({
   const map = props.board;
   const up = props.order.find((row) => row.combatantId === props.upNextId);
   const upAt = props.board.tokens.find((token) => token.combatantId === up?.combatantId)?.position;
-  const upPoint = upAt === undefined ? undefined : centreOf(upAt);
+  return (
+    <PartyLevelStage
+      label="Battle map"
+      centreLabel="Centre on whoever is up"
+      board={map}
+      centre={upAt === undefined ? undefined : centreOf(upAt)}
+      freeArea={freeArea}
+    >
+      {props.board.area !== null && (
+        <AreaLayer board={map} area={props.board.area} state="pinned" />
+      )}
+      <PlayerTokens {...props} />
+    </PartyLevelStage>
+  );
+}
+
+/**
+ * A board a seated player is shown, on the canvas: the party's level drawn
+ * under it where the browser can (`LevelBackdrop` in the party's view), as
+ * the DM's board draws the whole one, and the player's own camera in the
+ * stage's corner. What stands on it (`children`) is the caller's: a fight's
+ * tokens (`PlayerBoardStage`) or a level visit's (`play/PlayerVisitBoard.tsx`).
+ * `centre` is where *Centre* takes the camera, when there is somewhere;
+ * `focus`, where the camera first looks (`BoardCanvas`), when not the middle.
+ */
+export function PartyLevelStage({
+  label,
+  board,
+  centre,
+  centreLabel,
+  focus,
+  freeArea,
+  children,
+}: {
+  readonly label: string;
+  /** What *Centre* centres on, as its name (`CameraBar`). */
+  readonly centreLabel: string;
+  readonly focus?: CanvasFocus | undefined;
+  readonly board: {
+    readonly columns: number;
+    readonly rows: number;
+    readonly feetPerCell: number;
+    readonly level: PlayerLiveLevel | null;
+  };
+  readonly centre: { readonly x: number; readonly y: number } | undefined;
+  readonly freeArea: (canvas: DOMRect) => PlaneRect;
+  readonly children: ReactNode;
+}) {
   // The party's level as the renderer reads it, kept while the board's
   // answer is the same (a re-read is a new one, and redraws).
-  const level = props.board.level;
-  const { columns, rows, feetPerCell } = props.board;
+  const { columns, rows, feetPerCell, level } = board;
   const layout = useMemo(
     () => (level === null ? null : playerLevelLayout({ columns, rows, feetPerCell }, level)),
     [level, columns, rows, feetPerCell],
   );
   const [levelDrawable, setLevelDrawable] = useState(canDrawWebGL);
-  // A level fight draws the party's level under the board where the browser
-  // can, as the DM's board does (`RunStage.tsx`); the board box over it is
-  // then clear, its grid the renderer's.
+  // A level draws under the board where the browser can, as the DM's board
+  // does (`RunStage.tsx`); the board box over it is then clear, its grid the
+  // renderer's.
   const drawsLevel = layout !== null && level !== null && levelDrawable;
+  const map = { columns, rows, feetPerCell };
   return (
-    <section aria-label="Battle map" data-slot="run-board" className="absolute inset-0">
+    <section aria-label={label} data-slot="run-board" className="absolute inset-0">
       <BoardCanvas
         plane={boardPlane(map)}
         cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
+        {...(focus === undefined ? {} : { focus })}
         backdrop={
           drawsLevel
             ? (view) => (
@@ -226,7 +276,8 @@ export function PlayerBoardStage({
             <div className="rounded-card border border-strong bg-surface-card p-2 shadow-3">
               <CameraBar
                 camera={camera}
-                onCentre={upPoint === undefined ? undefined : () => camera.centre(upPoint)}
+                centreLabel={centreLabel}
+                onCentre={centre === undefined ? undefined : () => camera.centre(centre)}
               />
             </div>
           </InStageCorner>
@@ -237,10 +288,7 @@ export function PlayerBoardStage({
           grid={!drawsLevel}
           className={cn("box-content", drawsLevel && "border-transparent bg-transparent")}
         >
-          {props.board.area !== null && (
-            <AreaLayer board={map} area={props.board.area} state="pinned" />
-          )}
-          <PlayerTokens {...props} />
+          {children}
         </GridBoard>
       </BoardCanvas>
     </section>

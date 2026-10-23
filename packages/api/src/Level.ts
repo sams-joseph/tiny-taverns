@@ -190,6 +190,9 @@ export const levelIssues = (level: LevelLayout): Array<Schema.FilterIssue> => {
     if (region.squares.some((square) => square >= columns * rows)) {
       issues.push({ path: ["regions", index], issue: "a region's squares are on the board" });
     }
+    if (region.kind === "entry" && region.secret) {
+      issues.push({ path: ["regions", index], issue: "an entry region is never secret" });
+    }
   });
   return issues;
 };

@@ -20,6 +20,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { levelFightsOf, refreshFights } from "./levelFights.js";
+import { dropSeatTokens, standNewSeats } from "./LevelVisits.js";
 import {
   characterRow,
   claimCharacterRequest,
@@ -344,7 +345,12 @@ export class Party extends Context.Service<
                     and campaign_character.character_id = ${payload.characterId}
                     and campaign_character.left_at is null
                 `;
-                if (seated.length === 1) return yield* readSeat(campaignId, seated[0]!.id, actor);
+                if (seated.length === 1) {
+                  return {
+                    seat: yield* readSeat(campaignId, seated[0]!.id, actor),
+                    night: null,
+                  };
+                }
 
                 const inserted = yield* sql<{ readonly id: CampaignCharacterId }>`
                   insert into campaign_character
@@ -355,8 +361,14 @@ export class Party extends Context.Service<
                   from campaign where campaign.id = ${campaignId}
                   returning campaign_character.id
                 `;
-                return yield* readSeat(campaignId, inserted[0]!.id, actor);
+                // The new seat stands on the level the table is playing.
+                const night = yield* standNewSeats(sql, campaignId);
+                return { seat: yield* readSeat(campaignId, inserted[0]!.id, actor), night };
               }),
+            ),
+          ).pipe(
+            Effect.flatMap(({ seat, night }) =>
+              Effect.as(night === null ? Effect.void : live.touched(night), seat),
             ),
           ),
 
@@ -553,7 +565,16 @@ export class Party extends Context.Service<
                   const characters = rows.flatMap((row) =>
                     row.character_id === null ? [] : [row.character_id],
                   );
-                  return yield* refreshFights(sql, yield* levelFightsOf(sql, characters));
+                  // Nor does it stand on any of the table's level visits.
+                  const visitNights = yield* dropSeatTokens(
+                    sql,
+                    rows.map((row) => row.id),
+                  );
+                  const fightNights = yield* refreshFights(
+                    sql,
+                    yield* levelFightsOf(sql, characters),
+                  );
+                  return [...new Set([...fightNights, ...visitNights])];
                 }),
               )
               .pipe(

@@ -3,6 +3,7 @@ import type {
   Encounter,
   EncounterId,
   EncounterRunId,
+  LevelVisitSummary,
   Session,
   SessionId,
   Visibility,
@@ -33,6 +34,7 @@ import { startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { sceneNoun } from "../run/scene";
+import { tableVisitWrites } from "../visits/load";
 import { runNumberAtom } from "./runNumber";
 
 /**
@@ -71,6 +73,14 @@ import { runNumberAtom } from "./runNumber";
  * start, so offering a played one would be a choice that can only fail. A
  * carried one is picked up instead (`PickUpRunDialog.tsx`), and a played one's
  * way in is its log.
+ *
+ * **On a level the party has been to, the fight is played there.** An
+ * encounter whose level has a visit on the table starts where the party
+ * stands, the dungeon as they left it (`EncounterRunStart`), and the dialog
+ * says so. One whose level's visit is off the table would be refused, so the
+ * start is not offered: *Put it on the table* is, and the start follows. Nor
+ * is one whose level a fight holds (`LevelVisitSummary.fight`): a live one is
+ * gone back to, and a carried one picked up, first.
  */
 
 /** The one value the encounter select takes that is not an encounter. */
@@ -80,6 +90,7 @@ export function StartRunDialog({
   campaign,
   session,
   encounters,
+  visits,
   preselected,
   onClose,
   onStarted,
@@ -88,6 +99,8 @@ export function StartRunDialog({
   /** The campaign's current session, if it has one. */
   readonly session: Session | undefined;
   readonly encounters: ReadonlyArray<Encounter>;
+  /** The campaign's level visits, to say where a fight on one of their levels is played. */
+  readonly visits: ReadonlyArray<LevelVisitSummary>;
   /** The card the DM pressed Run on, if they came in that way. */
   readonly preselected: EncounterId | undefined;
   readonly onClose: () => void;
@@ -110,16 +123,46 @@ export function StartRunDialog({
   const [showProblems, setShowProblems] = useState(false);
 
   const { busy, failure, submit } = useMutation();
+  const tabling = useMutation();
+  /** Put on the table from here: the list this dialog was given is older than that. */
+  const [tabled, setTabled] = useState<string>();
 
   const chosen = playable.find((encounter) => encounter.id === encounterId);
+  // The campaign's visit of the chosen encounter's level, if it has been there.
+  const visit =
+    chosen === undefined || chosen.levelId === null
+      ? undefined
+      : visits.find((one) => one.levelId === chosen.levelId);
+  const visitOnTable = visit !== undefined && (visit.onTable || tabled === visit.id);
+  /** The fight holding the level's visit, live or carried: a start would be refused. */
+  const holding = visit?.fight ?? null;
+  /** A start the server would refuse: the level's visit is off the table. */
+  const offTable = visit !== undefined && !visitOnTable && holding === null;
+  const refused = offTable || holding !== null;
   // Worded as the kind it will be run as; a fight until one is picked.
   const kind = chosen?.kind ?? "combat";
   const noun = sceneNoun(kind);
   const problem = chosen === undefined ? "Pick the encounter you are about to run." : undefined;
 
+  const putOnTable = async () => {
+    if (visit === undefined) return;
+    const done = await tabling.submit(
+      (client) =>
+        Effect.asVoid(
+          client.levelVisits.putOnTable({ params: { campaignId }, payload: { visitId: visit.id } }),
+        ),
+      // The list's *On the table*, this visit, and whichever it took the place of.
+      tableVisitWrites(campaignId, [
+        visit.id,
+        ...visits.filter((one) => one.onTable).map((one) => one.id),
+      ]),
+    );
+    if (Result.isSuccess(done)) setTabled(visit.id);
+  };
+
   const start = async () => {
     setShowProblems(true);
-    if (chosen === undefined || number.state !== "ready") return;
+    if (chosen === undefined || number.state !== "ready" || refused) return;
     const opening = number.value;
 
     const started = await submit(
@@ -153,9 +196,13 @@ export function StartRunDialog({
       // being undefined means. Naming them unconditionally would re-read the
       // campaign every time a DM put a second encounter on tonight's table.
       // The encounters too: a fight on the table moves a list row.
-      session === undefined
-        ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
-        : [reads.runs(session.id), reads.encounters(campaignId)],
+      // On a visit, the visit too: a fight borrows it (`LevelVisit.fight`).
+      [
+        ...(session === undefined
+          ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
+          : [reads.runs(session.id), reads.encounters(campaignId)]),
+        ...(visit === undefined ? [] : [reads.levelVisit(visit.id), reads.levelVisits(campaignId)]),
+      ],
     );
 
     if (Result.isSuccess(started)) {
@@ -279,6 +326,44 @@ export function StartRunDialog({
                   : `Only you can see the ${noun}. You can share it once it is under way.`
               }
             />
+
+            {visit !== undefined && holding !== null && (
+              <p
+                data-slot="run-visit-held"
+                className="text-body-s leading-body text-muted-foreground"
+              >
+                {holding.carried
+                  ? `${holding.name} was carried over in ${visit.name}. Pick it up from its encounter before starting another there.`
+                  : `${holding.name} is being played in ${visit.name}. End it before starting another there.`}
+              </p>
+            )}
+            {visit !== undefined && visitOnTable && holding === null && (
+              <p
+                data-slot="run-on-visit"
+                className="text-body-s leading-body text-muted-foreground"
+              >
+                It starts in <span className="text-heading">{visit.name}</span>, where the party
+                stands, with the doors, lights and fog as they are. Ending it hands the level back.
+              </p>
+            )}
+            {offTable && visit !== undefined && (
+              <div data-slot="run-visit-off-table" className="flex flex-col items-start gap-2">
+                <p className="text-body-s leading-body text-muted-foreground">
+                  The party has been to <span className="text-heading">{visit.name}</span>, and it
+                  is not on the table. Put it on the table and the {noun} starts there, where the
+                  party stands.
+                </p>
+                {tabling.failure !== undefined && <SaveFailure failure={tabling.failure} />}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={tabling.busy}
+                  onClick={() => void putOnTable()}
+                >
+                  {tabling.busy ? "Putting it on…" : `Put ${visit.name} on the table`}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -293,7 +378,7 @@ export function StartRunDialog({
           </Button>
           <Button
             size="sm"
-            disabled={busy || number.state !== "ready" || playable.length === 0}
+            disabled={busy || number.state !== "ready" || playable.length === 0 || refused}
             onClick={() => void start()}
           >
             {busy ? "Starting…" : `Start the ${noun}`}

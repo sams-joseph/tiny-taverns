@@ -109,3 +109,50 @@ export const BoardLightUpdatedPayload = Schema.Struct({
   ),
 });
 export type BoardLightUpdatedPayload = typeof BoardLightUpdatedPayload.Type;
+
+const Square = Schema.Struct({ column: Schema.Int, row: Schema.Int });
+
+/** `visit-token-moved`: whose token, by its seat, and from where to where on the visit. */
+export const VisitTokenMovedPayload = Schema.Struct({
+  seatId: Schema.String,
+  from: Square,
+  to: Square,
+});
+export type VisitTokenMovedPayload = typeof VisitTokenMovedPayload.Type;
+
+/** `visit-tabled`: the visit put on the campaign's table (`true`) or taken off it. */
+export const VisitTabledPayload = Schema.Struct({ onTable: Schema.Boolean });
+export type VisitTabledPayload = typeof VisitTabledPayload.Type;
+
+/**
+ * `visit-placement-updated`: the DM placed an encounter's creatures on the
+ * visit's level again, or its trigger area, by the encounter's name. The DM's
+ * line: it would say where a fight waits.
+ */
+export const VisitPlacementUpdatedPayload = Schema.Struct({
+  encounterId: Schema.String,
+  name: Schema.String,
+});
+export type VisitPlacementUpdatedPayload = typeof VisitPlacementUpdatedPayload.Type;
+
+/**
+ * `visit-returned`: a fight that borrowed the visit ended resolved and handed
+ * the dungeon back, by the visit's name (the level's when it was opened):
+ * doors, lights, reveals, fog and what the party saw are the fight's, and the
+ * party stands where the fight left it.
+ */
+export const VisitReturnedPayload = Schema.Struct({ name: Schema.String });
+export type VisitReturnedPayload = typeof VisitReturnedPayload.Type;
+
+/**
+ * `visit-encounter-noticed`: an encounter placed on the visit became noticed
+ * (`LevelVisitEncounter.noticed`), by its id and name, and the DM's runner
+ * offers to start it. The DM's line, logged once on the write that made it
+ * so; it is logged again only after the party has stopped noticing it and
+ * notices it once more.
+ */
+export const VisitEncounterNoticedPayload = Schema.Struct({
+  encounterId: Schema.String,
+  name: Schema.String,
+});
+export type VisitEncounterNoticedPayload = typeof VisitEncounterNoticedPayload.Type;

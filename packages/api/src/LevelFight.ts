@@ -11,7 +11,7 @@ import {
   pathCost,
   reachableOnLevel,
 } from "./LevelGeometry.js";
-import { LEVEL_MATERIALS, LevelAmbient, LevelDoorState } from "./LevelKit.js";
+import { LEVEL_MATERIALS, LevelAmbient, LevelDoorState, TableRegionKind } from "./LevelKit.js";
 
 /**
  * A fight played on a level: the fight's own copy of it, the DM's live writes
@@ -116,9 +116,12 @@ export type PlayerLevelLight = typeof PlayerLevelLight.Type;
 
 /**
  * A region as the party sees it: never a secret one the DM has not revealed,
- * and only its squares the party has seen.
+ * never the DM's `entry`, and only its squares the party has seen.
  */
-export const PlayerLevelRegion = Schema.Struct(Struct.omit(LevelRegion.fields, ["secret"]));
+export const PlayerLevelRegion = Schema.Struct({
+  ...Struct.omit(LevelRegion.fields, ["secret", "kind"]),
+  kind: TableRegionKind,
+});
 export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
 
 /**
@@ -137,7 +140,7 @@ export type PlayerLevelRegion = typeof PlayerLevelRegion.Type;
  * - props that are not DM-only whose footprint touches a seen square;
  * - lights that are lit and stand on a seen square;
  * - regions that are not secret, or are secret and revealed by the DM,
- *   clipped to the seen squares.
+ *   clipped to the seen squares; never an `entry`.
  */
 export const PlayerLiveLevel = Schema.Struct({
   ambient: LevelAmbient,

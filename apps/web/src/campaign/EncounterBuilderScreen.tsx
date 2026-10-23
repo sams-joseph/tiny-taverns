@@ -14,7 +14,7 @@ import {
   type Note,
   type PartySeat,
 } from "@taverns/api";
-import { Link, useBlocker, useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useBlocker, useNavigate, useParams } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -40,7 +40,8 @@ import {
 } from "@taverns/ui";
 import { DateTime, Effect, Result } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useArrivalScroll } from "../ui/arrival";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
@@ -76,6 +77,7 @@ import {
 } from "./encounterDraft";
 import { KIND_ICON } from "./encounterList";
 import { encounterPrepListAtom } from "./load";
+import { useVisitsOfLevels } from "../visits/load";
 
 /**
  * Writing an encounter, new or already made: the redesign's encounter builder
@@ -315,10 +317,12 @@ function EncounterBuilder({
   const [draft, setDraft] = useState(initial);
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
+  /** The stages of the visits of the level it was on and the one it is going to. */
+  const visitStages = useVisitsOfLevels(campaignId, [
+    saved.encounter?.levelId ?? null,
+    draft.levelId,
+  ]);
   const navigate = useNavigate();
-  const hash = useLocation({ select: (location) => location.hash });
-  /** Where the page was opened: `#creatures` from the preview's *Add creature*. */
-  const [arrivedAt] = useState(() => hash);
 
   const patch = (next: Partial<EncounterDraft>) => setDraft((current) => ({ ...current, ...next }));
   const setRoster = useCallback(
@@ -355,14 +359,9 @@ function EncounterBuilder({
     withResolver: true,
   });
 
-  // *Add creature* on the preview opens this page at `#creatures`. The card is
-  // drawn only once the reads have answered, after the router has looked for it.
-  // Once, on arriving: a hash the DM scrolls away from is not a place to return to.
-  useEffect(() => {
-    const card = arrivedAt === "creatures" ? document.getElementById("creatures") : null;
-    // jsdom lays nothing out and has no `scrollIntoView` at all.
-    if (card !== null && typeof card.scrollIntoView === "function") card.scrollIntoView();
-  }, [arrivedAt]);
+  // *Add creature* on the preview opens this page at `#creatures`, drawn only
+  // once the reads have answered, after the router has looked for it.
+  useArrivalScroll("creatures");
 
   const problems = validate(draft);
   const refused = Object.keys(problems).length > 0;
@@ -453,6 +452,9 @@ function EncounterBuilder({
         ...(encounter === undefined || draft.levelId !== (saved.encounter?.levelId ?? null)
           ? [reads.libraryLevels]
           : []),
+        // A roster line removed or counted down, or another level, takes
+        // placed creatures off the visit of the level it was placed on.
+        ...(encounter === undefined ? [] : visitStages),
       ],
     );
 
@@ -621,6 +623,28 @@ function EncounterBuilder({
                 value={draft.levelId}
                 onChange={(levelId) => patch({ levelId })}
               />
+              {/* Placing is on the encounter's page, over the saved roster
+                  and level: a level just picked here is placed once saved. */}
+              {encounter !== undefined &&
+                encounter.levelId !== null &&
+                draft.levelId === encounter.levelId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    nativeButton={false}
+                    render={
+                      <Link
+                        to="/campaigns/$campaignId/encounters/$encounterId"
+                        params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+                        hash="placement"
+                      />
+                    }
+                  >
+                    <Icon name="map-pin" size={14} />
+                    Place on the level
+                  </Button>
+                )}
               {encounter === undefined && draft.levelId === null && (
                 <Field
                   label="Location"

@@ -5,6 +5,7 @@ import {
   EncounterId,
   EncounterRunId,
   LevelId,
+  LevelVisitId,
   LocationId,
   NoteId,
   NpcId,
@@ -81,6 +82,7 @@ export const encounterIdParam = pathId("encounterId", EncounterId);
 export const npcIdParam = pathId("npcId", NpcId);
 export const locationIdParam = pathId("locationId", LocationId);
 export const levelIdParam = pathId("levelId", LevelId);
+export const visitIdParam = pathId("visitId", LevelVisitId);
 
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
