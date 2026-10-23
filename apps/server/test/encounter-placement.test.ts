@@ -674,6 +674,77 @@ describeLayer("encounter-placement", shared, (it) => {
           ]);
         }),
     );
+
+    it.effect(
+      "tells the visit when the Library deletes the level, and rings the table that saw it",
+      () =>
+        Effect.gen(function* () {
+          const { jo, ilse } = yield* People;
+          const table = yield* aTable;
+          const level = yield* aHall;
+          const { encounter, line } = yield* anAmbush(table, level);
+          // In the west room, where the party stands.
+          yield* place(jo, table, encounter.id, {
+            spots: [{ encounterCreatureId: line, ordinal: 0, column: 1, row: 1 }],
+            trigger: null,
+          });
+          yield* openNight(table);
+          const visit = yield* openVisit(table, level);
+          yield* putOnTable(table, visit);
+          expect((yield* tableVisit(ilse, table))?.creatures).toEqual([
+            { name: "Goblin", column: 1, row: 1 },
+          ]);
+          const before = (yield* linesOf(visit.id)).length;
+
+          expect(
+            yield* failure(jo.token, (client) =>
+              client.libraryLevels.remove({ params: { levelId: level.id } }),
+            ),
+          ).toEqual({ tag: "succeeded", message: undefined });
+          expect((yield* linesOf(visit.id)).slice(before)).toEqual([
+            "visit-placement-updated:dm",
+            "visit-vision-updated:shared",
+          ]);
+          expect((yield* tableVisit(ilse, table))?.creatures).toEqual([]);
+          expect((yield* prepOf(table, encounter.id)).placement).toEqual({
+            spots: [],
+            trigger: null,
+          });
+        }),
+    );
+
+    it.effect("still deletes the level while a fight holds the visit, telling only the DM", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        const table = yield* aTable;
+        const level = yield* aHall;
+        const { encounter, line } = yield* anAmbush(table, level);
+        const patrol = yield* anAmbush(table, level, 1, "Patrol");
+        yield* place(jo, table, encounter.id, {
+          spots: [{ encounterCreatureId: line, ordinal: 0, column: 1, row: 1 }],
+          trigger: null,
+        });
+        const night = yield* openNight(table);
+        const visit = yield* openVisit(table, level);
+        yield* putOnTable(table, visit);
+        // Another encounter's fight, played on the visit on the table.
+        yield* as(jo.token, (client) =>
+          client.runs.start({
+            params: { campaignId: table, sessionId: night },
+            payload: { encounterId: patrol.encounter.id },
+          }),
+        );
+        const before = (yield* linesOf(visit.id)).length;
+
+        expect(
+          yield* failure(jo.token, (client) =>
+            client.libraryLevels.remove({ params: { levelId: level.id } }),
+          ),
+        ).toEqual({ tag: "succeeded", message: undefined });
+        // The DM is told; the table plays the fight's own copy, unrung.
+        expect((yield* linesOf(visit.id)).slice(before)).toEqual(["visit-placement-updated:dm"]);
+      }),
+    );
   });
 
   describe("the player's visit", () => {
