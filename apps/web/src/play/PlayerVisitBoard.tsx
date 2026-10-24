@@ -150,8 +150,13 @@ const ownPoint = (visit: PlayerLevelVisit) => {
  */
 export function PlayerVisitStage({
   freeArea,
+  handoff,
   ...props
-}: PlayerVisitBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
+}: PlayerVisitBoardProps & {
+  readonly freeArea: (canvas: DOMRect) => PlaneRect;
+  /** The table's stage, handed between its visit and its fight (`stageHandoff.ts`). */
+  readonly handoff?: string | undefined;
+}) {
   const centre = ownPoint(props.visit);
   return (
     <PartyLevelStage
@@ -162,6 +167,7 @@ export function PlayerVisitStage({
       // On your token, but the whole level while a pointer can still play it.
       focus={centre === undefined ? undefined : { at: centre, squarePx: SQUARE_PX.target }}
       freeArea={freeArea}
+      handoff={handoff}
     >
       <VisitTokens {...props} />
     </PartyLevelStage>

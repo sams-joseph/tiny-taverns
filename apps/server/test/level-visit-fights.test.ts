@@ -513,6 +513,87 @@ describeLayer("level-visit-fights", shared, (it) => {
       }),
     );
 
+    it.effect(
+      "reaches the players as it starts, its board shown, unless the DM says otherwise",
+      () =>
+        Effect.gen(function* () {
+          const { jo, ilse } = yield* People;
+          const { table, level, sessionId } = yield* explored();
+          const { encounter, line } = yield* anAmbush(table, level);
+          // One goblin through the open door, one on the square the DM fogged.
+          yield* as(jo.token, (client) =>
+            client.encounters.place({
+              params: { campaignId: table, encounterId: encounter.id },
+              payload: {
+                spots: [
+                  { encounterCreatureId: line, ordinal: 0, column: 6, row: 1 },
+                  { encounterCreatureId: line, ordinal: 1, column: 7, row: 0 },
+                ],
+                trigger: null,
+              },
+            }),
+          );
+          // Nothing but which encounter: the visit's default is the table's.
+          const run = yield* as(jo.token, (client) =>
+            client.runs.start({
+              params: { campaignId: table, sessionId },
+              payload: { encounterId: encounter.id },
+            }),
+          );
+          expect(run.visibility).toBe("shared");
+          expect(run.mapShown).toBe(true);
+          const seen = yield* as(ilse.token, (client) =>
+            client.table.read({ params: { campaignId: table } }),
+          );
+          expect(seen!.fight!.id).toBe(run.id);
+          expect(seen!.fight!.board).not.toBeNull();
+          // Its rows are shared with it: the player's own character is in the
+          // order and on the board, and so is the goblin the party can see. The
+          // one under fog is in neither.
+          expect(seen!.fight!.order.map((row) => row.displayName)).toEqual(["Tamsin", "Goblin"]);
+          expect(seen!.fight!.board!.tokens.map((token) => token.position)).toEqual([
+            { column: 2, row: 1 },
+            { column: 6, row: 1 },
+          ]);
+          yield* endRun(table, run);
+
+          // The DM's own pick still holds: kept back, the players see no fight.
+          const { encounter: second } = yield* anAmbush(table, level, 1, "Second ambush");
+          const kept = yield* as(jo.token, (client) =>
+            client.runs.start({
+              params: { campaignId: table, sessionId },
+              payload: { encounterId: second.id, visibility: "dm" },
+            }),
+          );
+          expect(kept.visibility).toBe("dm");
+          const hidden = yield* as(ilse.token, (client) =>
+            client.table.read({ params: { campaignId: table } }),
+          );
+          expect(hidden!.fight).toBeNull();
+          yield* endRun(table, kept);
+        }),
+    );
+
+    it.effect("keeps a fight on no visit to the DM, its map unshared, by default", () =>
+      Effect.gen(function* () {
+        const { jo } = yield* People;
+        const table = yield* aTable;
+        const level = yield* aHall();
+        const sessionId = yield* openNight(table);
+        const { encounter } = yield* anAmbush(table, level, 1);
+        const run = yield* as(jo.token, (client) =>
+          client.runs.start({
+            params: { campaignId: table, sessionId },
+            payload: { encounterId: encounter.id },
+          }),
+        );
+        expect(run.levelVisitId).toBeNull();
+        expect(run.visibility).toBe("dm");
+        expect(run.mapShown).toBe(false);
+        yield* endRun(table, run);
+      }),
+    );
+
     it.effect("falls back to the edges for a spot it cannot use and a seat with no token", () =>
       Effect.gen(function* () {
         const { jo } = yield* People;

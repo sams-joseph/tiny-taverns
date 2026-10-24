@@ -5,6 +5,7 @@ import type { LevelRenderer } from "../level/renderer";
 import { dmReader, type Reader } from "../level/scene";
 import type { LevelView } from "../level/view";
 import type { CanvasView } from "./canvas";
+import { claimRenderer, parkRenderer } from "./stageHandoff";
 
 type Stage = typeof import("../level/renderer");
 
@@ -53,6 +54,7 @@ export function LevelBackdrop({
   grid,
   party,
   vision,
+  handoff,
   onFailed,
 }: {
   readonly layout: LevelLayout;
@@ -67,6 +69,13 @@ export function LevelBackdrop({
    * Absent, the DM's board is lit as the DM sees it.
    */
   readonly vision?: PartySight | undefined;
+  /**
+   * The dungeon this stage draws, for the next stage over it (`stageHandoff.ts`):
+   * the renderer is parked under it when this one goes, and one parked under it
+   * is taken up when this one comes, rather than built again. Absent, it is
+   * this mount's alone and disposed with it.
+   */
+  readonly handoff?: string | undefined;
   /** Three could not load, or the browser dropped the WebGL context. */
   readonly onFailed: () => void;
 }) {
@@ -106,33 +115,41 @@ export function LevelBackdrop({
     let alive = true;
     let observer: ResizeObserver | undefined;
     let lost: ((event: Event) => void) | undefined;
-    import("../level/renderer")
-      .then((stage: Stage) => {
-        if (!alive) return;
-        const r = new stage.LevelRenderer(at);
-        renderer.current = r;
-        lost = (event: Event) => {
-          event.preventDefault();
-          failed.current();
-        };
-        r.renderer.domElement.addEventListener("webglcontextlost", lost);
-        const fit = (width: number, height: number) => {
-          size.current = { width, height };
-          r.resize(width, height);
-          r.setView(levelView(latest.current.view, latest.current.cellPx));
-        };
-        const box = at.getBoundingClientRect();
-        fit(box.width, box.height);
-        observer = new ResizeObserver(([entry]) => {
-          if (entry !== undefined) fit(entry.contentRect.width, entry.contentRect.height);
-        });
-        observer.observe(at);
-        r.start();
-        setReady(true);
-      })
-      .catch(() => {
-        if (alive) failed.current();
+    const take = (r: LevelRenderer) => {
+      renderer.current = r;
+      lost = (event: Event) => {
+        event.preventDefault();
+        failed.current();
+      };
+      r.renderer.domElement.addEventListener("webglcontextlost", lost);
+      const fit = (width: number, height: number) => {
+        size.current = { width, height };
+        r.resize(width, height);
+        r.setView(levelView(latest.current.view, latest.current.cellPx));
+      };
+      const box = at.getBoundingClientRect();
+      fit(box.width, box.height);
+      observer = new ResizeObserver(([entry]) => {
+        if (entry !== undefined) fit(entry.contentRect.width, entry.contentRect.height);
       });
+      observer.observe(at);
+      r.start();
+      setReady(true);
+    };
+    // Taken up before the first paint, so the dungeon never leaves the screen.
+    const parked = handoff === undefined ? undefined : claimRenderer(handoff);
+    if (parked !== undefined) {
+      parked.attach(at);
+      take(parked);
+    } else {
+      import("../level/renderer")
+        .then((stage: Stage) => {
+          if (alive) take(new stage.LevelRenderer(at));
+        })
+        .catch(() => {
+          if (alive) failed.current();
+        });
+    }
     return () => {
       alive = false;
       observer?.disconnect();
@@ -140,7 +157,8 @@ export function LevelBackdrop({
       if (r !== null && lost !== undefined) {
         r.renderer.domElement.removeEventListener("webglcontextlost", lost);
       }
-      r?.dispose();
+      if (r !== null && handoff !== undefined) parkRenderer(handoff, r);
+      else r?.dispose();
       renderer.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- one renderer per mount; the rest is fed below.

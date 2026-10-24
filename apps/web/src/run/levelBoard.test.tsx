@@ -51,6 +51,8 @@ vi.mock("../level/renderer", () => ({
       drawn.views.push(view);
     }
     resize() {}
+    park() {}
+    attach() {}
     start() {}
     dispose() {
       drawn.disposed += 1;

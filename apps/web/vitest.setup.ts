@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { configure } from "@testing-library/react";
+import { afterEach } from "vitest";
+import { drop } from "./src/run/stageHandoff";
 // Base UI's controls construct a PointerEvent on click; jsdom ships none.
 import "@taverns/ui/testing/pointer-event-polyfill";
 
@@ -25,3 +27,6 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
+
+// A stage parked by one test's unmount (`run/stageHandoff.ts`) is not the next test's.
+afterEach(() => drop());

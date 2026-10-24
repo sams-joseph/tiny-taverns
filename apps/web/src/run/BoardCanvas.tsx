@@ -22,6 +22,7 @@ import {
   zoomAbout,
   zoomLimits,
 } from "./canvas";
+import { claimView, parkView } from "./stageHandoff";
 
 /**
  * The fight's board as a canvas: it fills the stage behind the runner's
@@ -82,6 +83,7 @@ export function BoardCanvas({
   camera: cameraRef,
   controls,
   backdrop,
+  handoff,
   children,
 }: {
   readonly plane: PlaneSize;
@@ -102,14 +104,23 @@ export function BoardCanvas({
    * `p * view.zoom + (view.x, view.y)` on the canvas. Takes no pointer.
    */
   readonly backdrop?: (view: CanvasView) => ReactNode;
+  /**
+   * The dungeon this canvas looks at (`stageHandoff.ts`): the view is parked
+   * under it when this canvas goes, and one parked under it over a plane of
+   * this size is where this one opens, so going from a level to its fight
+   * leaves the camera where the DM had it.
+   */
+  readonly handoff?: string | undefined;
   /** The board, drawn at the plane's size. */
   readonly children: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   /** The free area as the canvas was last measured: what the view opens into. */
   const [opening, setOpening] = useState<PlaneRect>();
-  const [chosen, setChosen] = useState<CanvasView>();
   const plane = useMemo<PlaneSize>(() => ({ width, height }), [width, height]);
+  const [chosen, setChosen] = useState<CanvasView | undefined>(() =>
+    handoff === undefined ? undefined : claimView(handoff, { width, height }),
+  );
   const limits = useMemo(() => zoomLimits(cellPx), [cellPx]);
   const free = useRef(freeArea);
   free.current = freeArea;
@@ -140,6 +151,17 @@ export function BoardCanvas({
   // The latest view, for the handlers below, which are bound once.
   const current = useRef(view);
   current.current = view;
+  // Where the camera is when the canvas goes, for the next one over this dungeon.
+  // A canvas never measured has no view of its own to hand on.
+  const parking = useRef({ handoff, plane, placed: false });
+  parking.current = { handoff, plane, placed: chosen !== undefined || opening !== undefined };
+  useLayoutEffect(
+    () => () => {
+      const { handoff: key, plane: over, placed } = parking.current;
+      if (key !== undefined && placed) parkView(key, over, current.current);
+    },
+    [],
+  );
 
   const settle = useCallback(
     (next: CanvasView) => {

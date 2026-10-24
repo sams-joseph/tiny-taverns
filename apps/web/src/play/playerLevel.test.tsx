@@ -72,6 +72,8 @@ vi.mock("../level/renderer", () => ({
     setView() {}
     resize() {}
     start() {}
+    park() {}
+    attach() {}
     dispose() {}
   },
 }));

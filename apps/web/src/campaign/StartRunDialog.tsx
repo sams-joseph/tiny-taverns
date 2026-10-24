@@ -117,9 +117,8 @@ export function StartRunDialog({
     playable.find((encounter) => encounter.id === preselected)?.id ?? NONE,
   );
   const [includeParty, setIncludeParty] = useState(true);
-  // `dm` for a new run: the column default, and the only safe one to fail to.
-  // The prototype's switch starts on; fail closed is not negotiable here.
-  const [visibility, setVisibility] = useState<Visibility>("dm");
+  /** The DM's own pick, once they make one; until then the default below. */
+  const [picked, setVisibility] = useState<Visibility>();
   const [showProblems, setShowProblems] = useState(false);
 
   const { busy, failure, submit } = useMutation();
@@ -139,6 +138,10 @@ export function StartRunDialog({
   /** A start the server would refuse: the level's visit is off the table. */
   const offTable = visit !== undefined && !visitOnTable && holding === null;
   const refused = offTable || holding !== null;
+  // `dm` for a new run: the column default, and the only safe one to fail to.
+  // A fight on a visit is the exception, as it is on the server
+  // (`EncounterRunStart`): the table is already looking at that dungeon.
+  const visibility = picked ?? (visit === undefined ? "dm" : "shared");
   // Worded as the kind it will be run as; a fight until one is picked.
   const kind = chosen?.kind ?? "combat";
   const noun = sceneNoun(kind);

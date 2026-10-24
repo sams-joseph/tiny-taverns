@@ -720,6 +720,11 @@ export class EncounterRuns extends Context.Service<
                       });
                     }
 
+                    // A fight on a visit is played on the dungeon the table is
+                    // already looking at, so it reaches the players as it
+                    // starts: shared unless the DM said otherwise, with its
+                    // board shown. What of it they see is still the party's
+                    // sight (`tokenShown`), as it was on the visit.
                     // An insert answers with its row; not getting one is a defect.
                     const run = yield* insert(
                       defined({
@@ -728,10 +733,19 @@ export class EncounterRuns extends Context.Service<
                         encounter_name: encounter.name,
                         mode: encounter.kind,
                         phase,
-                        visibility: payload.visibility,
+                        visibility: payload.visibility ?? (visit === null ? undefined : "shared"),
+                        map_shown: visit === null ? undefined : true,
                         level_visit_id: visit?.id,
                       }),
                     ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
+                    // A shared fight on a visit shares its rows too, so the
+                    // players' order is there as it starts: what the party
+                    // cannot see of it is still dropped by its sight
+                    // (`hiddenByFog`). Anywhere else a row starts the DM's,
+                    // the column default, and is shared one at a time.
+                    const rows: Visibility =
+                      visit !== null && run.visibility === "shared" ? "shared" : "dm";
 
                     // The fight's board: a copy of the visit it borrows, doors,
                     // lights, fog and what the party has seen as they stand
@@ -918,6 +932,7 @@ export class EncounterRuns extends Context.Service<
                         death_save_failures: member.death_save_failures,
                         kind: "pc",
                         side: "party",
+                        visibility: rows,
                       });
                     }
                     for (const line of roster) {
@@ -951,6 +966,7 @@ export class EncounterRuns extends Context.Service<
                           death_save_failures: 0,
                           kind: "npc",
                           side: line.side,
+                          visibility: rows,
                         });
                       }
                     }

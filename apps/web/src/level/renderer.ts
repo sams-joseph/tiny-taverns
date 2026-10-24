@@ -189,7 +189,7 @@ export interface LevelStats {
 
 export class LevelRenderer {
   readonly renderer: THREE.WebGLRenderer;
-  private readonly host: HTMLElement;
+  private host: HTMLElement;
   private palette: Palette;
   private readonly cam = new THREE.OrthographicCamera(0, 1, 0, 1, -100, 100);
   private readonly boardCam = new THREE.OrthographicCamera(0, 1, 0, 1, -100, 100);
@@ -394,20 +394,23 @@ export class LevelRenderer {
 
   /**
    * Draw `level` as `reader` sees it, rebuilding only the parts whose arrays
-   * changed since the last call.
+   * changed since the last call. Changed means a different content, not a
+   * different array: every re-read decodes fresh arrays, and a fight's board
+   * read hands over the same dungeon the visit's renderer already drew
+   * (`stageHandoff.ts`), so neither rebuilds what is already on the GPU.
    */
   setLevel(level: LevelLayout, reader: Reader) {
     const before = this.level;
-    const readerChanged = reader !== this.reader;
+    const readerChanged = !sameReader(reader, this.reader);
     const resized =
       before === null || before.columns !== level.columns || before.rows !== level.rows;
-    const floorChanged = resized || before.floor !== level.floor;
-    const wallsChanged = resized || readerChanged || before.walls !== level.walls;
-    const propsChanged = resized || readerChanged || before.props !== level.props;
+    const floorChanged = resized || !sameContent(before.floor, level.floor);
+    const wallsChanged = resized || readerChanged || !sameContent(before.walls, level.walls);
+    const propsChanged = resized || readerChanged || !sameContent(before.props, level.props);
     const lightsChanged =
       wallsChanged ||
       propsChanged ||
-      before.lights !== level.lights ||
+      !sameContent(before.lights, level.lights) ||
       before.feetPerCell !== level.feetPerCell;
     this.level = level;
     this.reader = reader;
@@ -1071,6 +1074,24 @@ export class LevelRenderer {
     this.raf = requestAnimationFrame(frame);
   }
 
+  /**
+   * Stop drawing and take the canvas out of the page, keeping everything on
+   * the GPU, so the next stage over the same dungeon takes it up (`attach`)
+   * rather than building it again (`stageHandoff.ts`).
+   */
+  park() {
+    if (this.raf !== undefined) cancelAnimationFrame(this.raf);
+    this.raf = undefined;
+    this.last = undefined;
+    this.renderer.domElement.remove();
+  }
+
+  /** Put a parked canvas into `host`, which the caller then sizes and `start`s. */
+  attach(host: HTMLElement) {
+    this.host = host;
+    host.appendChild(this.renderer.domElement);
+  }
+
   private stepDoors(dt: number): boolean {
     let moving = false;
     const step = this.swingMs <= 0 ? 1 : dt / this.swingMs;
@@ -1196,3 +1217,27 @@ export class LevelRenderer {
     this.renderer.domElement.remove();
   }
 }
+
+/** The same reader in effect: the same view, and the same secret doors found. */
+const sameReader = (a: Reader, b: Reader | null): boolean =>
+  a === b ||
+  (b !== null &&
+    a.party === b.party &&
+    a.revealed.size === b.revealed.size &&
+    [...a.revealed].every((id) => b.revealed.has(id)));
+
+/** The same parts of a level, whichever arrays carry them. Exported for its test. */
+export const sameContent = (a: unknown, b: unknown): boolean =>
+  a === b || canonical(a) === canonical(b);
+
+/** JSON with every object's keys sorted, so two decodings of one value spell it alike. */
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, inner: unknown) =>
+    inner !== null && typeof inner === "object" && !Array.isArray(inner)
+      ? Object.fromEntries(
+          Object.entries(inner as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : inner,
+  );

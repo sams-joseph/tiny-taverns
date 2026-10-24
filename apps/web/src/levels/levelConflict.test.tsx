@@ -31,6 +31,8 @@ vi.mock("../level/renderer", () => ({
     floorThumbnails() {
       return [];
     }
+    park() {}
+    attach() {}
     dispose() {}
   },
 }));

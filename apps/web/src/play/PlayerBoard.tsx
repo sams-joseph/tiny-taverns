@@ -180,8 +180,13 @@ export function PlayerBoardCard(props: PlayerBoardProps) {
  */
 export function PlayerBoardStage({
   freeArea,
+  handoff,
   ...props
-}: PlayerBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
+}: PlayerBoardProps & {
+  readonly freeArea: (canvas: DOMRect) => PlaneRect;
+  /** The table's stage, handed between its visit and its fight (`stageHandoff.ts`). */
+  readonly handoff?: string | undefined;
+}) {
   const map = props.board;
   const up = props.order.find((row) => row.combatantId === props.upNextId);
   const upAt = props.board.tokens.find((token) => token.combatantId === up?.combatantId)?.position;
@@ -192,6 +197,7 @@ export function PlayerBoardStage({
       board={map}
       centre={upAt === undefined ? undefined : centreOf(upAt)}
       freeArea={freeArea}
+      handoff={handoff}
     >
       {props.board.area !== null && (
         <AreaLayer board={map} area={props.board.area} state="pinned" />
@@ -217,9 +223,12 @@ export function PartyLevelStage({
   centreLabel,
   focus,
   freeArea,
+  handoff,
   children,
 }: {
   readonly label: string;
+  /** The dungeon this stage draws, for the next stage over it (`stageHandoff.ts`). */
+  readonly handoff?: string | undefined;
   /** What *Centre* centres on, as its name (`CameraBar`). */
   readonly centreLabel: string;
   readonly focus?: CanvasFocus | undefined;
@@ -253,6 +262,7 @@ export function PartyLevelStage({
         cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
         {...(focus === undefined ? {} : { focus })}
+        handoff={handoff}
         backdrop={
           drawsLevel
             ? (view) => (
@@ -262,6 +272,7 @@ export function PartyLevelStage({
                   view={view}
                   grid
                   party={level}
+                  handoff={handoff}
                   onFailed={() => setLevelDrawable(false)}
                 />
               )
