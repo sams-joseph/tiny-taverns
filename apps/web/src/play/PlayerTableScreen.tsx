@@ -53,6 +53,7 @@ import { useFullscreen } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
+import { stageKey } from "../run/stageHandoff";
 import { PlayerBoardCard, PlayerBoardStage, type PlayerBoardProps } from "./PlayerBoard";
 import { TableRowCard, YourCard } from "./PlayerCard";
 import { PlayerStrip } from "./PlayerStrip";
@@ -670,7 +671,13 @@ export function PlayerTableScreen() {
                   </>
                 }
                 rolls={rolls}
-                board={(freeArea) => <PlayerVisitStage {...visitProps} freeArea={freeArea} />}
+                board={(freeArea) => (
+                  <PlayerVisitStage
+                    {...visitProps}
+                    freeArea={freeArea}
+                    handoff={stageKey.table(campaignId)}
+                  />
+                )}
               />
             ) : (
               <>
@@ -744,7 +751,13 @@ export function PlayerTableScreen() {
                 </>
               }
               rolls={rolls}
-              board={(freeArea) => <PlayerBoardStage {...boardProps} freeArea={freeArea} />}
+              board={(freeArea) => (
+                <PlayerBoardStage
+                  {...boardProps}
+                  freeArea={freeArea}
+                  handoff={stageKey.table(campaignId)}
+                />
+              )}
             />
           ) : (
             <RunLayout

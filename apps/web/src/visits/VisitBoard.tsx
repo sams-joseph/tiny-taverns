@@ -24,6 +24,7 @@ import { canDrawWebGL } from "../run/fx3d/support";
 import { GridBoard } from "../run/GridBoard";
 import { hudSurface } from "../run/hud";
 import { LevelBackdrop } from "../run/LevelBackdrop";
+import { stageKey } from "../run/stageHandoff";
 import { LevelSwitches } from "../run/LevelSwitches";
 import { useFogTool } from "../run/runBoard";
 import { InStageCorner } from "../run/RunStage";
@@ -192,6 +193,7 @@ export function VisitBoard({
         cellPx={BOARD_CELL_PX}
         freeArea={freeArea}
         focus={firstAt === undefined ? undefined : { at: firstAt, squarePx: SQUARE_PX.readable }}
+        handoff={stageKey.visit(visit.id)}
         backdrop={
           levelDrawable
             ? (view) => (
@@ -201,6 +203,7 @@ export function VisitBoard({
                   view={view}
                   grid
                   vision={sight}
+                  handoff={stageKey.visit(visit.id)}
                   onFailed={() => setLevelDrawable(false)}
                 />
               )

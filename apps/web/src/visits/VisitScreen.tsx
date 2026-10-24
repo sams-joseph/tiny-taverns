@@ -32,8 +32,10 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { reads } from "../api/keys";
+import { readAhead } from "../api/readAhead";
 import { useMutation } from "../api/mutation";
 import { useCampaignAct } from "../campaign/act";
+import { runBoardAtom, runViewAtom } from "../run/load";
 import { campaignAtom } from "../campaign/load";
 import { CanvasTitle } from "../run/CanvasTitle";
 import { type FogEdit, fogPayload } from "../run/fog";
@@ -99,6 +101,8 @@ export function VisitScreen() {
   const { run: startEncounter, dialogs } = useCampaignAct(campaignId);
   /** The noticed encounters this tab has answered, *Start* or *Not yet*. */
   const [answered, setAnswered] = useState<ReadonlySet<string>>(() => new Set());
+  /** Started, and on the way to it: the stage stays as it is until the fight can draw. */
+  const [going, setGoing] = useState(false);
   const answer = (encounterId: EncounterId) => setAnswered((was) => new Set([...was, encounterId]));
 
   const visit = resource.state === "ready" ? resource.value : undefined;
@@ -246,7 +250,7 @@ export function VisitScreen() {
   const fight = visit?.fight ?? null;
   /** The first noticed encounter this tab has not answered, while no fight holds the visit. */
   const asking =
-    visit === undefined || fight !== null
+    visit === undefined || fight !== null || going
       ? undefined
       : visit.encounters.find((encounter) => encounter.noticed && !answered.has(encounter.id));
   const starting = useMutation();
@@ -276,11 +280,15 @@ export function VisitScreen() {
           reads.levelVisits(campaignId),
         ],
       )
-      .then((started) => {
+      .then(async (started) => {
         if (Result.isSuccess(started)) {
+          setGoing(true);
+          const run = { campaignId, sessionId: night, runId: started.success.id };
+          // The fight's rows and board, which the runner draws nothing without.
+          await readAhead(registry, [runViewAtom(run), runBoardAtom(run)]);
           void navigate({
             to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
-            params: { campaignId, sessionId: night, runId: started.success.id },
+            params: run,
           });
           return;
         }
@@ -378,7 +386,9 @@ export function VisitScreen() {
               party={null}
               turn={null}
               banner={
-                fight === null ? undefined : <FightBanner campaignId={campaignId} fight={fight} />
+                fight === null || going ? undefined : (
+                  <FightBanner campaignId={campaignId} fight={fight} />
+                )
               }
               drawers={[
                 {

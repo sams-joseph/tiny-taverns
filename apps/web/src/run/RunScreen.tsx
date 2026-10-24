@@ -30,7 +30,7 @@ import {
   sightMode,
   walkingFeet,
 } from "@taverns/api";
-import { Link, useParams, type LinkProps } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -56,7 +56,7 @@ import { Effect, Result } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
-import { levelVisitsAtom } from "../visits/load";
+import { levelVisitAtom, levelVisitsAtom } from "../visits/load";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
@@ -67,7 +67,8 @@ import { HOB_DRAWER, INITIATIVE_DRAWER, SHEET_DRAWER, type StageDrawer } from ".
 import { TargetFrame } from "./TargetFrame";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
-import { partyAtom } from "../campaign/load";
+import { campaignAtom, partyAtom } from "../campaign/load";
+import { readAhead } from "../api/readAhead";
 import { actionDetail, actionsOf, type ActionLine } from "./actions";
 import { sensesOfSource, sightBetween, sightLines } from "./levelRules";
 import {
@@ -99,6 +100,7 @@ import { RunBoardCard } from "./RunBoardCard";
 import type { RunBoardProps } from "./runBoard";
 import { RunLayout } from "./RunLayout";
 import { RunBoardStage, RunStage } from "./RunStage";
+import { stageKey } from "./stageHandoff";
 import { useStage } from "./stage";
 import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
@@ -2770,7 +2772,17 @@ export function RunScreen() {
                 banner={banner}
                 drawers={drawers}
                 rolls={rollsDock}
-                board={(freeArea) => <RunBoardStage {...boardProps} freeArea={freeArea} />}
+                board={(freeArea) => (
+                  <RunBoardStage
+                    {...boardProps}
+                    freeArea={freeArea}
+                    handoff={
+                      state.run.levelVisitId === null
+                        ? undefined
+                        : stageKey.visit(state.run.levelVisitId)
+                    }
+                  />
+                )}
               />
             ) : (
               <>
@@ -2866,13 +2878,35 @@ function BackToLevel({
   readonly visitId: LevelVisitId;
 }) {
   const [visits] = useApiAtom(levelVisitsAtom(campaignId));
+  const registry = useContext(RegistryContext);
+  const navigate = useNavigate();
   const name =
     visits.state === "ready" ? visits.value.find((visit) => visit.id === visitId)?.name : undefined;
+  // The level is read before going to it, so its stage takes this one's over
+  // in one frame (`api/readAhead.ts`, `stageHandoff.ts`). A modified click
+  // is the browser's own: a new tab reads it there.
+  const back = async () => {
+    await readAhead(registry, [levelVisitAtom({ campaignId, visitId }), campaignAtom(campaignId)]);
+    void navigate({
+      to: "/campaigns/$campaignId/levels/$visitId",
+      params: { campaignId, visitId },
+    });
+  };
   return (
     <Button
       size="sm"
       nativeButton={false}
-      render={<Link to="/campaigns/$campaignId/levels/$visitId" params={{ campaignId, visitId }} />}
+      render={
+        <Link
+          to="/campaigns/$campaignId/levels/$visitId"
+          params={{ campaignId, visitId }}
+          onClick={(event) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            void back();
+          }}
+        />
+      }
     >
       {name === undefined ? "Back to the level" : `Back to ${name}`}
     </Button>

@@ -406,8 +406,13 @@ const hudScroller = "pointer-events-auto overflow-y-auto overscroll-contain";
  */
 export function RunBoardStage({
   freeArea,
+  handoff,
   ...props
-}: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PlaneRect }) {
+}: RunBoardProps & {
+  readonly freeArea: (canvas: DOMRect) => PlaneRect;
+  /** The visit the fight borrows, if it does: its stage is handed over (`stageHandoff.ts`). */
+  readonly handoff?: string | undefined;
+}) {
   const { resource, reload, over } = props;
   const { board, gridShown, withBoard, tools, fogTool } = useRunBoard(props, true);
   const camera = useRef<Camera | null>(null);
@@ -460,6 +465,7 @@ export function RunBoardStage({
         freeArea={freeArea}
         focus={activeAt === undefined ? undefined : { at: activeAt, squarePx: SQUARE_PX.readable }}
         camera={camera}
+        handoff={handoff}
         backdrop={
           drawsLevel
             ? (view) => (
@@ -468,6 +474,7 @@ export function RunBoardStage({
                   cellPx={BOARD_CELL_PX}
                   view={view}
                   grid={gridShown}
+                  handoff={handoff}
                   onFailed={() => setLevelDrawable(false)}
                 />
               )
