@@ -2,9 +2,9 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import { campaign, installStubServer } from "../campaign/campaign.fixtures";
+import { campaign, installStubServer, liveRun } from "../campaign/campaign.fixtures";
 import { cryptLevelId, fordLevelId } from "../levels/levels.fixtures";
-import { campaignId, encounterId, seatId, sessionId } from "../test/ids";
+import { campaignId, encounterId, runId, seatId, sessionId } from "../test/ids";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
 
@@ -522,7 +522,65 @@ describe("a visit's stage", () => {
     expect(await screen.findByRole("region", { name: "Ambush is in sight" })).toBeTruthy();
   });
 
-  it("opens the start flow with the noticed encounter picked on Start", async () => {
+  it("starts the noticed encounter on Start, shared as the level is, and goes to the fight", async () => {
+    onTheCanvas();
+    server.routes.set(`GET ${base}`, { status: 200, body: campaign });
+    server.routes.set(`GET ${base}/visits/${hallId}`, { status: 200, body: noticedHall(true) });
+    server.routes.set(`POST ${base}/sessions/${sessionId}/runs`, { status: 200, body: liveRun });
+    await at(`${base}/levels/${hallId}`);
+    const prompt = await screen.findByRole("region", { name: "Ambush is in sight" });
+    await userEvent.click(within(prompt).getByRole("button", { name: "Start" }));
+    // No dialog between the prompt and the fight: the server's default for a
+    // fight on a visit is the table's, so nothing is sent but which one.
+    await waitFor(() =>
+      expect(
+        calls("POST", `${base}/sessions/${sessionId}/runs`).map((call) => JSON.parse(call.body)),
+      ).toEqual([{ encounterId }]),
+    );
+    expect(screen.queryByText("Put an encounter on the table")).toBeNull();
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`${base}/sessions/${sessionId}/runs/${runId}`),
+    );
+  });
+
+  it("reads the visit once for a burst of lines on its stream, not once per line", async () => {
+    onTheCanvas();
+    server.routes.set(`GET ${base}`, { status: 200, body: campaign });
+    const lineAt = (seq: number) => ({
+      id: `2b1f2a1e-0000-4000-8000-0000000090${String(seq)}`,
+      sessionId,
+      seq,
+      kind: "visit-token-moved",
+      encounterRunId: null,
+      combatantId: null,
+      levelVisitId: hallId,
+      payload: {},
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: stamp,
+      updatedAt: stamp,
+    });
+    const seqs = [11, 12, 13, 14, 15, 16, 17, 18];
+    server.routes.set(`GET ${base}/sessions/${sessionId}/visits/${hallId}/events`, {
+      status: 200,
+      sse: seqs
+        .map(
+          (seq) =>
+            `id: ${String(seq)}\nevent: session-event\ndata: ${JSON.stringify(lineAt(seq))}\n\n`,
+        )
+        .join(""),
+    } as never);
+    await at(`${base}/levels/${hallId}`);
+    await screen.findByRole("region", { name: "Level" });
+    await waitFor(() => expect(calls("GET", `${base}/visits/${hallId}`).length).toBeGreaterThan(1));
+    // Settle, then count: the first read, and at most the one the line was
+    // already running and the one waiting behind it.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(calls("GET", `${base}/visits/${hallId}`).length).toBeLessThanOrEqual(3);
+  });
+
+  it("opens the start flow with the noticed encounter picked on Start, with no night open", async () => {
     onTheCanvas();
     server.routes.set(`GET ${base}/visits/${hallId}`, { status: 200, body: noticedHall(true) });
     await at(`${base}/levels/${hallId}`);

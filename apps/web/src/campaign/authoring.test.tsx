@@ -562,10 +562,11 @@ describe("starting a session", () => {
     const start = screen.getByRole("button", { name: "Start the fight" });
     expect(start).toBeEnabled();
     await userEvent.click(start);
+    // Shared by default: the table is already looking at that dungeon.
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/sessions/${sessionId}/runs`)).toEqual({
         encounterId,
-        visibility: "dm",
+        visibility: "shared",
       }),
     );
   });

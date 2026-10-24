@@ -31,6 +31,7 @@ import { useCallback, useContext, useRef, useState } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
+import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { useCampaignAct } from "../campaign/act";
 import { campaignAtom } from "../campaign/load";
@@ -69,12 +70,13 @@ import { WaitingHere } from "./WaitingHere";
  *
  * **The prompt.** When the party comes to notice an encounter placed here
  * (`LevelVisitEncounter.noticed`), the stage asks over the board whether to
- * start it (`NoticedPrompt`): *Start* opens the campaign's ordinary start
- * flow with it picked (`useCampaignAct`), where the DM still confirms, and
- * *Not yet* only closes the prompt. Which encounters were answered is this
- * tab's alone and never stored: an encounter noticed when the stage loads
- * asks once, and its `visit-encounter-noticed` line, logged as the party
- * notices it afresh, asks again. The *Waiting here* drawer keeps it marked
+ * start it (`NoticedPrompt`): *Start* begins the fight there and then, with
+ * the party, shared as the dungeon is, and goes to it (`start`), and *Not
+ * yet* only closes the prompt. With no night open it opens the campaign's
+ * start flow instead (`useCampaignAct`), which opens one. Which encounters
+ * were answered is this tab's alone and never stored: an encounter noticed
+ * when the stage loads asks once, and its `visit-encounter-noticed` line,
+ * logged as the party notices it afresh, asks again. The *Waiting here* drawer keeps it marked
  * *In sight* with a *Start* of its own, so nothing is lost by *Not yet*.
  */
 export function VisitScreen() {
@@ -112,16 +114,23 @@ export function VisitScreen() {
     line.current = done;
     return done;
   }, []);
-  const reread = useCallback(
-    () =>
-      void inLine(async () => {
-        reload();
-        await Effect.runPromise(
-          AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-        ).catch(() => undefined);
-      }),
-    [inLine, reload, registry, atom],
-  );
+  /**
+   * A re-read waiting in the line and not yet begun. Every ring after it is
+   * answered by it, since it reads after them all: a stream opening on a
+   * night's worth of lines reads the visit once, not once per line.
+   */
+  const rereadWaiting = useRef(false);
+  const reread = useCallback(() => {
+    if (rereadWaiting.current) return;
+    rereadWaiting.current = true;
+    void inLine(async () => {
+      rereadWaiting.current = false;
+      reload();
+      await Effect.runPromise(
+        AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
+      ).catch(() => undefined);
+    });
+  }, [inLine, reload, registry, atom]);
   /** A line of the visit's: read it again, and an encounter noticed afresh asks again. */
   const onLine = useCallback(
     (event?: SessionEvent) => {
@@ -240,9 +249,50 @@ export function VisitScreen() {
     visit === undefined || fight !== null
       ? undefined
       : visit.encounters.find((encounter) => encounter.noticed && !answered.has(encounter.id));
+  const starting = useMutation();
+  /**
+   * *Start*, on the level the table is playing: the fight begins at once,
+   * with the party, shared as the dungeon is (`EncounterRunStart`), and the
+   * stage goes to it. Without an open night there is no fight to hang it
+   * off, so the campaign's start flow opens one and asks.
+   */
   const start = (encounterId: EncounterId) => {
     answer(encounterId);
-    startEncounter(encounterId);
+    if (night === undefined || visit === undefined || !visit.onTable) {
+      startEncounter(encounterId);
+      return;
+    }
+    void starting
+      .submit(
+        (client) =>
+          client.runs.start({
+            params: { campaignId, sessionId: night },
+            payload: { encounterId },
+          }),
+        [
+          reads.runs(night),
+          reads.encounters(campaignId),
+          reads.levelVisit(visitId),
+          reads.levelVisits(campaignId),
+        ],
+      )
+      .then((started) => {
+        if (Result.isSuccess(started)) {
+          void navigate({
+            to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+            params: { campaignId, sessionId: night, runId: started.success.id },
+          });
+          return;
+        }
+        toast.add({
+          type: "destructive",
+          title: "The fight did not start",
+          description:
+            started.failure.kind === "conflict"
+              ? started.failure.message
+              : "That did not reach the server. Try again.",
+        });
+      });
   };
   const title = visit?.name ?? "Level";
   const subtitle = [
@@ -318,6 +368,7 @@ export function VisitScreen() {
                 asking === undefined ? null : (
                   <NoticedPrompt
                     encounter={asking}
+                    starting={starting.busy}
                     onStart={() => start(asking.id)}
                     onLater={() => answer(asking.id)}
                   />
@@ -339,7 +390,7 @@ export function VisitScreen() {
                     <WaitingHere
                       campaignId={campaignId}
                       encounters={visit.encounters}
-                      onStart={fight === null ? start : undefined}
+                      onStart={fight === null && !starting.busy ? start : undefined}
                     />
                   ),
                 },
@@ -419,10 +470,12 @@ const decodeNoticed = (payload: unknown) =>
  */
 function NoticedPrompt({
   encounter,
+  starting,
   onStart,
   onLater,
 }: {
   readonly encounter: LevelVisitEncounter;
+  readonly starting: boolean;
   readonly onStart: () => void;
   readonly onLater: () => void;
 }) {
@@ -437,10 +490,10 @@ function NoticedPrompt({
         {encounter.name} — the party has seen them. Start it?
       </span>
       <span className="flex items-center gap-1.5">
-        <Button size="sm" onClick={onStart}>
-          Start
+        <Button size="sm" disabled={starting} onClick={onStart}>
+          {starting ? "Starting…" : "Start"}
         </Button>
-        <Button variant="secondary" size="sm" onClick={onLater}>
+        <Button variant="secondary" size="sm" disabled={starting} onClick={onLater}>
           Not yet
         </Button>
       </span>

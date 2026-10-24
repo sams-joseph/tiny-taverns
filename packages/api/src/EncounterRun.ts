@@ -229,6 +229,10 @@ export const EncounterRunStart = Schema.Struct({
    * because a fight without the PCs in initiative is not a fight.
    */
   includeParty: Schema.optional(Schema.Boolean),
+  /**
+   * Absent means `dm`, except for a fight on a level visit: the table is
+   * already looking at that dungeon, so it starts `shared` with its map shown.
+   */
   visibility: Schema.optional(Visibility),
 });
 export type EncounterRunStart = typeof EncounterRunStart.Type;
